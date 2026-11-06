@@ -141,7 +141,8 @@ let suite = "modal syntax" >::: [
       | _ -> assert_failure text)
       ["?Int.End"; "!(M.T).End"; "?modal [] Int.End";
        "!(modal [] M.T).End"; "?(modal [] M.T(Int)).End";
-       "?modal <> modal [] Int.End"; "?List (M.T).End"]);
+       "?modal <> modal [] Int.End"; "?List (M.T).End";
+       "?List (List Int).End"; "!modal [] List (List Int).End"]);
 
   "prefix list types" >:: (fun _ ->
     List.iter (fun (text, check) -> match node (parse text) with
@@ -154,7 +155,16 @@ let suite = "modal syntax" >::: [
       "List (modal <E> Int)", (function Datatype.Modal _ -> true | _ -> false);
       "List (M.T)", (function Datatype.QualifiedTypeApplication (["M"; "T"], []) -> true | _ -> false);
     ];
-    List.iter reject_syntax ["[Int]"; "List"; "List (Int) -> Int"; "List forall a. a"]);
+    List.iter (fun text -> ignore (parse text)) [
+      "List (List (List Int))"; "Box(List (List Int))";
+      "modal [] List (List Int)"; "modal <E(List (List Int))> Int";
+    ];
+    List.iter reject_syntax [
+      "[Int]"; "List"; "List (Int) -> Int"; "List forall a. a";
+      "List List Int"; "List (List List Int)"; "Box(List List Int)";
+      "modal [] List List Int"; "modal <E(List List Int)> Int";
+      "?List List Int.End"; "!modal [] List List Int.End";
+    ]);
 
   "binder modal and ordinary kinds" >:: (fun _ ->
     List.iter (fun (text, expected) ->
@@ -375,7 +385,7 @@ let suite = "modal syntax" >::: [
       "handle <M.State(List (modal <E> Int))> (shallowhandle <State> (<State/>) { case x -> x }) { case <List(x:List Int) => k> -> <State>{k(x)}</State> case x -> x }";
     ]);
 
-  "shared printers produce parseable modal types" >:: (fun _ ->
+  "shared printers produce parseable modal and list types" >:: (fun _ ->
     let arg = Types.int_type in
     let entry name arguments = { EffectRow.name; arguments } in
     let q, a = Types.fresh_type_quantifier ~modal_kind:ModalKind.Abs (Linearity.Any, Restriction.Any) in
@@ -385,11 +395,13 @@ let suite = "modal syntax" >::: [
       Types.Modal (Modality.Relative (["M.State"; "M.State"], [entry "M.State" [arg]]),
         Types.LinearArrow (Types.make_tuple_type [], arg));
       Types.ForAll ([q], Types.Modal (Modality.Absolute [], Types.Arrow (Types.make_tuple_type [a], a)));
+      Types.make_list_type (Types.make_list_type arg);
     ] in
     let expected = List.map parse [
       "modal [M.State(Int),M.State(Bool)] ((Int) -> Int)";
       "modal <M.State,M.State|M.State(Int)> (() -@ Int)";
       "forall a::Type(Any,Any,Abs). modal [] ((a) -> a)";
+      "List (List Int)";
     ] in
     let strip = object
       inherit SugarTraversals.map

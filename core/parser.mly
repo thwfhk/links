@@ -1253,6 +1253,10 @@ primary_datatype_with_pos(modal_type):
 | primary_datatype_with(modal_type)                            { with_pos $loc $1 }
 
 primary_datatype_with(modal_type):
+| LIST element = list_element_datatype(modal_type)             { Datatype.List (with_pos $loc(element) element) }
+| list_element_datatype(modal_type)                            { $1 }
+
+list_element_datatype(modal_type):
 | modal_type                                                  { $1 }
 | TILDE primary_datatype_with_pos(modal_type)                                   { Datatype.Dual $2 }
 | parenthesized_datatypes                                      { match $1 with
@@ -1264,7 +1268,6 @@ primary_datatype_with(modal_type):
      LPAREN temporality_type COMMA datatype COMMA datatype COMMA datatype RPAREN
                                                                { Datatype.Table ($3, $5, $7, $9) }
 | LBRACKETBAR vrow BARRBRACKET                                 { Datatype.Variant $2 }
-| LIST primary_datatype_with_pos(modal_type)                    { Datatype.List $2 }
 | type_var                                                     { $1 }
 | kinded_type_var                                              { $1 }
 | CONSTRUCTOR                                                  { let open Datatype in

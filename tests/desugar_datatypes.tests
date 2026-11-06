@@ -131,6 +131,15 @@ Bracketed list types are rejected
 exit : 1
 stderr : @.*Parse error.*
 
+Parenthesised nested list types are accepted
+[[42]] : List (List Int)
+stdout : [[42]] : List (List Int)
+
+Unparenthesised nested list types are rejected
+[[42]] : List List Int
+exit : 1
+stderr : @.*Parse error.*
+
 Modal types require the contextual type checker
 sig f : modal [] ((Int) -> Int) fun f(x) { x }
 exit : 1

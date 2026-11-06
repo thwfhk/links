@@ -13,9 +13,9 @@ implementation decisions, reasons, internal invariants and source comparisons.
 
 ## Current status
 
-D3e, D3f and D4a2 were committed. D3f now needs the list-parentheses
-correction below. Implementation remains paused before D4f2;
-D4f2 has not been started.
+Implementation has resumed through D4i. The D3f list-parentheses correction
+is complete. Continue with D4f2, D4g, D4h and D4i, then pause for the user's
+review of the recorded design choices.
 
 - D1--D3d provide row/modality operations, shared modal types, surface syntax,
   and effect/operation resolution. D4a--D4f1 provide kind checks, persistent
@@ -35,8 +35,8 @@ D4f2 has not been started.
 - D4a2 implements the thesis' quantified-type classification while retaining
   declared binder requirements. Modal-kind refinement remains in D4g.
 
-The user requires parentheses around nested list element types. The
-specification and design record this rule; the parser correction is pending.
+Nested list element types require parentheses. The parser and both type
+printers follow this rule.
 The most recent compiler verification is recorded below. Passing legacy suites
 checks compatibility during construction; it does not complete Fresco inference.
 
@@ -61,11 +61,12 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D4f1 | Skeleton free variables, root substitution and quantifier opening | `7af62207` |
 | D3e | Remove higher-order effect declarations and row rules | `29a9ba43` |
 | D3f | Prefix list types, combined kinds and handler delimiters | `aa9358e4` |
-| D4a2 | Thesis quantified-type classification | This commit |
+| D4a2 | Thesis quantified-type classification | `41b96256` |
+| D3f correction | Require parentheses around nested list element types | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
-results here. The additional D3f list-parentheses correction remains pending.
+results here. The D3f list-parentheses correction is complete.
 
 ## Remaining work
 
@@ -75,7 +76,6 @@ also requires the affected build/tests and review described in AGENTS.md.
 
 | Task | Depends on | Completion check |
 |---|---|---|
-| D3f correction: required list parentheses | D3f | Accept `List (List Int)`; reject `List List Int`; retain grouped printer output and round trips |
 | D4f2: skeleton solution expansion and scope exit | D4f1, D4d1 | Preserve ghosts, scope, live unknowns and recursive sharing; reject escapes without changing the input context |
 | D4g: ordinary/modal requirement refinement | D4f2, D4c, D4a2 | Enforce flexible `Abs` and structural payload requirements through later assignment, scope exit and export; never narrow rigid binders |
 | D4h: contextual recursive type operations | D4g | Alias application, unfolding and comparison preserve binders and terminate on tested equal/unequal recursive applications with changing arguments |
@@ -129,27 +129,28 @@ integration tests must cover the remaining choices.
 
 ## Latest task and verification
 
-6 November 2026, D4a2, this commit (base `aa9358e4`): quantified value-type
-binders have temporary `Abs` summaries during modal classification. Declared
-ordinary and modal kinds still govern well-formedness and type argument checks.
-Independent review found no compiler or test issues; a documentation wording
-finding was corrected.
+6 November 2026, D3f correction, this commit (base `f842e49c`): the parser
+accepts `List (List Int)` and rejects `List List Int`. Review found no issues.
+Source tests cover evaluation and rejection; parser tests cover modal/session
+payloads and both printer round trips. Menhir reported zero conflicts and
+matched all 14 acceptance/rejection probes.
 
-The table retains the latest result for each check. D4a2 checks ran on the
-final integrated source; D3f results refer to `aa9358e4`.
+The table retains each check's latest result. Correction checks ran after all
+source edits and review were complete. D4a2 refers to `41b96256`; D3f refers to
+`aa9358e4`.
 
 | Check | Revision | Result |
 |---|---|---|
-| `make no-db` | D4a2 | Passed |
-| `tests/handlers.tests` | D4a2 | 95 passed |
-| `tests/effect_sugar.tests` | D4a2 | 44 passed |
+| `make no-db` | Correction | Passed |
+| `tests/handlers.tests` | Correction | 95 passed |
+| `tests/effect_sugar.tests` | Correction | 44 passed |
 | `tests/polymorphism.tests` | D4a2 | 55 passed |
-| `tests/typecheck_examples.tests` | D4a2 | 167 passed, 15 ignored by existing settings |
-| `tests/type_print.tests` | D3f | 10 passed |
-| `tests/desugar_datatypes.tests` | D3f | 42 passed |
+| `tests/typecheck_examples.tests` | Correction | 167 passed, 15 ignored by existing settings |
+| `tests/type_print.tests` | Correction | 10 passed |
+| `tests/desugar_datatypes.tests` | Correction | 44 passed |
 | `tests/modules.tests` | D3f | 41 passed |
 | `tests/mutual.tests` | D3f | 17 passed |
-| `tests/collections.tests` | D3f | 37 passed |
+| `tests/collections.tests` | Correction | 37 passed |
 | `tests/library.tests` | D3f | 4 passed |
 | `tests/freezeml.tests` | D3f | 59 passed |
 | `tests/typed_ir.tests` | D3f | 26 passed |
@@ -161,12 +162,12 @@ final integrated source; D3f results refer to `aa9358e4`.
 | `tests/xml.tests` | D3f | 74 passed |
 | `tests/bindings.tests` | D3f | 25 passed |
 | `tests/conditionals.tests` | D3f | 6 passed |
-| `opam exec -- ./run-tests nodb-unit-tests` | D4a2 | 675 passed |
-| Menhir conflict check | D3f | Zero conflicts before and after the grammar change |
+| `opam exec -- ./run-tests nodb-unit-tests` | Correction | 675 passed |
+| Menhir conflict check | Correction | Zero conflicts before and after the grammar change |
 | Parse-only source and expected-type comparison | D3f | No unexpected parse regressions; 1,374 programs and 838 type strings parse |
-| `make rule-check` | D4a2 | Passed; GNU-find tab check skipped, formatter check disabled |
-| Manual added-line tab/trailing-whitespace check | D4a2 | Passed |
-| `git diff --check` | D4a2 | Passed |
+| `make rule-check` | Correction | Passed; GNU-find tab check skipped, formatter check disabled |
+| Manual added-line tab/trailing-whitespace check | Correction | Passed |
+| `git diff --check` | Correction | Passed |
 
 D3f's parse-only audit covered excluded-feature fixtures without executing
 those suites. Existing invalid examples and deliberate rejection cases remain.
@@ -183,7 +184,6 @@ No compiler changes, build or tests.
 
 ## Next action
 
-Remain paused before D4f2. On explicit resumption, complete the D3f
-list-parentheses correction first. D4f2 then requires skeleton solution
-expansion and scope exit, preserving ghosts, scope, live unknowns and recursive
-sharing. D5 still requires its contextual annotation and solver dependencies.
+Implement D4f2's skeleton solution expansion and scope exit. Continue through D4g, D4h and D4i, reviewing,
+testing and committing each milestone. Pause after D4i, summarise the current
+status and ask the user to review the marked design choices and raise questions.
