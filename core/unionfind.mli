@@ -4,6 +4,9 @@ type 'a point
 val fresh      : 'a -> 'a point
 val find       : 'a point -> 'a
 
+(** Read the representative without path compression or other writes. *)
+val representative : 'a point -> 'a point
+
 (** Read the descriptor without path compression or other writes. *)
 val peek       : 'a point -> 'a
 

@@ -14,6 +14,12 @@ type flexible = {
   requires_monotype : bool;
 }
 
+type scoped_root = {
+  binders : Quantifier.t list;
+  primary_kind : PrimaryKind.t;
+  typ : Types.typ;
+}
+
 type marker
 type entry =
   | Rigid of declaration
@@ -34,6 +40,10 @@ type error =
   | Expected_monotype
   | Cyclic_solution of Types.tid
   | Cyclic_type
+  | Missing_marker
+  | Inner_marker_open
+  | Binder_mismatch of Types.tid
+  | Dependency_order of Types.tid
   | Kind_error of FrescoKind.error
 
 val empty : t
@@ -64,3 +74,25 @@ val add_lock : FrescoKind.checking_environment -> Types.modality ->
     non-mutating declaration callbacks while using a context. *)
 val assign : FrescoKind.checking_environment -> t -> Types.tid ->
   Types.type_arg -> (t, error) result
+
+(** Leave the innermost open marker, preserving its current prefix and live
+    local flexible entries. [binders] lists the actual enclosing type binders
+    of an annotation; a complete type normally has an empty list and carries
+    its own [ForAll]. [primary_kind] states the annotation's syntactic category.
+    Every external surviving type and annotation must be supplied in [roots].
+    Prefix term types, flexible solutions and lock arguments are automatic
+    roots. Supply any other ambient or declaration types explicitly.
+
+    Solved variables are expanded in the returned roots, in input order.
+    The caller must replace every supplied type or annotation by its returned
+    root before using the reduced context. Retained context entries and their
+    monotype requirements are unchanged. Free local rigid variables cause
+    rejection, including those in retained solutions and raw nominal bodies.
+    Quantified binders must match the ordinary and modal kinds of matching
+    context rigids. A [Recursive] binder can close only a matching Any rigid.
+
+    Input points and context entries are never mutated, on success or failure.
+    Returned roots retain nominal callbacks under [assign]'s stable-callback
+    contract; this operation does not provide detached type export. *)
+val leave_scope : FrescoKind.checking_environment -> marker ->
+  roots:scoped_root list -> t -> (t * scoped_root list, error) result

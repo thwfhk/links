@@ -853,6 +853,21 @@ of removed rigid variables in rewritten roots or retained solutions. Root
 binders cannot hide free variables in a separately retained solution or raw
 declaration body.
 
+Each root states its primary kind (`Type`, `Row`, or `Presence`). Check
+the original root before substitution and the rewritten root in the reduced
+context. Quantified binders closing a local rigid variable must preserve its
+ordinary and modal kinds. A `Recursive` binder carries no declared `Abs`
+constraint, so it can close only a matching `Any` rigid variable. Distinct
+nested recursive binders must have their bodies checked even when they reuse
+one variable ID; only a repeated occurrence in a recursive graph ends that
+traversal.
+
+`FrescoContext.leave_scope` implements this operation, also exposed through
+`FrescoTypeOps`. It returns fresh root points while retaining raw nominal
+callbacks under the existing stable-callback contract. Recursive kind states
+now distinguish syntax nodes and retain active recursive nodes separately
+from lexical variable bindings.
+
 Export several types together to fresh, memoised points. Return a declaration
 table alongside the types for free rigid and unresolved flexible variables,
 including ordinary kind, modal kind, freedom, and monotype requirements.
@@ -860,6 +875,8 @@ including ordinary kind, modal kind, freedom, and monotype requirements.
 Keep this table for later consumers; D8 must account for it before allowing
 backend type operations. Read-only representative lookup is needed to retain
 sharing between points in one Unionfind class without path compression.
+Free variable occurrences with the same ID share one exported variable point.
+Keep bound occurrences separate from free occurrences with the same ID.
 
 Copy raw nominal declaration bodies and rebuild callbacks over the copied
 graph. Snapshot declaration linearity. No exported callback may retain source

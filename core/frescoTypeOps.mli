@@ -2,3 +2,9 @@
     scope and monotype requirements. Declared kinds remain unchanged. *)
 val assign : FrescoKind.checking_environment -> FrescoContext.t -> Types.tid ->
   Types.type_arg -> (FrescoContext.t, FrescoContext.error) result
+
+(** Scope exit with rewritten roots. See [FrescoContext.leave_scope] for
+    required roots, lexical binders and the caller's replacement obligation. *)
+val leave_scope : FrescoKind.checking_environment -> FrescoContext.marker ->
+  roots:FrescoContext.scoped_root list -> FrescoContext.t ->
+  (FrescoContext.t * FrescoContext.scoped_root list, FrescoContext.error) result

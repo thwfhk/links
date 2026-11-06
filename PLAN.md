@@ -48,7 +48,8 @@ D4a adds non-mutating type inspection and modal kind classification,
 also reviewed and tested. D4b adds separate well-formedness checks for
 types, effect applications and signatures. Fresco inference and migration
 remain incomplete. D4c adds persistent contexts and checked assignment,
-with review and selected checks complete.
+with review and selected checks complete. D4d1 adds checked scope exit and
+rewrites surviving type roots, with review and selected checks complete.
 
 A read-only declaration investigation identified the module
 name-resolution changes and affected pattern-matching handlers. A
@@ -210,6 +211,7 @@ implementation defects. Record completed behaviour and deferred work.
 - [x] D4a: add non-mutating type reads and recursive modal kind classification.
 - [x] D4b: check type/effect well-formedness and operation signatures.
 - [x] D4c: add persistent contexts and checked type/row/presence assignment.
+- [x] D4d1: add checked scope exit with rewritten type roots.
 - [ ] Implement and test modal syntax and scoped effect rows.
 - [ ] Refactor type inference to follow Fresco.
 - [ ] Implement modal inference and run the first working example.
@@ -651,9 +653,9 @@ movement, monotype requirements, and later ordinary refinement through
 fresh stronger-kind unknowns. The checker does not yet connect to source
 elaboration or term inference.
 
-## Latest task and verification
+## D4c verification
 
-6 November 2026, D4c: added abstract persistent contexts and strict checked
+6 November 2026, D4c, commit `39107efb`: added abstract persistent contexts and strict checked
 assignment. Context entries preserve declaration order and fixed kinds.
 Assignment checks scope, occurs, ordinary/modal requirements and monotype
 structure, moves younger flexible dependencies before its target, and
@@ -692,9 +694,47 @@ liveness, escape checks, and detached export with variable metadata.
 Scope exit, export, skeletons, consistency and term inference remain
 incomplete.
 
+## Latest task and verification
+
+6 November 2026, D4d1: added scope exit with explicit Type, Row and Presence
+roots. Solved variables are expanded before liveness and escape checks.
+The returned context retains its current prefix and live local unknowns,
+including their kinds and monotype requirements. Added non-mutating
+Unionfind representative lookup and 47 unit tests.
+
+Main and independent review identified missing recursive binder metadata
+checks and distinct nested recursive nodes that shared a variable ID and
+could hide a body. Scope closure now preserves rigid binder metadata, and
+kind checking distinguishes recursive nodes while retaining graph cycles.
+The new tests cover both corrections, lexical solution scope, copied graphs,
+raw declaration dependencies, retained constraints and atomic rejection.
+An initial unit compilation failed because a helper used the OCaml keyword
+`effect`; the corrected helper passes.
+
+Independent review found no remaining issues and passed its build,
+395 unit tests, 37 datatype tests, 10 type-print tests and source checks.
+Main, implementation, and review source snapshots match.
+
+| Integrated check | Result |
+|---|---|
+| `make no-db` | Passed |
+| `tests/handlers.tests` | 95 passed |
+| `tests/effect_sugar.tests` | 44 passed |
+| `tests/polymorphism.tests` | 55 passed |
+| `tests/typecheck_examples.tests` | 167 passed, 15 ignored by existing settings |
+| `tests/type_print.tests` | 10 passed |
+| `tests/desugar_datatypes.tests` | 37 passed |
+| `tests/modules.tests` | 41 passed |
+| `opam exec -- ./run-tests nodb-unit-tests` | 395 passed, including 47 new tests |
+| `make rule-check` | Passed; GNU-find tab check skipped, formatter check disabled |
+| Manual new/changed-line tab/trailing-whitespace check | Passed |
+| `git diff --check` | Passed |
+
+Scope exit retains raw nominal callbacks under the stable-callback contract.
+Detached export, skeletons, consistency and term inference remain incomplete.
+
 ## Next action
 
-Implement D4d scope exit and detached type export. Rewrite solved variables
-in explicit roots before deciding which local unknowns remain live. Preserve
-variable constraints and sharing in exported data, and reject rigid escapes.
+Implement D4d2 detached type export. Preserve variable constraints and sharing
+in exported data, and copy recursive declaration bodies and callbacks.
 Skeletons, consistency, and contextual datatype elaboration follow.

@@ -13,6 +13,12 @@ type flexible = {
   requires_monotype : bool;
 }
 
+type scoped_root = {
+  binders : Quantifier.t list;
+  primary_kind : PrimaryKind.t;
+  typ : Types.typ;
+}
+
 type marker = unit ref
 type entry =
   | Rigid of declaration
@@ -33,6 +39,10 @@ type error =
   | Expected_monotype
   | Cyclic_solution of Types.tid
   | Cyclic_type
+  | Missing_marker
+  | Inner_marker_open
+  | Binder_mismatch of Types.tid
+  | Dependency_order of Types.tid
   | Kind_error of FrescoKind.error
 
 exception Failure of error
@@ -123,9 +133,8 @@ let inspect environment context ?target required typ =
        | Some (Term _ | Marker _ | Lock _) -> assert false
        end
     | Types.Recursive (id, _, body) ->
-       if not (IntSet.mem id recursive) then
-         visit (IntSet.add id bound) (IntSet.add id recursive)
-           solutions declarations points required body
+       visit (IntSet.add id bound) (IntSet.add id recursive)
+         solutions declarations points required body
     | Types.ForAll (quantifiers, body) ->
        if required && quantifiers <> [] then fail Expected_monotype;
        let bound = List.fold_left (fun bound q ->
@@ -235,3 +244,175 @@ let assign environment context id (tag, typ) = checked (fun () ->
                  IntSet.mem variable.declaration.id monotypes }
           | entry -> entry) (before @ moved @ [target] @ after)
     end)
+
+(* A value-type wrapper places annotation binders in the syntax checked by
+   FrescoKind. In particular, they never enter its declaration callbacks. *)
+let root_type root =
+  let body = match root.primary_kind with
+    | PrimaryKind.Type -> root.typ
+    | PrimaryKind.Row -> Types.Record root.typ
+    | PrimaryKind.Presence ->
+       Types.Record (Types.Row (StringMap.singleton "field" root.typ,
+         Unionfind.fresh Types.Closed, false)) in
+  Types.ForAll (root.binders, body)
+
+let expand_roots context roots =
+  let points = ref [] in
+  let solutions = ref IntMap.empty in
+  let check_quantifier q =
+    let id = Quantifier.to_var q in
+    match lookup id context with
+    | Some (Rigid declaration) when
+        not (Kind.equal declaration.kind (Quantifier.to_kind q)) ||
+        declaration.modal_kind <> Quantifier.to_modal_kind q ->
+       fail (Binder_mismatch id)
+    | _ -> () in
+  let bind bound quantifiers =
+    List.fold_left (fun bound q ->
+        check_quantifier q;
+        IntSet.add (Quantifier.to_var q) bound) bound quantifiers in
+  let rec expand bound recursive active solving typ =
+    let child = expand bound recursive active solving in
+    let arguments = List.map (fun (tag, body) -> tag, child body) in
+    match typ with
+    | Types.Meta point ->
+       let point = Unionfind.representative point in
+       begin match List.find_opt (fun (source, _) -> source == point) active with
+       | Some (_, copy) ->
+          begin match Unionfind.peek point with
+          | Types.Recursive (id, _, _) when IntSet.mem id recursive -> Types.Meta copy
+          | _ -> fail Cyclic_type
+          end
+       | None ->
+          begin match List.find_opt (fun (source, scope, _) ->
+              source == point && IntSet.equal scope bound) !points with
+          | Some (_, _, copy) -> Types.Meta copy
+          | None ->
+             let copy = Unionfind.fresh Types.Not_typed in
+             points := (point, bound, copy) :: !points;
+             let body = expand bound recursive ((point, copy) :: active) solving
+                 (Unionfind.peek point) in
+             Unionfind.change copy body;
+             Types.Meta copy
+          end
+       end
+    | Types.Var (id, _, _) when IntSet.mem id bound -> typ
+    | Types.Var (id, _, _) ->
+       begin match lookup id context with
+       | Some (Flexible { solution = Some body; _ }) ->
+          if IntSet.mem id solving then fail (Cyclic_solution id);
+          begin match IntMap.find_opt id !solutions with
+          | Some body -> body
+          | None ->
+             (* Stored solutions have their own lexical scope. Their free
+                variables may become bound where the expanded type is placed. *)
+             let body = expand IntSet.empty IntSet.empty active (IntSet.add id solving) body in
+             solutions := IntMap.add id body !solutions;
+             body
+          end
+       | Some (Rigid _ | Flexible _) -> typ
+       | None -> fail (Missing_variable id)
+       | Some (Term _ | Marker _ | Lock _) -> assert false
+       end
+    | Types.Recursive (id, kind, body) ->
+       begin match lookup id context with
+       | Some (Rigid declaration) when
+           not (Kind.equal declaration.kind kind) || declaration.modal_kind <> ModalKind.Any ->
+          fail (Binder_mismatch id)
+       | _ -> ()
+       end;
+       Types.Recursive (id, kind,
+         expand (IntSet.add id bound) (IntSet.add id recursive) active solving body)
+    | Types.ForAll (quantifiers, body) ->
+       Types.ForAll (quantifiers, expand (bind bound quantifiers) recursive active solving body)
+    | Types.RecursiveApplication app ->
+       Types.RecursiveApplication { app with Types.r_args = arguments app.Types.r_args }
+    | Types.Alias (pk, (name, parameters, args, dual), body) ->
+       Types.Alias (pk, (name, parameters, arguments args, dual), child body)
+    | Types.Application (constructor, args) -> Types.Application (constructor, arguments args)
+    | Types.Modal (modality, body) -> Types.Modal (Modality.map child modality, child body)
+    | Types.Arrow (a, b) -> Types.Arrow (child a, child b)
+    | Types.LinearArrow (a, b) -> Types.LinearArrow (child a, child b)
+    | Types.Input (a, b) -> Types.Input (child a, child b)
+    | Types.Output (a, b) -> Types.Output (child a, child b)
+    | Types.Record body -> Types.Record (child body)
+    | Types.Variant body -> Types.Variant (child body)
+    | Types.Select body -> Types.Select (child body)
+    | Types.Choice body -> Types.Choice (child body)
+    | Types.Present body -> Types.Present (child body)
+    | Types.Dual body -> Types.Dual (child body)
+    | Types.Row (fields, tail, dual) ->
+       let tail = match child (Types.Meta tail) with
+         | Types.Meta point -> point
+         | _ -> assert false in
+       Types.Row (StringMap.map child fields, tail, dual)
+    | Types.Primitive _ | Types.Closed | Types.Absent | Types.End -> typ
+    | Types.Function _ | Types.Lolli _ | Types.Effect _ | Types.Operation _
+    | Types.Table _ | Types.Lens _ | Types.Not_typed ->
+       raise (FrescoKind.Error (FrescoKind.Unsupported_type "Legacy or incomplete type")) in
+  List.map (fun root ->
+      let bound = bind IntSet.empty root.binders in
+      { root with typ = expand bound IntSet.empty [] IntSet.empty root.typ }) roots
+
+let leave_scope environment marker ~roots context = checked (fun () ->
+    let rec split before = function
+      | [] -> fail Missing_marker
+      | Marker found :: after when equal_marker marker found ->
+         if List.exists (function Marker _ -> true | _ -> false) after then
+           fail Inner_marker_open;
+         List.rev before, after
+      | entry :: after -> split (entry :: before) after in
+    let prefix, suffix = split [] context in
+    let environment = checking_environment environment context in
+    (* Validate the input before substitution can erase malformed metadata. *)
+    List.iter (fun root ->
+        let typ = root_type root in
+        ignore (inspect environment context false typ);
+        FrescoKind.check environment (any_parameter PrimaryKind.Type) typ) roots;
+    let roots = expand_roots context roots in
+    let dependencies typ = fst (inspect environment context false typ) in
+    let entry_dependencies = function
+      | Flexible { solution = Some typ; _ } | Term (_, typ) -> dependencies typ
+      | Lock (modality, ambient) ->
+         List.fold_left (fun deps typ -> IntSet.union deps (dependencies typ))
+           IntSet.empty (Modality.arguments modality @ EffectRow.arguments ambient)
+      | Rigid _ | Flexible { solution = None; _ } | Marker _ -> IntSet.empty in
+    let live = List.fold_left (fun live root ->
+        IntSet.union live (dependencies (root_type root))) IntSet.empty roots in
+    let live = List.fold_left (fun live entry ->
+        IntSet.union live (entry_dependencies entry)) live prefix in
+    let retained = List.filter (function
+        | Flexible variable -> IntSet.mem variable.declaration.id live
+        | Rigid _ | Term _ | Marker _ | Lock _ -> false) suffix in
+    let result = prefix @ retained in
+    let removed = List.fold_left (fun removed -> function
+        | Rigid declaration -> IntSet.add declaration.id removed
+        | _ -> removed) IntSet.empty suffix in
+    let check_escape dependencies =
+      IntSet.iter (fun id -> if IntSet.mem id removed then fail (Escaping_rigid id)) dependencies in
+    check_escape live;
+    let reduced_environment = checking_environment environment result in
+    ignore (List.fold_left (fun preceding entry ->
+        let dependencies = entry_dependencies entry in
+        check_escape dependencies;
+        IntSet.iter (fun id ->
+            if not (IntSet.mem id preceding) then fail (Dependency_order id)) dependencies;
+        begin match entry with
+        | Flexible { declaration; solution = Some typ; requires_monotype } ->
+           let required = requires_monotype || snd (Kind.subkind declaration.kind) = Restriction.Mono in
+           ignore (inspect reduced_environment result required typ);
+           FrescoKind.check reduced_environment
+             (TypeParameter.make ~modal_kind:declaration.modal_kind declaration.kind) typ
+        | Term (_, typ) -> FrescoKind.check reduced_environment (any_parameter PrimaryKind.Type) typ
+        | Lock (modality, ambient) ->
+           FrescoKind.check reduced_environment (any_parameter PrimaryKind.Type)
+             (Types.Modal (modality, Types.int_type));
+           FrescoKind.check_effect_row reduced_environment ambient
+        | Rigid _ | Flexible { solution = None; _ } | Marker _ -> ()
+        end;
+        match variable_declaration entry with
+        | Some declaration -> IntSet.add declaration.id preceding
+        | None -> preceding) IntSet.empty result);
+    List.iter (fun root ->
+        FrescoKind.check reduced_environment (any_parameter PrimaryKind.Type) (root_type root)) roots;
+    result, roots)

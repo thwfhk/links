@@ -55,11 +55,12 @@ let declared kind modal_kind =
 
 (* Recursive binders may capture local parameters and other recursive
    binders. Their keys retain both, so evaluations under different parameter
-   summaries do not share a result. Captured state keys are finite because
-   they follow lexical binder nesting. *)
+   summaries do not share a result. Active node states also retain graph
+   edges across a shadowing binder. Keys are finite because an active node
+   is reused when a recursive graph returns to it. *)
 type key =
   | Declaration of string * bool list
-  | Binder of Types.tid * (Types.tid * binding_key) list
+  | Binder of int * (Types.tid * binding_key) list * key list
   | Solution of Types.tid
 and binding_key =
   | Summary_key of bool
@@ -81,7 +82,25 @@ let binding_summary = function
   | Summary absolute -> absolute
   | State state -> state.absolute
 
+(* Identities distinguish nested binders that reuse a variable ID. Read the
+   syntax by physical identity so recursive point graphs need no mutation. *)
+let node_identity () =
+  let nodes = ref [] in
+  fun typ ->
+    match List.find_opt (fun (node, _) -> node == typ) !nodes with
+    | Some (_, id) -> id
+    | None ->
+       let id = List.length !nodes in
+       nodes := (typ, id) :: !nodes;
+       id
+
+let binder_key identity typ bindings recursive =
+  Binder (identity typ,
+    List.map (fun (id, binding) -> id, binding_key binding) (IntMap.bindings bindings),
+    List.map (fun (_, state) -> state.key) recursive)
+
 let classify environment typ =
+  let identity = node_identity () in
   let states = Hashtbl.create 16 in
   let changed = ref false in
   let request key body =
@@ -94,8 +113,9 @@ let classify environment typ =
        changed := true;
        state
   in
-  let rec summary bindings = function
-    | Types.Meta point -> summary bindings (Unionfind.peek point)
+  let rec summary bindings recursive typ =
+    match typ with
+    | Types.Meta point -> summary bindings recursive (Unionfind.peek point)
     | Types.Var (id, _, _) ->
        begin match IntMap.find_opt id bindings with
        | Some binding -> binding_summary binding
@@ -105,22 +125,21 @@ let classify environment typ =
           | Some { kind; modal_kind; solution = None } -> declared kind modal_kind
           | Some { solution = Some body; _ } ->
              let state = request (Solution id)
-                 (fun _ () -> summary IntMap.empty body) in
+                 (fun _ () -> summary IntMap.empty [] body) in
              state.absolute
           end
        end
     | Types.Recursive (id, _, body) ->
-       begin match IntMap.find_opt id bindings with
-       | Some (State state) -> state.absolute
-       | _ ->
-          let captured = List.map (fun (id, binding) -> id, binding_key binding)
-              (IntMap.bindings bindings) in
-          let state = request (Binder (id, captured))
-              (fun state () -> summary (IntMap.add id (State state) bindings) body) in
+       begin match List.find_opt (fun (node, _) -> node == typ) recursive with
+       | Some (_, state) -> state.absolute
+       | None ->
+          let state = request (binder_key identity typ bindings recursive)
+              (fun state () -> summary (IntMap.add id (State state) bindings)
+                  ((typ, state) :: recursive) body) in
           state.absolute
        end
     | Types.RecursiveApplication app ->
-       let arguments = List.map (fun (_, t) -> summary bindings t) app.Types.r_args in
+       let arguments = List.map (fun (_, t) -> summary bindings recursive t) app.Types.r_args in
        let state = request (Declaration (app.Types.r_unique_name, arguments))
            (fun _ ->
              match environment.declaration app with
@@ -131,7 +150,7 @@ let classify environment typ =
                 let bindings = List.fold_left2 (fun bindings formal argument ->
                     IntMap.add (Quantifier.to_var formal) (Summary argument) bindings)
                     IntMap.empty formals arguments in
-                fun () -> summary bindings body) in
+                fun () -> summary bindings [] body) in
        state.absolute
     | Types.ForAll (quantifiers, body) ->
        let bindings = List.fold_left (fun bindings quantifier ->
@@ -139,19 +158,19 @@ let classify environment typ =
              (Summary (declared (Quantifier.to_kind quantifier)
                          (Quantifier.to_modal_kind quantifier))) bindings)
            bindings quantifiers in
-       summary bindings body
+       summary bindings recursive body
     | Types.Primitive _ | Types.End | Types.Closed | Types.Absent -> true
     | Types.Arrow _ | Types.LinearArrow _ -> false
     | Types.Modal (Modality.Absolute _, _) -> true
     | Types.Modal (Modality.Relative _, body)
     | Types.Record body | Types.Variant body | Types.Present body
     | Types.Select body | Types.Choice body | Types.Dual body
-    | Types.Alias (_, _, body) -> summary bindings body
+    | Types.Alias (_, _, body) -> summary bindings recursive body
     | Types.Input (payload, continuation) | Types.Output (payload, continuation) ->
-       summary bindings payload && summary bindings continuation
+       summary bindings recursive payload && summary bindings recursive continuation
     | Types.Row (fields, tail, _) ->
-       Utility.StringMap.for_all (fun _ field -> summary bindings field) fields &&
-       summary bindings (Unionfind.peek tail)
+       Utility.StringMap.for_all (fun _ field -> summary bindings recursive field) fields &&
+       summary bindings recursive (Unionfind.peek tail)
     | Types.Application (constructor, arguments) ->
        let wrong = match Types.wrong_type with
          | Types.Application (constructor, _) -> constructor
@@ -164,7 +183,7 @@ let classify environment typ =
           List.for_all (fun index ->
               match List.nth_opt arguments index with
               | None -> raise (Error (Argument_count (Types.Abstype.name constructor)))
-              | Some (_, typ) -> summary bindings typ) indices
+              | Some (_, typ) -> summary bindings recursive typ) indices
        end
     | Types.Not_typed -> raise (Error (Unsupported_type "Not_typed"))
     | Types.Function _ -> raise (Error (Unsupported_type "Function"))
@@ -179,7 +198,7 @@ let classify environment typ =
      There are finitely many Boolean vectors per declaration and binder. *)
   let rec solve () =
     changed := false;
-    let result = summary IntMap.empty typ in
+    let result = summary IntMap.empty [] typ in
     let current = Hashtbl.fold (fun _ state rest -> state :: rest) states [] in
     List.iter (fun state ->
         if state.absolute && not (state.evaluate ()) then begin
@@ -226,6 +245,7 @@ let with_bindings environment bindings =
 type ordinary_requirement = Unrestricted | Restricted of Restriction.t
 
 let ordinary_satisfies environment requirement typ =
+  let identity = node_identity () in
   let initial = requirement <> Restricted Restriction.Session in
   let states = Hashtbl.create 16 in
   let changed = ref false in
@@ -247,10 +267,10 @@ let ordinary_satisfies environment requirement typ =
        actual = restriction ||
        (actual = Restriction.Base && restriction = Restriction.Mono)
   in
-  let rec summary bindings typ =
-    let all ts = List.for_all (summary bindings) ts in
+  let rec summary bindings recursive typ =
+    let all ts = List.for_all (summary bindings recursive) ts in
     match typ with
-    | Types.Meta point -> summary bindings (Unionfind.peek point)
+    | Types.Meta point -> summary bindings recursive (Unionfind.peek point)
     | Types.Var (id, _, _) ->
        begin match IntMap.find_opt id bindings with
        | Some binding -> binding_summary binding
@@ -259,18 +279,17 @@ let ordinary_satisfies environment requirement typ =
           | None -> raise (Error (Unbound_variable id))
           | Some { kind; solution = None; _ } -> declared kind
           | Some { solution = Some body; _ } ->
-             (request (Solution id) (fun _ () -> summary IntMap.empty body)).absolute
+             (request (Solution id) (fun _ () -> summary IntMap.empty [] body)).absolute
           end
        end
     | Types.Recursive (id, _, body) ->
        if requirement = Restricted Restriction.Base then false
-       else begin match IntMap.find_opt id bindings with
-       | Some (State state) -> state.absolute
-       | _ ->
-          let captured = List.map (fun (id, binding) -> id, binding_key binding)
-              (IntMap.bindings bindings) in
-          (request (Binder (id, captured)) (fun state () ->
-               summary (IntMap.add id (State state) bindings) body)).absolute
+       else begin match List.find_opt (fun (node, _) -> node == typ) recursive with
+       | Some (_, state) -> state.absolute
+       | None ->
+          (request (binder_key identity typ bindings recursive) (fun state () ->
+               summary (IntMap.add id (State state) bindings)
+                 ((typ, state) :: recursive) body)).absolute
        end
     | Types.RecursiveApplication app ->
        begin match requirement with
@@ -281,7 +300,7 @@ let ordinary_satisfies environment requirement typ =
           end
        | Restricted Restriction.Base -> false
        | Restricted _ ->
-          let arguments = List.map (fun (_, t) -> summary bindings t) app.Types.r_args in
+          let arguments = List.map (fun (_, t) -> summary bindings recursive t) app.Types.r_args in
           let state = request (Declaration (app.Types.r_unique_name, arguments))
               (fun _ ->
                 match environment.declaration app with
@@ -290,23 +309,23 @@ let ordinary_satisfies environment requirement typ =
                    let bindings = List.fold_left2 (fun bindings formal argument ->
                        IntMap.add (Quantifier.to_var formal) (Summary argument) bindings)
                        IntMap.empty formals arguments in
-                   fun () -> summary bindings body) in
+                   fun () -> summary bindings [] body) in
           state.absolute
        end
-    | Types.Alias (_, _, body) -> summary bindings body
+    | Types.Alias (_, _, body) -> summary bindings recursive body
     | Types.Closed | Types.Absent -> true
     | Types.Row (fields, tail, _) ->
-       Utility.StringMap.for_all (fun _ field -> summary bindings field) fields &&
-       summary bindings (Unionfind.peek tail)
-    | Types.Present body -> summary bindings body
+       Utility.StringMap.for_all (fun _ field -> summary bindings recursive field) fields &&
+       summary bindings recursive (Unionfind.peek tail)
+    | Types.Present body -> summary bindings recursive body
     | Types.ForAll (qs, body) ->
        begin match requirement with
        | Unrestricted ->
           let bindings = List.fold_left (fun bindings q ->
               IntMap.add (Quantifier.to_var q) (Summary true) bindings) bindings qs in
-          summary bindings body
+          summary bindings recursive body
        | Restricted (Restriction.Base | Restriction.Mono) when qs = [] ->
-          summary bindings body
+          summary bindings recursive body
        | Restricted _ -> false
        end
     | Types.Primitive primitive ->
@@ -334,16 +353,16 @@ let ordinary_satisfies environment requirement typ =
        end
     | Types.LinearArrow (a, b) ->
        requirement = Restricted Restriction.Mono && all [a; b]
-    | Types.Modal (_, body) -> requirement = Unrestricted && summary bindings body
+    | Types.Modal (_, body) -> requirement = Unrestricted && summary bindings recursive body
     | Types.Record body | Types.Variant body ->
        (requirement = Unrestricted || requirement = Restricted Restriction.Mono) &&
-       summary bindings body
+       summary bindings recursive body
     | Types.Input (a, b) | Types.Output (a, b) ->
        requirement = Restricted Restriction.Session ||
        (requirement = Restricted Restriction.Mono && all [a; b])
     | Types.Select body | Types.Choice body | Types.Dual body ->
        requirement = Restricted Restriction.Session ||
-       (requirement = Restricted Restriction.Mono && summary bindings body)
+       (requirement = Restricted Restriction.Mono && summary bindings recursive body)
     | Types.End ->
        requirement = Restricted Restriction.Session || requirement = Restricted Restriction.Mono
     | Types.Not_typed | Types.Function _ | Types.Lolli _ | Types.Effect _
@@ -352,7 +371,7 @@ let ordinary_satisfies environment requirement typ =
   in
   let rec solve () =
     changed := false;
-    let result = summary IntMap.empty typ in
+    let result = summary IntMap.empty [] typ in
     let current = Hashtbl.fold (fun _ state rest -> state :: rest) states [] in
     List.iter (fun state ->
         let result = state.evaluate () in
@@ -417,7 +436,7 @@ let checker environment =
        begin match local, descriptor.solution with
        | None, Some body when not (Hashtbl.mem solutions id) ->
           Hashtbl.add solutions id ();
-          Queue.add (fun () -> check IntMap.empty Utility.IntSet.empty
+          Queue.add (fun () -> check IntMap.empty []
               (TypeParameter.make ~modal_kind:descriptor.modal_kind descriptor.kind) body) pending
        | _ -> ()
        end;
@@ -425,10 +444,10 @@ let checker environment =
     | Types.Recursive (id, kind, body) ->
        let pk = Kind.primary_kind kind in
        if pk = PrimaryKind.Presence then malformed "Recursive presence";
-       if not (Utility.IntSet.mem id recursive) then begin
+       if not (List.exists (fun node -> node == typ) recursive) then begin
          let bindings = IntMap.add id { kind; modal_kind = ModalKind.Any;
              solution = Some typ } bindings in
-         check bindings (Utility.IntSet.add id recursive) (any_parameter pk) body
+         check bindings (typ :: recursive) (any_parameter pk) body
        end;
        pk
     | Types.RecursiveApplication app ->
@@ -445,7 +464,7 @@ let checker environment =
        if not (Hashtbl.mem declarations name) then begin
          Hashtbl.add declarations name ();
          Queue.add (fun () ->
-             check (bind_quantifiers IntMap.empty formals) Utility.IntSet.empty
+             check (bind_quantifiers IntMap.empty formals) []
                (any_parameter PrimaryKind.Type) body) pending
        end;
        PrimaryKind.Type
@@ -520,12 +539,12 @@ let checker environment =
 
 let check environment parameter typ =
   let check, _, finish = checker environment in
-  check IntMap.empty Utility.IntSet.empty parameter typ;
+  check IntMap.empty [] parameter typ;
   finish ()
 
 let check_effect_row environment row =
   let _, check_row, finish = checker environment in
-  check_row IntMap.empty Utility.IntSet.empty row;
+  check_row IntMap.empty [] row;
   finish ()
 
 let check_effect_signature environment ~parameters ~higher_order ~operations =
@@ -538,5 +557,5 @@ let check_effect_signature environment ~parameters ~higher_order ~operations =
       (PrimaryKind.Type, (Linearity.Any, Restriction.Any)) in
   let check, _, finish = checker environment in
   List.iter (fun (arguments, result) ->
-      List.iter (check bindings Utility.IntSet.empty parameter) (result :: arguments)) operations;
+      List.iter (check bindings [] parameter) (result :: arguments)) operations;
   finish ()

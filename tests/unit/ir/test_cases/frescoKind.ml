@@ -81,6 +81,28 @@ let desugar_application row_application name group formals =
   | _ -> assert_failure "Expected a desugared annotation"
 
 let suite = "Fresco modal kinds" >::: [
+  "distinct recursive binders with one identity inspect both bodies" >:: (fun _ ->
+    let q, _ = quantifier () in
+    let id = Quantifier.to_var q in
+    let nested body = Types.Recursive (id, kind, Types.Recursive (id, kind, body)) in
+    any (nested arrow);
+    abs (nested int));
+
+  "recursive point graphs retain active nodes across shadowing" >:: (fun _ ->
+    let q, self = quantifier () in
+    let id = Quantifier.to_var q in
+    let p = Unionfind.fresh Types.Not_typed and r = Unionfind.fresh Types.Not_typed in
+    Unionfind.change p (Types.Recursive (id, kind, record ["next", Types.Meta r]));
+    Unionfind.change r (Types.Recursive (id, kind, record ["next", Types.Meta p; "self", self]));
+    let before = bytes (p, r) in
+    abs (Types.Meta p);
+    assert_equal before (bytes (p, r));
+    Unionfind.change r (Types.Recursive (id, kind,
+      record ["next", Types.Meta p; "function", arrow]));
+    let before = bytes (p, r) in
+    any (Types.Meta p);
+    assert_equal before (bytes (p, r)));
+
   "peek preserves a depth two graph" >:: (fun _ ->
     let points, point = graph 42 in
     let before = bytes points in

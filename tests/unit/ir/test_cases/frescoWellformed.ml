@@ -65,6 +65,27 @@ let rejects expected f = assert_raises (FrescoKind.Error expected) f
 let bytes t = Marshal.to_string t [Marshal.Closures]
 
 let suite = "Fresco well-formedness" >::: [
+  "nested recursive binders check structure and ordinary requirements" >:: (fun _ ->
+    let q, _ = variable any in
+    let id = Quantifier.to_var q and kind = Quantifier.to_kind q in
+    let nested body = Types.Recursive (id, kind, Types.Recursive (id, kind, body)) in
+    check ~kind:abs (nested int);
+    reject (wrong_kind PrimaryKind.Type PrimaryKind.Row) (nested (row []));
+    reject ~kind:abs modal (nested arrow);
+    reject ~kind:unl (ordinary unl) (nested linear);
+    let q, body = variable any in
+    reject ~kind:mono (ordinary mono) (nested (Types.ForAll ([q], body))));
+
+  "two recursive nodes sharing a variable identity terminate" >:: (fun _ ->
+    let q, self = variable any in
+    let id = Quantifier.to_var q and kind = Quantifier.to_kind q in
+    let p = Unionfind.fresh Types.Not_typed and r = Unionfind.fresh Types.Not_typed in
+    Unionfind.change p (Types.Recursive (id, kind, record ["next", Types.Meta r]));
+    Unionfind.change r (Types.Recursive (id, kind, record ["next", Types.Meta p; "self", self]));
+    let before = bytes (p, r) in
+    List.iter (fun kind -> check ~kind (Types.Meta p)) [any; abs; unl; mono];
+    assert_equal before (bytes (p, r)));
+
   "primary kinds and argument tags" >:: (fun _ ->
     let cases = [PrimaryKind.Type, int; PrimaryKind.Row, row []; PrimaryKind.Presence, Types.Absent] in
     List.iter (fun (pk, t) ->
