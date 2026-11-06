@@ -46,9 +46,183 @@ let recursive_application name body = Types.RecursiveApplication {
   r_linear = (fun () -> Some false);
 }
 
+let reject_parameter f =
+  assert_raises
+    (Invalid_argument "Legacy typing does not support Abs declaration parameters") f
+
+let parameter_applications parameter argument =
+  let parameters = [parameter] in
+  let args = [PrimaryKind.Type, argument] in
+  let recursive = match recursive_application "Parameter" (fun () -> Some Types.int_type) with
+    | Types.RecursiveApplication app ->
+       Types.RecursiveApplication { app with r_quantifiers = parameters; r_args = args }
+    | _ -> assert false in
+  [Types.Application (Types.Abstype.make "Parameter" parameters, args);
+   Types.Alias (PrimaryKind.Type, ("Parameter", parameters, args, false), Types.int_type);
+   recursive]
+
+let assert_desugaring_preserves_point row_application =
+  let open Sugartypes in
+  let w = SourceCode.WithPos.make in
+  let q, _ = Types.fresh_type_quantifier subkind in
+  let r, _ = absolute () in
+  let qs = [q; r] in
+  let abs = Types.Abstype.make "Declared" (List.map Quantifier.to_parameter qs) in
+  let result_kind, body =
+    if row_application then PrimaryKind.Row, Types.make_empty_closed_row ()
+    else PrimaryKind.Type, Types.int_type in
+  let group = ref { Types.id = 0; type_map = StringMap.empty; linearity_map = StringMap.empty } in
+  List.iter (fun (declaration, reject) ->
+    let _, point, before = fresh_flexible () in
+    let recursive = w (Datatype.Mu
+      (SugarTypeVar.TResolvedType point, w (Datatype.Primitive Primitive.Int))) in
+    let args = [Datatype.Type recursive; Datatype.Type (w (Datatype.Primitive Primitive.Bool))] in
+    let datatype = w (if row_application then
+      Datatype.Record ([], Datatype.EffectApplication ("Declared", args))
+      else Datatype.TypeApplication ("Declared", args)) in
+    let phrase = w (TypeAnnotation (w (Var "x"), (datatype, None))) in
+    let env = { Types.empty_typing_environment with
+      tycon_env = Env.String.bind "Declared" declaration Env.String.empty } in
+    reject (fun () -> ignore (DesugarDatatypes.sentence env (Expression phrase)));
+    assert_equal before (Unionfind.find point))
+    [`Abstract abs, reject_parameter;
+     `Alias (result_kind, qs, body), reject;
+     `Mutual (qs, group), reject]
+
 let suite =
   "modal quantifiers"
   >::: [
+    "declaration parameter defaults preserve ordinary kinds" >:: (fun _ ->
+      List.iter (fun pk ->
+        List.iter (fun lin ->
+          List.iter (fun restriction ->
+            let kind = pk, (lin, restriction) in
+            let parameter = TypeParameter.make kind in
+            assert_equal ModalKind.Any (TypeParameter.to_modal_kind parameter);
+            assert_equal kind (TypeParameter.to_kind parameter);
+            assert_equal kind (TypeParameter.to_legacy_kind parameter))
+            [Restriction.Any; Restriction.Base; Restriction.Mono;
+             Restriction.Session; Restriction.Effect])
+          [Linearity.Any; Linearity.Unl])
+        [PrimaryKind.Type; PrimaryKind.Row; PrimaryKind.Presence]);
+
+    "Abs declaration parameters require Type" >:: (fun _ ->
+      List.iter (fun pk ->
+        assert_raises
+          (Invalid_argument "Abs declaration parameters must have primary kind Type")
+          (fun () -> ignore (TypeParameter.make ~modal_kind:ModalKind.Abs (pk, subkind))))
+        [PrimaryKind.Row; PrimaryKind.Presence]);
+
+    "declaration parameter equality includes both kinds" >:: (fun _ ->
+      let any = TypeParameter.make kind in
+      let abs = TypeParameter.make ~modal_kind:ModalKind.Abs kind in
+      assert_bool "Same kinds" (TypeParameter.equal any (TypeParameter.make kind));
+      assert_bool "Different modal kinds" (not (TypeParameter.equal any abs));
+      assert_bool "Different primary kinds"
+        (not (TypeParameter.equal any (TypeParameter.make (PrimaryKind.Row, subkind))));
+      assert_bool "Different subkinds"
+        (not (TypeParameter.equal any
+          (TypeParameter.make (PrimaryKind.Type, (Linearity.Any, Restriction.Base))))));
+
+    "quantifier conversion preserves declaration kinds" >:: (fun _ ->
+      List.iter (fun modal_kind ->
+        let q = Quantifier.make ~modal_kind 123 kind in
+        let before = !(Types.type_variable_counter) in
+        let parameter = Quantifier.to_parameter q in
+        assert_equal before !(Types.type_variable_counter);
+        assert_equal kind (TypeParameter.to_kind parameter);
+        assert_equal modal_kind (TypeParameter.to_modal_kind parameter))
+        [ModalKind.Any; ModalKind.Abs]);
+
+    "legacy declaration projection rejects Abs" >:: (fun _ ->
+      let parameter = TypeParameter.make ~modal_kind:ModalKind.Abs kind in
+      reject_parameter (fun () -> TypeParameter.require_any parameter);
+      reject_parameter (fun () -> ignore (TypeParameter.to_legacy_kind parameter)));
+
+    "declaration parameter printer retains Any output" >:: (fun _ ->
+      assert_equal ~printer:Fun.id (Kind.show kind)
+        (TypeParameter.show (TypeParameter.make kind));
+      assert_equal ~printer:Fun.id (Kind.show kind ^ "::Abs")
+        (TypeParameter.show (TypeParameter.make ~modal_kind:ModalKind.Abs kind)));
+
+    "built-in declaration parameters retain ordinary kinds" >:: (fun _ ->
+      List.iter (fun (abs, kinds) ->
+        let parameters = Types.Abstype.arity abs in
+        assert_equal kinds (List.map TypeParameter.to_legacy_kind parameters))
+        [Types.process, [PrimaryKind.Row, (Linearity.Any, Restriction.Effect)];
+         Types.list, [PrimaryKind.Type, (Linearity.Unl, Restriction.Any)];
+         Types.access_point, [PrimaryKind.Type, (Linearity.Any, Restriction.Session)]]);
+
+    "phantom Abs declaration parameters reject before mutation" >:: (fun _ ->
+      let parameter = TypeParameter.make ~modal_kind:ModalKind.Abs kind in
+      List.iter (fun unsupported ->
+        let free, point, before = fresh_flexible () in
+        let left = Types.Function (free, Types.make_empty_closed_row (), Types.int_type) in
+        let right = Types.Function (Types.bool_type, Types.make_empty_closed_row (), unsupported) in
+        reject_parameter (fun () -> Unify.datatypes (left, right));
+        assert_equal before (Unionfind.find point);
+        let combined = Types.make_tuple_type [free; unsupported] in
+        List.iter (fun generalise ->
+          reject_parameter (fun () -> ignore (generalise Env.String.empty combined));
+          assert_equal before (Unionfind.find point))
+          [Generalise.generalise; Generalise.generalise_without_mutation; Generalise.generalise_rigid];
+        List.iter (fun instantiate ->
+          reject_parameter (fun () -> ignore (instantiate combined));
+          assert_equal before (Unionfind.find point)) [Instantiate.typ; Instantiate.typ_rigid];
+        reject_parameter (fun () -> ignore (Types.is_sub_type (combined, combined)));
+        reject_parameter (fun () -> ignore (Instantiate.apply_type combined [])))
+        (parameter_applications parameter Types.int_type));
+
+    "declaration arguments are checked even when unused" >:: (fun _ ->
+      List.iter (fun application ->
+        reject (fun () -> Types.check_legacy_quantifiers application))
+        (parameter_applications (TypeParameter.make kind) (abs_type ())));
+
+    "repeated recursive declaration parameters are checked" >:: (fun _ ->
+      let visits = ref 0 in
+      let parameter = TypeParameter.make kind in
+      let app = match recursive_application "Repeated" (fun () -> incr visits; Some Types.int_type) with
+        | Types.RecursiveApplication app ->
+           { app with r_quantifiers = [parameter]; r_args = [PrimaryKind.Type, Types.int_type] }
+        | _ -> assert false in
+      let with_abs = { app with r_quantifiers = [TypeParameter.make ~modal_kind:ModalKind.Abs kind] } in
+      reject_parameter (fun () -> Types.check_legacy_quantifiers
+        (Types.Function (Types.RecursiveApplication app, Types.make_empty_closed_row (),
+                         Types.RecursiveApplication with_abs)));
+      assert_equal 1 !visits);
+
+    "incomplete recursive declarations still check parameters" >:: (fun _ ->
+      let app = match recursive_application "IncompleteParameter" (fun () -> None) with
+        | Types.RecursiveApplication app ->
+           Types.RecursiveApplication { app with
+             r_quantifiers = [TypeParameter.make ~modal_kind:ModalKind.Abs kind];
+             r_args = [PrimaryKind.Type, Types.int_type] }
+        | _ -> assert false in
+      reject_parameter (fun () -> Types.check_legacy_quantifiers ~allow_incomplete:true app));
+
+    "Any declaration prechecks retain raw recursive bodies" >:: (fun _ ->
+      List.iter Types.check_legacy_quantifiers
+        (parameter_applications (TypeParameter.make kind) Types.int_type));
+
+    "Any abstract and alias inference remains available" >:: (fun _ ->
+      let q, t = Types.fresh_type_quantifier subkind in
+      let abs = Types.Abstype.make "Box" [Quantifier.to_parameter q] in
+      let _, instantiated = Instantiate.typ
+        (Types.ForAll ([q], Types.Application (abs, [PrimaryKind.Type, t]))) in
+      Unify.datatypes (instantiated, Types.Application (abs, [PrimaryKind.Type, Types.int_type]));
+      let env = Env.String.bind "Box" (`Alias (PrimaryKind.Type, [q], t)) Env.String.empty in
+      match Instantiate.alias "Box" [PrimaryKind.Type, Types.int_type] env with
+      | Types.Alias (_, (_, [parameter], _, _), body) ->
+         assert_bool "Retained parameter" (TypeParameter.equal parameter (Quantifier.to_parameter q));
+         assert_equal Types.int_type body
+      | _ -> assert_failure "Expected an alias application");
+
+    "type application checks all parameters before desugaring arguments" >:: (fun _ ->
+      assert_desugaring_preserves_point false);
+
+    "row application checks all parameters before desugaring arguments" >:: (fun _ ->
+      assert_desugaring_preserves_point true);
+
     "default modal kind" >:: (fun _ ->
       let q = Quantifier.make 0 kind in
       assert_equal ModalKind.Any (Quantifier.to_modal_kind q);

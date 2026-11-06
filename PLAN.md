@@ -38,8 +38,9 @@ document. Independent design review is complete and its four findings
 are resolved. D1's scoped row and modality modules are implemented,
 integrated, tested, and independently reviewed. D2a's modal quantifier
 metadata and D2b's contextual arrows/modal type constructors are also
-integrated, tested, and independently reviewed. Syntax, Fresco inference,
-and migration remain incomplete.
+integrated, tested, and independently reviewed. D3a preserves modal
+kinds on declaration parameters. Syntax, Fresco inference, and migration
+remain incomplete.
 
 Baseline checked on 5 November 2026 at commit `7100e289`:
 
@@ -188,6 +189,7 @@ implementation defects. Record completed behaviour and deferred work.
 - [x] D1: implement and review scoped row and modality operations.
 - [x] D2a: preserve modal quantifier kinds through shared type operations.
 - [x] D2b: add contextual arrows/modal types and shared type operations.
+- [x] D3a: preserve modal kinds on declaration parameters.
 - [ ] Implement and test modal syntax and scoped effect rows.
 - [ ] Refactor type inference to follow Fresco.
 - [ ] Implement modal inference and run the first working example.
@@ -349,9 +351,10 @@ document records representative pairs and additional Links coverage.
 Read-only investigations also recorded the D3 parser transition and
 the D4 context/assignment design.
 
-## Latest task and verification
+## D2b verification
 
-6 November 2026, D2b: added contextual `Arrow`/`LinearArrow` and `Modal`
+6 November 2026, D2b, commit `6255518a`: added contextual
+`Arrow`/`LinearArrow` and `Modal`
 types, scoped effect row aliases, structural traversals, substitution,
 free-variable collection, kind utilities, and printers. Modal effect
 arguments retain their identities, flags, duplicates, and order.
@@ -383,9 +386,41 @@ A source review also confirmed that the reference's ghost consistency
 cases omit a required bound-variable check. The design records the
 thesis rule and direct/source-level probes for D4.
 
+## Latest task and verification
+
+6 November 2026, D3a: added `TypeParameter` descriptors carrying
+ordinary and modal kinds. Abstract type arities, aliases, and recursive
+applications retain these descriptors through structural operations.
+Legacy consumers reject `Abs`, including unused parameters. Added
+18 unit tests.
+
+Independent review found that datatype desugaring could mutate an
+earlier recursive type argument before rejecting a later `Abs`
+parameter. Both argument-matching helpers now check the entire
+parameter list before desugaring arguments. Two regression tests
+failed before the fix and pass afterwards; they cover ordinary and
+row applications of abstract, alias, and recursive declarations.
+Independent review confirmed the fix and reported no further findings.
+Main, implementation, and review source snapshots match.
+
+| Integrated check | Result |
+|---|---|
+| `make no-db` | Passed |
+| `tests/handlers.tests` | 95 passed |
+| `tests/effect_sugar.tests` | 44 passed |
+| `tests/polymorphism.tests` | 55 passed |
+| `tests/typecheck_examples.tests` | 167 passed, 15 ignored by existing settings |
+| `tests/type_print.tests` | 10 passed |
+| `tests/desugar_datatypes.tests` | 25 passed |
+| `opam exec -- ./run-tests nodb-unit-tests` | 152 passed, including 18 new tests |
+| `make rule-check` | Passed; GNU-find tab check skipped, formatter check disabled |
+| Manual changed-file tab/trailing-whitespace check | Passed |
+| `git diff --check` | Passed |
+
 ## Next action
 
-Implement D3a: preserve ordinary and modal kinds on abstract, alias,
-and recursive type declaration parameters, including unused parameters.
-Then add contextual declaration application and surface syntax in
-the remaining D3 changes. D4 adds Fresco contexts and constraints.
+Implement D3b: modal type and binder syntax, surface effect applications,
+and implicit arrow nodes. Keep the legacy frontend building through
+the planned temporary normalisation. Then add effect declarations,
+handler annotations, freezing, and contextual datatype elaboration.
+D4 supplies the contextual kind checks, contexts, and constraints.

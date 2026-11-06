@@ -121,7 +121,7 @@ let simplify_tycon_env (tycon_env : Types.tycon_environment) : simple_tycon_env
     let param_kinds, internal_type =
       match tycon with
       | `Alias (_, qs, tp) -> List.map Quantifier.to_legacy_kind qs, Some tp
-      | `Abstract abs -> Types.Abstype.arity abs, None
+      | `Abstract abs -> List.map TypeParameter.to_legacy_kind (Types.Abstype.arity abs), None
       | `Mutual _ -> raise (internal_error "Found `Mutual in global tycon env")
     in
     SEnv.bind name (param_kinds, false, internal_type) simpl_env
@@ -534,7 +534,7 @@ let gather_operation_of_type tp
         method alias_recapp
           = fun kinds tyargs ->
           let effect_rows = ListUtils.filter_map2
-                              (fun (knd, _) -> is_effect_row_kind knd)
+                              (fun (knd, _) -> is_effect_row_kind (TypeParameter.to_legacy_kind knd))
                               (fun (_, (_, typ)) -> typ)
                               kinds tyargs in
           List.fold_left

@@ -474,4 +474,4 @@ let alias ?(allow_incomplete = false) name tyargs env : Types.typ =
            definition with the type arguments *and* instantiate any
            top-level quantifiers *)
         let (_, body) = instantiate_typ ~allow_incomplete (instantiate_datatype inst_map body) in
-          Alias (k, (name, List.map Quantifier.to_legacy_kind vars, tyargs, false), body)
+          Alias (k, (name, List.map Quantifier.to_parameter vars, tyargs, false), body)

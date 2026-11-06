@@ -121,13 +121,12 @@ module Desugar = struct
             (* Matches kinds of the quantifiers against the type arguments.
              * Returns Types.type_args based on the given frontend type arguments. *)
             let match_quantifiers : type a. (a -> Kind.t) -> a list -> Types.type_arg list = fun proj qs ->
-              let match_kinds i (q, t) =
+              let match_kinds i ((q_kind, _), t) =
                 let primary_kind_of_type_arg : Datatype.type_arg -> PrimaryKind.t = function
                   | Type _ -> PrimaryKind.Type
                   | Row _ -> PrimaryKind.Row
                   | Presence _ -> PrimaryKind.Presence
                 in
-                let q_kind, _ = proj q in
                 let t_kind = primary_kind_of_type_arg t in
                 if q_kind <> t_kind then
                   raise
@@ -137,7 +136,7 @@ module Desugar = struct
                 else t
               in
               let type_args qs ts =
-                List.combine qs ts
+                List.combine (List.map proj qs) ts
                 |> List.mapi
                      (fun i (q,t) ->
                        let  t = match_kinds i (q, t) in
@@ -160,7 +159,7 @@ module Desugar = struct
                     raise (type_application_global_kind_mismatch pos tycon
                         "Type" (PrimaryKind.to_string k))
               | Some (`Abstract abstype) ->
-                  let ts = match_quantifiers identity (Abstype.arity abstype) in
+                  let ts = match_quantifiers TypeParameter.to_legacy_kind (Abstype.arity abstype) in
                   Application (abstype, ts)
               | Some (`Mutual (qs, tygroup_ref)) ->
                   (* Check that the quantifiers / kinds match up, then generate
@@ -179,7 +178,7 @@ module Desugar = struct
                     { r_name = tycon;
                       r_dual = false;
                       r_unique_name;
-                      r_quantifiers = List.map Quantifier.to_legacy_kind qs;
+                      r_quantifiers = List.map Quantifier.to_parameter qs;
                       r_args; r_unwind; r_body; r_linear
                     }
             end
@@ -219,13 +218,12 @@ module Desugar = struct
       match rv with
         | EffectApplication (name, ts) ->
             let match_quantifiers : type a. (a -> Kind.t) -> a list -> Types.type_arg list = fun proj qs ->
-              let match_kinds i (q, t) =
+              let match_kinds i ((q_kind, _), t) =
                 let primary_kind_of_type_arg : Datatype.type_arg -> PrimaryKind.t = function
                   | Type _ -> PrimaryKind.Type
                   | Row _ -> PrimaryKind.Row
                   | Presence _ -> PrimaryKind.Presence
                 in
-                let q_kind, _ = proj q in
                 let t_kind = primary_kind_of_type_arg t in
                 if q_kind <> t_kind then
                   raise
@@ -235,7 +233,7 @@ module Desugar = struct
                 else t
               in
               let type_args qs ts =
-                List.combine qs ts
+                List.combine (List.map proj qs) ts
                 |> List.mapi
                      (fun i (q,t) ->
                        let  t = match_kinds i (q, t) in
@@ -260,7 +258,7 @@ module Desugar = struct
                     raise (type_application_global_kind_mismatch node.pos name
                         "Row" (PrimaryKind.to_string k))
               | Some (`Abstract abstype) ->
-                  let ts = match_quantifiers identity (Abstype.arity abstype) in
+                  let ts = match_quantifiers TypeParameter.to_legacy_kind (Abstype.arity abstype) in
                   Application (abstype, ts)
               | Some (`Mutual (qs, tygroup_ref)) ->
                   (* Check that the quantifiers / kinds match up, then generate
@@ -279,7 +277,7 @@ module Desugar = struct
                     { r_name = name;
                       r_dual = false;
                       r_unique_name;
-                      r_quantifiers = List.map Quantifier.to_legacy_kind qs;
+                      r_quantifiers = List.map Quantifier.to_parameter qs;
                       r_args; r_unwind; r_body; r_linear
                     }
             end

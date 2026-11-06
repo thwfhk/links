@@ -316,7 +316,8 @@ let check_type_wellformedness primary_kind t : unit =
     | Closed -> pk_row
     | body -> typ rec_env body
 
-  and compare_kinds _rec_env k (pk, _t) =
+  and compare_kinds _rec_env parameter (pk, _t) =
+    let k = TypeParameter.to_kind parameter in
     (* ignore (check_kind (Kind.primary_kind k) (typ rec_env t)) *)
     ignore (check_kind (Kind.primary_kind k) pk)
   and typ rec_env =

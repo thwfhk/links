@@ -41,7 +41,7 @@ let recursive body =
 let recursive_application name args body =
   Types.RecursiveApplication {
     Types.r_name = name; r_unique_name = name; r_dual = false;
-    r_quantifiers = List.map (fun (pk, _) -> pk, subkind) args;
+    r_quantifiers = List.map (fun (pk, _) -> TypeParameter.make (pk, subkind)) args;
     r_args = args;
     r_unwind = (fun _ _ -> assert_failure "Must inspect the raw declaration body");
     r_body = body;
@@ -78,6 +78,70 @@ let print t =
   Types.string_of_datatype ~policy t
 
 let suite = "modal type traversals" >::: [
+  "substitution preserves declaration parameters" >:: (fun _ ->
+    let q, a = rigid () in
+    let parameters = [TypeParameter.make ~modal_kind:ModalKind.Abs kind; TypeParameter.make kind] in
+    let args = [PrimaryKind.Type, a; PrimaryKind.Type, Types.bool_type] in
+    let abs = Types.Abstype.make "Declared" parameters in
+    let recursive = match recursive_application "Declared" args (fun () -> Some Types.int_type) with
+      | Types.RecursiveApplication app -> Types.RecursiveApplication { app with r_quantifiers = parameters }
+      | _ -> assert false in
+    let applications = [Types.Application (abs, args);
+      Types.Alias (PrimaryKind.Type, ("Declared", parameters, args, false), Types.int_type);
+      recursive] in
+    List.iter (fun t ->
+      TypeUtils.check_type_wellformedness (Some PrimaryKind.Type) t;
+      let subst = IntMap.singleton (Quantifier.to_var q) (PrimaryKind.Type, Types.int_type) in
+      let t = Instantiate.datatype subst t in
+      let parameters', args' = match t with
+        | Types.Application (abs, args) -> Types.Abstype.arity abs, args
+        | Types.Alias (_, (_, parameters, args, _), _) -> parameters, args
+        | Types.RecursiveApplication app -> app.r_quantifiers, app.r_args
+        | _ -> assert_failure "Expected a declaration application" in
+      assert_equal parameters parameters';
+      assert_equal [PrimaryKind.Type, Types.int_type; PrimaryKind.Type, Types.bool_type] args')
+      applications);
+
+  "Transform preserves declaration parameters" >:: (fun _ ->
+    let parameters = [TypeParameter.make ~modal_kind:ModalKind.Abs kind; TypeParameter.make kind] in
+    let args = [PrimaryKind.Type, Types.int_type; PrimaryKind.Type, Types.bool_type] in
+    let abs = Types.Abstype.make "Declared" parameters in
+    let recursive = match recursive_application "Declared" args (fun () -> Some Types.int_type) with
+      | Types.RecursiveApplication app -> Types.RecursiveApplication { app with r_quantifiers = parameters }
+      | _ -> assert false in
+    let visitor = object (self)
+      inherit Types.Transform.visitor as super
+      method! typ = function
+        | Types.Primitive Primitive.Int -> self, Types.bool_type
+        | t -> super#typ t
+    end in
+    List.iter (fun t ->
+      let parameters', args' = match snd (visitor#typ t) with
+        | Types.Application (abs, args) -> Types.Abstype.arity abs, args
+        | Types.Alias (_, (_, parameters, args, _), _) -> parameters, args
+        | Types.RecursiveApplication app -> app.r_quantifiers, app.r_args
+        | _ -> assert_failure "Expected a declaration application" in
+      assert_equal parameters parameters';
+      assert_equal [PrimaryKind.Type, Types.bool_type; PrimaryKind.Type, Types.bool_type] args')
+      [Types.Application (abs, args);
+       Types.Alias (PrimaryKind.Type, ("Declared", parameters, args, false), Types.int_type);
+       recursive]);
+
+  "declaration printers retain implicit effect omission" >:: (fun _ ->
+    let _, eff = Types.fresh_row_quantifier (Linearity.Any, Restriction.Effect) in
+    let parameters = [TypeParameter.make kind;
+      TypeParameter.make (PrimaryKind.Row, (Linearity.Any, Restriction.Effect))] in
+    let args = [PrimaryKind.Type, Types.int_type; PrimaryKind.Row, eff] in
+    let recursive = match recursive_application "Declared" args (fun () -> Some Types.int_type) with
+      | Types.RecursiveApplication app -> Types.RecursiveApplication { app with r_quantifiers = parameters }
+      | _ -> assert false in
+    List.iter (fun engine -> with_printer engine (fun () ->
+      let policy () = Types.Policy.default_policy () |> Types.Policy.set_effect_sugar true in
+      List.iter (fun t ->
+        assert_equal ~printer:Fun.id "Declared (Int)" (Types.string_of_datatype ~policy t))
+        [Types.Alias (PrimaryKind.Type, ("Declared", parameters, args, false), Types.int_type);
+         recursive])) [Types.Old; Types.Roundtrip]);
+
   "primary kinds" >:: (fun _ ->
     List.iter (fun t ->
       assert_equal PrimaryKind.Type (TypeUtils.primary_kind_of_type t);

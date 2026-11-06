@@ -36,7 +36,7 @@ module Abstype =
 struct
   type t = { id    : istring ;
              name  : istring ;
-             arity : Kind.t list }
+             arity : TypeParameter.t list }
       [@@deriving eq,show]
   let make name arity =
     let id = Utility.gensym ~prefix:"abstype:" () in
@@ -49,7 +49,7 @@ end
 let process  = {
   Abstype.id = "Process" ;
   name       = "Process" ;
-  arity      = [pk_row, (lin_any, res_effect)] ;
+  arity      = [TypeParameter.make (pk_row, (lin_any, res_effect))] ;
 }
 
 (* Lists are currently unlimited because the only deconstructors are
@@ -58,15 +58,15 @@ let process  = {
 let list     = {
   Abstype.id = "List" ;
   name       = "List" ;
-  arity      = [pk_type, (lin_unl, res_any)] ;
+  arity      = [TypeParameter.make (pk_type, (lin_unl, res_any))] ;
 }
 
 (* WR: used by DB queries *)
 let mapentry = {
   Abstype.id = "MapEntry" ;
   name       = "MapEntry" ;
-  arity      = [pk_type, (lin_unl, res_any)
-               ;pk_type, (lin_unl, res_any)] ;
+  arity      = [TypeParameter.make (pk_type, (lin_unl, res_any))
+               ;TypeParameter.make (pk_type, (lin_unl, res_any))] ;
 }
 
 let event    = {
@@ -83,7 +83,7 @@ let dom_node = {
 let access_point = {
   Abstype.id = "AP" ;
   name       = "AP" ;
-  arity      = [pk_type, (lin_any, res_session)] ;
+  arity      = [TypeParameter.make (pk_type, (lin_any, res_session))] ;
 }
 
 let socket = {
@@ -101,13 +101,13 @@ let spawn_location = {
 let transaction_time_data = {
   Abstype.id = "TransactionTime";
   name       = "TransactionTime";
-  arity      = [pk_type, (lin_any, res_any)]
+  arity      = [TypeParameter.make (pk_type, (lin_any, res_any))]
 }
 
 let valid_time_data = {
   Abstype.id = "ValidTime";
   name       = "ValidTime";
-  arity      = [pk_type, (lin_any, res_any)]
+  arity      = [TypeParameter.make (pk_type, (lin_any, res_any))]
 }
 
 (* Not a real type!
@@ -147,7 +147,7 @@ and rec_appl = {
   r_name: string;
   r_dual: bool;
   r_unique_name: string;
-  r_quantifiers : Kind.t list;
+  r_quantifiers : TypeParameter.t list;
   r_args: type_arg list;
   r_unwind: type_arg list -> bool -> typ;
   r_body: unit -> typ option;
@@ -159,7 +159,7 @@ and typ =
   | Not_typed
   | Var of (tid * Kind.t * Freedom.t)
   | Recursive of (tid * Kind.t * typ)
-  | Alias of (PrimaryKind.t * (string * Kind.t list * type_arg list * bool) * typ)
+  | Alias of (PrimaryKind.t * (string * TypeParameter.t list * type_arg list * bool) * typ)
   | Application of (Abstype.t * type_arg list)
   | RecursiveApplication of rec_appl
   | Meta of typ point
@@ -1775,12 +1775,17 @@ let check_legacy_quantifiers ?(allow_incomplete = false) t =
       | ForAll (qs, body) ->
          List.iter Quantifier.require_any qs;
          self#visit_type vars body
-      | Alias (_, (_, _, args, _), body) ->
+      | Application (abs, args) ->
+         List.iter TypeParameter.require_any (Abstype.arity abs);
+         List.iter (self#visit_type_arg vars) args
+      | Alias (_, (_, parameters, args, _), body) ->
+         List.iter TypeParameter.require_any parameters;
          List.iter (self#visit_type_arg vars) args;
          self#visit_type vars body
       | Table (_, read, write, needed) ->
          List.iter (self#visit_type vars) [read; write; needed]
       | RecursiveApplication app ->
+         List.iter TypeParameter.require_any app.r_quantifiers;
          List.iter (self#visit_type_arg vars) app.r_args;
          if not (StringSet.mem app.r_unique_name !checked_bodies) then
            begin match app.r_body () with
@@ -2444,7 +2449,7 @@ struct
   let maybe_shared_effect = function
     | Function _ | Lolli _ -> true
     | Alias (_, (_, qs, _, _), _) | RecursiveApplication { r_quantifiers = qs; _ } ->
-       begin match ListUtils.last_opt qs with
+       begin match Option.map TypeParameter.to_kind (ListUtils.last_opt qs) with
        | Some (PrimaryKind.Row, (_, Restriction.Effect)) -> true
        | _ -> false
        end
@@ -3086,8 +3091,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       | Var (vid, _, _) -> Some vid
       | _ -> None
 
-    let is_effect_row_kind : Kind.t -> bool
-      = fun (primary, (_, restriction)) ->
+    let is_effect_row_kind : TypeParameter.t -> bool
+      = fun parameter ->
+      let primary, (_, restriction) = TypeParameter.to_kind parameter in
       primary = PrimaryKind.Row && restriction = Restriction.Effect
 
     (* inspired by how the original code does it (see maybe_shared_effect)  *)
@@ -3395,7 +3401,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 effect row and sugar will apply to it. The last argument can by
                 convention be also completely omitted, if all its fields are eliminated
                 by the sugar. *)
-            method tyarg_list : Kind.t list -> type_arg list -> 'self_type * Kind.t list * type_arg list
+            method tyarg_list : TypeParameter.t list -> type_arg list -> 'self_type * TypeParameter.t list * type_arg list
               = fun kinds tyargs ->
               match (kinds, tyargs) with
               | [], [] -> (o, [], [])
@@ -3789,7 +3795,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               (if want_parens then StringBuffer.write buf ")");
             end)
 
-  and alias_recapp : (string * Kind.t list * type_arg list * bool) printer
+  and alias_recapp : (string * TypeParameter.t list * type_arg list * bool) printer
     = let open Printer in
       Printer (fun ctx (name, arg_kinds, arg_types, is_dual) buf ->
           (if is_dual then StringBuffer.write buf "~");
@@ -3797,7 +3803,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           (match arg_types with
            | [] -> ()
            | _ -> StringBuffer.write buf " (";
-                  let ambients = List.map (function
+                  let ambients = List.map (fun parameter -> match TypeParameter.to_kind parameter with
                                      | (PrimaryKind.Row, (_, Restriction.Effect)) -> Some Context.Effect
                                      | _ -> None) arg_kinds in
                   Printer.concat_items_with_ambients ~sep:"," type_arg arg_types ambients ctx buf;
@@ -4923,7 +4929,7 @@ let make_table_type (t, r, w, n) = Table (t, r, w, n)
 (* Alias of more general TemporalTable type *)
 let make_tablehandle_alias (r, w, n) =
     let kind = (PrimaryKind.Type, (lin_unl, res_any)) in
-    let kinds = List.init 3 (fun _ -> kind) in
+    let kinds = List.init 3 (fun _ -> TypeParameter.make kind) in
     let tyargs = List.map (fun x -> (PrimaryKind.Type, x)) [r; w; n] in
     Alias (pk_type, ("TableHandle", kinds, tyargs, false),
         Table (Temporality.current, r, w, n))

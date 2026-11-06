@@ -156,6 +156,46 @@ module ModalKind = struct
     [@@deriving show,eq]
 end
 
+module TypeParameter : sig
+  type t
+  val make : ?modal_kind:ModalKind.t -> Kind.t -> t
+  val to_kind : t -> Kind.t
+  val to_modal_kind : t -> ModalKind.t
+  val require_any : t -> unit
+  val to_legacy_kind : t -> Kind.t
+  val equal : t -> t -> bool
+  val pp : Format.formatter -> t -> unit
+  val show : t -> string
+end = struct
+  type t = { kind : Kind.t; modal_kind : ModalKind.t }
+
+  let make ?(modal_kind = ModalKind.Any) kind =
+    if modal_kind = ModalKind.Abs && Kind.primary_kind kind <> PrimaryKind.Type then
+      invalid_arg "Abs declaration parameters must have primary kind Type";
+    { kind; modal_kind }
+
+  let to_kind p = p.kind
+  let to_modal_kind p = p.modal_kind
+
+  let require_any p =
+    match p.modal_kind with
+    | ModalKind.Any -> ()
+    | ModalKind.Abs -> invalid_arg "Legacy typing does not support Abs declaration parameters"
+
+  let to_legacy_kind p =
+    require_any p;
+    p.kind
+
+  let equal p p' =
+    Kind.equal p.kind p'.kind && ModalKind.equal p.modal_kind p'.modal_kind
+
+  let pp fmt p =
+    Kind.pp fmt p.kind;
+    if p.modal_kind = ModalKind.Abs then Format.pp_print_string fmt "::Abs"
+
+  let show p = Format.asprintf "%a" pp p
+end
+
 module Quantifier = struct
   type t = { var : int; kind : Kind.t; modal_kind : ModalKind.t }
 
@@ -168,6 +208,7 @@ module Quantifier = struct
   let to_kind q = q.kind
   let to_modal_kind q = q.modal_kind
   let with_var var q = { q with var }
+  let to_parameter q = TypeParameter.make ~modal_kind:q.modal_kind q.kind
 
   let to_primary_kind q = Kind.primary_kind q.kind
   let to_subkind q = Kind.subkind q.kind

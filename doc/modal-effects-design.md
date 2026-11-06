@@ -355,6 +355,25 @@ substitution and preserve quantified/modal bodies. The legacy alias
 helpers also instantiate leading quantifiers and remain confined to
 the legacy frontend during migration.
 
+D3a implements `TypeParameter`, containing `Kind.t` and `ModalKind.t`, with
+an `Any` default and `Abs` permitted only for primary kind `Type`.
+Use it in abstract type arities, alias parameter descriptors, and
+`rec_appl.r_quantifiers`. `Quantifier.to_parameter` copies both kinds
+without allocating a variable identity. Structural consumers retain
+the full descriptor. Legacy consumers use a checked projection to
+`Kind.t` which rejects `Abs`. The legacy precheck must also inspect
+unused declaration parameters on abstract, alias, and recursive
+applications. A later D3 change adds contextual structural application
+and validates argument modal kinds using the contextual kind checker.
+
+The 18 D3a tests cover descriptor preservation, unused `Abs` parameters,
+checked legacy projections, unchanged ordinary kinds/printing, and
+rejection before mutation. Datatype desugaring projects every parameter
+before desugaring any argument; this corrects the review finding where
+a preceding recursive argument changed a point before a later `Abs`
+parameter failed. All 152 unit tests and six selected regression suites
+pass. Independent review confirmed the correction.
+
 Split D2 into D2a, quantifier metadata and its preservation, and D2b,
 contextual arrows/modal types and their traversals. D2a changes no
 surface syntax. Test freshening, renaming, and rejection by legacy

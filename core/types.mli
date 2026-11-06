@@ -22,8 +22,8 @@ type 'a point = 'a Unionfind.point
 module Abstype :
 sig
   type t [@@deriving eq,show]
-  val make  : string -> Kind.t list -> t
-  val arity : t -> Kind.t list
+  val make  : string -> TypeParameter.t list -> t
+  val arity : t -> TypeParameter.t list
   val name  : t -> string
   val compare : t -> t -> int
 end
@@ -119,7 +119,7 @@ and rec_appl = {
   r_name: string;
   r_dual: bool;
   r_unique_name: string;
-  r_quantifiers : Kind.t list;
+  r_quantifiers : TypeParameter.t list;
   r_args: type_arg list;
   r_unwind: type_arg list -> bool -> typ;
   (* The raw declaration body, without substitution or unfolding. It is absent
@@ -133,7 +133,7 @@ and typ =
   | Not_typed
   | Var of (tid * Kind.t * Freedom.t)
   | Recursive of (tid * Kind.t * typ)
-  | Alias of (PrimaryKind.t * (string * Kind.t list * type_arg list * bool) * typ)
+  | Alias of (PrimaryKind.t * (string * TypeParameter.t list * type_arg list * bool) * typ)
   | Application of (Abstype.t * type_arg list)
   | RecursiveApplication of rec_appl
   | Meta of typ point
@@ -279,7 +279,7 @@ val type_arg_of_quantifier : Quantifier.t -> type_arg
 val quantifier_of_type_arg : type_arg -> Quantifier.t
 val quantifiers_of_type_args : type_arg list -> Quantifier.t list
 
-(** Reject [Abs] binders, contextual arrows and modal types before legacy
+(** Reject [Abs] binders and declaration parameters, contextual arrows and modal types before legacy
     inference changes any type variables.
     Structural substitution and binder copying do not need this check.
     [allow_incomplete] permits unfinished recursive declarations during type
