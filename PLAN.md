@@ -14,8 +14,8 @@ implementation decisions, reasons, internal invariants and source comparisons.
 ## Current status
 
 Paused after D4i as requested. The list-parentheses correction and D4f2--D4i
-are complete, reviewed, tested and committed. Await the user's review of the
-marked design choices before D4j.
+are complete, reviewed, tested and committed. Await the user's instruction
+to resume before D4j.
 
 - D1--D3d provide row/modality operations, shared modal types, surface syntax,
   and effect/operation resolution. D4a--D4f1 provide kind checks, persistent
@@ -182,23 +182,14 @@ Handler argument inference follows in D6; D3f preserves omission in the AST.
 
 ## Design review at the D4i pause
 
-The [design](doc/modal-effects-design.md) marks the choices for discussion:
-
-- Skeleton scope projection through the persistent context.
-- Separate flexible requirements and Boolean dependency checks.
-- Contextual recursive operations, deferred row-tail duality and partial proofs.
-- Ghost-free raw declaration bodies for guessing and consistency.
-- Unresolved presence duality and opposite duality of one unknown row tail.
-
-The user approved a distinct error for unresolved recursive comparison. Equal
-recursive examples and legacy defects are documented with the comparison design.
-Two session duality cases currently return explicit unsupported-operation errors;
-choose how to store those relations before session source migration. D4j owns
-constraint solving. Raw-declaration ghost filling would require coordinated
-replacement of shared declarations; root and application-argument ghosts work.
+The marked implementation choices require no further user decision. The user
+approved an error for unresolved recursive comparison. D4j must check the two
+unsupported session duality cases against current Links and preserve its
+accepted programs before source migration; see the
+[design](doc/modal-effects-design.md#consistency-guessing-and-monotype-unification).
 
 ## Next action
 
-Await the user's design review and questions. Do not begin D4j until work resumes.
-Then implement subtyping, constraints and `look`, including a decision on the
-remaining session duality relations before source integration.
+Await the user's instruction to resume. Then implement subtyping, constraints
+and `look`, including the remaining session duality compatibility checks before
+source integration.

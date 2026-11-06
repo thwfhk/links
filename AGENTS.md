@@ -46,6 +46,8 @@ run their dedicated test suites unless the user requests it.
   in the design document, and update the specification if the choice
   affects language behaviour. Ask before major choices affecting scope,
   accepted programs, required annotations or runtime behaviour.
+  For features not directly related to effect systems, follow Links' current
+  behaviour.
 - Mark design choices made without user input that would benefit from
   user review in the design document. Record the choice, reason and main
   alternatives, and collect these marked choices in the milestone report

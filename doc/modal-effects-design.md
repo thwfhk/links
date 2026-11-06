@@ -347,19 +347,14 @@ metadata and raw declaration records. Fresh IDs avoid the input graph and
 context. Recursive demand checks close replacements over their defining scope;
 closed replacements are cached and unused substitutions are skipped.
 
-**For user review:** raw declaration bodies must contain no ghosts before
-consistency or guessing. Application arguments and root syntax may contain ghosts.
-Filling ghosts in a raw declaration would require a coordinated replacement of
-that declaration across all roots and context entries. That operation remains
-deferred with global raw-capture substitution.
-
-**For user review:** defer two unresolved session duality constraints. Dualising
+Two session duality cases remain unsupported. Dualising
 an unresolved presence reports `Unsupported_presence_duality`; the legacy helper
 asserts in this case. Comparing one unresolved row tail against its own dual
 reports `Unsupported_row_duality`. Choosing a closed row would discard other
 solutions, and inferring a recursive assignment would conflict with the occurs
-check. D4j must decide how to store these relations before session source
-migration. Resolved presences and open row tails in supported orientations work.
+check. D4j must check these cases against current Links and preserve its
+accepted programs before session source migration. Resolved presences and
+open row tails in supported orientations work.
 
 ## Implementation in Links
 
@@ -572,7 +567,7 @@ the exported variable table before checking. Session duality exchanges input and
 output and selection and choice, while message payloads keep their original type.
 Checked duality requires `Session`, including for nominal applications.
 
-**For user review:** represent a dual choice row using an empty row whose tail
+Represent a dual choice row using an empty row whose tail
 is the original copied row and whose tail-duality flag is set. This retains
 unknown presences and recursive rows without calling mutable legacy flattening.
 Equality and consistency must interpret the deferred duality when comparing rows.
@@ -603,7 +598,7 @@ recursive types. A complete comparison algorithm is deferred; the new comparison
 must reject the delayed mismatch above and test equal and unequal applications
 whose arguments grow during unfolding.
 
-**For user review:** use read-only comparison with three outcomes: equality,
+Use read-only comparison with three outcomes: equality,
 a structural mismatch, or unresolved obligations. Candidate equations replace
 repeated argument subterms by shared fresh rigid variables while retaining
 abstract constructor structure. Prove each equation by unfolding, allowing a
@@ -992,7 +987,7 @@ resulting rigid variables only when their full metadata agrees. Raw declaration
 records remain unchanged, so their captured solved variables remain live.
 Copies preserve recursive points and shared roots in matching lexical scopes.
 
-**For user review:** reuse context scope checking through a projection of
+Reuse context scope checking through a projection of
 variable occurrences and binders. Include vacuous binders and put raw captures
 behind fresh private nominal declarations. This retains independent raw scope
 and captured solution IDs. A separate skeleton scope checker would repeat
@@ -1041,7 +1036,7 @@ checking and modality transformation checks. For variable access, try the
 right residual before the absolute fallback, following the thesis' algorithmic
 variable lookup. Keep each failed attempt's context separate from the next.
 
-**For user review:** keep an explicit set of added guarantees on each flexible
+Keep an explicit set of added guarantees on each flexible
 context entry and exported variable. Preserve `Unl`, `Base`, `Mono`, `Session`
 and absolute-payload requirements as conjunctions. `Base` entails the ordinary
 `Mono` predicate; `Session` permits polymorphic message payloads and does not
@@ -1049,7 +1044,7 @@ entail `Mono`. Empty rows and absent fields can meet both `Base` and `Session`;
 a value type cannot. A fresh stronger representative was the main alternative,
 but the existing ordinary kind descriptor cannot express every conjunction.
 
-**For user review:** reuse the finite Boolean summary checks to find flexible
+Reuse the finite Boolean summary checks to find flexible
 dependencies. First test whether giving every eligible unknown the requested
 guarantee would suffice. Then remove each candidate guarantee in turn to find
 which unknowns need it. These summaries use conjunctions and fixed constructor

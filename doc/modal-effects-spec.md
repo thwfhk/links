@@ -21,6 +21,9 @@ the scope of these changes.
 
 ## 2. Syntax
 
+Programs, including type annotations and declaration bodies, contain no ghosts.
+Ghosts occur only in internal skeletons constructed during inference.
+
 ### 2.1 Types and binders
 
 In the table, `A` and `B` are types, `E` and `D` are comma-separated lists of
