@@ -13,9 +13,9 @@ implementation decisions, reasons, internal invariants and source comparisons.
 
 ## Current status
 
-Implementation has resumed through D4i. The D3f list-parentheses correction
-and D4f2--D4h are complete. Continue with D4i, then pause for the user's
-review of the recorded design choices.
+Paused after D4i as requested. The list-parentheses correction and D4f2--D4i
+are complete, reviewed, tested and committed. Await the user's review of the
+marked design choices before D4j.
 
 - D1--D3d provide row/modality operations, shared modal types, surface syntax,
   and effect/operation resolution. D4a--D4f1 provide kind checks, persistent
@@ -25,8 +25,11 @@ review of the recorded design choices.
   the legacy desugaring passes. Modal source programs cannot yet run through
   Fresco. New syntax is parsed and tested through separate entry points;
   the legacy frontend rejects modal constructs.
-- Consistency, subtyping, constraint solving and source inference remain.
-  Annotation elaboration, runtime integration and migration also remain.
+- D4f2--D4i add skeleton expansion/scope exit preserving ghosts, flexible
+  requirement refinement, contextual recursive operations, consistency,
+  guessing and monotype unification.
+- Subtyping, constraint solving, annotation elaboration and source inference
+  remain. Runtime integration and migration also remain.
 - D3e removes higher-order effect flags, syntax and row rules. Ordinary
   operation arguments and results must be absolute.
 - D3f implements `List A`, combined kind annotations and angle-bracket
@@ -64,7 +67,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D3f correction | Require parentheses around nested list element types | `02f79356` |
 | D4f2 | Skeleton solution expansion and scope exit preserving ghosts | `609c02fe` |
 | D4g | Ordinary/modal requirement refinement and detached restoration | `dac6f8fc` |
-| D4h | Contextual application, unfolding, session duality and recursive comparison | This commit |
+| D4h | Contextual application, unfolding, session duality and recursive comparison | `d12f864a` |
+| D4i | Persistent monotype unification, consistency and guessing | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -78,7 +82,6 @@ also requires the affected build/tests and review described in AGENTS.md.
 
 | Task | Depends on | Completion check |
 |---|---|---|
-| D4i: monotype unification, consistency and guessing | D4f2--D4h | Adapt existing Links structural unification to checked Fresco assignment; cover ghosts, supplied polymorphic fields, kinds/scope, repeated rows and failed alternatives |
 | D4j: subtyping, constraints and `look` | D4i | Preserve supplied polymorphic/modal structure and kind/scope requirements; failed alternatives retain no assignments |
 | D4k: contextual annotation/declaration elaboration | D3e--D3f, D4 checking/refinement/recursive operations | Source annotations and closed signatures reach the contextual kind checker with positioned errors |
 | D5: pure Fresco source inference | D3, D4i--D4k, required IR/export support | Adapted Fresco examples typecheck or reject as specified; a pure example evaluates; top-level unknowns and REPL failure handling work |
@@ -128,35 +131,36 @@ and modal integration tests must cover the remaining choices.
 
 ## Latest task and verification
 
-6 November 2026, D4h, this commit (base `dac6f8fc`): structural application,
-unfolding and session duality preserve supplied binders, modalities and detached
-requirements. Read-only recursive comparison separates equality, structural
-mismatch and unresolved obligations. It proves tested regular, growing and
-shifted equalities and rejects the delayed mismatch accepted by legacy Links.
-The specification and design record the user-authorised unresolved-comparison
-error and an equal example that currently remains unresolved.
+6 November 2026, D4i, this commit (base `d12f864a`): persistent consistency,
+guessing and monotype unification cover ghosts, quantified/modal structure,
+structural rows and presences, authored recursion, kind refinement and failure
+rollback. Inputs are checked before aliases are removed. Captured recursive
+scopes, freshness, session requirements and later assignments have regression
+coverage. The distinct unresolved-recursion error also covers growing joins
+that cannot construct a result.
 
-Independent review and integration review found and fixed nominal session checks,
-free/bound variable confusion, enclosing-binder capture on unfolding, quantifier
-grouping and closed-row absence. All D4h checks below ran after review fixes and
-writer readiness. Earlier results retain their last tested milestones:
+Independent review and integration review resolved captured-binder/shadowing
+errors, stale row-duality context, discarded alias requirements, recursive
+mismatch termination, fresh-ID collisions and repeated closure work. No review
+findings remain. All D4i checks below ran after writer readiness, fixes and
+combined-change inspection. Earlier checks retain their last tested milestones:
 Correction is `02f79356`, D3f is `aa9358e4`.
 
 | Check | Revision | Result |
 |---|---|---|
-| `make no-db` | D4h | Passed |
-| `tests/handlers.tests` | D4h | 95 passed |
-| `tests/effect_sugar.tests` | D4h | 44 passed |
-| `tests/polymorphism.tests` | D4h | 55 passed |
-| `tests/typecheck_examples.tests` | D4h | 167 passed, 15 ignored by existing settings |
+| `make no-db` | D4i | Passed |
+| `tests/handlers.tests` | D4i | 95 passed |
+| `tests/effect_sugar.tests` | D4i | 44 passed |
+| `tests/polymorphism.tests` | D4i | 55 passed |
+| `tests/typecheck_examples.tests` | D4i | 167 passed, 15 ignored by existing settings |
 | `tests/type_print.tests` | Correction | 10 passed |
 | `tests/desugar_datatypes.tests` | Correction | 44 passed |
 | `tests/modules.tests` | D3f | 41 passed |
 | `tests/mutual.tests` | D3f | 17 passed |
 | `tests/collections.tests` | Correction | 37 passed |
 | `tests/library.tests` | D3f | 4 passed |
-| `tests/freezeml.tests` | D3f | 59 passed |
-| `tests/typed_ir.tests` | D3f | 26 passed |
+| `tests/freezeml.tests` | D4i | 59 passed |
+| `tests/typed_ir.tests` | D4i | 26 passed |
 | `tests/binaryTrees.tests` | D3f | 5 passed |
 | `tests/cliArgs.tests` | D3f | 7 passed |
 | `tests/operators.tests` | D3f | 21 passed |
@@ -165,20 +169,36 @@ Correction is `02f79356`, D3f is `aa9358e4`.
 | `tests/xml.tests` | D3f | 74 passed |
 | `tests/bindings.tests` | D3f | 25 passed |
 | `tests/conditionals.tests` | D3f | 6 passed |
-| `opam exec -- ./run-tests nodb-unit-tests` | D4h | 812 passed |
+| `opam exec -- ./run-tests nodb-unit-tests` | D4i | 871 passed |
 | Menhir conflict check | Correction | Zero conflicts before and after the grammar change |
 | Parse-only source and expected-type comparison | D3f | No unexpected parse regressions; 1,374 programs and 838 type strings parse |
-| `make rule-check` | D4h | Passed; GNU-find tab check skipped, formatter check disabled |
-| Manual added-line tab/trailing-whitespace check | D4h | Passed |
-| `git diff --check` | D4h | Passed |
+| `make rule-check` | D4i | Passed; GNU-find tab check skipped, formatter check disabled |
+| Manual added-line tab/trailing-whitespace check | D4i | Passed |
+| `git diff --check` | D4i | Passed |
 
 D3f's parse-only audit covered excluded-feature fixtures without executing
 those suites. Existing invalid examples and deliberate rejection cases remain.
 Handler argument inference follows in D6; D3f preserves omission in the AST.
 
+## Design review at the D4i pause
+
+The [design](doc/modal-effects-design.md) marks the choices for discussion:
+
+- Skeleton scope projection through the persistent context.
+- Separate flexible requirements and Boolean dependency checks.
+- Contextual recursive operations, deferred row-tail duality and partial proofs.
+- Ghost-free raw declaration bodies for guessing and consistency.
+- Unresolved presence duality and opposite duality of one unknown row tail.
+
+The user approved a distinct error for unresolved recursive comparison. Equal
+recursive examples and legacy defects are documented with the comparison design.
+Two session duality cases currently return explicit unsupported-operation errors;
+choose how to store those relations before session source migration. D4j owns
+constraint solving. Raw-declaration ghost filling would require coordinated
+replacement of shared declarations; root and application-argument ghosts work.
+
 ## Next action
 
-Complete D4i's unification, consistency and guessing. Finish review fixes,
-inspect the combined changes, run the integrated checks and commit the milestone.
-Pause after D4i, summarise the current status and ask the user to review the
-marked design choices and raise questions.
+Await the user's design review and questions. Do not begin D4j until work resumes.
+Then implement subtyping, constraints and `look`, including a decision on the
+remaining session duality relations before source integration.

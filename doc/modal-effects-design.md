@@ -305,6 +305,62 @@ must retain constraints on later field solutions. Field comparisons involving
 supplied quantifiers or modalities use the corresponding Fresco judgement.
 Include accepted/rejected cases for all reused structures and failure rollback.
 
+### Consistency, guessing and monotype unification
+
+`FrescoConsistency` returns a persistent context and joined skeleton. Guessing
+fills ordinary ghosts with fresh flexible variables, removes universal ghosts,
+and retains supplied quantified and modal structure. Assignment then checks
+syntactic monotypes, occurs, ordering and scope. Input skeletons are checked
+before transparent aliases or other wrappers can be removed; unused actual
+arguments retain their declared requirements. Session constructors also impose
+their ordinary requirements during this check.
+
+Consistency implements the thesis' two bound-variable sets. Matching quantifiers
+introduce a shared fresh binder on both sides; a one-sided quantifier extends
+only its own set. Filling a ghost checks free variables after solution expansion.
+Raw captures retain their independent scope. Requirement checks inside recursive
+syntax must use the binder's captured environment, including references through
+an inner recursive type beneath a shadowing quantifier.
+
+Record/variant rows align common fields and solve open tails using checked
+assignment. Missing fields in closed rows constrain unknown presences to `Absent`.
+Two flexible tails receive the opposite missing fields and a shared fresh tail.
+A repeated tail in the same orientation compares extra fields as absent. Row
+and presence solutions may contain supplied polymorphic fields; dependencies
+reached from a value unknown retain the syntactic monotype requirement.
+
+Modality comparison matches scoped effect arguments from left to right and
+preserves repeated-effect order and mask multiplicity. Failed checks expose no
+context updates. Authored recursive types use contextual comparison. A proved
+mismatch stops immediately, including when a different branch grows indefinitely.
+Flexible obligations are solved in a returned context before comparison repeats.
+Regular recursive skeletons with holes can produce a joined recursive graph;
+reuse requires the full pair of types, primary category, both bound-variable
+sets and structural progress. Unresolved growing comparisons use the distinct
+error recorded in [recursive comparison](#contextual-recursive-type-operations).
+For example, joining `A(Ghost)` with `B(Int)` for
+`A(a) = a -> A(List(a))` and `B(b) = b -> B(List(b))` remains unresolved;
+with unchanged recursive arguments, the join can construct a recursive skeleton.
+
+Guessing freshens root quantifier and recursive binder IDs while preserving
+metadata and raw declaration records. Fresh IDs avoid the input graph and
+context. Recursive demand checks close replacements over their defining scope;
+closed replacements are cached and unused substitutions are skipped.
+
+**For user review:** raw declaration bodies must contain no ghosts before
+consistency or guessing. Application arguments and root syntax may contain ghosts.
+Filling ghosts in a raw declaration would require a coordinated replacement of
+that declaration across all roots and context entries. That operation remains
+deferred with global raw-capture substitution.
+
+**For user review:** defer two unresolved session duality constraints. Dualising
+an unresolved presence reports `Unsupported_presence_duality`; the legacy helper
+asserts in this case. Comparing one unresolved row tail against its own dual
+reports `Unsupported_row_duality`. Choosing a closed row would discard other
+solutions, and inferring a recursive assignment would conflict with the occurs
+check. D4j must decide how to store these relations before session source
+migration. Resolved presences and open row tails in supported orientations work.
+
 ## Implementation in Links
 
 The final frontend uses Fresco for all in-scope constructs. Keep the
