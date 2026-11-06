@@ -508,6 +508,71 @@ generates new argument types indefinitely under naive unfolding. Use a checked
 comparison strategy and test termination on equal and unequal non-regular
 applications before enabling recursive modal types in the affected consumers.
 
+`FrescoRecursive` applies formal arguments simultaneously and preserves supplied
+quantifiers and modalities. Pure operations preserve ghosts. Checked operations
+validate raw bodies under their formal binders and actual arguments against every
+ordinary/modal requirement, including unused parameters. Detached callers restore
+the exported variable table before checking. Session duality exchanges input and
+output and selection and choice, while message payloads keep their original type.
+Checked duality requires `Session`, including for nominal applications.
+
+**For user review:** represent a dual choice row using an empty row whose tail
+is the original copied row and whose tail-duality flag is set. This retains
+unknown presences and recursive rows without calling mutable legacy flattening.
+Equality and consistency must interpret the deferred duality when comparing rows.
+
+Legacy exported `r_unwind` callbacks still reject unfolding. Contextual operations
+receive the environment and restored variable requirements explicitly. Installing
+an ordinary callback would lose that metadata. Migrate consumers to the contextual
+operations in D7/D8 before removing the temporary callback rejection.
+
+The user selected Links' existing equality behaviour on 6 November 2026.
+Transparent aliases compare through their bodies, including unused parameters.
+For applications of the same recursive declaration, Links compares actual
+arguments even when the body does not use a parameter. Distinct recursive
+declarations compare through their bodies.
+
+Selected source probes also found two defects in legacy comparison. Equal
+applications with growing arguments can fail to terminate. The declarations
+`P(a,b) = Leaf(a) | Next(P(b,List(b)))` and
+`Q = Leaf(Int) | Next(Q)` are incorrectly accepted as equal at `P(Int,Int)`
+and `Q`, in both directions. Their leaf types differ after two `Next` steps.
+The legacy assumption cache can close a comparison after only the opposing
+body repeats, while the first declaration's arguments have changed.
+
+The user authorised a distinct “cannot establish recursive type equality”
+error when a sound terminating comparison cannot settle a case. Preserve this
+outcome separately from a proved mismatch. This temporarily rejects some equal
+recursive types. A complete comparison algorithm is deferred; the new comparison
+must reject the delayed mismatch above and test equal and unequal applications
+whose arguments grow during unfolding.
+
+**For user review:** use read-only comparison with three outcomes: equality,
+a structural mismatch, or unresolved obligations. Candidate equations replace
+repeated argument subterms by shared fresh rigid variables while retaining
+abstract constructor structure. Prove each equation by unfolding, allowing a
+recursive assumption only under a checked constructor and one consistent
+substitution across both applications. A failed candidate does not prove
+inequality. Concrete comparison keeps complete argument pairs; repeated finite
+summaries of argument heads stop further growth with an unresolved result.
+This avoids a numeric unfolding limit. A complete decision procedure remains
+the main alternative and is deferred under the user's decision above.
+
+A current incomplete example is
+`P(a,b) = Leaf(a) | Next(P(a,List(b)))` and
+`Q = Leaf(Int) | Next(Q)`. `P(Int,Int)` and `Q` have equal unfoldings, but
+comparison returns an unresolved result. The unused growing second argument
+prevents the current candidate equations from proving this instance. Keep this
+example when extending the comparison algorithm.
+
+Proofs and assumptions belong to one comparison call. Flexible and ghost
+obligations retain their lexical binders. Consistency solves applicable
+obligations in a returned context and compares again; it cannot retain a proof
+across changed assignments. Tests include regular recursion, growing and
+shifted arguments, delayed mismatches, binder capture, rows and modality
+arguments. Source probes establish legacy behaviour; these operations become
+source-facing only after inference integration.
+
 ### Ordered contexts and recursive inspection
 
 `Unionfind.peek` reads without changing `find`. `rec_appl.r_body`

@@ -21,6 +21,8 @@ let suites =
            FrescoSkeleton.suite;
            FrescoSkeletonOps.suite;
            FrescoSkeletonScope.suite;
+           FrescoRecursive.suite;
+           FrescoCompare.suite;
            ModalSyntax.suite;
            ModalDeclarations.suite;
            ModalResolution.suite;

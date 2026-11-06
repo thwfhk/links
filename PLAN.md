@@ -14,7 +14,7 @@ implementation decisions, reasons, internal invariants and source comparisons.
 ## Current status
 
 Implementation has resumed through D4i. The D3f list-parentheses correction
-and D4f2--D4g are complete. Continue with D4h and D4i, then pause for the user's
+and D4f2--D4h are complete. Continue with D4i, then pause for the user's
 review of the recorded design choices.
 
 - D1--D3d provide row/modality operations, shared modal types, surface syntax,
@@ -25,8 +25,7 @@ review of the recorded design choices.
   the legacy desugaring passes. Modal source programs cannot yet run through
   Fresco. New syntax is parsed and tested through separate entry points;
   the legacy frontend rejects modal constructs.
-- Recursive comparison, consistency, subtyping, constraint solving and source
-  inference remain.
+- Consistency, subtyping, constraint solving and source inference remain.
   Annotation elaboration, runtime integration and migration also remain.
 - D3e removes higher-order effect flags, syntax and row rules. Ordinary
   operation arguments and results must be absolute.
@@ -64,7 +63,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D4a2 | Thesis quantified-type classification | `41b96256` |
 | D3f correction | Require parentheses around nested list element types | `02f79356` |
 | D4f2 | Skeleton solution expansion and scope exit preserving ghosts | `609c02fe` |
-| D4g | Ordinary/modal requirement refinement and detached restoration | This commit |
+| D4g | Ordinary/modal requirement refinement and detached restoration | `dac6f8fc` |
+| D4h | Contextual application, unfolding, session duality and recursive comparison | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -78,7 +78,6 @@ also requires the affected build/tests and review described in AGENTS.md.
 
 | Task | Depends on | Completion check |
 |---|---|---|
-| D4h: contextual recursive type operations | D4g | Alias application, unfolding and comparison preserve binders and terminate on tested equal/unequal recursive applications with changing arguments |
 | D4i: monotype unification, consistency and guessing | D4f2--D4h | Adapt existing Links structural unification to checked Fresco assignment; cover ghosts, supplied polymorphic fields, kinds/scope, repeated rows and failed alternatives |
 | D4j: subtyping, constraints and `look` | D4i | Preserve supplied polymorphic/modal structure and kind/scope requirements; failed alternatives retain no assignments |
 | D4k: contextual annotation/declaration elaboration | D3e--D3f, D4 checking/refinement/recursive operations | Source annotations and closed signatures reach the contextual kind checker with positioned errors |
@@ -129,26 +128,27 @@ and modal integration tests must cover the remaining choices.
 
 ## Latest task and verification
 
-6 November 2026, D4g, this commit (base `609c02fe`): flexible variables
-retain separate ordinary and absolute-payload requirements. Strict assignment,
-shared and skeleton scope exit, detached export and checked restoration preserve
-them. Consistency can pass a target's added requirements when refining a candidate.
-Tests cover rigid rejection, lexical scope, recursive dependencies, failed
-refinement, combined requirements and later positive/negative assignments.
+6 November 2026, D4h, this commit (base `dac6f8fc`): structural application,
+unfolding and session duality preserve supplied binders, modalities and detached
+requirements. Read-only recursive comparison separates equality, structural
+mismatch and unresolved obligations. It proves tested regular, growing and
+shifted equalities and rejects the delayed mismatch accepted by legacy Links.
+The specification and design record the user-authorised unresolved-comparison
+error and an equal example that currently remains unresolved.
 
-Independent review found no issues. The subsequent metadata-restoration and
-assignment-preparation additions received a separate integration review.
-All checks below marked D4g ran on the final integrated compiler and tests after
-writers reported readiness. Earlier milestones retain their last results:
+Independent review and integration review found and fixed nominal session checks,
+free/bound variable confusion, enclosing-binder capture on unfolding, quantifier
+grouping and closed-row absence. All D4h checks below ran after review fixes and
+writer readiness. Earlier results retain their last tested milestones:
 Correction is `02f79356`, D3f is `aa9358e4`.
 
 | Check | Revision | Result |
 |---|---|---|
-| `make no-db` | D4g | Passed |
-| `tests/handlers.tests` | D4g | 95 passed |
-| `tests/effect_sugar.tests` | D4g | 44 passed |
-| `tests/polymorphism.tests` | D4g | 55 passed |
-| `tests/typecheck_examples.tests` | D4g | 167 passed, 15 ignored by existing settings |
+| `make no-db` | D4h | Passed |
+| `tests/handlers.tests` | D4h | 95 passed |
+| `tests/effect_sugar.tests` | D4h | 44 passed |
+| `tests/polymorphism.tests` | D4h | 55 passed |
+| `tests/typecheck_examples.tests` | D4h | 167 passed, 15 ignored by existing settings |
 | `tests/type_print.tests` | Correction | 10 passed |
 | `tests/desugar_datatypes.tests` | Correction | 44 passed |
 | `tests/modules.tests` | D3f | 41 passed |
@@ -165,29 +165,20 @@ Correction is `02f79356`, D3f is `aa9358e4`.
 | `tests/xml.tests` | D3f | 74 passed |
 | `tests/bindings.tests` | D3f | 25 passed |
 | `tests/conditionals.tests` | D3f | 6 passed |
-| `opam exec -- ./run-tests nodb-unit-tests` | D4g | 731 passed |
+| `opam exec -- ./run-tests nodb-unit-tests` | D4h | 812 passed |
 | Menhir conflict check | Correction | Zero conflicts before and after the grammar change |
 | Parse-only source and expected-type comparison | D3f | No unexpected parse regressions; 1,374 programs and 838 type strings parse |
-| `make rule-check` | D4g | Passed; GNU-find tab check skipped, formatter check disabled |
-| Manual added-line tab/trailing-whitespace check | D4g | Passed |
-| `git diff --check` | D4g | Passed |
+| `make rule-check` | D4h | Passed; GNU-find tab check skipped, formatter check disabled |
+| Manual added-line tab/trailing-whitespace check | D4h | Passed |
+| `git diff --check` | D4h | Passed |
 
 D3f's parse-only audit covered excluded-feature fixtures without executing
 those suites. Existing invalid examples and deliberate rejection cases remain.
 Handler argument inference follows in D6; D3f preserves omission in the AST.
 
-## Latest documentation task
-
-6 November 2026: recorded the user's requirement for parentheses around nested
-list element types in the specification and design. Added the pending D3f
-parser correction above. Compiler work remains paused.
-
-Verification: checked document consistency and whitespace. `git diff --check` passed.
-No compiler changes, build or tests.
-
 ## Next action
 
-Complete D4h's recursive comparison and reviewed duality checks, then D4i's
-unification, consistency and guessing. Review, test and commit each milestone.
+Complete D4i's unification, consistency and guessing. Finish review fixes,
+inspect the combined changes, run the integrated checks and commit the milestone.
 Pause after D4i, summarise the current status and ask the user to review the
 marked design choices and raise questions.

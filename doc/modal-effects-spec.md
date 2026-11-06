@@ -261,6 +261,15 @@ original context. Commit successful matching without revisiting that choice
 if a later check fails. This policy may reject programs accepted by a different
 choice order.
 
+Recursive type comparison follows Links' treatment of declaration identities.
+Transparent aliases compare through their bodies. Applications of the same
+recursive declaration compare their arguments, including unused arguments;
+distinct recursive declarations compare through their bodies. Comparison must
+account for changing arguments during unfolding. If the terminating comparison
+cannot settle equality, it reports “cannot establish recursive type equality”.
+Some equal recursive types can receive this error while a complete comparison
+algorithm remains deferred.
+
 ### 5.2 Bindings and annotations
 
 1. Local bindings retain their inferred types without implicit let
