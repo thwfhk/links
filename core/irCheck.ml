@@ -221,7 +221,7 @@ let contextual_type_features t =
          List.iter (self#visit_type_arg vars) app.r_args;
          if not (StringSet.mem app.r_unique_name !checked_bodies) then begin
            checked_bodies := StringSet.add app.r_unique_name !checked_bodies;
-           Option.iter (self#visit_type vars) (app.r_body ())
+           Option.iter (fun (_, body) -> self#visit_type vars body) (app.r_body ())
          end
       | Types.Recursive (var, _, body) ->
          recursive := true;

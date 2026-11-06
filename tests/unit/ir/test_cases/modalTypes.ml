@@ -42,7 +42,7 @@ let recursive_application name body = Types.RecursiveApplication {
   r_quantifiers = [];
   r_args = [];
   r_unwind = (fun _ _ -> assert_failure "The precheck must not unfold types");
-  r_body = body;
+  r_body = (fun () -> Option.map (fun t -> [], t) (body ()));
   r_linear = (fun () -> Some false);
 }
 

@@ -44,7 +44,8 @@ implicit arrows, and temporary legacy normalisation. D3c adds effect
 declarations, qualified operations, handler annotations, and freezing
 syntax. D3d adds effect resolution and declaration/handler checks,
 with independent review and all selected checks complete.
-Fresco inference and migration remain incomplete.
+D4a adds non-mutating type inspection and modal kind classification,
+also reviewed and tested. Fresco inference and migration remain incomplete.
 
 A read-only declaration investigation identified the module
 name-resolution changes and affected pattern-matching handlers. A
@@ -203,6 +204,7 @@ implementation defects. Record completed behaviour and deferred work.
 - [x] D3b: add modal type/binder syntax and temporary legacy normalisation.
 - [x] D3c: add declaration, qualified operation, handler, and freezing syntax.
 - [x] D3d: resolve effects/operations and check declarations and handler groups.
+- [x] D4a: add non-mutating type reads and recursive modal kind classification.
 - [ ] Implement and test modal syntax and scoped effect rows.
 - [ ] Refactor type inference to follow Fresco.
 - [ ] Implement modal inference and run the first working example.
@@ -214,8 +216,9 @@ implementation defects. Record completed behaviour and deferred work.
 - Start each implementation task by reading `AGENTS.md`, this plan,
   the design document, and the relevant source files. The main agent
   owns design, integration, verification, progress records, and commits.
-- Use fresh Astra High subagents for bounded investigations, changes,
-  and reviews; reserve extra-high effort for very difficult tasks. Give each
+- Use fresh Sol 6.1 High subagents for simple tasks and Astra High
+  subagents for harder investigations, changes, and reviews. Reserve
+  extra-high effort for very difficult tasks. Give each
   agent its allowed files, sources, completion conditions, and checks.
   Use `.worktrees/<name>` for separate work. Run independent
   investigations and reviews in parallel, with one agent editing
@@ -526,9 +529,9 @@ contexts and assignment, then scope exit and export. Raw recursive
 declarations must retain their formal binders. Recursive declaration
 identities also need a separator between their name and group number.
 
-## Latest task and verification
+## D3d verification
 
-6 November 2026, D3d: added effect headers and contextual resolution state,
+6 November 2026, D3d, commit `59e61a6a`: added effect headers and contextual resolution state,
 lexical effect/operation scopes, stable identities, repeated import reuse,
 and declaration/handler structural checks. Annotated handlers resolve
 unqualified clauses against their selected effect. Declaration parameters
@@ -564,10 +567,47 @@ Anonymous row syntax remains for contextual elaboration to check.
 Operation signature typing, modal-kind checks, and the Fresco frontend
 remain incomplete.
 
+## Latest task and verification
+
+6 November 2026, D4a: added `Unionfind.peek`, raw recursive declaration
+binders, unambiguous declaration identities, and the `FrescoKind`
+classification API. Classification uses callbacks and a finite Boolean
+fixed point, preserving input points and declared modal kinds. Added
+34 unit tests for type constructors, variables and solutions, recursive
+arguments, captured binders, raw metadata, and both recorded reference
+classification defects.
+
+Independent review checked recursion, changing argument summaries,
+captured bindings, callback scope, and input immutability. It found no
+issues and passed its build, 259 unit tests, 37 datatype tests and
+10 type-print tests. A separate metadata audit confirmed that existing
+recursive record copies retain the callback and identity consumers treat
+the identifier as opaque. Main, implementation, and review snapshots match.
+
+| Integrated check | Result |
+|---|---|
+| `make no-db` | Passed |
+| `tests/handlers.tests` | 95 passed |
+| `tests/effect_sugar.tests` | 44 passed |
+| `tests/polymorphism.tests` | 55 passed |
+| `tests/typecheck_examples.tests` | 167 passed, 15 ignored by existing settings |
+| `tests/type_print.tests` | 10 passed |
+| `tests/desugar_datatypes.tests` | 37 passed |
+| `tests/modules.tests` | 41 passed |
+| `opam exec -- ./run-tests nodb-unit-tests` | 259 passed, including 34 new tests |
+| `make rule-check` | Passed; GNU-find tab check skipped, formatter check disabled |
+| Manual new/changed-line tab/trailing-whitespace check | Passed |
+| `git diff --check` | Passed |
+
+Classification assumes well-formed types. D4b will validate every child,
+ordinary and modal parameter kinds, and operation signatures. Its design
+now distinguishes explicit ordinary `Mono` requirements from D4c's
+syntactic monotype obligations, and requires closed effect signatures.
+
 ## Next action
 
-Implement D4a: non-mutating Unionfind reads, raw recursive declaration
-binders, and modal kind classification. Use callbacks for variable solutions
-and declaration bodies. Check nested and argument-changing recursive
-applications against the recorded reference defect. Well-formedness,
-ordered contexts, assignment, and contextual datatype elaboration follow.
+Implement D4b's separate well-formedness checks using non-mutating reads
+and declaration callbacks. Validate primary-kind structure, ordinary
+subkinds, modal parameter requirements, scoped effect applications and
+operation signatures. Ordered contexts, checked assignment, and contextual
+datatype elaboration follow.

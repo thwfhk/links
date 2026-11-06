@@ -122,9 +122,9 @@ and rec_appl = {
   r_quantifiers : TypeParameter.t list;
   r_args: type_arg list;
   r_unwind: type_arg list -> bool -> typ;
-  (* The raw declaration body, without substitution or unfolding. It is absent
+  (* The formal binders and raw declaration body, without substitution or unfolding. It is absent
      only while the recursive declaration group is being constructed. *)
-  r_body: unit -> typ option;
+  r_body: unit -> (Quantifier.t list * typ) option;
   r_linear: unit -> bool option
   }
 and tid = int

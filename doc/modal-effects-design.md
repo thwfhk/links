@@ -730,6 +730,60 @@ rules keyed by identity: lists and map entries depend on their payloads,
 access points on their protocols, and unknown abstract constructors
 default to `Any`. Preserve the current process representation until D7.
 
+D4a implements this classification in `frescoKind.ml/.mli`. Its callbacks
+provide variable declarations and solutions, raw recursive declarations,
+and abstract-constructor rules. Declaration states contain the declaration
+identity and Boolean argument summaries. Recursive-binder states also
+contain captured bindings; solution states use variable identities.
+Re-evaluate demanded states when summaries change or new states appear.
+Every result starts at `Abs` and can change once to `Any`. Recursive
+references to a bound variable reuse its existing state.
+
+`Unionfind.peek` reads descriptors without path compression. Raw recursive
+bodies now retain their formal binders, and recursive declaration identities
+separate names from group numbers. The tests include actual datatype
+desugaring, both reference classification defects, argument changes, mutual
+recursion, captured binders, and unchanged input graphs after classification.
+
+For D4b, validate actual primary-kind structure, ordinary subkinds, and
+modal kinds separately. Check each argument's tag against both its formal
+parameter and its body. Check all application arguments even when the
+result ignores them. Check session continuations and branches as sessions.
+Existing `Types.Base`, `Unl`, `Session`, and `Mono` predicates use mutable
+point reads or legacy unfolding; implement read-only checks with `peek`.
+Do not copy the existing `Mono.type_satisfies` call that supplies `Session`
+to its restriction predicate. An explicit ordinary `Mono` requirement is
+separate from D4c's monotype obligations on value-unknown solutions.
+
+For an explicit ordinary `Mono` parameter, a rigid variable declared
+`Any` fails: substituting a polymorphic type for that variable would break
+the parameter contract. A rigid variable declared `Mono` succeeds.
+D4c's syntactic monotype check still accepts an older rigid `Any` variable
+as an atom. If the unknown being assigned itself has ordinary restriction
+`Mono`, its solution must also pass the stricter ordinary-kind check.
+Keep these checks separate and do not narrow rigid declarations.
+
+At each recursive application, check its actual arguments. Validate each
+raw declaration body under its own formal binders once per check, retaining
+pending checks for mutually recursive bodies. Do not substitute arguments
+or skip argument checks when a declaration is already active. Contextual
+named type declarations return `Type`; reject legacy recursive effect
+aliases. Preserve recursive type and row binders with their stated kinds.
+
+Supply a separate effect-parameter callback to well-formedness checking;
+keep D3d's headers unchanged. Check effect identities, arities, higher-order
+flags, and ordinary/modal parameter kinds, including identities in masks.
+Check ordinary operation arguments and results at `Abs`, and higher-order
+signatures at `Any`, with a provisional self header in scope.
+
+During contextual effect declaration elaboration, require closed operation
+signatures with only explicit effect parameters and nested quantifiers.
+Reject remaining anonymous type, row, and presence placeholders before
+allocating unknowns. This follows the reference's explicit declaration
+parameters and bound-variable lookup. D3d only preserves anonymous row
+syntax for this later check. Expression annotation holes are a separate
+part of contextual term elaboration.
+
 ## Examples and expected behaviour
 
 These are target Links programs for the proposed syntax.

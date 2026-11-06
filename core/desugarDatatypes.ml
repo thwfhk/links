@@ -168,13 +168,13 @@ module Desugar = struct
                    * a `RecursiveApplication. *)
                   let r_args = match_quantifiers Quantifier.to_legacy_kind qs in
                   let r_body () =
-                    Option.map snd (StringMap.find_opt tycon !tygroup_ref.type_map) in
+                    StringMap.find_opt tycon !tygroup_ref.type_map in
                   let r_unwind args dual =
                     let _, body = StringMap.find tycon !tygroup_ref.type_map in
                     let body = Instantiate.recursive_application tycon qs args body in
                     if dual then dual_type body else body
                   in
-                  let r_unique_name = tycon ^ string_of_int !tygroup_ref.id in
+                  let r_unique_name = tycon ^ ":" ^ string_of_int !tygroup_ref.id in
                   let r_linear () = StringMap.lookup tycon !tygroup_ref.linearity_map in
                   RecursiveApplication
                     { r_name = tycon;
@@ -267,13 +267,13 @@ module Desugar = struct
                    * a `RecursiveApplication. *)
                   let r_args = match_quantifiers Quantifier.to_legacy_kind qs in
                   let r_body () =
-                    Option.map snd (StringMap.find_opt name !tygroup_ref.type_map) in
+                    StringMap.find_opt name !tygroup_ref.type_map in
                   let r_unwind args dual =
                     let _, body = StringMap.find name !tygroup_ref.type_map in
                     let body = Instantiate.recursive_application name qs args body in
                     if dual then dual_type body else body
                   in
-                  let r_unique_name = name ^ string_of_int !tygroup_ref.id in
+                  let r_unique_name = name ^ ":" ^ string_of_int !tygroup_ref.id in
                   let r_linear () = StringMap.lookup name !tygroup_ref.linearity_map in
                   RecursiveApplication
                     { r_name = name;

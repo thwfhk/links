@@ -94,6 +94,12 @@ let rec find point =
     | Link { link = Link _ } ->
     find (repr point)
 
+(** Read the descriptor without changing any links. *)
+let rec peek point =
+  match point.link with
+  | Info info -> info.descriptor
+  | Link parent -> peek parent
+
 let rec change point v =
   match point.link with
     | Info info

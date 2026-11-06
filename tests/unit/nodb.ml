@@ -13,6 +13,7 @@ let suites =
            ModalEffects.suite;
            ModalTypes.suite;
            ModalTypeTraversal.suite;
+           FrescoKind.suite;
            ModalSyntax.suite;
            ModalDeclarations.suite;
            ModalResolution.suite;
