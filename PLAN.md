@@ -51,7 +51,8 @@ remain incomplete. D4c adds persistent contexts and checked assignment,
 with review and selected checks complete. D4d1 adds checked scope exit and
 rewrites surviving type roots, with review and selected checks complete.
 D4d2 adds detached export with variable metadata and copied raw declarations,
-also reviewed and tested.
+also reviewed and tested. D4e adds separate recursive skeletons and checked
+conversion to and from shared types, with review and selected checks complete.
 
 A read-only declaration investigation identified the module
 name-resolution changes and affected pattern-matching handlers. A
@@ -215,6 +216,7 @@ implementation defects. Record completed behaviour and deferred work.
 - [x] D4c: add persistent contexts and checked type/row/presence assignment.
 - [x] D4d1: add checked scope exit with rewritten type roots.
 - [x] D4d2: add detached type export with variable metadata and copied declarations.
+- [x] D4e: add recursive skeletons and checked shared-type conversion.
 - [ ] Implement and test modal syntax and scoped effect rows.
 - [ ] Refactor type inference to follow Fresco.
 - [ ] Implement modal inference and run the first working example.
@@ -736,9 +738,9 @@ Main, implementation, and review source snapshots match.
 Scope exit retains raw nominal callbacks under the stable-callback contract.
 Detached export, skeletons, consistency and term inference remain incomplete.
 
-## Latest task and verification
+## D4d2 verification
 
-6 November 2026, D4d2: added detached batch export with a free-variable table.
+6 November 2026, D4d2, commit `c143fb84`: added detached batch export with a free-variable table.
 Export expands solutions, preserves kinds and monotype requirements, copies
 points and raw declarations, and rebuilds declaration callbacks over copied
 data. Added 50 export tests and five scope-exit tests.
@@ -778,8 +780,46 @@ incomplete. A read-only D4e investigation specified separate recursive
 skeletons and conversion that preserves context variable IDs and rejects
 remaining ghosts.
 
+## Latest task and verification
+
+6 November 2026, D4e: added a separate recursive skeleton representation with
+Ghost and UniversalGhost nodes and checked batch conversion. Conversion
+preserves variable occurrences and leaves solutions and constraints in the
+persistent context. Raw nominal bodies are skeleton data; conversion back
+rejects either ghost form anywhere reachable. Added 115 unit tests.
+
+Tests cover every supported constructor, supplied polymorphic fields, primary
+and modal metadata, variable solutions, lexical scopes, copied point cycles,
+nominal snapshots, stale declaration callbacks and input immutability.
+Independent review found no issues and passed its build, 565 unit tests,
+37 datatype tests, 10 type-print tests and source checks. Main, implementation,
+and review source snapshots match. An initial test compilation failed because
+a helper used the OCaml keyword `effect`; the renamed helper passes.
+
+| Integrated check | Result |
+|---|---|
+| `make no-db` | Passed |
+| `tests/handlers.tests` | 95 passed |
+| `tests/effect_sugar.tests` | 44 passed |
+| `tests/polymorphism.tests` | 55 passed |
+| `tests/typecheck_examples.tests` | 167 passed, 15 ignored by existing settings |
+| `tests/type_print.tests` | 10 passed |
+| `tests/desugar_datatypes.tests` | 37 passed |
+| `tests/modules.tests` | 41 passed |
+| `opam exec -- ./run-tests nodb-unit-tests` | 565 passed, including 115 new tests |
+| `make rule-check` | Passed; GNU-find tab check skipped, formatter check disabled |
+| Manual changed/new-file tab/trailing-whitespace check | Passed |
+| `git diff --check` | Passed |
+
+A read-only investigation identified the skeleton operations required before
+consistency: free variables, capture-avoiding substitution, binder freshening,
+solution expansion and scope exit that preserves ghosts. Later kind refinement
+also needs internal absolute-payload requirements for flexible row/presence
+variables. These operations and source inference remain incomplete.
+
 ## Next action
 
-Implement D4e skeleton representation and shared-type conversion. Keep
-solutions and variable constraints in the persistent context. Consistency,
-constraint collection/solving, and contextual datatype elaboration follow.
+Implement D4f1 skeleton free-variable collection, capture-avoiding substitution
+and quantifier freshening. Then add solution expansion and scope exit that
+preserves ghosts, followed by kind refinement, consistency, constraint
+collection/solving, and contextual datatype elaboration.

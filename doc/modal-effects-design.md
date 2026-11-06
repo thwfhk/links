@@ -923,6 +923,34 @@ using their rebuilt declaration callbacks. Detached export follows this
 conversion through D4d2. Consistency, `look`, constraint collection and solving
 follow in later changes.
 
+`FrescoSkeleton.of_types` and `to_types` implement this conversion. Root
+binders shadow context declarations normally because conversion retains the
+context. Row tails are skeleton nodes. Nominal declarations store formal
+binders, a skeleton body and optional linearity as data; body mutation is used
+only to construct fresh mutually recursive graphs during conversion. Distinct
+declaration records must have distinct identities. Output callbacks refer to
+the converted graph, and checking uses these bodies even when the supplied
+environment contains an older declaration callback.
+
+Before consistency, add skeleton free-variable collection, capture-avoiding
+substitution and quantifier freshening. Solution expansion and scope exit must
+also preserve ghosts. A variable-occurrence projection may reuse the checked
+context operation, but must retain lexical binders, check vacuous binders,
+and treat raw declaration scope independently. A free-ID set alone loses
+these distinctions. Guessing follows these operations: the reference fills
+ordinary ghosts and removes universal ghosts while preserving supplied
+quantifiers and modalities; assignment then checks the monotype requirement.
+`look` also collects and solves constraints.
+
+Later kind refinement needs an internal absolute-payload requirement for
+flexible row and presence variables. Keep their declared modal kind `Any`.
+This requirement can justify an absolute record before its row is solved;
+subsequent structural assignment must enforce and propagate it. Preserve it
+through context changes and export, and expose it to kind classification.
+Rigid row and presence binders carry no such guarantee. Keep this requirement
+separate from monotype requirements and Type-variable refinement through a
+fresh variable declared `Abs`.
+
 ## Examples and expected behaviour
 
 These are target Links programs for the proposed syntax.

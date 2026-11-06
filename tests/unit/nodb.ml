@@ -18,6 +18,7 @@ let suites =
            FrescoContext.suite;
            FrescoScope.suite;
            FrescoExport.suite;
+           FrescoSkeleton.suite;
            ModalSyntax.suite;
            ModalDeclarations.suite;
            ModalResolution.suite;
