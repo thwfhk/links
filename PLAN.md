@@ -13,7 +13,8 @@ implementation decisions, reasons, internal invariants and source comparisons.
 
 ## Current status
 
-Implementation has resumed for D3e, D3f and D4a2. Pause before D4f2.
+D3e, D3f and D4a2 are complete. Implementation is paused at the user's
+request before D4f2; D4f2 has not been started.
 
 - D1--D3d provide row/modality operations, shared modal types, surface syntax,
   and effect/operation resolution. D4a--D4f1 provide kind checks, persistent
@@ -30,10 +31,11 @@ Implementation has resumed for D3e, D3f and D4a2. Pause before D4f2.
   operation arguments and results must be absolute.
 - D3f implements `List A`, combined kind annotations and angle-bracket
   handled-effect annotations, for example `handle <Reader> (...)`.
-- Modal-kind refinement and the thesis' quantified-type classification are
-  required. D4g adds refinement; D4a2 below updates the implemented classifier.
+- D4a2 implements the thesis' quantified-type classification while retaining
+  declared binder requirements. Modal-kind refinement remains in D4g.
 
-D3e and D3f resume compiler work after the pause recorded at `87264380`.
+The requested scope correction, syntax migration and classification update
+are complete. No unresolved decisions remain for these three milestones.
 The most recent compiler verification is recorded below. Passing legacy suites
 checks compatibility during construction; it does not complete Fresco inference.
 
@@ -57,7 +59,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D4e | Recursive skeletons and checked shared-type conversion | `bb94d506` |
 | D4f1 | Skeleton free variables, root substitution and quantifier opening | `7af62207` |
 | D3e | Remove higher-order effect declarations and row rules | `29a9ba43` |
-| D3f | Prefix list types, combined kinds and handler delimiters | This commit |
+| D3f | Prefix list types, combined kinds and handler delimiters | `aa9358e4` |
+| D4a2 | Thesis quantified-type classification | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -71,7 +74,6 @@ also requires the affected build/tests and review described in AGENTS.md.
 
 | Task | Depends on | Completion check |
 |---|---|---|
-| D4a2: thesis quantified-type classification | D4a--D4b | Classify quantified value-type binders at `Abs` without changing their declared kinds; test classification versus well-formedness/instantiation |
 | D4f2: skeleton solution expansion and scope exit | D4f1, D4d1 | Preserve ghosts, scope, live unknowns and recursive sharing; reject escapes without changing the input context |
 | D4g: ordinary/modal requirement refinement | D4f2, D4c, D4a2 | Enforce flexible `Abs` and structural payload requirements through later assignment, scope exit and export; never narrow rigid binders |
 | D4h: contextual recursive type operations | D4g | Alias application, unfolding and comparison preserve binders and terminate on tested equal/unequal recursive applications with changing arguments |
@@ -120,48 +122,51 @@ behaviour, select equality before `Abs` fallback, adopt the thesis' quantified
 classification, add implicit `modal []` to global signatures, start programs
 with ambient context `Wild`, and reserve built-in effects from user handlers.
 
-Implementation must update the existing classifier (D4a2) and cover these
-choices in refinement, signature elaboration and modal integration tests.
+D4a2 updates the classifier. Refinement, signature elaboration and modal
+integration tests must cover the remaining choices.
 
 ## Latest task and verification
 
-6 November 2026, D3f, this commit (base `29a9ba43`): implemented prefix list
-types, combined kind annotations, angle-bracket handlers and handler-only
-omission of effect arguments. Migrated signatures and fixtures. Independent
-review identified three printer grouping cases; all were fixed and covered by
-round-trip tests. No findings remain.
+6 November 2026, D4a2, this commit (base `aa9358e4`): quantified value-type
+binders have temporary `Abs` summaries during modal classification. Declared
+ordinary and modal kinds still govern well-formedness and type argument checks.
+Independent review found no compiler or test issues; a documentation wording
+finding was corrected.
 
-| Integrated check | Result |
-|---|---|
-| `make no-db` | Passed |
-| `tests/handlers.tests` | 95 passed |
-| `tests/effect_sugar.tests` | 44 passed |
-| `tests/polymorphism.tests` | 55 passed |
-| `tests/typecheck_examples.tests` | 167 passed, 15 ignored by existing settings |
-| `tests/type_print.tests` | 10 passed |
-| `tests/desugar_datatypes.tests` | 42 passed |
-| `tests/modules.tests` | 41 passed |
-| `tests/mutual.tests` | 17 passed |
-| `tests/collections.tests` | 37 passed |
-| `tests/library.tests` | 4 passed |
-| `tests/freezeml.tests` | 59 passed |
-| `tests/typed_ir.tests` | 26 passed |
-| `tests/binaryTrees.tests` | 5 passed |
-| `tests/cliArgs.tests` | 7 passed |
-| `tests/operators.tests` | 21 passed |
-| `tests/roundtrippable_types.tests` | 5 passed |
-| `tests/strings.tests` | 5 passed |
-| `tests/xml.tests` | 74 passed |
-| `tests/bindings.tests` | 25 passed |
-| `tests/conditionals.tests` | 6 passed |
-| `opam exec -- ./run-tests nodb-unit-tests` | 673 passed |
-| Menhir conflict check | Zero conflicts before and after the grammar change |
-| Parse-only source and expected-type comparison | No unexpected parse regressions; 1,374 programs and 838 type strings parse |
-| `make rule-check` | Passed; GNU-find tab check skipped, formatter check disabled |
-| Manual added-line tab/trailing-whitespace check | Passed |
-| `git diff --check` | Passed |
+The table retains the latest result for each check. D4a2 checks ran on the
+final integrated source; D3f results refer to `aa9358e4`.
 
-The parse-only audit also covered excluded-feature fixtures without executing
+| Check | Revision | Result |
+|---|---|---|
+| `make no-db` | D4a2 | Passed |
+| `tests/handlers.tests` | D4a2 | 95 passed |
+| `tests/effect_sugar.tests` | D4a2 | 44 passed |
+| `tests/polymorphism.tests` | D4a2 | 55 passed |
+| `tests/typecheck_examples.tests` | D4a2 | 167 passed, 15 ignored by existing settings |
+| `tests/type_print.tests` | D3f | 10 passed |
+| `tests/desugar_datatypes.tests` | D3f | 42 passed |
+| `tests/modules.tests` | D3f | 41 passed |
+| `tests/mutual.tests` | D3f | 17 passed |
+| `tests/collections.tests` | D3f | 37 passed |
+| `tests/library.tests` | D3f | 4 passed |
+| `tests/freezeml.tests` | D3f | 59 passed |
+| `tests/typed_ir.tests` | D3f | 26 passed |
+| `tests/binaryTrees.tests` | D3f | 5 passed |
+| `tests/cliArgs.tests` | D3f | 7 passed |
+| `tests/operators.tests` | D3f | 21 passed |
+| `tests/roundtrippable_types.tests` | D3f | 5 passed |
+| `tests/strings.tests` | D3f | 5 passed |
+| `tests/xml.tests` | D3f | 74 passed |
+| `tests/bindings.tests` | D3f | 25 passed |
+| `tests/conditionals.tests` | D3f | 6 passed |
+| `opam exec -- ./run-tests nodb-unit-tests` | D4a2 | 675 passed |
+| Menhir conflict check | D3f | Zero conflicts before and after the grammar change |
+| Parse-only source and expected-type comparison | D3f | No unexpected parse regressions; 1,374 programs and 838 type strings parse |
+| `make rule-check` | D4a2 | Passed; GNU-find tab check skipped, formatter check disabled |
+| Manual added-line tab/trailing-whitespace check | D4a2 | Passed |
+| `git diff --check` | D4a2 | Passed |
+
+D3f's parse-only audit covered excluded-feature fixtures without executing
 those suites. Existing invalid examples and deliberate rejection cases remain.
 Handler argument inference follows in D6; D3f preserves omission in the AST.
 
@@ -178,7 +183,6 @@ No compiler changes, build or tests.
 
 ## Next action
 
-Complete D4a2's quantified-classification update, then review, test and commit
-that milestone. Pause before D4f2's skeleton
-solution expansion and scope exit. D5 requires its contextual annotation and
-solver dependencies.
+Remain paused before D4f2. On explicit resumption, implement skeleton solution
+expansion and scope exit, preserving ghosts, scope, live unknowns and recursive
+sharing. D5 still requires its contextual annotation and solver dependencies.

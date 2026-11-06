@@ -154,9 +154,8 @@ let classify environment typ =
        state.absolute
     | Types.ForAll (quantifiers, body) ->
        let bindings = List.fold_left (fun bindings quantifier ->
-           IntMap.add (Quantifier.to_var quantifier)
-             (Summary (declared (Quantifier.to_kind quantifier)
-                         (Quantifier.to_modal_kind quantifier))) bindings)
+           let absolute = Quantifier.to_primary_kind quantifier = PrimaryKind.Type in
+           IntMap.add (Quantifier.to_var quantifier) (Summary absolute) bindings)
            bindings quantifiers in
        summary bindings recursive body
     | Types.Primitive _ | Types.End | Types.Closed | Types.Absent -> true

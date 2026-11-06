@@ -143,6 +143,21 @@ let suite = "Fresco well-formedness" >::: [
     check ~kind:unl (Types.ForAll ([q], a));
     reject (ordinary unl) (Types.ForAll ([q], application unl a)));
 
+  "forall classification preserves declared modal requirements" >:: (fun _ ->
+    let q, a = variable any and r, b = variable abs in
+    signature [Types.ForAll ([q], a)] (Types.ForAll ([r], b));
+    check ~kind:abs (Types.ForAll ([r], alias abs b b));
+    reject ~kind:abs modal (Types.ForAll ([q], alias abs a a));
+    check ~kind:(Quantifier.to_parameter q) arrow;
+    reject ~kind:(Quantifier.to_parameter r) modal arrow);
+
+  "forall classification preserves declared ordinary requirements" >:: (fun _ ->
+    let q, a = variable mono in
+    check ~kind:abs (Types.ForAll ([q], alias mono a a));
+    reject ~kind:abs (ordinary base) (Types.ForAll ([q], alias base a a));
+    check ~kind:(Quantifier.to_parameter q) arrow;
+    reject ~kind:(Quantifier.to_parameter q) (ordinary mono) (absolute int));
+
   "base values and row restrictions" >:: (fun _ ->
     check ~kind:base int;
     check ~kind:(parameter ~pk:PrimaryKind.Row ~res:Restriction.Base ()) (row ["x", Types.Present int]);

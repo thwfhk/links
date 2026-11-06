@@ -200,11 +200,13 @@ polymorphism: classify the quantified body with value-type binders at `Abs`.
 Consequently `forall a::Any. a` is absolute. This replaces Aghilas' classification
 under the declared modal kinds.
 
-Use temporary classifier bindings for this rule. Preserve ordinary kinds and
-leave declared modal kinds unchanged for well-formedness, term checking,
-instantiation and exported binder metadata. Row/presence binders receive no
-new absolute-payload guarantee. Add positive and negative tests separating
-quantified-type classification from actual instantiation requirements.
+`FrescoKind.classify` uses temporary absolute summaries for quantified
+value-type binders. Well-formedness still checks uses of binders against their
+declared ordinary and modal kinds. Preserve ordinary kinds and leave declared
+modal kinds unchanged for term checking, instantiation and exported binder
+metadata. Row/presence binders receive no new absolute-payload guarantee.
+Positive and negative tests separate quantified-type classification from
+actual instantiation requirements.
 
 Require complete handler groups so dynamic selection agrees with consuming
 one scoped-row occurrence. Preserve return-only Links handlers explicitly;

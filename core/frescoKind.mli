@@ -44,11 +44,11 @@ val builtin_abstract : Types.Abstype.t -> abstract_rule
 (** Uses raw [r_body] declarations and [builtin_abstract]. *)
 val environment : (Types.tid -> variable option) -> environment
 
-(** Classify a value type. Local quantifiers use their declared modal kinds
-    and override the variable callback. Recursive declarations are analysed
-    by a finite greatest fixed point over Boolean argument summaries.
-    Row and presence summaries describe possible payloads internally; they
-    do not give row or presence variables the modal kind Abs. *)
+(** Classify a value type. Local quantifiers override the variable callback.
+    Quantified value-type binders are treated as Abs for classification.
+    Quantified row and presence binders may contain contextual payloads.
+    Recursive declarations are analysed by a finite greatest fixed point
+    over Boolean argument summaries. *)
 val classify : environment -> Types.typ -> ModalKind.t
 
 (** Effect descriptors are supplied after contextual elaboration. Their

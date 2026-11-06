@@ -121,13 +121,16 @@ let suite = "Fresco modal kinds" >::: [
     abs (relative int);
     any (relative arrow));
 
-  "fixed quantifier modes and callback shadowing" >:: (fun _ ->
+  "quantified value binders are absolute and shadow the callback" >:: (fun _ ->
     let q, a = quantifier () in
-    let env = variable_env [Quantifier.to_var q, info ~solution:int kind] in
-    check ~env ModalKind.Abs a;
-    check ~env ModalKind.Any (Types.ForAll ([q], a));
+    let env = variable_env [Quantifier.to_var q, info ~solution:arrow kind] in
+    check ~env ModalKind.Any a;
+    check ~env ModalKind.Abs (Types.ForAll ([q], a));
+    check ~env ModalKind.Abs (Types.ForAll ([q], record ["value", a]));
+    check ~env ModalKind.Any (Types.ForAll ([q], Types.Arrow (a, a)));
     let q = Quantifier.make ~modal_kind:ModalKind.Abs (Quantifier.to_var q) kind in
-    check ~env ModalKind.Abs (Types.ForAll ([q], a)));
+    check ~env ModalKind.Abs (Types.ForAll ([q], a));
+    check ~env ModalKind.Any a);
 
   "variables use tids across points" >:: (fun _ ->
     let q, a = quantifier () in
