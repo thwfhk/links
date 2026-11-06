@@ -125,3 +125,27 @@ typename X = Comp((), {Var:() => ()}); fun() { } : X({ |_})
 exit : 1
 stderr : @.*Arity mismatch: Type X expects 0 type arguments, but 1 arguments were provided.*
 args : --set=effect_sugar=true
+
+Modal types require the contextual type checker
+sig f : modal [] ((Int) -> Int) fun f(x) { x }
+exit : 1
+stderr : @.*Modal types require the contextual type checker.*
+
+Abs quantifiers require the contextual type checker
+sig f : forall a::Abs. (a) -> a fun f(x) { x }
+exit : 1
+stderr : @.*Abs binders require the contextual type checker.*
+
+Unused Abs typename parameters require the contextual type checker
+typename T(a::Abs) = Int;
+exit : 1
+stderr : @.*Abs binders require the contextual type checker.*
+
+Repeated modal binder annotations are rejected
+sig f : forall a::Abs::Abs. (a) -> a fun f(x) { x }
+exit : 1
+stderr : @.*Repeated or conflicting binder kind annotation.*
+
+Any binder annotations preserve the ordinary kind
+sig identity : forall a::Any. (a) {wild:()}-> a fun identity(x) { x } identity(1)
+stdout : 1 : Int

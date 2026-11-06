@@ -359,6 +359,9 @@ object (o : 'self)
       let pos = SourceCode.Position.dummy in
       if StringSet.mem name names then raise (duplicate_var pos name);
       let (_, (pk, sk), freedom) = ensure_kinded v in
+      let pk = match SugarQuantifier.modal_kind sq, pk with
+        | ModalKind.Abs, None -> Some PrimaryKind.Type
+        | _ -> pk in
       let freedom = if rigidify then `Rigid else freedom in
       (* let point = make_opt_kinded_point sk `Rigid in *)
       let entry = make_fresh_entry pk sk freedom in
@@ -373,9 +376,14 @@ object (o : 'self)
       let o, ((pk, sk), _freedom), entry = o#unbind name original_o in
       let var = match get_entry_var_info entry with
           | Some (var, _, _) -> var
-          | None -> raise (internal_error "must have a Unionfind Var at this time")
+          | None -> Types.fresh_raw_variable ()
       in
-      let q = Quantifier.make var (pk, sk) in
+      let modal_kind = SugarQuantifier.modal_kind sq in
+      (match pk, modal_kind with
+       | (PrimaryKind.Row | PrimaryKind.Presence), ModalKind.Abs ->
+          raise (Errors.Type_error (SourceCode.Position.dummy, "Abs requires a type binder"))
+       | _ -> ());
+      let q = Quantifier.make ~modal_kind var (pk, sk) in
       let rq = SugarQuantifier.mk_resolved q in
       o, (rq :: rqs)
     in

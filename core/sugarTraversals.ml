@@ -80,6 +80,8 @@ class map =
 
     method kind : kind -> kind = fun x -> x
 
+    method modal_kind : ModalKind.t -> ModalKind.t = fun x -> x
+
     method freedom : Freedom.t -> Freedom.t = fun x -> x
 
     method type_variable : SugarTypeVar.t -> SugarTypeVar.t =
@@ -97,12 +99,15 @@ class map =
     method quantifier : SugarQuantifier.t -> SugarQuantifier.t =
       let open SugarQuantifier in
       function
-      | QUnresolved (name, kind, freedom) ->
+      | QUnresolved (name, kind, modal_kind, freedom) ->
          let name' = o#name name in
          let kind' = o#kind kind in
          let freedom' = o#freedom freedom in
-         QUnresolved (name', kind', freedom')
-      | (QResolved _) as rq -> rq
+         let modal_kind' = o#modal_kind modal_kind in
+         QUnresolved (name', kind', modal_kind', freedom')
+      | QResolved q ->
+         QResolved (Quantifier.make ~modal_kind:(o#modal_kind (Quantifier.to_modal_kind q))
+           (Quantifier.to_var q) (Quantifier.to_kind q))
 
 
 
@@ -656,6 +661,23 @@ class map =
         let _x = o#string _x in
         let _x_i1 = o#list (fun o -> o#string) _x_i1 in (_x, _x_i1)
 
+    method effect_name : Datatype.effect_name -> Datatype.effect_name =
+      WithPos.map2 ~f_pos:o#position ~f_node:(o#list (fun o -> o#name))
+
+    method effect_application : Datatype.effect_application -> Datatype.effect_application =
+      WithPos.map2 ~f_pos:o#position ~f_node:(fun (name, args) ->
+        let name = o#list (fun o -> o#name) name in
+        let args = o#list (fun o -> o#datatype) args in
+        name, args)
+
+    method modality : Datatype.modality -> Datatype.modality =
+      let open Datatype in function
+      | Absolute effects -> Absolute (o#list (fun o -> o#effect_application) effects)
+      | Relative (mask, effects) ->
+         let mask = o#list (fun o -> o#effect_name) mask in
+         let effects = o#list (fun o -> o#effect_application) effects in
+         Relative (mask, effects)
+
     method datatypenode : Datatype.t -> Datatype.t =
       let open Datatype in
       function
@@ -665,6 +687,15 @@ class map =
           let ns = o#list (fun o -> o#name) ns in
           let args = o#list (fun o -> o#type_arg) args in
           QualifiedTypeApplication (ns, args)
+      | ImplicitArrow (args, result) ->
+          let args = o#list (fun o -> o#datatype) args in
+          ImplicitArrow (args, o#datatype result)
+      | ImplicitLinearArrow (args, result) ->
+          let args = o#list (fun o -> o#datatype) args in
+          ImplicitLinearArrow (args, o#datatype result)
+      | Modal (modality, payload) ->
+          let modality = o#modality modality in
+          Modal (modality, o#datatype payload)
       | Function (_x, _x_i1, _x_i2) ->
           let _x = o#list (fun o -> o#datatype) _x in
           let _x_i1 = o#row _x_i1 in
@@ -677,6 +708,7 @@ class map =
           let _x = o#type_variable _x in
           let _x_i1 = o#datatype _x_i1 in Mu (_x, _x_i1)
       | Forall (_x, _x_i1) ->
+          let _x = o#list (fun o -> o#quantifier) _x in
           let _x_i1 = o#datatype _x_i1 in Forall (_x, _x_i1)
       | Unit -> Unit
       | Tuple _x ->
@@ -948,6 +980,8 @@ class fold =
 
     method kind : kind -> 'self_type = fun _ -> o
 
+    method modal_kind : ModalKind.t -> 'self_type = fun _ -> o
+
     method freedom : Freedom.t -> 'self_type = fun _ -> o
 
     method type_variable : SugarTypeVar.t -> 'self_type =
@@ -964,12 +998,13 @@ class fold =
    method quantifier : SugarQuantifier.t -> 'self_type =
      let open SugarQuantifier in
      function
-     | QUnresolved (name, kind, freedom) ->
+     | QUnresolved (name, kind, modal_kind, freedom) ->
         let o = o#name name in
         let o = o#kind kind in
+        let o = o#modal_kind modal_kind in
         let o = o#freedom freedom in
         o
-     | QResolved _  -> o
+     | QResolved q -> o#modal_kind (Quantifier.to_modal_kind q)
 
     method row_var : Datatype.row_var -> 'self_type =
       let open Datatype in function
@@ -1447,6 +1482,23 @@ class fold =
       fun (_x, _x_i1) ->
         let o = o#string _x in let o = o#list (fun o -> o#string) _x_i1 in o
 
+    method effect_name : Datatype.effect_name -> 'self_type =
+      WithPos.traverse ~o ~f_pos:(fun o -> o#position)
+        ~f_node:(fun o -> o#list (fun o -> o#name))
+
+    method effect_application : Datatype.effect_application -> 'self_type =
+      WithPos.traverse ~o ~f_pos:(fun o -> o#position)
+        ~f_node:(fun o (name, args) ->
+          let o = o#list (fun o -> o#name) name in
+          o#list (fun o -> o#datatype) args)
+
+    method modality : Datatype.modality -> 'self_type =
+      let open Datatype in function
+      | Absolute effects -> o#list (fun o -> o#effect_application) effects
+      | Relative (mask, effects) ->
+         let o = o#list (fun o -> o#effect_name) mask in
+         o#list (fun o -> o#effect_application) effects
+
     method datatypenode : Datatype.t -> 'self_type =
       let open Datatype in
       function
@@ -1456,6 +1508,12 @@ class fold =
           let o = o#list (fun o -> o#name) ns in
           let o = o#list (fun o -> o#type_arg) args in
           o
+      | ImplicitArrow (args, result) | ImplicitLinearArrow (args, result) ->
+          let o = o#list (fun o -> o#datatype) args in
+          o#datatype result
+      | Modal (modality, payload) ->
+          let o = o#modality modality in
+          o#datatype payload
       | Function (_x, _x_i1, _x_i2) ->
           let o = o#list (fun o -> o#datatype) _x in
           let o = o#row _x_i1 in let o = o#datatype _x_i2 in o
@@ -1466,6 +1524,7 @@ class fold =
           let o = o#type_variable _x in
           let o = o#datatype _x_i1 in o
       | Forall (_x, _x_i1) ->
+          let o = o#list (fun o -> o#quantifier) _x in
           let o = o#datatype _x_i1 in o
       | Unit -> o
       | Tuple _x -> let o = o#list (fun o -> o#datatype) _x in o
@@ -1731,6 +1790,8 @@ class fold_map =
 
     method kind : kind -> ('self_type * kind) = fun k -> (o, k)
 
+    method modal_kind : ModalKind.t -> ('self_type * ModalKind.t) = fun k -> (o, k)
+
     method freedom : Freedom.t -> ('self_type * Freedom.t) = fun k -> (o, k)
 
     method type_variable : SugarTypeVar.t -> ('self_type * SugarTypeVar.t) =
@@ -1748,12 +1809,15 @@ class fold_map =
     method quantifier : SugarQuantifier.t -> ('self_type * SugarQuantifier.t) =
       let open SugarQuantifier in
       function
-      | QUnresolved (name, kind, freedom) ->
+      | QUnresolved (name, kind, modal_kind, freedom) ->
          let o, name' = o#name name in
          let o, kind' = o#kind kind in
          let o, freedom' = o#freedom freedom in
-         o, QUnresolved (name', kind', freedom')
-      | (QResolved _) as rq -> o, rq
+         let o, modal_kind' = o#modal_kind modal_kind in
+         o, QUnresolved (name', kind', modal_kind', freedom')
+      | QResolved q ->
+         let o, modal_kind = o#modal_kind (Quantifier.to_modal_kind q) in
+         o, QResolved (Quantifier.make ~modal_kind (Quantifier.to_var q) (Quantifier.to_kind q))
 
 
     method row_var : Datatype.row_var -> ('self_type * Datatype.row_var) =
@@ -2369,6 +2433,27 @@ class fold_map =
         let (o, _x_i1) = o#option (fun o -> o#typ) _x_i1
         in (o, (_x, _x_i1))
 
+    method effect_name : Datatype.effect_name -> 'self_type * Datatype.effect_name =
+      WithPos.traverse_map ~o ~f_pos:(fun o -> o#position)
+        ~f_node:(fun o -> o#list (fun o -> o#name))
+
+    method effect_application : Datatype.effect_application -> 'self_type * Datatype.effect_application =
+      WithPos.traverse_map ~o ~f_pos:(fun o -> o#position)
+        ~f_node:(fun o (name, args) ->
+          let o, name = o#list (fun o -> o#name) name in
+          let o, args = o#list (fun o -> o#datatype) args in
+          o, (name, args))
+
+    method modality : Datatype.modality -> 'self_type * Datatype.modality =
+      let open Datatype in function
+      | Absolute effects ->
+         let o, effects = o#list (fun o -> o#effect_application) effects in
+         o, Absolute effects
+      | Relative (mask, effects) ->
+         let o, mask = o#list (fun o -> o#effect_name) mask in
+         let o, effects = o#list (fun o -> o#effect_application) effects in
+         o, Relative (mask, effects)
+
     method datatypenode : Datatype.t -> ('self_type * Datatype.t) =
       let open Datatype in
       function
@@ -2378,6 +2463,18 @@ class fold_map =
           let (o, ns) = o#list (fun o -> o#name) ns in
           let (o, args) = o#list (fun o -> o#type_arg) args in
           (o, QualifiedTypeApplication (ns, args))
+      | ImplicitArrow (args, result) ->
+          let o, args = o#list (fun o -> o#datatype) args in
+          let o, result = o#datatype result in
+          o, ImplicitArrow (args, result)
+      | ImplicitLinearArrow (args, result) ->
+          let o, args = o#list (fun o -> o#datatype) args in
+          let o, result = o#datatype result in
+          o, ImplicitLinearArrow (args, result)
+      | Modal (modality, payload) ->
+          let o, modality = o#modality modality in
+          let o, payload = o#datatype payload in
+          o, Modal (modality, payload)
       | Function (_x, _x_i1, _x_i2) ->
           let (o, _x) = o#list (fun o -> o#datatype) _x in
           let (o, _x_i1) = o#row _x_i1 in
@@ -2392,7 +2489,7 @@ class fold_map =
           let (o, _x) = o#type_variable _x in
           let (o, _x_i1) = o#datatype _x_i1 in (o, (Mu (_x, _x_i1)))
       | Forall (_x, _x_i1) ->
-          (*let (o, _x) = o#list (fun o -> o#quantifier) _x in*)
+          let (o, _x) = o#list (fun o -> o#quantifier) _x in
           let (o, _x_i1) = o#datatype _x_i1 in (o, (Forall (_x, _x_i1)))
       | Unit -> (o, Unit)
       | Tuple _x ->
@@ -2486,6 +2583,7 @@ class fold_map =
       function
       | Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
           let (o, _x   ) = o#pattern _x in
+          let (o, _x_i1) = o#list (fun o -> o#quantifier) _x_i1 in
           let (o, _x_i2) = o#phrase _x_i2 in
           let (o, _x_i3) = o#location _x_i3 in
           let (o, _x_i4) = o#option (fun o -> o#datatype') _x_i4

@@ -83,6 +83,8 @@ module Desugar = struct
            let point = SugarTypeVar.get_resolved_type_exn stv in
            Meta point
         | QualifiedTypeApplication _ -> assert false (* will have been erased *)
+        | ImplicitArrow _ | ImplicitLinearArrow _ | Modal _ ->
+            raise (Errors.Type_error (pos, "Modal type syntax requires the contextual type checker"))
         | Function (f, e, t) as _fn ->
             Types.Function ( Types.make_tuple_type (List.map datatype f)
                            , row alias_env e t'
@@ -573,6 +575,7 @@ let sentence typing_env = function
 
 let read ~aliases s =
   let dt, _ = parse_string ~in_context:(LinksLexer.fresh_context ()) datatype s in
+  let dt = DesugarLegacyTypes.datatype dt in
   let dt = DesugarTypeVariables.standalone_signature dt in
   let dt = DesugarEffects.standalone_signature aliases dt in
   let _, ty = Generalise.generalise Env.String.empty (Desugar.datatype aliases dt) in

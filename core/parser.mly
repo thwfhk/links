@@ -162,9 +162,21 @@ let subkind_of p =
   | "Eff"     -> Some (default_effect_lin, res_effect)
   | sk        -> raise (ConcreteSyntaxError (pos p, "Invalid subkind: " ^ sk))
 
-let named_quantifier name kind freedom = SugarQuantifier.mk_unresolved name kind freedom
-
-let attach_kind (t, k) = SugarQuantifier.mk_unresolved t k `Rigid
+let attach_binder_kinds p name annotations =
+  let kind, modal_kind, _, _ =
+    List.fold_left (fun (kind, modal_kind, has_kind, has_modal) (k, m) ->
+      let duplicate = (has_kind && Option.is_some k) || (has_modal && Option.is_some m) in
+      if duplicate then
+        raise (ConcreteSyntaxError (pos p, "Repeated or conflicting binder kind annotation"));
+      (Option.value ~default:kind k, Option.value ~default:modal_kind m,
+       has_kind || Option.is_some k, has_modal || Option.is_some m))
+      ((None, None), ModalKind.Any, false, false) annotations
+  in
+  (match fst kind, modal_kind with
+   | Some (PrimaryKind.Row | PrimaryKind.Presence), ModalKind.Abs ->
+      raise (ConcreteSyntaxError (pos p, "Abs requires a type binder"))
+   | _ -> ());
+  SugarQuantifier.mk_unresolved ~modal_kind name kind `Rigid
 
 let attach_subkind_helper update sk = update sk
 
@@ -367,6 +379,7 @@ let any = any_pat dp
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
 %token MU FORALL ALIEN SIG UNSAFE
+%token MODAL MODAL_LANGLE MODAL_RANGLE
 %token MODULE MUTUAL OPEN IMPORT
 %token BANG QUESTION
 %token CAPITAL_LAMBDA
@@ -551,20 +564,23 @@ typeargs_opt:
 | /* empty */                                                  { [] }
 | LPAREN varlist RPAREN                                        { $2 }
 
-kind:
+binder_kind:
+| COLONCOLON LPAREN CONSTRUCTOR COMMA CONSTRUCTOR RPAREN        { Some (Some pk_type, full_subkind_of $loc $3 $5), None }
 | COLONCOLON CONSTRUCTOR LPAREN CONSTRUCTOR COMMA CONSTRUCTOR RPAREN
-                                                               { full_kind_of $loc $2 $4 $6 }
+                                                               { Some (full_kind_of $loc $2 $4 $6), None }
 | COLONCOLON CONSTRUCTOR LPAREN CONSTRUCTOR RPAREN
-                                                               { linrow_kind_of $loc $2 $4 }
-| COLONCOLON CONSTRUCTOR                                       { kind_of $loc($2) $2        }
+                                                               { Some (linrow_kind_of $loc $2 $4), None }
+| COLONCOLON CONSTRUCTOR                                       { match $2 with
+                                                                 | "Abs" -> None, Some ModalKind.Abs
+                                                                 | "Any" -> Some (kind_of $loc($2) $2), Some ModalKind.Any
+                                                                 | _ -> Some (kind_of $loc($2) $2), None }
 
 subkind:
 | COLONCOLON LPAREN CONSTRUCTOR COMMA CONSTRUCTOR RPAREN       { full_subkind_of $loc $3 $5 }
 | COLONCOLON CONSTRUCTOR                                       { subkind_of $loc($2) $2     }
 
 typearg:
-| VARIABLE                                                     { (named_quantifier $1 (None, None) `Rigid) }
-| VARIABLE kind                                                { attach_kind ($1, $2)                            }
+| VARIABLE binder_kind*                                        { attach_binder_kinds $loc $1 $2 }
 
 varlist:
 | separated_nonempty_list(COMMA, typearg)                      { $1 }
@@ -1090,8 +1106,8 @@ straight_arrow:
   straight_arrow_prefix RARROW datatype                        { Datatype.Function ($1, $2, $4) }
 | parenthesized_datatypes
   straight_arrow_prefix LOLLI datatype                         { Datatype.Lolli    ($1, $2, $4) }
-| parenthesized_datatypes RARROW datatype                      { Datatype.Function ($1, fresh_effects, $3) }
-| parenthesized_datatypes LOLLI datatype                       { Datatype.Lolli    ($1, fresh_effects, $3) }
+| parenthesized_datatypes RARROW datatype                      { Datatype.ImplicitArrow ($1, $3) }
+| parenthesized_datatypes LOLLI datatype                       { Datatype.ImplicitLinearArrow ($1, $3) }
 
 squiggly_arrow:
 | parenthesized_datatypes
@@ -1131,8 +1147,8 @@ forall_datatype:
    among several nonterminals.
 */
 session_datatype:
-| BANG primary_datatype_pos DOT datatype                       { Datatype.Output ($2, $4) }
-| QUESTION primary_datatype_pos DOT datatype                   { Datatype.Input  ($2, $4) }
+| BANG primary_datatype_with_pos(session_modal_datatype) DOT datatype                       { Datatype.Output ($2, $4) }
+| QUESTION primary_datatype_with_pos(session_modal_datatype) DOT datatype                   { Datatype.Input  ($2, $4) }
 | LBRACKETPLUSBAR row BARPLUSRBRACKET                          { Datatype.Select $2       }
 | LBRACKETAMPBAR row BARAMPRBRACKET                            { Datatype.Choice $2       }
 | primary_datatype                                             { $1                       }
@@ -1146,8 +1162,50 @@ parenthesized_datatypes:
 primary_datatype_pos:
 | primary_datatype                                             { with_pos $loc $1 }
 
+modal_effect_name:
+| separated_nonempty_list(DOT, CONSTRUCTOR)                    { with_pos $loc $1 }
+
+modal_effect_application:
+| modal_effect_name                                            { with_pos $loc (WithPos.node $1, []) }
+| modal_effect_name LPAREN separated_nonempty_list(COMMA, datatype) RPAREN
+                                                               { with_pos $loc (WithPos.node $1, $3) }
+
+modal_modality:
+| LBRACKET separated_list(COMMA, modal_effect_application) RBRACKET
+                                                               { Datatype.Absolute $2 }
+| MODAL_LANGLE separated_list(COMMA, modal_effect_application) MODAL_RANGLE
+                                                               { Datatype.Relative ([], $2) }
+| MODAL_LANGLE separated_list(COMMA, modal_effect_application) VBAR
+  separated_list(COMMA, modal_effect_application) MODAL_RANGLE { let mask = List.map (fun e ->
+                                                                  match WithPos.node e with
+                                                                  | name, [] -> WithPos.with_node e name
+                                                                  | _, _ -> raise (ConcreteSyntaxError (WithPos.pos e,
+                                                                      "Effect masks contain names without arguments"))) $2 in
+                                                                Datatype.Relative (mask, $4) }
+
+modal_payload:
+| primary_datatype_pos                                         { $1 }
+| qualified_type_name                                          { with_pos $loc (Datatype.QualifiedTypeApplication ($1, [])) }
+| qualified_type_name LPAREN type_arg_list RPAREN              { with_pos $loc (Datatype.QualifiedTypeApplication ($1, $3)) }
+
+modal_datatype:
+| MODAL modal_modality modal_payload                          { Datatype.Modal ($2, $3) }
+
+(* As for existing session payloads, parentheses allow qualified type names
+   without confusing their dots with the session continuation. *)
+session_modal_datatype:
+| MODAL modal_modality primary_datatype_with_pos(session_modal_datatype)
+                                                               { Datatype.Modal ($2, $3) }
+
 primary_datatype:
-| TILDE primary_datatype_pos                                   { Datatype.Dual $2 }
+| primary_datatype_with(modal_datatype)                         { $1 }
+
+primary_datatype_with_pos(modal_type):
+| primary_datatype_with(modal_type)                            { with_pos $loc $1 }
+
+primary_datatype_with(modal_type):
+| modal_type                                                  { $1 }
+| TILDE primary_datatype_with_pos(modal_type)                                   { Datatype.Dual $2 }
 | parenthesized_datatypes                                      { match $1 with
                                                                    | [] -> Datatype.Unit
                                                                    | [n] -> WithPos.node n

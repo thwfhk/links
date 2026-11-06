@@ -148,20 +148,20 @@ module SugarQuantifier =
 struct
 
   type t =
-    | QUnresolved of Name.t * kind * Freedom.t
+    | QUnresolved of Name.t * kind * ModalKind.t * Freedom.t
     | QResolved of Quantifier.t
       [@@deriving show]
 
 
-  let mk_unresolved name kind freedom =
-    QUnresolved (name, kind, freedom)
+  let mk_unresolved ?(modal_kind=ModalKind.Any) name kind freedom =
+    QUnresolved (name, kind, modal_kind, freedom)
 
   let mk_resolved quantifier =
     QResolved quantifier
 
 
   let get_unresolved_exn = function
-    | QUnresolved (name, kind, freedom) -> name, kind, freedom
+    | QUnresolved (name, kind, _, freedom) -> name, kind, freedom
     | QResolved _q ->
        raise
          (internal_error
@@ -171,6 +171,10 @@ struct
  let get_unresolved_name_exn =
    get_unresolved_exn ->- fst3
 
+
+  let modal_kind = function
+    | QUnresolved (_, _, modal_kind, _) -> modal_kind
+    | QResolved q -> Quantifier.to_modal_kind q
 
   let get_resolved_exn = function
     | QResolved q -> q
@@ -194,6 +198,9 @@ module Datatype = struct
   type t =
     | TypeVar         of SugarTypeVar.t
     | QualifiedTypeApplication of Name.t list * type_arg list
+    | ImplicitArrow   of with_pos list * with_pos
+    | ImplicitLinearArrow of with_pos list * with_pos
+    | Modal           of modality * with_pos
     | Function        of with_pos list * row * with_pos
     | Lolli           of with_pos list * row * with_pos
     | Mu              of SugarTypeVar.t * with_pos
@@ -216,6 +223,11 @@ module Datatype = struct
     | Dual            of with_pos
     | End
   and with_pos = t WithPos.t
+  and effect_application = (Name.t list * with_pos list) WithPos.t
+  and effect_name = Name.t list WithPos.t
+  and modality =
+    | Absolute of effect_application list
+    | Relative of effect_name list * effect_application list
   and row = (string * fieldspec) list * row_var
   and row_var =
     | EffectApplication of string * type_arg list

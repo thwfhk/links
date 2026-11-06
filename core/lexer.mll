@@ -118,6 +118,7 @@ let keywords = [
  "insert"   , INSERT;
  "linfun"   , LINFUN;
  "module"   , MODULE;
+ "modal"    , MODAL;
  "mu"       , MU;
  "mutual"   , MUTUAL;
  "nu"       , NU;
@@ -291,13 +292,34 @@ rule lex ctxt nl = parse
   | "delete"                            { ctxt#push_lexer (upd_qual ctxt nl); DELETE }
   | def_id as var                       { try
                                             let keyword = List.assoc var keywords in
-                                            ignore (match keyword with CASE when not ctxt#effect_mode -> ctxt#toggle | _ -> ());
+                                            ignore (match keyword with
+                                              | CASE when not ctxt#effect_mode -> ctxt#toggle
+                                              | MODAL -> ctxt#push_lexer (modal_start ctxt nl)
+                                              | _ -> ());
                                             keyword
                                           with Not_found | NotFound _ ->
                                             if Char.isUpper var.[0] then CONSTRUCTOR var
                                             else VARIABLE var }
   | def_blank                           { lex ctxt nl lexbuf }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
+(* Modal delimiters do not affect the chevron count for operation patterns. *)
+and modal_start ctxt nl = parse
+  | '#' ([^ '\n'] *)                   { modal_start ctxt nl lexbuf }
+  | '\n'                               { nl (); bump_lines lexbuf 1; modal_start ctxt nl lexbuf }
+  | def_blank                          { modal_start ctxt nl lexbuf }
+  | '['                                { ctxt#pop_lexer; LBRACKET }
+  | '<'                                { ctxt#pop_lexer; ctxt#push_lexer (modal_row ctxt nl); MODAL_LANGLE }
+  | _                                  { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
+and modal_row ctxt nl = parse
+  | '#' ([^ '\n'] *)                   { modal_row ctxt nl lexbuf }
+  | '\n'                               { nl (); bump_lines lexbuf 1; modal_row ctxt nl lexbuf }
+  | def_blank                          { modal_row ctxt nl lexbuf }
+  | "|]"                               { BARRBRACKET }
+  | "|+]"                              { BARPLUSRBRACKET }
+  | "|&]"                              { BARAMPRBRACKET }
+  | '>'                                { ctxt#pop_lexer; MODAL_RANGLE }
+  | '|'                                { VBAR }
+  | ""                                 { lex ctxt nl lexbuf }
 and upd_qual ctxt nl = parse
   | def_blank                           { upd_qual ctxt nl lexbuf }
   | '\n'                                { nl (); bump_lines lexbuf 1; upd_qual ctxt nl lexbuf }

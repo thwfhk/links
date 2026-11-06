@@ -39,8 +39,15 @@ are resolved. D1's scoped row and modality modules are implemented,
 integrated, tested, and independently reviewed. D2a's modal quantifier
 metadata and D2b's contextual arrows/modal type constructors are also
 integrated, tested, and independently reviewed. D3a preserves modal
-kinds on declaration parameters. Syntax, Fresco inference, and migration
-remain incomplete.
+kinds on declaration parameters. D3b adds modal type and binder syntax,
+implicit arrows, and temporary legacy normalisation. Declaration syntax,
+Fresco inference, and migration remain incomplete.
+
+A read-only declaration investigation identified the module
+name-resolution changes and affected pattern-matching handlers. A
+second investigation confirmed a reference modal-kind defect for nested
+and recursive datatype applications; the design records the correction
+and required D4 tests.
 
 Baseline checked on 5 November 2026 at commit `7100e289`:
 
@@ -190,6 +197,7 @@ implementation defects. Record completed behaviour and deferred work.
 - [x] D2a: preserve modal quantifier kinds through shared type operations.
 - [x] D2b: add contextual arrows/modal types and shared type operations.
 - [x] D3a: preserve modal kinds on declaration parameters.
+- [x] D3b: add modal type/binder syntax and temporary legacy normalisation.
 - [ ] Implement and test modal syntax and scoped effect rows.
 - [ ] Refactor type inference to follow Fresco.
 - [ ] Implement modal inference and run the first working example.
@@ -247,6 +255,9 @@ Add acceptance and rejection tests for each changed typing behaviour.
 - 6 November 2026: Defer the term-level mask operator, as requested
   by the user. Scoped row removal and relative modality composition
   remain part of the implementation.
+- 6 November 2026: Qualify operations by their owning effect, using
+  `State.Get` and `M.State.Get`, as confirmed by the user. Reject
+  ambiguous unqualified operation names.
 - 6 November 2026: Follow Aghilas for unresolved language choices.
   Include its higher-order effects with restricted exchange, fixed
   modal kinds, monomorphic lets, and signed recursion. Use a `modal`
@@ -386,9 +397,9 @@ A source review also confirmed that the reference's ghost consistency
 cases omit a required bound-variable check. The design records the
 thesis rule and direct/source-level probes for D4.
 
-## Latest task and verification
+## D3a verification
 
-6 November 2026, D3a: added `TypeParameter` descriptors carrying
+6 November 2026, D3a, commit `86863c58`: added `TypeParameter` descriptors carrying
 ordinary and modal kinds. Abstract type arities, aliases, and recursive
 applications retain these descriptors through structural operations.
 Legacy consumers reject `Abs`, including unused parameters. Added
@@ -417,10 +428,53 @@ Main, implementation, and review source snapshots match.
 | Manual changed-file tab/trailing-whitespace check | Passed |
 | `git diff --check` | Passed |
 
+## Latest task and verification
+
+6 November 2026, D3b: added modal type syntax, positioned named effect
+applications and masks, implicit arrow nodes, and modal binder kinds.
+Sugar traversals and type-variable resolution preserve the new
+structure and metadata. Legacy normalisation runs after import loading
+and before module resolution, and in the built-in type-string reader.
+Added 22 unit tests and five datatype regression tests.
+
+Main review identified modal delimiter handling for variant/session
+arguments and normalisation of imported signatures. Both were corrected
+before integration. The final audit also added traversal of value-binding
+quantifier lists. Independent review reported no remaining findings and
+passed all 174 unit tests and 30 datatype tests. Main, implementation,
+and review snapshots match.
+
+The first unit run exposed an invalid legacy implicit-effect fixture.
+The first datatype regression run had a new fixture calling a closed-row
+function in the top-level `wild` context; the corrected fixture declares
+that effect. The integrated handler suite timed out on its examples test
+during parallel verification, then passed when rerun on its own.
+
+| Integrated check | Result |
+|---|---|
+| `make no-db` | Passed |
+| `tests/handlers.tests` | 95 passed on rerun |
+| `tests/effect_sugar.tests` | 44 passed |
+| `tests/polymorphism.tests` | 55 passed |
+| `tests/typecheck_examples.tests` | 167 passed, 15 ignored by existing settings |
+| `tests/type_print.tests` | 10 passed |
+| `tests/desugar_datatypes.tests` | 30 passed, including five new tests |
+| `tests/modules.tests` | 41 passed |
+| `opam exec -- ./run-tests nodb-unit-tests` | 174 passed, including 22 new tests |
+| Menhir conflicts | Zero in both baseline and changed grammar |
+| `make rule-check` | Passed; GNU-find tab check skipped, formatter check disabled |
+| Manual changed-file tab/trailing-whitespace check | Passed |
+| `git diff --check` | Passed |
+
+The declaration investigation recorded effect-qualified operation names,
+confirmed by the user, and migration of repeated operation-pattern clauses.
+Reference probes also confirmed incorrect modal-kind classification of
+nested and recursive datatype applications. The design records D4's
+required correction and tests.
+
 ## Next action
 
-Implement D3b: modal type and binder syntax, surface effect applications,
-and implicit arrow nodes. Keep the legacy frontend building through
-the planned temporary normalisation. Then add effect declarations,
-handler annotations, freezing, and contextual datatype elaboration.
-D4 supplies the contextual kind checks, contexts, and constraints.
+Implement D3c: named effect declarations, effect-qualified operation
+syntax, handler annotations, and general freezing, with positioned
+legacy rejection. Then add effect and operation resolution. Contextual
+datatype elaboration follows D4's kind checks, contexts, and constraints.

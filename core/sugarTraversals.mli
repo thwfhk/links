@@ -35,6 +35,10 @@ class map :
     method subkind         : Subkind.t -> Subkind.t
     method kind            : kind -> kind
     method freedom         : Freedom.t -> Freedom.t
+    method modal_kind : ModalKind.t -> ModalKind.t
+    method effect_name : Datatype.effect_name -> Datatype.effect_name
+    method effect_application : Datatype.effect_application -> Datatype.effect_application
+    method modality : Datatype.modality -> Datatype.modality
     method quantifier      :  SugarQuantifier.t -> SugarQuantifier.t
     method type_variable   : SugarTypeVar.t -> SugarTypeVar.t
     method row_var         : Datatype.row_var -> Datatype.row_var
@@ -121,6 +125,10 @@ class fold :
     method kind            : kind -> 'self
     method freedom         : Freedom.t -> 'self
     method type_variable   : SugarTypeVar.t -> 'self
+    method modal_kind : ModalKind.t -> 'self
+    method effect_name : Datatype.effect_name -> 'self
+    method effect_application : Datatype.effect_application -> 'self
+    method modality : Datatype.modality -> 'self
     method quantifier      : SugarQuantifier.t -> 'self
     method row_var         : Datatype.row_var -> 'self
     method row             : Datatype.row -> 'self
@@ -233,6 +241,10 @@ object ('self)
   method subkind         : Subkind.t -> 'self * Subkind.t
   method kind            : kind -> 'self * kind
   method freedom         : Freedom.t -> 'self * Freedom.t
+  method modal_kind : ModalKind.t -> 'self * ModalKind.t
+  method effect_name : Datatype.effect_name -> 'self * Datatype.effect_name
+  method effect_application : Datatype.effect_application -> 'self * Datatype.effect_application
+  method modality : Datatype.modality -> 'self * Datatype.modality
   method quantifier      : SugarQuantifier.t -> 'self * SugarQuantifier.t
   method type_variable   : SugarTypeVar.t -> 'self * SugarTypeVar.t
   method typ             : Types.datatype -> ('self * Types.datatype)

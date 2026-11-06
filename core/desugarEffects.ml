@@ -196,7 +196,7 @@ module RowVarMap : ROW_VAR_MAP = struct
     let open SugarQuantifier in
     function
     | QResolved q -> Quantifier.to_var q
-    | QUnresolved (_, _, _) ->
+    | QUnresolved _ ->
         raise
           (internal_error
              "must not call on unresolved quantifiers")

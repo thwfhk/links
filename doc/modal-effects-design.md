@@ -157,6 +157,19 @@ legacy conversion and reader routing in D7. This keeps one grammar
 and preserves the parsed distinction until inference selects the
 appropriate representation.
 
+D3b first adds modal type/binder syntax and implicit arrow nodes.
+Store qualified effect names and positioned datatype arguments in
+surface effect applications; declaration resolution later supplies
+effect identities and higher-order flags. Modal types are primary
+types, permitting nesting while requiring parentheses around arrows
+and quantified payloads. Preserve modal binder metadata through
+unresolved/resolved quantifiers and all syntax traversals. Modal kind
+annotations apply to binders; existing kind annotations on variable
+occurrences retain their ordinary meaning. The temporary legacy
+normaliser rejects modal constructs explicitly. Subsequent D3 changes
+add named effect declarations, handler annotations, freezing, and
+contextual datatype elaboration with D4's kind checks.
+
 `::Any` already denotes the Links kind `Type(Any,Any)`. Preserve that
 interpretation and record modal kind `Any`; `::Abs` adds modal kind
 `Abs`. Permit a modal annotation alongside an ordinary kind annotation,
@@ -168,11 +181,23 @@ by `case`. Include both interactions in D3 parser tests.
 Declarations bind effect identities and their operation signatures.
 Reject duplicate operation names in a declaration and ambiguous
 unqualified uses. Preserve declaration identities through module
-desugaring. Handler annotations select one effect group and its type
+desugaring. Qualify operations by their owning effect: `State.Get`
+and `M.State.Get`, as confirmed by the user. Keep effect and operation
+names separate from type, term, and variant-constructor names.
+Handler annotations select one effect group and its type
 arguments. Without an annotation, infer that group from the operation
 clauses. Reject mixed groups in one handler; nesting handles several
 groups. Return-only identity handlers remain valid Links programs and
 introduce no effect group.
+
+Split the remaining declaration work into syntax with legacy rejection,
+then effect and operation resolution. Allocate stable identities before
+checking declaration bodies, permitting signatures to mention their
+own effect. Preserve declaration parameters, operation signatures, and
+handler annotations until contextual elaboration can check their kinds.
+Module scopes must retain all candidates for an unqualified operation;
+opening the same declaration twice does not create an ambiguity.
+Use the same resolved operation identity in invocations and patterns.
 
 ### Scoped rows and modalities
 
@@ -258,6 +283,11 @@ and result in `<D>` in the clause, following `type.ml:finfer`.
 
 Require every operation of the handled group exactly once. Reject
 missing, duplicate, and foreign clauses before checking the body.
+Existing Links permits several argument-pattern clauses for one
+operation. Migrate handler tests "Operation parameter pattern-matching"
+(7)--(9) and the six affected handlers in `examples/handlers/nim.links`
+to one clause containing a `switch`, preserving pattern order and
+continuation calls. Add rejection tests for repeated operation clauses.
 Preserve existing Links handler parameters and shallow handlers as
 Links extensions. JavaScript currently rejects shallow handlers;
 retain that diagnostic and verify deep handlers in both backends.
@@ -501,6 +531,28 @@ that shortcut. Recursive traversal and substitution remain required.
 D8 must replace this temporary rejection with checked recursive
 comparison before accepting recursive modal programs.
 
+D3b adds the surface syntax for modal types, positioned effect
+applications and masks, implicit arrows, and modal binder kinds.
+All three sugar traversals visit their children and binder metadata,
+including quantified types and value-binding quantifier lists.
+Type-variable resolution preserves modal kinds and binder identities.
+`Abs` fixes primary kind `Type`, including when ordinary kind inference
+is enabled. The existing `::Any` annotation also records modal `Any`,
+so `::Any::Abs` is rejected; an explicit ordinary kind such as
+`::Type(Any,Any)` or `::(Any,Any)` can be followed by `::Abs`.
+
+The modal lexer mode preserves variant/session delimiters and remains
+separate from operation-pattern chevrons. Session payloads containing
+qualified types retain the parenthesis requirement, for example
+`?(modal [] M.T).End`. The grammar has no Menhir conflicts.
+`DesugarLegacyTypes` runs after imported syntax has been loaded and
+before module resolution through the legacy module-pass callbacks;
+the direct module entry points preserve contextual syntax by default.
+The built-in type reader also uses this temporary normaliser.
+Modal type annotations and `Abs` binders receive positioned legacy
+rejections. Effect declarations, resolution, and contextual elaboration
+remain to be implemented.
+
 Begin D4 with ordered contexts and checked assignment in
 `frescoContext.ml/.mli` and `frescoTypeOps.ml/.mli`. Identify variables
 by `Types.tid`: separate Unionfind points can denote the same variable.
@@ -533,6 +585,21 @@ exercise the resulting invalid refinement. A value-type unknown's solution
 must be a monotype; supplied polymorphic/modal structure is handled
 by `look`. Structural row solutions may contain supplied polymorphic
 field types, whose comparisons use Fresco.
+
+Modal kind analysis must account for declaration arguments. The
+reference's `context.ml:get_kind` returns `Abs` when a constructor name
+has already been visited, even if its arguments differ. Use a finite
+fixed-point analysis of declaration identities and argument modal kinds
+for recursive declarations. Start at `Abs` and propagate `Any` from
+contextual functions and relevant parameters until the results stop
+changing. Inspect declaration bodies so unused parameters do not affect
+the result. Check kind validity separately from this classification.
+Cover nested applications and recursive aliases with changing arguments.
+Supply each raw declaration body with its `Quantifier.t` binders, so
+formal variable identities map to the argument-kind vector. The current
+`rec_appl.r_quantifiers` parameter descriptors do not contain those
+identities; `r_body` alone is insufficient. Avoid legacy unfolding in
+this analysis.
 
 ## Examples and expected behaviour
 
@@ -613,6 +680,17 @@ pass: 57 Fresco and 25 modal/data-type tests. Additional probes found:
    type check rejects the program. Require the direct joins to reject.
    Keep the whole-program rejection test, and acceptance tests where
    the expected result is `Int` or the argument is an identity lambda.
+9. `context.ml:get_kind` classifies `box (box (int -> int))` as `Abs`
+   for `type box a = Box of a`. It also classifies `nest int` as `Abs`
+   for `type nest a = Leaf of a | Next of nest (a -> a)`. Both are
+   accepted as ordinary operation arguments by the reference; both
+   contain contextual function values and require kind `Any`. The
+   name-only recursion check skips the inner constructor's payload.
+   Regular `nest int` and recursion through an absolute function
+   modality are positive controls; regular `nest (int -> int)` is a
+   negative control. Links permits changing arguments in recursive
+   aliases, so D4 must handle this case. Add kind-classification and
+   operation-declaration rejection tests.
 
 Keep tests for these corrections alongside the adapted reference tests.
 
