@@ -53,6 +53,8 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
             end
         (* Types *)
         | Primitive _ -> []
+        | Arrow (f, t) | LinearArrow (f, t) -> gt f @ gt t
+        | Modal (m, t) -> concat_map gt (Modality.arguments m) @ gt t
         | Function (f, m, t) ->
             let from_gens = gt f
             and effect_gens = get_row_type_args kind bound_vars m

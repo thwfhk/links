@@ -141,6 +141,9 @@ and typ =
   | Primitive of Primitive.t
   | Function of (typ * row * typ)
   | Lolli of (typ * row * typ)
+  | Arrow of (typ * typ)
+  | LinearArrow of (typ * typ)
+  | Modal of (modality * typ)
   | Record of row
   | Variant of row
   | Table of (Temporality.t * typ * typ * typ)
@@ -171,6 +174,8 @@ and field_spec_map = field_spec Utility.StringMap.t
 and meta_type_var = typ point
 and meta_row_var = row point
 and meta_presence_var = typ point
+and scoped_effect_row = typ EffectRow.t
+and modality = typ Modality.t
 and row = typ
 and row' = field_spec_map * row_var * bool
 and row_var = meta_row_var
@@ -274,7 +279,8 @@ val type_arg_of_quantifier : Quantifier.t -> type_arg
 val quantifier_of_type_arg : type_arg -> Quantifier.t
 val quantifiers_of_type_args : type_arg list -> Quantifier.t list
 
-(** Reject [Abs] binders before legacy inference changes any type variables.
+(** Reject [Abs] binders, contextual arrows and modal types before legacy
+    inference changes any type variables.
     Structural substitution and binder copying do not need this check.
     [allow_incomplete] permits unfinished recursive declarations during type
     desugaring; inference must use the default [false]. *)
@@ -483,6 +489,8 @@ sig
     method list : ('self_type -> 'a -> 'self_type * 'b ) -> 'a list -> ('self_type * 'b list)
     method type_args : type_arg list -> ('self_type * type_arg list)
     method typ : typ -> ('self_type * typ)
+    method scoped_effect_row : scoped_effect_row -> ('self_type * scoped_effect_row)
+    method modality : modality -> ('self_type * modality)
     method row : row -> ('self_type * row)
     method row_var : row_var -> ('self_type * row_var)
     method meta_type_var : meta_type_var -> ('self_type * meta_type_var)
@@ -505,6 +513,17 @@ class virtual type_predicate :
     method row_satisfies : visit_context -> row -> bool
     method type_satisfies_arg : visit_context -> type_arg -> bool
     method predicates : ((typ -> bool) * (row -> bool))
+  end
+
+class virtual type_iter :
+  object
+    method visit_var : typ point -> (int * Kind.t * Freedom.t) -> unit
+    method visit_point : (visit_context -> typ -> unit) -> visit_context -> typ point -> unit
+    method visit_type : visit_context -> typ -> unit
+    method visit_field : visit_context -> field_spec -> unit
+    method visit_row : visit_context -> row -> unit
+    method visit_type_arg : visit_context -> type_arg -> unit
+    method visitors : ((typ -> unit) * (row -> unit))
   end
 
 module Transform : TYPE_VISITOR

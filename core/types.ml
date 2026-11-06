@@ -167,6 +167,9 @@ and typ =
   | Primitive of Primitive.t
   | Function of (typ * row * typ)
   | Lolli of (typ * row * typ)
+  | Arrow of (typ * typ)
+  | LinearArrow of (typ * typ)
+  | Modal of (modality * typ)
   | Record of row
   | Variant of row
   | Table of (Temporality.t * typ * typ * typ)
@@ -197,6 +200,8 @@ and field_spec_map = field_spec Utility.StringMap.t
 and meta_type_var = typ point
 and meta_row_var = row point
 and meta_presence_var = typ point
+and scoped_effect_row = typ EffectRow.t
+and modality = typ Modality.t
 and row = typ
 and row' = field_spec_map * row_var * bool
 and row_var = meta_row_var
@@ -235,6 +240,8 @@ sig
     method list : ('self_type -> 'a -> 'self_type * 'b ) -> 'a list -> ('self_type * 'b list)
     method type_args : type_arg list -> ('self_type * type_arg list)
     method typ : typ -> ('self_type * typ)
+    method scoped_effect_row : scoped_effect_row -> ('self_type * scoped_effect_row)
+    method modality : modality -> ('self_type * modality)
     method row : row -> ('self_type * row)
     method row_var : row_var -> ('self_type * row_var)
     method meta_type_var : meta_type_var -> ('self_type * meta_type_var)
@@ -344,6 +351,19 @@ struct
     method type_args : type_arg list -> ('self_type * type_arg list) =
       fun ts -> o#list (fun o -> o#type_arg) ts
 
+    method scoped_effect_row row =
+      o#list (fun o entry ->
+        let o, arguments = o#list (fun o -> o#typ) entry.EffectRow.arguments in
+        o, { entry with EffectRow.arguments }) row
+
+    method modality = function
+      | Modality.Absolute row ->
+         let o, row = o#scoped_effect_row row in
+         o, Modality.Absolute row
+      | Modality.Relative (mask, row) ->
+         let o, row = o#scoped_effect_row row in
+         o, Modality.Relative (mask, row)
+
     method typ : typ -> ('self_type * typ) = function
       (* Unspecified kind *)
       | Not_typed ->
@@ -370,6 +390,18 @@ struct
       | Primitive prim ->
          let (o, prim') = o#primitive prim in
          (o, Primitive prim')
+      | Arrow (dom, cod) ->
+         let o, dom = o#typ dom in
+         let o, cod = o#typ cod in
+         o, Arrow (dom, cod)
+      | LinearArrow (dom, cod) ->
+         let o, dom = o#typ dom in
+         let o, cod = o#typ cod in
+         o, LinearArrow (dom, cod)
+      | Modal (modality, payload) ->
+         let o, modality = o#modality modality in
+         let o, payload = o#typ payload in
+         o, Modal (modality, payload)
       | Function (dom, eff, cod) ->
          let (o, dom') = o#typ dom in
          let (o, eff') = o#row eff in
@@ -609,6 +641,11 @@ class virtual type_predicate = object(self)
          self#type_satisfies (StringSet.add r_unique_name rec_appl, rec_vars, quant_vars) body
     | Meta point -> self#point_satisfies self#type_satisfies vars point
     | Primitive _ -> true
+    | Arrow (a, r) | LinearArrow (a, r) ->
+       self#type_satisfies vars a && self#type_satisfies vars r
+    | Modal (m, t) ->
+       List.for_all (self#type_satisfies vars) (Modality.arguments m)
+       && self#type_satisfies vars t
     | Function (a, e, r) | Lolli (a, e, r) -> self#type_satisfies vars a && self#row_satisfies vars e && self#type_satisfies vars r
     | Record r | Effect r | Variant r -> self#row_satisfies vars r
     | Table _ -> true
@@ -675,6 +712,11 @@ class virtual type_iter = object(self)
     | Meta point -> self#visit_point self#visit_type vars point
     (* Type *)
     | Primitive _ -> ()
+    | Arrow (a, r) | LinearArrow (a, r) ->
+       self#visit_type vars a; self#visit_type vars r
+    | Modal (m, t) ->
+       List.iter (self#visit_type vars) (Modality.arguments m);
+       self#visit_type vars t
     | Function (a, e, r) | Lolli (a, e, r) ->
        self#visit_type vars a; self#visit_row vars e; self#visit_type vars r
     | Record r | Variant r -> self#visit_row vars r
@@ -780,7 +822,7 @@ module Base : Constraint = struct
         (* Type *)
         | Primitive (Bool | Int | Char | Float | String | DateTime) -> true
         | Primitive _ -> false
-        | (Function _ | Lolli _ | Record _ | Variant _ | Table _ | Lens _ | ForAll (_::_, _)) -> false
+        | (Function _ | Lolli _ | Arrow _ | LinearArrow _ | Modal _ | Record _ | Variant _ | Table _ | Lens _ | ForAll (_::_, _)) -> false
         | ForAll ([], t) -> super#type_satisfies vars t
         (* Effect *)
         | Effect _ as t -> super#type_satisfies vars t
@@ -825,8 +867,9 @@ module Unl : Constraint = struct
          OptionUtils.opt_app not true (r_linear ())
       | Meta _ as t -> super#type_satisfies vars t
       (* Type *)
-      | Primitive _ | Function _ -> true
-      | Lolli _ -> false
+      | Primitive _ | Function _ | Arrow _ -> true
+      | Lolli _ | LinearArrow _ -> false
+      | Modal (_, t) -> o#type_satisfies vars t
       | (Record _ | Variant _) as t -> super#type_satisfies vars t
       | (Table _ | Lens _) -> true
       | ForAll _ as t -> super#type_satisfies vars t
@@ -864,7 +907,7 @@ module Unl : Constraint = struct
         | (_, _, `Rigid) -> false
     end)#predicates
 
-  let make_type, make_row = (object
+  let make_type, make_row = (object (self)
      inherit type_iter as super
 
      method! visit_type vars = function
@@ -878,8 +921,9 @@ module Unl : Constraint = struct
        | Meta _ as t -> super#visit_type vars t
        (* Type *)
        | Primitive _ -> ()
-       | Function _ -> ()
-       | Lolli _ -> assert false
+       | Function _ | Arrow _ -> ()
+       | Lolli _ | LinearArrow _ -> assert false
+       | Modal (_, t) -> self#visit_type vars t
        | (Record _ | Variant _) as t -> super#visit_type vars t
        | Table _ | Lens _ -> ()
        | ForAll _ as t -> super#visit_type vars t
@@ -930,7 +974,7 @@ module Session : Constraint = struct
         (* Unspecified kind *)
         | Application _ -> false (* FIXME: we assume that abstract types cannot have session kind *)
         (* Type but not Session *)
-        | Primitive _ | Function _ | Lolli _ | Record _ | Variant _ | Table _ | Lens _ | ForAll _ -> false
+        | Primitive _ | Function _ | Lolli _ | Arrow _ | LinearArrow _ | Modal _ | Record _ | Variant _ | Table _ | Lens _ | ForAll _ -> false
         (* Effect *)
         | Effect _  -> false
         | Operation _ -> failwith "TODO types.ml/910"
@@ -967,7 +1011,7 @@ module Mono : Constraint = struct
          inherit type_predicate as super
 
          method! type_satisfies vars = function
-           | ForAll _ -> false
+           | ForAll _ | Modal _ -> false
            | t -> super#type_satisfies vars t
        end
      end
@@ -1195,6 +1239,10 @@ let free_type_vars, free_row_type_vars, free_tyarg_vars =
     | Var _ | Recursive _ | Closed ->
        failwith ("[7] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
     | Primitive _             -> S.empty
+    | Arrow (f, t) | LinearArrow (f, t) ->
+       S.union (free_type_vars' rec_vars f) (free_type_vars' rec_vars t)
+    | Modal (m, t) ->
+       S.union_all (List.map (free_type_vars' rec_vars) (Modality.arguments m @ [t]))
     | Function (f, m, t)      ->
        S.union_all [free_type_vars' rec_vars f; free_row_type_vars' rec_vars m; free_type_vars' rec_vars t]
     | Lolli (f, m, t)         ->
@@ -1394,6 +1442,9 @@ and subst_dual_type : var_map -> datatype -> datatype =
   | Not_typed | Primitive _ -> t
   | Var _ | Recursive _ | Closed ->
      failwith ("[8] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
+  | Arrow (f, t) -> Arrow (sdt f, sdt t)
+  | LinearArrow (f, t) -> LinearArrow (sdt f, sdt t)
+  | Modal (m, t) -> Modal (Modality.map sdt m, sdt t)
   | Function (f, m, t) -> Function (sdt f, sdr m, sdt t)
   | Lolli (f, m, t) -> Lolli (sdt f, sdr m, sdt t)
   | Record row -> Record (sdr row)
@@ -1598,6 +1649,9 @@ and normalise_datatype rec_names t =
   | Var _ | Recursive _ | Closed ->
      failwith ("[9] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
   | Primitive _             -> t
+  | Arrow (f, t) -> Arrow (nt f, nt t)
+  | LinearArrow (f, t) -> LinearArrow (nt f, nt t)
+  | Modal (m, t) -> Modal (Modality.map nt m, nt t)
   | Function (f, m, t)      ->
      Function (nt f, nr m, nt t)
   | Lolli (f, m, t)         ->
@@ -1716,6 +1770,8 @@ let check_legacy_quantifiers ?(allow_incomplete = false) t =
     inherit type_iter as super
 
     method! visit_type ((rec_appl, rec_vars, quant_vars) as vars) = function
+      | Arrow _ | LinearArrow _ | Modal _ ->
+         invalid_arg "Legacy typing does not support contextual arrows or modal types"
       | ForAll (qs, body) ->
          List.iter Quantifier.require_any qs;
          self#visit_type vars body
@@ -1930,6 +1986,8 @@ struct
        end
     (* Type *)
     | Primitive _ -> []
+    | Arrow (f, t) | LinearArrow (f, t) -> fbtv f @ fbtv t
+    | Modal (m, t) -> concat_map fbtv (Modality.arguments m) @ fbtv t
     | Function (f, m, t) ->
        (fbtv f) @ (free_bound_row_type_vars bound_vars m) @ (fbtv t)
     | Lolli (f, m, t) ->
@@ -2342,6 +2400,24 @@ module type PRETTY_PRINTER = sig
   val string_of_presence : Policy.t -> names -> field_spec -> string
 end
 
+let string_of_modality print_type modality =
+  let row entries =
+    String.concat ", " (List.map (fun entry ->
+      let name = entry.EffectRow.name in
+      match entry.EffectRow.arguments with
+      | [] -> name
+      | args -> name ^ "(" ^ String.concat ", " (List.map print_type args) ^ ")") entries) in
+  match modality with
+  | Modality.Absolute entries -> "[" ^ row entries ^ "]"
+  | Modality.Relative ([], entries) -> "<" ^ row entries ^ ">"
+  | Modality.Relative (mask, entries) ->
+     "<" ^ String.concat ", " mask ^ " | " ^ row entries ^ ">"
+
+let modal_payload_needs_parentheses t =
+  match concrete_type t with
+  | Arrow _ | LinearArrow _ | Function _ | Lolli _ | ForAll _ | Operation _ -> true
+  | _ -> false
+
 module Print : PRETTY_PRINTER =
 struct
   module BS = Basicsettings
@@ -2645,6 +2721,20 @@ struct
             end
          (* Types *)
          | Primitive p     -> Primitive.to_string p
+         | (Arrow (args, result) | LinearArrow (args, result)) as arrow ->
+            let domain = match concrete_type args with
+              | Record (Row row) when is_tuple ~allow_onetuples:true (Row row) ->
+                 string_of_tuple context row
+              | _ -> "(" ^ sd args ^ ")" in
+            let result = match concrete_type result with
+              | ForAll _ -> "(" ^ sd result ^ ")"
+              | _ -> sd result in
+            domain ^ (match arrow with LinearArrow _ -> " -@ " | _ -> " -> ") ^ result
+         | Modal (m, payload) ->
+            let m = string_of_modality sd m in
+            let body = sd payload in
+            "modal " ^ m ^ " " ^
+              (if modal_payload_needs_parentheses payload then "(" ^ body ^ ")" else body)
          | Function (args, effects, t) ->
             let ht fields =
               match FieldEnv.find hear fields with
@@ -4038,6 +4128,28 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           Printer.apply datatype ctx range buf;
         )
 
+  and contextual_arrow : (bool * typ * typ) printer
+    = let open Printer in
+      Printer (fun ctx (linear, domain, range) buf ->
+          let ctx = Context.toplevel ctx in
+          Printer.apply row (Context.set_ambient Context.Tuple ctx) domain buf;
+          StringBuffer.write buf (if linear then " -@ " else " -> ");
+          let parenthesise = match concrete_type range with ForAll _ -> true | _ -> false in
+          if parenthesise then StringBuffer.write buf "(";
+          Printer.apply datatype ctx range buf;
+          if parenthesise then StringBuffer.write buf ")")
+
+  and modal : (modality * typ) printer
+    = let open Printer in
+      Printer (fun ctx (m, payload) buf ->
+          let ctx = Context.toplevel ctx in
+          let m = string_of_modality (Printer.generate_string datatype ctx) m in
+          StringBuffer.write buf ("modal " ^ m ^ " ");
+          let parenthesise = modal_payload_needs_parentheses payload in
+          if parenthesise then StringBuffer.write buf "(";
+          Printer.apply datatype ctx payload buf;
+          if parenthesise then StringBuffer.write buf ")")
+
   and op : (typ * typ * DeclaredLinearity.t) printer
     = let open Printer in
       Printer (fun ctx (domain, range, lin) buf ->
@@ -4164,6 +4276,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | Absent             -> constant "-"
             | Primitive t        -> with_value primitive t
 
+            | Arrow (dom, cod)   -> with_value contextual_arrow (false, dom, cod)
+            | LinearArrow (dom, cod) -> with_value contextual_arrow (true, dom, cod)
+            | Modal m            -> with_value modal m
             | Function f         -> let ambient = if Context.is_ambient_effect ctx
                                                   then Context.Effect (* TODO make this explicitly an operation arrow *)
                                                   else Context.ambient_function_default in
@@ -4504,6 +4619,8 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
     | Var _ | Recursive _ | Closed ->
        failwith ("[12] freestanding Var / Recursive not implemented yet (must be inside Meta)")
     | Primitive _             -> empties
+    | Arrow (f, t) | LinearArrow (f, t) -> union [make_env boundvars f; make_env boundvars t]
+    | Modal (m, t) -> union (List.map (make_env boundvars) (Modality.arguments m @ [t]))
     | Function (f, m, t)      -> union [make_env boundvars f; make_env boundvars m; make_env boundvars t]
     | Lolli (f, m, t)         -> union [make_env boundvars f; make_env boundvars m; make_env boundvars t]
     | Effect row | Record row | Variant row -> make_env boundvars row
@@ -4723,8 +4840,11 @@ let is_sub_type, is_sub_row =
       sub_fields && sub_row_vars
     | _ -> raise tag_expectation_mismatch
   in
-  ((fun t -> is_sub_type S.empty t),
-   (fun row -> is_sub_row S.empty row))
+  let checked check (left, right) =
+    check_legacy_quantifiers left;
+    check_legacy_quantifiers right;
+    check S.empty (left, right) in
+  (checked is_sub_type, checked is_sub_row)
 
 
 let make_tuple_type (ts : datatype list) : datatype =

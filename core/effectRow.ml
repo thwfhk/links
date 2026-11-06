@@ -2,10 +2,15 @@ type 'a entry = {
   name : string;
   arguments : 'a list;
   higher_order : bool;
-}
+} [@@deriving show]
 
-type 'a t = 'a entry list
-type mask = string list
+type 'a t = 'a entry list [@@deriving show]
+type mask = string list [@@deriving show]
+
+let map f row =
+  List.map (fun entry -> { entry with arguments = List.map f entry.arguments }) row
+
+let arguments row = List.concat_map (fun entry -> entry.arguments) row
 
 let labels row = List.map (fun entry -> entry.name) row
 

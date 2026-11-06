@@ -1,6 +1,14 @@
 type 'a t =
   | Absolute of 'a EffectRow.t
   | Relative of EffectRow.mask * 'a EffectRow.t
+  [@@deriving show]
+
+let map f = function
+  | Absolute row -> Absolute (EffectRow.map f row)
+  | Relative (mask, row) -> Relative (mask, EffectRow.map f row)
+
+let arguments = function
+  | Absolute row | Relative (_, row) -> EffectRow.arguments row
 
 let identity = Relative ([], [])
 

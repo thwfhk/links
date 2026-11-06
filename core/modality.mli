@@ -4,6 +4,11 @@
 type 'a t =
   | Absolute of 'a EffectRow.t
   | Relative of EffectRow.mask * 'a EffectRow.t
+  [@@deriving show]
+
+(** Traverse effect arguments while preserving masks and row structure. *)
+val map : ('a -> 'b) -> 'a t -> 'b t
+val arguments : 'a t -> 'a list
 
 val identity : 'a t
 

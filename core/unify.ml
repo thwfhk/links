@@ -117,6 +117,8 @@ let rec eq_types : (datatype * datatype) -> bool =
           | Primitive y -> x = y
           | _            -> false
           end
+      | Arrow _ | LinearArrow _ | Modal _ ->
+          invalid_arg "Legacy typing does not support contextual arrows or modal types"
       | Function (lfrom, lm, lto) ->
           begin match unalias t2 with
           | Function (rfrom, rm, rto) -> eq_types (lfrom, rfrom)

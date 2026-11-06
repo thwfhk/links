@@ -71,6 +71,9 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
                      (* "Body" case *)
                      inst t
               end
+        | Arrow (f, t) -> Arrow (inst f, inst t)
+        | LinearArrow (f, t) -> LinearArrow (inst f, inst t)
+        | Modal (m, t) -> Modal (Modality.map inst m, inst t)
         | Function (f, m, t) -> Function (inst f, instr m, inst t)
         | Lolli (f, m, t) -> Lolli (inst f, instr m, inst t)
         | Record row -> Record (instr row)

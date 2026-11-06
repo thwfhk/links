@@ -208,6 +208,9 @@ relative modality is the identity. `compose m n` applies `m` first,
 then `n`, following `effects.ml:compose`. Implement cancellation and
 right residuals with label multiplicities. These type-level operations
 remain required while the term-level mask operator is deferred.
+Relative modality equality compares removal masks as multisets,
+following `effects.ml:eq_mask`, and extensions with scoped row equality.
+Traversal and printing preserve the supplied mask and row order.
 
 For relative lock `m = <L1 | D1>`, guard `n = <L2 | D2>`, and ambient
 row `F`, compute `G = remove L2 F` and `K = L1 - L2`. Take the shortest
@@ -347,6 +350,10 @@ renaming, closure conversion, and binder copies preserve the metadata.
 Legacy HM operations that cannot retain an `Abs` constraint reject it
 before mutating type variables. Named type/effect declaration parameter
 metadata must also retain modal kinds when D3 introduces declarations.
+Contextual alias application and recursive unfolding must use structural
+substitution and preserve quantified/modal bodies. The legacy alias
+helpers also instantiate leading quantifiers and remain confined to
+the legacy frontend during migration.
 
 Split D2 into D2a, quantifier metadata and its preservation, and D2b,
 contextual arrows/modal types and their traversals. D2a changes no
@@ -449,7 +456,31 @@ declarations before mutation. Unit tests cover this boundary and
 `tests/polymorphism.tests` contains the recursive-alias regression.
 All 104 no-database unit tests and the four selected regression suites
 pass. Independent review confirmed the fix and reported no further
-findings. D2b still needs the contextual arrow/modal type constructors.
+findings.
+
+D2b is implemented. Shared types contain contextual `Arrow` and
+`LinearArrow` nodes, `Modal`, and scoped effect row/modality aliases.
+Traversals and substitution visit effect arguments and modal payloads;
+printers preserve row/mask order. Effect arguments are invariant in
+variance checks. Modal payload variance follows the payload type;
+ordinary linearity also follows the payload and ignores effect
+arguments. Contextual arrows have no latent effect row. Legacy
+inference rejects these constructors before mutation.
+
+Non-recursive IR equality uses scoped row matching, mask multiset
+equality, full modal payload comparison, and modal binder kinds.
+Within these comparisons, session input/output types include their
+continuations. The 30 tests in `modalTypeTraversal.ml` cover these
+checks, structural operations, recursive traversal, printers, and
+legacy rejection. All 134 no-database unit tests and the four selected
+regression suites pass; independent review reported no further findings.
+
+D2b rejects recursive IR equality involving contextual arrows
+or modal types explicitly. The existing IR checker accepts recursive
+equality without comparing bodies; new modal types must not inherit
+that shortcut. Recursive traversal and substitution remain required.
+D8 must replace this temporary rejection with checked recursive
+comparison before accepting recursive modal programs.
 
 Begin D4 with ordered contexts and checked assignment in
 `frescoContext.ml/.mli` and `frescoTypeOps.ml/.mli`. Identify variables
@@ -474,9 +505,12 @@ with structural solutions checked according to their primary kinds.
 Subsequent D4 changes add recursive skeletons with `Ghost` and
 `UniversalGhost`, including holes inside fields and effect arguments,
 then consistency and constraint collection/solving. Conversion to
-shared types rejects remaining ghosts. Test the thesis consistency
-rules' bound-variable restrictions explicitly when adapting the
-reference's `join_sk` ghost cases. A value-type unknown's solution
+shared types rejects remaining ghosts. Retain the thesis consistency
+rules' two bound-variable sets: when opening two matching quantifiers,
+put the shared fresh variable in both sets. A ghost cannot be filled
+with a type containing a variable bound on its own side. The reference
+omits these restrictions; the direct and source-level probes below
+exercise the resulting invalid refinement. A value-type unknown's solution
 must be a monotype; supplied polymorphic/modal structure is handled
 by `look`. Structural row solutions may contain supplied polymorphic
 field types, whose comparisons use Fresco.
@@ -551,6 +585,15 @@ pass: 57 Fresco and 25 modal/data-type tests. Additional probes found:
    `[H,A]` also incorrectly produces `[A,H]` across higher-order H.
    Use the prefix construction above and test literal output equality
    and normalised masks of the composed modalities.
+8. `join_sk` accepts `forall a. a -> Ghost` against
+   `forall a. a -> a`, in both orders, violating the thesis' restriction
+   on filling ghosts with bound variables. Skeleton inference for
+   `f 1`, with `f : forall b. Int -> (forall a. a -> b)`, produces
+   the first skeleton. Passing a frozen `f 1` to a function expecting
+   `forall a. a -> a` reaches this invalid join; the subsequent full
+   type check rejects the program. Require the direct joins to reject.
+   Keep the whole-program rejection test, and acceptance tests where
+   the expected result is `Int` or the argument is an identity lambda.
 
 Keep tests for these corrections alongside the adapted reference tests.
 

@@ -2034,12 +2034,15 @@ let type_binary_op pos ctxt =
    variant will be closed.
 *)
 let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.datatype = fun pats t ->
+  Types.check_legacy_quantifiers t;
   (* We use a table to keep track of encountered recursive variables
      in order to avert non-termination. *)
   let rec_vars_seen = Hashtbl.create 8 in
   let open Types in
   let rec cpt : Pattern.with_pos list -> Types.datatype -> Types.datatype = fun pats t ->
     match t with
+      | Arrow _ | LinearArrow _ | Modal _ ->
+          invalid_arg "Legacy typing does not support contextual arrows or modal types"
       | Alias (k, alias, t) -> Alias (k, alias, cpt pats t)
       | Record row when Types.is_tuple row->
           let fields, row_var, dual = Types.unwrap_row row |> fst |> TypeUtils.extract_row_parts in

@@ -191,9 +191,67 @@ let is_toplevel_rec_row  row =
 
 
 
+(* Inspect raw recursive declarations before the legacy recursive equality
+   shortcuts. Contextual and modal recursive equality needs Fresco support. *)
+let contextual_type_features t =
+  let found = ref false in
+  let recursive = ref false in
+  let checked_bodies = ref StringSet.empty in
+  let visitor = object (self)
+    inherit Types.type_iter as super
+
+    method! visit_point f vars point =
+      begin match Unionfind.find point with
+      | Types.Recursive _ -> recursive := true
+      | _ -> ()
+      end;
+      super#visit_point f vars point
+
+    method! visit_type ((apps, recs, qs) as vars) = function
+      | (Types.Arrow _ | Types.LinearArrow _ | Types.Modal _) as t ->
+         found := true;
+         super#visit_type vars t
+      | Types.Alias (_, (_, _, args, _), body) ->
+         List.iter (self#visit_type_arg vars) args;
+         self#visit_type vars body
+      | Types.Table (_, read, write, needed) ->
+         List.iter (self#visit_type vars) [read; write; needed]
+      | Types.RecursiveApplication app ->
+         recursive := true;
+         List.iter (self#visit_type_arg vars) app.r_args;
+         if not (StringSet.mem app.r_unique_name !checked_bodies) then begin
+           checked_bodies := StringSet.add app.r_unique_name !checked_bodies;
+           Option.iter (self#visit_type vars) (app.r_body ())
+         end
+      | Types.Recursive (var, _, body) ->
+         recursive := true;
+         if not (Types.TypeVarSet.mem var recs) then
+           self#visit_type (apps, Types.TypeVarSet.add var recs, qs) body
+      | Types.Not_typed | Types.Var _ | Types.Closed -> ()
+      | t -> super#visit_type vars t
+  end in
+  visitor#visit_type (StringSet.empty, Types.TypeVarSet.empty, Types.TypeVarSet.empty) t;
+  !found, !recursive
+
+let contains_contextual_type t = fst (contextual_type_features t)
+
 let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
   let open Types in
   fun context (t1, t2) ->
+    let contextual1, recursive1 = contextual_type_features t1 in
+    let contextual2, recursive2 = contextual_type_features t2 in
+    let contextual = contextual1 || contextual2 in
+    if contextual && (recursive1 || recursive2) then
+      raise_ir_type_error
+        "Recursive equality for contextual arrows or modal types is not supported" occurrence;
+    let recursive_equality () =
+      if contextual then
+        raise_ir_type_error
+          "Recursive equality for contextual arrows or modal types is not supported" occurrence
+      else begin
+        Debug.print "IR typechecker encountered recursive type";
+        true
+      end in
     let lookupVar lvar map =
       match IntMap.find_opt lvar map with
       | Some rvar' -> rvar'
@@ -236,10 +294,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
 
       (* If t1 or t2 is recursive at the top, we give up. *)
       if is_toplevel_rec_type t1 || is_toplevel_rec_type t2 then
-        begin
-        Debug.print "IR typechecker encountered recursive type";
-        true
-        end
+        recursive_equality ()
       else
       begin
       (* Collapses nested Foralls, unpacks Alias, Body *)
@@ -264,7 +319,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
          | _ -> false
          end
       | RecursiveApplication _ ->
-         Debug.print "IR typechecker encountered recursive type"; true
+         recursive_equality ()
       | Meta lpoint ->
           begin match Unionfind.find lpoint with
             | Recursive _ -> assert false (* removed by now *)
@@ -289,6 +344,23 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
               Primitive y -> x = y
             | _            -> false
           end
+      | Arrow (ldom, lcod) ->
+         begin match t2 with
+         | Arrow (rdom, rcod) ->
+            eqt (context, ldom, rdom) && eqt (context, lcod, rcod)
+         | _ -> false
+         end
+      | LinearArrow (ldom, lcod) ->
+         begin match t2 with
+         | LinearArrow (rdom, rcod) ->
+            eqt (context, ldom, rdom) && eqt (context, lcod, rcod)
+         | _ -> false
+         end
+      | Modal (lm, lt) ->
+         begin match t2 with
+         | Modal (rm, rt) -> eq_modalities (context, lm, rm) && eqt (context, lt, rt)
+         | _ -> false
+         end
       | Function (lfrom, lm, lto) ->
           begin match t2 with
             | Function (rfrom, rm, rto) ->
@@ -327,7 +399,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       | Lens _ -> raise (internal_error "The IR type equality check does not support lenses (yet)")
       | ForAll (qs, t) ->
          begin match t2 with
-         | ForAll (qs', t') ->
+         | ForAll (qs', t') when List.length qs = List.length qs' ->
             let (context', quantifiers_match) =
               List.fold_left2 (fun (context, prev_eq) lqvar rqvar ->
                   let lid = Quantifier.to_var lqvar in
@@ -375,14 +447,16 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
          | _ -> false
          end
       (* Session *)
-      | Input (lt, _) ->
+      | Input (lt, ls) ->
          begin match t2 with
-         |  Input (rt, _) -> eqt (context, lt, rt)
+         | Input (rt, rs) ->
+            eqt (context, lt, rt) && (not contextual || eqt (context, ls, rs))
          | _ -> false
          end
-      | Output (lt, _) ->
+      | Output (lt, ls) ->
          begin match t2 with
-         |  Output (rt, _) -> eqt (context, lt, rt)
+         | Output (rt, rs) ->
+            eqt (context, lt, rt) && (not contextual || eqt (context, ls, rs))
          | _ -> false
          end
       | Select lr ->
@@ -407,10 +481,20 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
          end
       end
 
+    and eq_modalities (context, left, right) =
+      let eq_rows left right =
+        match EffectRow.match_equal left right with
+        | None -> false
+        | Some pairs -> List.for_all (fun (l, r) -> eqt (context, l, r)) pairs in
+      match left, right with
+      | Modality.Absolute l, Modality.Absolute r -> eq_rows l r
+      | Modality.Relative (lm, l), Modality.Relative (rm, r) ->
+         List.sort String.compare lm = List.sort String.compare rm && eq_rows l r
+      | _ -> false
+
     and eq_rows (context, r1, r2) =
       if is_toplevel_rec_row r1 || is_toplevel_rec_row r2 then
-        (Debug.print "IR typechecker encountered recursive type";
-        true)
+        recursive_equality ()
       else
         let (lfield_env, lrow_var, ldual) = remove_absent_fields_if_closed (Types.flatten_row r1) in
         let (rfield_env, rrow_var, rdual) = remove_absent_fields_if_closed (Types.flatten_row r2) in
@@ -444,7 +528,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       | Closed, Closed ->  true
       | Var lv, Var rv ->   handle_variable lv rv context
       | Recursive _, _
-      | _, Recursive _ -> Debug.print "IR typechecker encountered recursive type"; true
+      | _, Recursive _ -> recursive_equality ()
       | _ ->  false
     and eq_type_args  (context, (lpk, l), (rpk, r))  =
       let open CommonTypes.PrimaryKind in
@@ -689,6 +773,9 @@ struct
             let o, v, vt = o#value v in
             if RecursionDetector.is_recursive vt || RecursionDetector.is_recursive t then
               begin
+              if contains_contextual_type vt || contains_contextual_type t then
+                raise_ir_type_error
+                  "Recursive equality for contextual arrows or modal types is not supported" (SVal orig);
               (* TODO: We may want to implement simple subtyping for recursive types *)
               Debug.print "IR Typechecker gave up on coercion involving recursive types";
               o, Coerce (v, t), t

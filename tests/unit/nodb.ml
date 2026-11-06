@@ -12,6 +12,7 @@ let suites =
            Effects.suite;
            ModalEffects.suite;
            ModalTypes.suite;
+           ModalTypeTraversal.suite;
            Quantifiers.suite;
            Closures.suite;
            Variants.suite;

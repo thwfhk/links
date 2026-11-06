@@ -37,8 +37,8 @@ reference defects, and dependency-ordered changes D1--D8 in the design
 document. Independent design review is complete and its four findings
 are resolved. D1's scoped row and modality modules are implemented,
 integrated, tested, and independently reviewed. D2a's modal quantifier
-metadata is also integrated, tested, and independently reviewed.
-Contextual arrows and modal type constructors, syntax, Fresco inference,
+metadata and D2b's contextual arrows/modal type constructors are also
+integrated, tested, and independently reviewed. Syntax, Fresco inference,
 and migration remain incomplete.
 
 Baseline checked on 5 November 2026 at commit `7100e289`:
@@ -187,6 +187,7 @@ implementation defects. Record completed behaviour and deferred work.
 - [x] Complete independent design review and resolve findings.
 - [x] D1: implement and review scoped row and modality operations.
 - [x] D2a: preserve modal quantifier kinds through shared type operations.
+- [x] D2b: add contextual arrows/modal types and shared type operations.
 - [ ] Implement and test modal syntax and scoped effect rows.
 - [ ] Refactor type inference to follow Fresco.
 - [ ] Implement modal inference and run the first working example.
@@ -311,12 +312,12 @@ Finite tests cover 7,225 row pairs, 416,500 composition inputs, and
 use the old representation; D1 provides the operations for D2--D6.
 No milestone beyond the design comparison is complete yet.
 
-## Latest task and verification
+## D2a verification
 
-6 November 2026, D2a: added `Abs`/`Any` quantifier metadata, preserving
-it through structural substitution, freshening, renaming, closure
-conversion, binder comparisons, and printing. Existing callers default
-to `Any`. Legacy inference rejects unsupported `Abs` binders before
+6 November 2026, D2a, commit `33d32716`: added `Abs`/`Any` quantifier
+metadata, preserving it through structural substitution, freshening,
+renaming, closure conversion, binder comparisons, and printing.
+Existing callers default to `Any`. Legacy inference rejects unsupported `Abs` binders before
 mutation. Added 32 unit tests and a recursive-alias acceptance test.
 The main agent reviewed and integrated the changes from
 `.worktrees/modal-types`.
@@ -348,11 +349,43 @@ document records representative pairs and additional Links coverage.
 Read-only investigations also recorded the D3 parser transition and
 the D4 context/assignment design.
 
+## Latest task and verification
+
+6 November 2026, D2b: added contextual `Arrow`/`LinearArrow` and `Modal`
+types, scoped effect row aliases, structural traversals, substitution,
+free-variable collection, kind utilities, and printers. Modal effect
+arguments retain their identities, flags, duplicates, and order.
+Ordinary linearity follows the modal payload. IR equality checks
+scoped rows and relative mask multiplicities; legacy inference rejects
+the new types before mutation. Added 30 unit tests.
+
+Main review corrected unrestrictedness traversal through modal payloads.
+Unit tests exposed premature recursive unfolding in IR equality; the
+guard now checks raw bodies before comparison. Final audit added
+session continuation comparison within modal/contextual equality.
+Recursive modal IR equality remains explicitly unsupported until D8.
+Independent review reported no further findings and passed all 30
+focused tests. Main, implementation, and review snapshots match.
+
+| Integrated check | Result |
+|---|---|
+| `make no-db` | Passed |
+| `tests/handlers.tests` | 95 passed |
+| `tests/effect_sugar.tests` | 44 passed |
+| `tests/polymorphism.tests` | 55 passed |
+| `tests/typecheck_examples.tests` | 167 passed, 15 ignored by existing settings |
+| `opam exec -- ./run-tests nodb-unit-tests` | 134 passed, including 30 new tests |
+| `make rule-check` | Passed; GNU-find tab check skipped, formatter check disabled |
+| Manual changed-file tab/trailing-whitespace check | Passed |
+| `git diff --check` | Passed |
+
+A source review also confirmed that the reference's ghost consistency
+cases omit a required bound-variable check. The design records the
+thesis rule and direct/source-level probes for D4.
+
 ## Next action
 
-Implement D2b: add contextual arrow and modal type constructors with
-complete type traversals, structural substitution, free-variable
-collection, and printers. Test variables in effect arguments, repeated
-labels, nested binders, recursive types, ordinary linearity, and
-explicit rejection by legacy inference. Keep each change building
-before proceeding to D3 declarations/syntax and D4 Fresco contexts.
+Implement D3a: preserve ordinary and modal kinds on abstract, alias,
+and recursive type declaration parameters, including unused parameters.
+Then add contextual declaration application and surface syntax in
+the remaining D3 changes. D4 adds Fresco contexts and constraints.

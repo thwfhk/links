@@ -8,10 +8,14 @@ type 'a entry = {
   name : string;
   arguments : 'a list;
   higher_order : bool;
-}
+} [@@deriving show]
 
-type 'a t = 'a entry list
-type mask = string list
+type 'a t = 'a entry list [@@deriving show]
+type mask = string list [@@deriving show]
+
+(** Traverse argument payloads without changing entry identities, flags or order. *)
+val map : ('a -> 'b) -> 'a t -> 'b t
+val arguments : 'a t -> 'a list
 
 val labels : 'a t -> mask
 

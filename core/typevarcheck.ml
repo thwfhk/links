@@ -56,6 +56,8 @@ let rec is_guarded : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
             end
         (* Type *)
         | Primitive _ -> true
+        | Arrow (f, t) | LinearArrow (f, t) -> isg f && isg t
+        | Modal (m, t) -> List.for_all isg (Modality.arguments m) && isg t
         | Function (f, m, t) ->
             isg f && isgr m && isg t
         | Lolli (f, m, t) ->
@@ -163,6 +165,9 @@ let rec is_negative : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
             end
         (* Type *)
         | Primitive _ -> false
+        | Arrow (f, t) | LinearArrow (f, t) -> isp f || isn t
+        | Modal (m, t) ->
+            List.exists (fun a -> isp a || isn a) (Modality.arguments m) || isn t
         | Function (f, m, t)
         | Lolli (f, m, t) ->
             isp f || isnr m || isn t
@@ -252,6 +257,9 @@ and is_positive : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
             end
         (* Type *)
         | Primitive _ -> false
+        | Arrow (f, t) | LinearArrow (f, t) -> isn f || isp t
+        | Modal (m, t) ->
+            List.exists (fun a -> isp a || isn a) (Modality.arguments m) || isp t
         | Function (f, m, t)
         | Lolli (f, m, t) ->
             isn f || ispr m || isp t

@@ -124,6 +124,7 @@ let rec erase_type ?(overstep_quantifiers=true) names t =
 
 let rec return_type ?(overstep_quantifiers=true) t = match (concrete_type t, overstep_quantifiers)  with
   | (ForAll (_, t), true) -> return_type t
+  | (Arrow (_, t), _) | (LinearArrow (_, t), _) -> t
   | (Function (_, _, t), _) -> t
   | (Lolli (_, _, t), _) -> t
   | (Operation (_, t, _), _) -> t
@@ -132,6 +133,8 @@ let rec return_type ?(overstep_quantifiers=true) t = match (concrete_type t, ove
 
 let rec arg_types ?(overstep_quantifiers=true) t = match (concrete_type t, overstep_quantifiers) with
   | (ForAll (_, t), true) -> arg_types t
+  | (Arrow (Record row, _), _) | (LinearArrow (Record row, _), _) ->
+      extract_tuple row
   | (Function (Record row, _, _), _) ->
       extract_tuple row
   | (Lolli (Record row, _, _), _) ->
@@ -146,6 +149,8 @@ let rec arg_types ?(overstep_quantifiers=true) t = match (concrete_type t, overs
 
 let rec effect_row ?(overstep_quantifiers=true) t = match (concrete_type t, overstep_quantifiers)  with
   | (ForAll (_, t), true) -> effect_row t
+  | (Arrow _, _) | (LinearArrow _, _) ->
+      error "Contextual arrows have no latent effect row"
   | (Function (_, effects, _), _) -> effects
   | (Lolli (_, effects, _), _) -> effects
   | (t, _) ->
@@ -157,6 +162,7 @@ let iter_row (iter_func : string -> field_spec -> unit) row  =
   Utility.StringMap.iter iter_func field_spec_map
 
 let is_function_type t = match concrete_type t with
+  | Arrow _ | LinearArrow _
   | Lolli (_, _, _)
   | Function (_, _, _) -> true
   | _ -> false
@@ -241,6 +247,7 @@ let rec primary_kind_of_type t =
   | Alias (_, _, d) ->
      primary_kind_of_type d
   | Primitive _
+  | Arrow _ | LinearArrow _ | Modal _
   | Function _
   | Lolli _
   | Record _
@@ -338,6 +345,12 @@ let check_type_wellformedness primary_kind t : unit =
        meta rec_env p
     (* Type *)
     | Primitive _  -> pk_type
+    | Arrow (f, t) | LinearArrow (f, t) ->
+       idatatype f; idatatype t;
+       pk_type
+    | Modal (m, t) ->
+       List.iter idatatype (Modality.arguments m); idatatype t;
+       pk_type
     | Function (f, m, t)
     | Lolli (f, m, t) ->
        idatatype f; irow m; idatatype t;
