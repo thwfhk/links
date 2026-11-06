@@ -14,7 +14,7 @@ implementation decisions, reasons, internal invariants and source comparisons.
 ## Current status
 
 Implementation has resumed through D4i. The D3f list-parentheses correction
-is complete. Continue with D4f2, D4g, D4h and D4i, then pause for the user's
+and D4f2 are complete. Continue with D4g, D4h and D4i, then pause for the user's
 review of the recorded design choices.
 
 - D1--D3d provide row/modality operations, shared modal types, surface syntax,
@@ -25,8 +25,8 @@ review of the recorded design choices.
   the legacy desugaring passes. Modal source programs cannot yet run through
   Fresco. New syntax is parsed and tested through separate entry points;
   the legacy frontend rejects modal constructs.
-- Skeleton solution expansion, scope exit preserving ghosts, kind refinement,
-  consistency, subtyping, constraint solving and source inference remain.
+- Kind refinement, consistency, subtyping, constraint solving and source
+  inference remain.
   Annotation elaboration, runtime integration and migration also remain.
 - D3e removes higher-order effect flags, syntax and row rules. Ordinary
   operation arguments and results must be absolute.
@@ -62,7 +62,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D3e | Remove higher-order effect declarations and row rules | `29a9ba43` |
 | D3f | Prefix list types, combined kinds and handler delimiters | `aa9358e4` |
 | D4a2 | Thesis quantified-type classification | `41b96256` |
-| D3f correction | Require parentheses around nested list element types | This commit |
+| D3f correction | Require parentheses around nested list element types | `02f79356` |
+| D4f2 | Skeleton solution expansion and scope exit preserving ghosts | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -76,7 +77,6 @@ also requires the affected build/tests and review described in AGENTS.md.
 
 | Task | Depends on | Completion check |
 |---|---|---|
-| D4f2: skeleton solution expansion and scope exit | D4f1, D4d1 | Preserve ghosts, scope, live unknowns and recursive sharing; reject escapes without changing the input context |
 | D4g: ordinary/modal requirement refinement | D4f2, D4c, D4a2 | Enforce flexible `Abs` and structural payload requirements through later assignment, scope exit and export; never narrow rigid binders |
 | D4h: contextual recursive type operations | D4g | Alias application, unfolding and comparison preserve binders and terminate on tested equal/unequal recursive applications with changing arguments |
 | D4i: monotype unification, consistency and guessing | D4f2--D4h | Adapt existing Links structural unification to checked Fresco assignment; cover ghosts, supplied polymorphic fields, kinds/scope, repeated rows and failed alternatives |
@@ -129,23 +129,26 @@ integration tests must cover the remaining choices.
 
 ## Latest task and verification
 
-6 November 2026, D3f correction, this commit (base `f842e49c`): the parser
-accepts `List (List Int)` and rejects `List List Int`. Review found no issues.
-Source tests cover evaluation and rejection; parser tests cover modal/session
-payloads and both printer round trips. Menhir reported zero conflicts and
-matched all 14 acceptance/rejection probes.
+6 November 2026, D4f2, this commit (base `02f79356`): skeleton expansion
+and scope exit preserve both ghosts, independent raw scope, recursive sharing
+and live context entries. Independent review found a declaration-snapshot scope
+escape; the fix compares snapshots before identity merging. Regression cases
+cover the escape, nested and ambient conflicts, and fresh recursive callbacks.
 
-The table retains each check's latest result. Correction checks ran after all
-source edits and review were complete. D4a2 refers to `41b96256`; D3f refers to
+Checks ran after source edits and review. The first unit-test compile found
+`effect` used as a test variable name; renaming it to `entry` was the only later
+code change. The complete unit suite then passed. The compiler build and source
+regressions used the same compiler revision. Earlier checks below retain their
+last tested milestone: Correction is `02f79356`, D4a2 is `41b96256`, D3f is
 `aa9358e4`.
 
 | Check | Revision | Result |
 |---|---|---|
-| `make no-db` | Correction | Passed |
-| `tests/handlers.tests` | Correction | 95 passed |
-| `tests/effect_sugar.tests` | Correction | 44 passed |
-| `tests/polymorphism.tests` | D4a2 | 55 passed |
-| `tests/typecheck_examples.tests` | Correction | 167 passed, 15 ignored by existing settings |
+| `make no-db` | D4f2 | Passed |
+| `tests/handlers.tests` | D4f2 | 95 passed |
+| `tests/effect_sugar.tests` | D4f2 | 44 passed |
+| `tests/polymorphism.tests` | D4f2 | 55 passed |
+| `tests/typecheck_examples.tests` | D4f2 | 167 passed, 15 ignored by existing settings |
 | `tests/type_print.tests` | Correction | 10 passed |
 | `tests/desugar_datatypes.tests` | Correction | 44 passed |
 | `tests/modules.tests` | D3f | 41 passed |
@@ -162,12 +165,12 @@ source edits and review were complete. D4a2 refers to `41b96256`; D3f refers to
 | `tests/xml.tests` | D3f | 74 passed |
 | `tests/bindings.tests` | D3f | 25 passed |
 | `tests/conditionals.tests` | D3f | 6 passed |
-| `opam exec -- ./run-tests nodb-unit-tests` | Correction | 675 passed |
+| `opam exec -- ./run-tests nodb-unit-tests` | D4f2 | 712 passed |
 | Menhir conflict check | Correction | Zero conflicts before and after the grammar change |
 | Parse-only source and expected-type comparison | D3f | No unexpected parse regressions; 1,374 programs and 838 type strings parse |
-| `make rule-check` | Correction | Passed; GNU-find tab check skipped, formatter check disabled |
-| Manual added-line tab/trailing-whitespace check | Correction | Passed |
-| `git diff --check` | Correction | Passed |
+| `make rule-check` | D4f2 | Passed; GNU-find tab check skipped, formatter check disabled |
+| Manual added-line tab/trailing-whitespace check | D4f2 | Passed |
+| `git diff --check` | D4f2 | Passed |
 
 D3f's parse-only audit covered excluded-feature fixtures without executing
 those suites. Existing invalid examples and deliberate rejection cases remain.
@@ -184,6 +187,7 @@ No compiler changes, build or tests.
 
 ## Next action
 
-Implement D4f2's skeleton solution expansion and scope exit. Continue through D4g, D4h and D4i, reviewing,
-testing and committing each milestone. Pause after D4i, summarise the current
-status and ask the user to review the marked design choices and raise questions.
+Complete D4g's refinement integration, including detached metadata restoration.
+Continue through D4h and D4i, reviewing, testing and committing each milestone.
+Pause after D4i, summarise the current status and ask the user to review the
+marked design choices and raise questions.

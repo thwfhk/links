@@ -866,6 +866,33 @@ prevents repeated substitution and preserves captured scope on cyclic graphs.
 Completed recursive constructors are reused in equal scopes so repeated bare
 roots preserve sharing and the identity of their back-reference descriptors.
 
+### Skeleton solution expansion and scope exit
+
+`FrescoSkeletonOps.expand_solutions` and `leave_scope` preserve both ghost
+forms and use the persistent context for solution lookup and scope checks.
+Stored solutions start in their own lexical scope. Output binders can close
+resulting rigid variables only when their full metadata agrees. Raw declaration
+records remain unchanged, so their captured solved variables remain live.
+Copies preserve recursive points and shared roots in matching lexical scopes.
+
+**For user review:** reuse context scope checking through a projection of
+variable occurrences and binders. Include vacuous binders and put raw captures
+behind fresh private nominal declarations. This retains independent raw scope
+and captured solution IDs. A separate skeleton scope checker would repeat
+context ordering and liveness rules. The projection establishes scope and
+variable metadata; inference must check requirements through ghost-bearing
+constructors.
+
+Before combining shared solution and ambient graphs, compare every independently
+supplied declaration snapshot with the same identity. Include nested declarations,
+formal metadata and linearity. Deduplicating first can replace a live declaration
+body with a different dead solution's body and introduce an escaping rigid
+variable. Compare converted declarations with existing skeleton records before
+reusing those records. These checks leave input graphs and contexts unchanged.
+Shared callbacks must form a finite, stable graph of callback identities;
+they may allocate fresh body syntax. Existing declaration maps and detached
+snapshots satisfy this contract.
+
 ### Modal-kind refinement
 
 Follow `maetel/maetel.tex`, algorithmic kind checking rules `FlexAbs` and

@@ -9,6 +9,7 @@ type error =
   | Conflicting_declaration of string
   | Primary_kind_mismatch of { expected : PrimaryKind.t; actual : PrimaryKind.t }
   | Invalid_application of string
+  | Context_error of FrescoContext.error
 
 (** Include captures in all reachable raw declarations, each under its own
     formal binders, independently of the application site's binders. Check
@@ -45,3 +46,29 @@ val substitute_root_variables :
     declarations retain their independent scope and original records. *)
 val open_quantifiers : Quantifier.t list -> FrescoSkeleton.t ->
   (Quantifier.t list * FrescoSkeleton.t, error) result
+
+(** Expand stored solutions in root syntax and actual arguments, preserving
+    both ghost forms. Solution lookup starts in the solution's own scope;
+    enclosing output binders can close its resulting rigid variables.
+    Referenced raw declarations retain their original records and captures.
+    Occurrence projections check variable kinds, closing binder metadata and
+    scope; requirements through skeleton constructors remain with inference.
+    Equal nominal identities in stored solutions and roots must have equal
+    graphs and metadata; independent shared snapshots are checked before
+    nominal identities are merged. Shared declaration callbacks must be stable
+    and form a finite graph of callback identities. They may allocate fresh
+    body syntax while reusing those callbacks. Input points, raw bodies and
+    context are unchanged. *)
+val expand_solutions : FrescoKind.checking_environment ->
+  roots:FrescoSkeleton.scoped_root list -> FrescoContext.t ->
+  (FrescoSkeleton.scoped_root list, error) result
+
+(** Leave the innermost marker and return expanded skeleton roots in input
+    order. Preserve live flexible entries and their complete requirements,
+    including solved variables captured by unchanged raw declarations.
+    Reject escaping rigid variables, including independent raw captures.
+    Scope checks include vacuous binders. Preserve recursive sharing within
+    equal lexical scopes; input graphs and context are unchanged on failure. *)
+val leave_scope : FrescoKind.checking_environment -> FrescoContext.marker ->
+  roots:FrescoSkeleton.scoped_root list -> FrescoContext.t ->
+  (FrescoContext.t * FrescoSkeleton.scoped_root list, error) result
