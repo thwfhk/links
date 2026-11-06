@@ -834,11 +834,13 @@ needed. Checks and dependency collection precede the returned context update.
 Term and lock insertion also validate their types against the current context.
 
 Recursive inspection tracks bound variables, active recursive binders,
-nominal declarations and point paths separately. A repeated point under an
-active recursive binder is valid. Entering a raw nominal body resets the
-point path and uses the declaration guard. These rules accept shared
-recursive graphs while rejecting unguarded point cycles. Keeping recursive
-binders separate also prevents a quantifier with the same ID from hiding an
+nominal declarations and point paths separately. A point cycle must pass
+through a `Recursive` node. The repeated point may contain another
+constructor; an unrelated outer recursive binder cannot justify a cycle.
+Entering a raw nominal body resets the point path and uses the declaration
+guard. These rules accept shared recursive graphs while rejecting unguarded
+point cycles. Keeping recursive binders separate also prevents a quantifier
+with the same ID from hiding an
 occurrence of the assignment target.
 
 D4d scope exit takes explicit live type roots with their lexical binders,
@@ -861,6 +863,8 @@ constraint, so it can close only a matching `Any` rigid variable. Distinct
 nested recursive binders must have their bodies checked even when they reuse
 one variable ID; only a repeated occurrence in a recursive graph ends that
 traversal.
+Apply closing metadata checks to the original root syntax before copying.
+Binders inside stored solutions and raw declarations have independent scope.
 
 `FrescoContext.leave_scope` implements this operation, also exposed through
 `FrescoTypeOps`. It returns fresh root points while retaining raw nominal
@@ -885,6 +889,39 @@ explicitly; D8 must supply capture-avoiding contextual unfolding before
 recursive exported types reach consumers that unfold them. Preserve actual
 cyclic point graphs with an explicit `Recursive` binder, while rejecting
 cycles without such a binder.
+
+`FrescoContext.export`, also exposed through `FrescoTypeOps`, implements
+detached batch export. Its variable table follows context order. Context
+entries determine free-variable freedom, and rigid entries retain their
+declared kinds with no flexible monotype flag. Equal annotation binder lists
+share an output scope; syntax binders retain distinct identities. Copying
+uses separate solution-lookup and output scopes, so a solution can close under
+an output binder without changing how its free variables are resolved.
+
+Raw declarations use their own binders and the supplied declaration callback.
+Export snapshots bodies and optional linearity, then rebuilds callbacks over
+copied data. Exported unfolding raises
+`FrescoContext.Unsupported_recursive_unfolding` until D8. For point cycles,
+copy non-recursive nodes separately when their lexical scope changes, and
+close an active recursive node using its captured scope. Scope exit uses the
+same cycle rule and checks closing metadata before copying any roots.
+
+D4e adds a separate recursive `FrescoSkeleton` datatype. Mirror the supported
+shared constructors with skeleton children, including row fields, presences,
+effect arguments, modal payloads and session types. Add value-type `Ghost`
+and `UniversalGhost` constructors. Keep row and presence uncertainty in their
+existing variable categories. Store raw nominal bodies as skeleton data so
+that no shared-type wrapper can hide a ghost.
+
+Convert batches of roots with explicit binders and primary kinds using the
+current context's checking environment. Preserve variable nodes and IDs;
+leave solutions, free-variable kinds and monotype requirements in the
+persistent context. Representation conversion does not expand solutions.
+Conversion back to shared types rejects both ghost constructors anywhere
+reachable, including raw nominal bodies, then checks the resulting roots
+using their rebuilt declaration callbacks. Detached export follows this
+conversion through D4d2. Consistency, `look`, constraint collection and solving
+follow in later changes.
 
 ## Examples and expected behaviour
 

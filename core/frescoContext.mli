@@ -20,6 +20,12 @@ type scoped_root = {
   typ : Types.typ;
 }
 
+type exported_variable = {
+  declaration : declaration;
+  freedom : Freedom.t;
+  requires_monotype : bool;
+}
+
 type marker
 type entry =
   | Rigid of declaration
@@ -88,11 +94,34 @@ val assign : FrescoKind.checking_environment -> t -> Types.tid ->
     root before using the reduced context. Retained context entries and their
     monotype requirements are unchanged. Free local rigid variables cause
     rejection, including those in retained solutions and raw nominal bodies.
-    Quantified binders must match the ordinary and modal kinds of matching
-    context rigids. A [Recursive] binder can close only a matching Any rigid.
+    Quantified binders in supplied root syntax must match the ordinary and
+    modal kinds of matching context rigids. A [Recursive] binder can close
+    only a matching Any rigid. Stored solution and raw declaration binders
+    have their own scope. A point cycle must pass through a [Recursive] node.
 
     Input points and context entries are never mutated, on success or failure.
     Returned roots retain nominal callbacks under [assign]'s stable-callback
     contract; this operation does not provide detached type export. *)
 val leave_scope : FrescoKind.checking_environment -> marker ->
   roots:scoped_root list -> t -> (t * scoped_root list, error) result
+
+(** Recursive unfolding of detached declarations awaits contextual,
+    capture-avoiding unfolding. Exported [r_unwind] callbacks raise this
+    exception; export never calls source [r_unwind] callbacks. *)
+exception Unsupported_recursive_unfolding
+
+(** Checked detached export of a batch, preserving input order. Solutions are
+    expanded and all reachable points and raw nominal bodies are copied.
+    The table contains free rigid and unresolved flexible variables in context
+    order, preserving their ordinary/modal kinds and monotype requirements.
+    Context entries determine free variable freedom. Rigid entries have
+    [requires_monotype = false]; their declared kinds remain authoritative.
+    Free occurrences of one variable ID share one exported point; bound
+    occurrences have separate points. Equal enclosing binder lists share
+    one lexical scope across the batch. Root binders follow [leave_scope]'s
+    metadata requirements. Raw declarations use their own formal binders.
+    Raw bodies and linearity are snapshotted once per declaration identity;
+    returned callbacks retain only copied data. Input context, points and
+    callbacks are never changed, including when any root fails validation. *)
+val export : FrescoKind.checking_environment -> roots:scoped_root list -> t ->
+  (scoped_root list * exported_variable list, error) result

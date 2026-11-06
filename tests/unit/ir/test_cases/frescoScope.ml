@@ -83,6 +83,76 @@ let rec descriptor = function Types.Meta p -> descriptor (Unionfind.peek p) | t 
 let single = function [root] -> root.Context.typ | _ -> assert_failure "Expected one root"
 
 let suite = "Fresco scope exit" >::: [
+  "stored solution binders have independent metadata" >:: (fun _ ->
+    let a = declaration ~modal:ModalKind.Abs () and r = declaration ~pk:PrimaryKind.Row () in
+    let local = { a with Context.modal_kind = ModalKind.Any } in
+    let marker, c = Context.add_marker Context.empty in
+    let c = c |> add ~rigid:true a |> add r in
+    let body = Types.Meta (Unionfind.fresh (Types.ForAll ([quantifier local], point local))) in
+    let c = solve c r (field body) in
+    let c', _ = leave marker [root ~pk:PrimaryKind.Row (point r)] c in
+    assert_equal [] (Context.entries c');
+    List.iter (fun roots -> exit_error (Context.Binder_mismatch a.id) marker roots c)
+      [[root ~pk:PrimaryKind.Row (point r); root body];
+       [root body; root ~pk:PrimaryKind.Row (point r)]]);
+
+  "cycle scopes keep solved and bound occurrences separate" >:: (fun _ ->
+    let a = declaration () in
+    let p = Unionfind.fresh Types.Not_typed and q = Unionfind.fresh Types.Not_typed in
+    Unionfind.change p (record (row ["x", Types.Present (point a); "next", Types.Present (Types.Meta q)]));
+    Unionfind.change q (Types.Recursive (a.id, a.kind, Types.Meta p));
+    let marker, c = Context.add_marker Context.empty in
+    let c = solve (add a c) a int in
+    let _, roots = leave marker [root (Types.Meta p)] c in
+    let fields = function
+      | Types.Record (Types.Row (fields, _, _)) -> fields
+      | _ -> assert_failure "Expected record" in
+    let outside = fields (descriptor (single roots)) in
+    assert_equal (Types.Present int) (StringMap.find "x" outside |> function
+      | Types.Present t -> Types.Present (descriptor t) | _ -> assert_failure "Expected presence");
+    let inside = match StringMap.find "next" outside with
+      | Types.Present t ->
+         begin match descriptor t with
+         | Types.Recursive (_, _, body) -> fields (descriptor body)
+         | _ -> assert_failure "Expected recursive body"
+         end
+      | _ -> assert_failure "Expected recursive field" in
+    match StringMap.find "x" inside with
+    | Types.Present t -> assert_equal (variable a) (descriptor t)
+    | _ -> assert_failure "Expected bound field");
+
+  "active recursive nodes retain their captured scope" >:: (fun _ ->
+    let a = declaration () and b = declaration () in
+    let p = Unionfind.fresh Types.Not_typed in
+    Unionfind.change p (Types.Recursive (a.id, a.kind,
+        Types.Arrow (point b, Types.ForAll ([quantifier b], Types.Meta p))));
+    let marker, c = Context.add_marker (context [b]) in
+    let _, roots = leave marker [root (Types.Meta p)] c in
+    match single roots with
+    | Types.Meta out ->
+       begin match Unionfind.peek out with
+       | Types.Recursive (_, _, Types.Arrow (_, Types.ForAll (_, Types.Meta back))) ->
+          assert_bool "Original recursive scope" (out == back)
+       | _ -> assert_failure "Expected recursive descriptor"
+       end
+    | _ -> assert_failure "Expected point");
+
+  "cycles can enter before their recursive binder" >:: (fun _ ->
+    let binder = declaration () in
+    let p = Unionfind.fresh Types.Not_typed and q = Unionfind.fresh Types.Not_typed in
+    Unionfind.change p (record (field (Types.Meta q)));
+    Unionfind.change q (Types.Recursive (binder.id, binder.kind, Types.Meta p));
+    let marker, c = Context.add_marker Context.empty in
+    unchanged c (Types.Meta p) (fun () -> ignore (leave marker [root (Types.Meta p)] c)));
+
+  "outer recursive binders do not guard inner point cycles" >:: (fun _ ->
+    let binder = declaration () in
+    let p = Unionfind.fresh Types.Not_typed in
+    Unionfind.change p (record (field (Types.Meta p)));
+    let marker, c = Context.add_marker Context.empty in
+    exit_error Context.Cyclic_type marker
+      [root (Types.Recursive (binder.id, binder.kind, Types.Meta p))] c);
+
   "live unknowns retain order and dead entries disappear" >:: (fun _ ->
     let a = declaration () and dead = declaration () and b = declaration () in
     let marker, c = Context.add_marker Context.empty in
