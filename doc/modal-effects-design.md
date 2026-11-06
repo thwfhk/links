@@ -826,6 +826,49 @@ its solution. Propagate monotype requirements to fresh representatives.
 Failure of strict assignment before this refinement is not by itself a
 source-program rejection. This keeps D4b's descriptor API unchanged.
 
+D4c implements an abstract `FrescoContext`, with `FrescoTypeOps.assign`
+delegating to its checked assignment operation. Context entries retain
+declaration order, and lookup uses variable IDs. Type unknowns initially
+require monotypes; row and presence unknowns acquire that requirement when
+needed. Checks and dependency collection precede the returned context update.
+Term and lock insertion also validate their types against the current context.
+
+Recursive inspection tracks bound variables, active recursive binders,
+nominal declarations and point paths separately. A repeated point under an
+active recursive binder is valid. Entering a raw nominal body resets the
+point path and uses the declaration guard. These rules accept shared
+recursive graphs while rejecting unguarded point cycles. Keeping recursive
+binders separate also prevents a quantifier with the same ID from hiding an
+occurrence of the assignment target.
+
+D4d scope exit takes explicit live type roots with their lexical binders,
+and the innermost marker. Expand solved variables in those roots first and
+return rewritten roots with the resulting context. This permits a local
+solution `beta := a` in `forall a. beta`, whose rewritten root is
+`forall a. a`. Preserve the current prefix, including unknowns moved before
+the marker. Retain suffix flexible entries reachable from rewritten roots,
+prefix terms, solutions, and lock arguments. Remove local rigid, term and
+lock entries, the marker, and dead suffix unknowns. Reject free occurrences
+of removed rigid variables in rewritten roots or retained solutions. Root
+binders cannot hide free variables in a separately retained solution or raw
+declaration body.
+
+Export several types together to fresh, memoised points. Return a declaration
+table alongside the types for free rigid and unresolved flexible variables,
+including ordinary kind, modal kind, freedom, and monotype requirements.
+`Types.Var` alone cannot preserve `Abs` or structural monotype requirements.
+Keep this table for later consumers; D8 must account for it before allowing
+backend type operations. Read-only representative lookup is needed to retain
+sharing between points in one Unionfind class without path compression.
+
+Copy raw nominal declaration bodies and rebuild callbacks over the copied
+graph. Snapshot declaration linearity. No exported callback may retain source
+points or the inference context. The first D4d export may reject `r_unwind`
+explicitly; D8 must supply capture-avoiding contextual unfolding before
+recursive exported types reach consumers that unfold them. Preserve actual
+cyclic point graphs with an explicit `Recursive` binder, while rejecting
+cycles without such a binder.
+
 ## Examples and expected behaviour
 
 These are target Links programs for the proposed syntax.

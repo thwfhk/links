@@ -47,7 +47,8 @@ with independent review and all selected checks complete.
 D4a adds non-mutating type inspection and modal kind classification,
 also reviewed and tested. D4b adds separate well-formedness checks for
 types, effect applications and signatures. Fresco inference and migration
-remain incomplete.
+remain incomplete. D4c adds persistent contexts and checked assignment,
+with review and selected checks complete.
 
 A read-only declaration investigation identified the module
 name-resolution changes and affected pattern-matching handlers. A
@@ -208,6 +209,7 @@ implementation defects. Record completed behaviour and deferred work.
 - [x] D3d: resolve effects/operations and check declarations and handler groups.
 - [x] D4a: add non-mutating type reads and recursive modal kind classification.
 - [x] D4b: check type/effect well-formedness and operation signatures.
+- [x] D4c: add persistent contexts and checked type/row/presence assignment.
 - [ ] Implement and test modal syntax and scoped effect rows.
 - [ ] Refactor type inference to follow Fresco.
 - [ ] Implement modal inference and run the first working example.
@@ -607,9 +609,9 @@ ordinary and modal parameter kinds, and operation signatures. Its design
 now distinguishes explicit ordinary `Mono` requirements from D4c's
 syntactic monotype obligations, and requires closed effect signatures.
 
-## Latest task and verification
+## D4b verification
 
-6 November 2026, D4b: added separate type, effect-row and closed operation
+6 November 2026, D4b, commit `85291100`: added separate type, effect-row and closed operation
 signature checks in `FrescoKind`. The checks validate all children,
 primary-kind structure, ordinary subkinds, modal parameter requirements,
 effect descriptors and signature scopes. Recursive checks use raw bodies
@@ -649,9 +651,50 @@ movement, monotype requirements, and later ordinary refinement through
 fresh stronger-kind unknowns. The checker does not yet connect to source
 elaboration or term inference.
 
+## Latest task and verification
+
+6 November 2026, D4c: added abstract persistent contexts and strict checked
+assignment. Context entries preserve declaration order and fixed kinds.
+Assignment checks scope, occurs, ordinary/modal requirements and monotype
+structure, moves younger flexible dependencies before its target, and
+propagates monotype requirements through rows and presences. Added 49 unit
+test groups, including ordinary refinement through stronger-kind aliases.
+
+Main review found that the first point-cycle check rejected valid explicit
+recursive points. Independent review also found a valid shared point
+through a named declaration, and checked recursive binder shadowing.
+Separate recursive-binder tracking and declaration-local point paths fix
+these cases. Acceptance and rejection tests cover all three. One new test
+fixture supplied an Any variable to List's Unl parameter; it now uses an
+abstract constructor with an Any parameter for that traversal test.
+
+Independent review found no remaining issues and passed its build,
+348 unit tests, 37 datatype tests, 10 type-print tests and source checks.
+Main, implementation, and review source snapshots match.
+
+| Integrated check | Result |
+|---|---|
+| `make no-db` | Passed |
+| `tests/handlers.tests` | 95 passed |
+| `tests/effect_sugar.tests` | 44 passed |
+| `tests/polymorphism.tests` | 55 passed |
+| `tests/typecheck_examples.tests` | 167 passed, 15 ignored by existing settings |
+| `tests/type_print.tests` | 10 passed |
+| `tests/desugar_datatypes.tests` | 37 passed |
+| `tests/modules.tests` | 41 passed |
+| `opam exec -- ./run-tests nodb-unit-tests` | 348 passed, including 49 new groups |
+| `make rule-check` | Passed; GNU-find tab check skipped, formatter check disabled |
+| Manual new/changed-line tab/trailing-whitespace check | Passed |
+| `git diff --check` | Passed |
+
+A read-only D4d investigation identified required scope-root rewriting,
+liveness, escape checks, and detached export with variable metadata.
+Scope exit, export, skeletons, consistency and term inference remain
+incomplete.
+
 ## Next action
 
-Implement D4c's persistent ordered contexts and checked type/row/presence
-assignment. Cover scope, occurs, dependency ordering, ordinary/modal kinds,
-and monotype requirements through flexible rows and presences. Scope exit,
-export, skeletons, consistency, and contextual datatype elaboration follow.
+Implement D4d scope exit and detached type export. Rewrite solved variables
+in explicit roots before deciding which local unknowns remain live. Preserve
+variable constraints and sharing in exported data, and reject rigid escapes.
+Skeletons, consistency, and contextual datatype elaboration follow.
