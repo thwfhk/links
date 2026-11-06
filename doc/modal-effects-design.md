@@ -763,6 +763,14 @@ as an atom. If the unknown being assigned itself has ordinary restriction
 `Mono`, its solution must also pass the stricter ordinary-kind check.
 Keep these checks separate and do not narrow rigid declarations.
 
+Use explicit ordinary-kind entailment in this checker. `Base` entails
+`Mono`; `Session` does not, because session payloads may contain
+polymorphic or modal types. The legacy `Restriction.min` relation accepts
+the latter inclusion and cannot serve as an entailment test. Empty
+`ForAll` binder lists are transparent for `Base` and `Mono`; D4c's
+syntactic monotype traversal also treats `ForAll([], A)` as `A`.
+Non-empty quantifier lists and modal types fail a `Mono` requirement.
+
 At each recursive application, check its actual arguments. Validate each
 raw declaration body under its own formal binders once per check, retaining
 pending checks for mutually recursive bodies. Do not substitute arguments
@@ -783,6 +791,40 @@ allocating unknowns. This follows the reference's explicit declaration
 parameters and bound-variable lookup. D3d only preserves anonymous row
 syntax for this later check. Expression annotation holes are a separate
 part of contextual term elaboration.
+
+D4b implements `FrescoKind.check`, `check_effect_row`, and
+`check_effect_signature`. Structural validation queues kind requirements
+after checking all children. Raw declaration bodies are checked once under
+their own formal binders; each application still checks its arguments.
+Callback solutions are checked outside use-site binders. Callback solutions
+must be acyclic; explicit recursive type and row binders remain supported.
+
+Ordinary recursive summaries use a least fixed point for `Session` and
+a greatest fixed point for the other requirements. Recursive values are
+checked through their bodies: the legacy default `Unl` on a recursive
+binder does not prove its body unrestricted. Named recursive applications
+require available declaration linearity for an `Unl` check. Effect
+descriptors and explicit signature parameters must have primary kind `Type`,
+including descriptors used by relative masks. Nested quantified row and
+presence variables remain valid in signatures.
+
+D4c uses persistent ordered contexts and a strict assignment operation.
+Keep declared ordinary and modal kinds unchanged. Assignment validates
+current guarantees, follows solved dependencies, checks occurs and scope,
+and moves younger flexible dependencies before the variable being solved.
+Rows and presences retain monotype requirements through these moves and
+through later solutions. Reject assignments to rigid or already solved
+variables; consistency later compares solved targets.
+
+The later consistency layer can refine ordinary flexible requirements by
+introducing a fresh variable with a stronger ordinary kind and assigning
+the existing unknown to it. For example, introduce `rho'::Unl`, assign
+`rho := rho'`, then assign `alpha::Unl := Record(rho)`. Dependency movement
+places `rho'` and `rho` before `alpha` where needed. For an already solved
+row, refine its flexible field and tail dependencies without replacing
+its solution. Propagate monotype requirements to fresh representatives.
+Failure of strict assignment before this refinement is not by itself a
+source-program rejection. This keeps D4b's descriptor API unchanged.
 
 ## Examples and expected behaviour
 

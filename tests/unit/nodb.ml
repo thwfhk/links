@@ -14,6 +14,7 @@ let suites =
            ModalTypes.suite;
            ModalTypeTraversal.suite;
            FrescoKind.suite;
+           FrescoWellformed.suite;
            ModalSyntax.suite;
            ModalDeclarations.suite;
            ModalResolution.suite;

@@ -45,7 +45,9 @@ declarations, qualified operations, handler annotations, and freezing
 syntax. D3d adds effect resolution and declaration/handler checks,
 with independent review and all selected checks complete.
 D4a adds non-mutating type inspection and modal kind classification,
-also reviewed and tested. Fresco inference and migration remain incomplete.
+also reviewed and tested. D4b adds separate well-formedness checks for
+types, effect applications and signatures. Fresco inference and migration
+remain incomplete.
 
 A read-only declaration investigation identified the module
 name-resolution changes and affected pattern-matching handlers. A
@@ -205,6 +207,7 @@ implementation defects. Record completed behaviour and deferred work.
 - [x] D3c: add declaration, qualified operation, handler, and freezing syntax.
 - [x] D3d: resolve effects/operations and check declarations and handler groups.
 - [x] D4a: add non-mutating type reads and recursive modal kind classification.
+- [x] D4b: check type/effect well-formedness and operation signatures.
 - [ ] Implement and test modal syntax and scoped effect rows.
 - [ ] Refactor type inference to follow Fresco.
 - [ ] Implement modal inference and run the first working example.
@@ -567,9 +570,9 @@ Anonymous row syntax remains for contextual elaboration to check.
 Operation signature typing, modal-kind checks, and the Fresco frontend
 remain incomplete.
 
-## Latest task and verification
+## D4a verification
 
-6 November 2026, D4a: added `Unionfind.peek`, raw recursive declaration
+6 November 2026, D4a, commit `f97e8e2a`: added `Unionfind.peek`, raw recursive declaration
 binders, unambiguous declaration identities, and the `FrescoKind`
 classification API. Classification uses callbacks and a finite Boolean
 fixed point, preserving input points and declared modal kinds. Added
@@ -604,10 +607,51 @@ ordinary and modal parameter kinds, and operation signatures. Its design
 now distinguishes explicit ordinary `Mono` requirements from D4c's
 syntactic monotype obligations, and requires closed effect signatures.
 
+## Latest task and verification
+
+6 November 2026, D4b: added separate type, effect-row and closed operation
+signature checks in `FrescoKind`. The checks validate all children,
+primary-kind structure, ordinary subkinds, modal parameter requirements,
+effect descriptors and signature scopes. Recursive checks use raw bodies
+and non-mutating reads. Added 40 unit test groups.
+
+Main review found that the legacy kind ordering treats `Session` as
+implying `Mono`, although session payloads may be polymorphic or modal.
+The new checker now uses explicit entailment. Independent review found
+that the existing empty-quantifier exception for `Base` also needed to
+apply to `Mono`; empty `ForAll` wrappers now inherit their body's monotype
+property. Main review also required Type-only effect parameters at the
+public checking entry points. All corrections have regression tests.
+The initial build rejected an OCaml keyword as a record label; the
+callback is now named `lookup_effect`.
+
+Independent review found no remaining issues and passed its build,
+299 unit tests, 37 datatype tests, 10 type-print tests and source checks.
+Main, implementation, and review source snapshots match.
+
+| Integrated check | Result |
+|---|---|
+| `make no-db` | Passed |
+| `tests/handlers.tests` | 95 passed |
+| `tests/effect_sugar.tests` | 44 passed |
+| `tests/polymorphism.tests` | 55 passed |
+| `tests/typecheck_examples.tests` | 167 passed, 15 ignored by existing settings |
+| `tests/type_print.tests` | 10 passed |
+| `tests/desugar_datatypes.tests` | 37 passed |
+| `tests/modules.tests` | 41 passed |
+| `opam exec -- ./run-tests nodb-unit-tests` | 299 passed, including 40 new groups |
+| `make rule-check` | Passed; GNU-find tab check skipped, formatter check disabled |
+| Manual new/changed-line tab/trailing-whitespace check | Passed |
+| `git diff --check` | Passed |
+
+A read-only D4c investigation specified strict assignment, dependency
+movement, monotype requirements, and later ordinary refinement through
+fresh stronger-kind unknowns. The checker does not yet connect to source
+elaboration or term inference.
+
 ## Next action
 
-Implement D4b's separate well-formedness checks using non-mutating reads
-and declaration callbacks. Validate primary-kind structure, ordinary
-subkinds, modal parameter requirements, scoped effect applications and
-operation signatures. Ordered contexts, checked assignment, and contextual
-datatype elaboration follow.
+Implement D4c's persistent ordered contexts and checked type/row/presence
+assignment. Cover scope, occurs, dependency ordering, ordinary/modal kinds,
+and monotype requirements through flexible rows and presences. Scope exit,
+export, skeletons, consistency, and contextual datatype elaboration follow.
