@@ -823,7 +823,8 @@ variables. These operations and source inference remain incomplete.
 
 ## Latest task and verification
 
-6 November 2026, D4f1: added skeleton free-variable collection, simultaneous
+6 November 2026, D4f1, commit `7af62207`: added skeleton free-variable
+collection, simultaneous
 capture-avoiding root substitution and quantifier opening. The operations
 preserve ghosts and declaration records, check structural primary categories,
 and keep raw declaration scope independent of application-site binders.
