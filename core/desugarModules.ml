@@ -472,7 +472,7 @@ let rec desugar ?(toplevel=false) ?contextual
            (StringSet.empty, []) declaration.effect_operations in
          let effect_header : EffectHeaders.effect_header = { id; source_name = name; position = pos;
            parameter_count = List.length declaration.effect_parameters;
-           higher_order = declaration.effect_higher_order; operations = List.rev operations } in
+           operations = List.rev operations } in
          let headers = EffectHeaders.add effect_header (!data).headers in
          data := { headers; next_effect = (!data).next_effect + 1 };
          let extend (scope : BasicScope.t) = { scope with effects = StringMap.add name id scope.effects } in

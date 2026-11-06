@@ -60,9 +60,8 @@ let snominal ?(body = sint) ?(args = []) name =
     arguments = args; declaration = { S.identity = name; formals = (if args = [] then [] else [quantifier d]);
       body; linear = Some false } }
 let effects_env = { environment with lookup_effect = (fun name ->
-    if name = "E" || name = "F" then Some { FrescoKind.parameters = [TypeParameter.make (kind PrimaryKind.Type)];
-      higher_order = name = "E" } else None) }
-let effect_entry name typ = { EffectRow.name; arguments = [typ]; higher_order = name = "E" }
+    if name = "E" || name = "F" then Some { FrescoKind.parameters = [TypeParameter.make (kind PrimaryKind.Type)] } else None) }
+let effect_entry name typ = { EffectRow.name; arguments = [typ] }
 
 let suite = "Fresco skeletons" >::: ([
   "bare and wrapped recursive syntax keeps its captured scope" >:: (fun _ ->
@@ -412,7 +411,7 @@ let suite = "Fresco skeletons" >::: ([
     assert_equal roots (roundtrip ~env:(checking (context [b])) roots);
     reject (kind_error (FrescoKind.Unbound_variable b.id)) (S.of_types environment roots));
 
-  "relative modalities retain identities order duplicates flags and masks" >:: (fun _ ->
+  "relative modalities retain identities order duplicates and masks" >:: (fun _ ->
     let typ = Types.Modal (Modality.Relative (["E"; "F"; "E"],
       [effect_entry "E" int; effect_entry "F" Types.bool_type; effect_entry "E" Types.string_type]), Types.End) in
     assert_equal [root typ] (roundtrip ~env:effects_env [root typ]));

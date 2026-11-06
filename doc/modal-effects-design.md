@@ -175,6 +175,8 @@ through contributing type/row/presence dependencies as specified below.
 
 Use Aghilas' named declarations to group operations while using the thesis'
 scoped rows for effects. Omit the reference's higher-order effect extension.
+D3e removes its declaration flag and special row ordering. The lexer treats
+`higher` as an ordinary identifier; `effect higher` fails to parse.
 Preserve Links' record/variant rows, explicit type abstraction/application,
 handler parameters and shallow handlers.
 

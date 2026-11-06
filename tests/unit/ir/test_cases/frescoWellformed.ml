@@ -54,13 +54,12 @@ let declaration ?linearity name qs body ts =
 let recursive ?(p = any) f =
   let q, self = variable p in
   Types.Recursive (Quantifier.to_var q, TypeParameter.to_kind p, f self)
-let effect_entry ?(higher_order = false) name arguments =
-  { EffectRow.name; arguments; higher_order }
+let effect_entry name arguments = { EffectRow.name; arguments }
 let with_effects entries =
   { empty with FrescoKind.lookup_effect = (fun name -> List.assoc_opt name entries) }
-let descriptor ?(higher_order = false) parameters = { FrescoKind.parameters; higher_order }
-let signature ?(env = empty) ?(parameters = []) ?(higher_order = false) arguments result =
-  FrescoKind.check_effect_signature env ~parameters ~higher_order ~operations:[arguments, result]
+let descriptor parameters = { FrescoKind.parameters }
+let signature ?(env = empty) ?(parameters = []) arguments result =
+  FrescoKind.check_effect_signature env ~parameters ~operations:[arguments, result]
 let rejects expected f = assert_raises (FrescoKind.Error expected) f
 let bytes t = Marshal.to_string t [Marshal.Closures]
 
@@ -288,9 +287,9 @@ let suite = "Fresco well-formedness" >::: [
     let env = with_variables [Quantifier.to_var q, info ~solution:(absolute int) mono] in
     check ~env (declaration "GoodFormal" [q] (application mono a) [int]));
 
-  "named effect arities identities flags and duplicates" >:: (fun _ ->
-    let env = with_effects ["State", descriptor [any]; "Higher", descriptor ~higher_order:true []] in
-    let entries = [effect_entry "State" [int]; effect_entry ~higher_order:true "Higher" [];
+  "named effect arities identities and duplicates" >:: (fun _ ->
+    let env = with_effects ["State", descriptor [any]; "Tick", descriptor []] in
+    let entries = [effect_entry "State" [int]; effect_entry "Tick" [];
                    effect_entry "State" [arrow]] in
     let before = bytes entries in
     FrescoKind.check_effect_row env entries;
@@ -298,9 +297,7 @@ let suite = "Fresco well-formedness" >::: [
     rejects (FrescoKind.Unknown_effect "Unknown") (fun () ->
       FrescoKind.check_effect_row env [effect_entry "Unknown" []]);
     rejects (FrescoKind.Argument_count "State") (fun () ->
-      FrescoKind.check_effect_row env [effect_entry "State" []]);
-    rejects (malformed "Higher-order flag: Higher") (fun () ->
-      FrescoKind.check_effect_row env [effect_entry "Higher" []]));
+      FrescoKind.check_effect_row env [effect_entry "State" []]));
 
   "effect parameters check ordinary modal and primary kinds" >:: (fun _ ->
     List.iter (fun (p, good, bad, error) ->
@@ -316,7 +313,7 @@ let suite = "Fresco well-formedness" >::: [
         let p = parameter ~pk () in
         let q, _ = variable p in
         let error = wrong_kind PrimaryKind.Type pk in
-        rejects error (fun () -> signature ~parameters:[q] ~higher_order:true [int] int);
+        rejects error (fun () -> signature ~parameters:[q] [int] int);
         let env = with_effects ["Invalid", descriptor [p]] in
         rejects error (fun () ->
           FrescoKind.check_effect_row env [effect_entry "Invalid" [argument]]);
@@ -329,13 +326,12 @@ let suite = "Fresco well-formedness" >::: [
     reject ~env (FrescoKind.Unknown_effect "Missing")
       (Types.Modal (Modality.Relative (["E"; "Missing"], []), int)));
 
-  "ordinary and higher-order operation arguments and results" >:: (fun _ ->
-    signature [int; absolute arrow] int;
+  "operation arguments and results must be absolute" >:: (fun _ ->
+    signature [int; absolute arrow] (absolute arrow);
     List.iter (fun (args, result) ->
-        signature ~higher_order:true args result;
         rejects modal (fun () -> signature args result)) [[arrow], int; [int], arrow];
     rejects (FrescoKind.Unsupported_type "Not_typed") (fun () ->
-      signature ~higher_order:true [absolute Types.Not_typed] int));
+      signature [absolute Types.Not_typed] int));
 
   "signature explicit parameters and ambient capture" >:: (fun _ ->
     let q, a = variable abs in
@@ -345,19 +341,20 @@ let suite = "Fresco well-formedness" >::: [
         (fun () -> signature ~env [t] int))
       [a; absolute a; application any a; alias any a int];
     let q, a = variable any in
-    signature ~parameters:[q] ~higher_order:true [a] a;
-    rejects modal (fun () -> signature ~parameters:[q] [a] int));
+    signature ~parameters:[q] [absolute a] (absolute a);
+    rejects modal (fun () -> signature ~parameters:[q] [a] int);
+    rejects modal (fun () -> signature ~parameters:[q] [int] a));
 
   "signature nested type row presence and recursive binders" >:: (fun _ ->
     let q, a = variable any in
-    signature ~higher_order:true [Types.ForAll ([q], Types.Arrow (a, a))] int;
+    signature [Types.ForAll ([q], absolute (Types.Arrow (a, a)))] int;
     List.iter (fun pk ->
         let q, v = variable (parameter ~pk ()) in
         let t = match pk with
           | PrimaryKind.Row -> Types.Record (row ~tail:v [])
           | PrimaryKind.Presence -> Types.Record (row ["x", v])
           | PrimaryKind.Type -> assert false in
-        signature ~higher_order:true [Types.ForAll ([q], t)] int)
+        signature [Types.ForAll ([q], absolute t)] int)
       [PrimaryKind.Row; PrimaryKind.Presence];
     signature [recursive (fun self -> record ["value", int; "next", self])] int);
 
@@ -367,16 +364,14 @@ let suite = "Fresco well-formedness" >::: [
     signature ~env ~parameters:[q]
       [Types.Modal (Modality.Absolute [effect_entry "Self" [a]], arrow)] int);
 
-  "ordinary signatures reject nested boxes and nonregular nests" >:: (fun _ ->
+  "signatures reject non-absolute nested boxes and nonregular nests" >:: (fun _ ->
     let q, a = variable any in
     let box t = declaration "Box" [q] (record ["value", a]) [t] in
     signature [box (box int)] int;
-    signature ~higher_order:true [box (box arrow)] int;
     rejects modal (fun () -> signature [box (box arrow)] int);
     let body = ref int in
     let nest t = raw "Nest" [q] (fun () -> Some ([q], !body)) [PrimaryKind.Type, t] in
     body := record ["value", a; "next", nest (Types.Arrow (a, a))];
-    signature ~higher_order:true [nest int] int;
     rejects modal (fun () -> signature [nest int] int));
 
   "distinct points sharing one variable identity" >:: (fun _ ->
@@ -450,7 +445,7 @@ let suite = "Fresco well-formedness" >::: [
       (Types.Modal (Modality.Absolute [effect_entry "E" [application any Types.Not_typed]], int));
     let q, r = variable (parameter ~pk:PrimaryKind.Row ()) in
     rejects (FrescoKind.Unbound_variable (Quantifier.to_var q)) (fun () ->
-      signature ~higher_order:true [Types.Record (row ~tail:r [])] int));
+      signature [Types.Record (row ~tail:r [])] int));
 
   "unsupported legacy types and unresolved placeholders" >:: (fun _ ->
     List.iter (fun (name, t) -> reject (FrescoKind.Unsupported_type name) t)

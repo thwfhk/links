@@ -13,7 +13,6 @@ type effect_header = {
   source_name : string;
   position : SourceCode.Position.t;
   parameter_count : int;
-  higher_order : bool;
   operations : operation list;
 }
 

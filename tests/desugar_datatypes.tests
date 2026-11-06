@@ -155,10 +155,14 @@ effect State(a::Abs) { Get : () => a; Put : (a) => (); }
 exit : 1
 stderr : @.*Named effect declarations require the contextual type checker.*
 
-Higher-order effects require the contextual type checker
+The higher effect modifier is rejected
 effect higher Control { Run : (() -> Int) => Int; }
 exit : 1
-stderr : @.*Named effect declarations require the contextual type checker.*
+stderr : @.*Parse error.*
+
+Higher is an ordinary identifier
+var higher = 42; higher
+stdout : 42 : Int
 
 Qualified operation invocations require the contextual type checker
 do M.State.Get()

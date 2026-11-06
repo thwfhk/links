@@ -408,12 +408,11 @@ let suite = "Fresco detached export" >::: [
     assert_equal [free.id] (table_ids table);
     export_error (Context.Missing_variable free.id) [root typ] Context.empty);
 
-  "relative modalities preserve effects order flags and duplicates" >:: (fun _ ->
+  "relative modalities preserve effects order and duplicates" >:: (fun _ ->
     let a = declaration () in
     let env = { environment with lookup_effect = (fun name ->
-      if name = "E" || name = "F" then Some { FrescoKind.parameters = [parameter a];
-        higher_order = name = "E" } else None) } in
-    let effect_entry name typ = { EffectRow.name; arguments = [typ]; higher_order = name = "E" } in
+      if name = "E" || name = "F" then Some { FrescoKind.parameters = [parameter a] } else None) } in
+    let effect_entry name typ = { EffectRow.name; arguments = [typ] } in
     let c = solve (context [a]) a int in
     let mask = ["E"; "E"; "F"] in
     let effects = [effect_entry "E" (point a); effect_entry "F" Types.bool_type; effect_entry "E" (point a)] in
@@ -425,7 +424,6 @@ let suite = "Fresco detached export" >::: [
        assert_equal ["E"; "F"; "E"] (List.map (fun e -> e.EffectRow.name) effects');
        assert_equal [int; Types.bool_type; int]
          (List.map (fun e -> descriptor (List.hd e.EffectRow.arguments)) effects');
-       assert_equal [true; false; true] (List.map (fun e -> e.EffectRow.higher_order) effects');
        assert_equal int (descriptor body)
     | _ -> assert_failure "Expected modal type");
 

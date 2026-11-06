@@ -269,7 +269,6 @@ type effect_operation =
 type effect_declaration =
   { effect_name : Name.t WithPos.t
   ; effect_parameters : SugarQuantifier.t list
-  ; effect_higher_order : bool
   ; effect_operations : effect_operation list
   }
   [@@deriving show]

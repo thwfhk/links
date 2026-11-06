@@ -13,8 +13,7 @@ implementation decisions, reasons, internal invariants and source comparisons.
 
 ## Current status
 
-Implementation is paused at the user's request after D4f1. The documentation
-review below does not resume compiler work.
+Implementation has resumed for D3e, D3f and D4a2. Pause before D4f2.
 
 - D1--D3d provide row/modality operations, shared modal types, surface syntax,
   and effect/operation resolution. D4a--D4f1 provide kind checks, persistent
@@ -27,14 +26,14 @@ review below does not resume compiler work.
 - Skeleton solution expansion, scope exit preserving ghosts, kind refinement,
   consistency, subtyping, constraint solving and source inference remain.
   Annotation elaboration, runtime integration and migration also remain.
-- Existing code includes higher-order effect flags, syntax and row rules from
-  the earlier design. D3e below removes that extension from the current scope.
+- D3e removes higher-order effect flags, syntax and row rules. Ordinary
+  operation arguments and results must be absolute.
 - List types will use `List A`, and handled-effect annotations will use angle
   brackets, for example `handle <Reader> (...)`. D3f applies these source changes.
 - Modal-kind refinement and the thesis' quantified-type classification are
   required. D4g adds refinement; D4a2 below updates the implemented classifier.
 
-Completed compiler work ends at `7af62207`; `87264380` records the pause.
+D3e resumes compiler work after the pause recorded at `87264380`.
 The most recent compiler verification is recorded below. Passing legacy suites
 checks compatibility during construction; it does not complete Fresco inference.
 
@@ -57,10 +56,11 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D4d2 | Detached export with variable metadata | `c143fb84` |
 | D4e | Recursive skeletons and checked shared-type conversion | `bb94d506` |
 | D4f1 | Skeleton free variables, root substitution and quantifier opening | `7af62207` |
+| D3e | Remove higher-order effect declarations and row rules | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
-results here. D1--D3 require the scope correction below before final acceptance.
+results here. D3f remains before final syntax acceptance.
 
 ## Remaining work
 
@@ -70,7 +70,6 @@ also requires the affected build/tests and review described in AGENTS.md.
 
 | Task | Depends on | Completion check |
 |---|---|---|
-| D3e: remove higher-order effect extension | D1--D3d, D4b | Reject `effect higher`; restore `higher` as an identifier; ordinary row and absolute-signature checks pass |
 | D3f: list types, combined kinds and handler syntax | D2--D3d | Parse/print `List A`, `Type(l,r,m)` and `handle <E>`/`shallowhandle <E>`; migrate signatures and fixtures; reject replaced forms; preserve XML, list expressions/patterns and type round trips |
 | D4a2: thesis quantified-type classification | D4a--D4b | Classify quantified value-type binders at `Abs` without changing their declared kinds; test classification versus well-formedness/instantiation |
 | D4f2: skeleton solution expansion and scope exit | D4f1, D4d1 | Preserve ghosts, scope, live unknowns and recursive sharing; reject escapes without changing the input context |
@@ -136,24 +135,24 @@ choices in refinement, signature elaboration and modal integration tests.
 
 ## Latest task and verification
 
-6 November 2026, D4f1, commit `7af62207`: skeleton operations and recursive
-scope/copying corrections passed independent review. All findings were resolved.
-The final integrated revision passed the following checks:
+6 November 2026, D3e, this commit (base `aba99313`): removed higher-order
+effect syntax, flags and row rules. Independent review found no issues.
+The final integrated revision passed:
 
 | Integrated check | Result |
 |---|---|
 | `make no-db` | Passed |
 | `tests/handlers.tests` | 95 passed |
 | `tests/effect_sugar.tests` | 44 passed |
-| `tests/polymorphism.tests` | 55 passed |
-| `tests/typecheck_examples.tests` | 167 passed, 15 ignored by existing settings |
-| `tests/type_print.tests` | 10 passed |
-| `tests/desugar_datatypes.tests` | 37 passed |
-| `tests/modules.tests` | 41 passed |
-| `opam exec -- ./run-tests nodb-unit-tests` | 672 passed, including 107 new tests |
+| `tests/desugar_datatypes.tests` | 38 passed |
+| `opam exec -- ./run-tests nodb-unit-tests` | 669 passed |
 | `make rule-check` | Passed; GNU-find tab check skipped, formatter check disabled |
-| Manual changed/new-file tab/trailing-whitespace check | Passed |
+| Manual changed-file tab/trailing-whitespace check | Passed |
 | `git diff --check` | Passed |
+
+Three obsolete higher-order row tests were removed. Source tests check rejection
+of `effect higher` and execution of an ordinary `higher` binding. Signature unit
+tests cover absolute arguments/results and rejection of contextual payloads.
 
 ## Latest documentation task
 
@@ -168,8 +167,7 @@ No compiler changes, build or tests.
 
 ## Next action
 
-Compiler work remains paused. On explicit resumption, complete D3e's scope
-correction, D3f's syntax changes and D4a2's quantified-classification update,
-then D4f2's skeleton
+Complete D3f's syntax changes and D4a2's quantified-classification update,
+reviewing, testing and committing each milestone. Pause before D4f2's skeleton
 solution expansion and scope exit. D5 requires its contextual annotation and
 solver dependencies.

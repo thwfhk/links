@@ -37,7 +37,7 @@ let nominal ?(args = []) declaration = S.RecursiveApplication {
   name = "Display " ^ declaration.S.identity; dual = true;
   parameters = List.map parameter declaration.formals; arguments = args; declaration }
 let as_app = function S.RecursiveApplication app -> app | _ -> assert_failure "Expected an application"
-let effect_entry name body = { EffectRow.name; arguments = [body]; higher_order = true }
+let effect_entry name body = { EffectRow.name; arguments = [body] }
 let absolute body = S.Modal (Modality.Absolute [effect_entry "E" body], S.Ghost)
 let relative body = S.Modal (Modality.Relative (["X"; "X"], [effect_entry "E" body; effect_entry "E" int]), S.Ghost)
 let pair a b = S.Arrow (a, b)

@@ -58,7 +58,6 @@ val classify : environment -> Types.typ -> ModalKind.t
     [Types.Recursive] binders. *)
 type effect_parameters = {
   parameters : TypeParameter.t list;
-  higher_order : bool;
 }
 
 type checking_environment = {
@@ -75,9 +74,8 @@ val check_effect_row : checking_environment -> Types.scoped_effect_row -> unit
 
 (** Only explicit Type parameters and nested binders are in scope. Nested
     quantifiers may also bind row and presence variables. The caller
-    supplies the provisional self effect through [lookup_effect]. Ordinary
-    effect signatures require Abs arguments and results; higher-order signatures
-    permit Any. *)
+    supplies the provisional self effect through [lookup_effect]. Effect
+    signatures require Abs arguments and results. *)
 val check_effect_signature : checking_environment ->
-  parameters:Quantifier.t list -> higher_order:bool ->
+  parameters:Quantifier.t list ->
   operations:(Types.typ list * Types.typ) list -> unit

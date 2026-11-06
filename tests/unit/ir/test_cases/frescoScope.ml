@@ -315,8 +315,8 @@ let suite = "Fresco scope exit" >::: [
   "prefix modality and ambient arguments remain live" >:: (fun _ ->
     let a = declaration () and b = declaration () in
     let env = { environment with lookup_effect = (fun name -> if name = "E" then
-      Some { FrescoKind.parameters = [parameter a]; higher_order = true } else None) } in
-    let effect_entry body = { EffectRow.name = "E"; arguments = [body]; higher_order = true } in
+      Some { FrescoKind.parameters = [parameter a] } else None) } in
+    let effect_entry body = { EffectRow.name = "E"; arguments = [body] } in
     let c = context [a] in
     let c = get (Context.add_lock env (Modality.Absolute [effect_entry (point a)]) [effect_entry (point a)] c) in
     let marker, c = Context.add_marker c in
@@ -571,9 +571,9 @@ let suite = "Fresco scope exit" >::: [
   "modal rows preserve identities ordering and duplicates" >:: (fun _ ->
     let a = declaration () in
     let env = { environment with lookup_effect = (fun name ->
-      if name = "E" || name = "F" then Some { FrescoKind.parameters = [parameter a]; higher_order = true }
+      if name = "E" || name = "F" then Some { FrescoKind.parameters = [parameter a] }
       else None) } in
-    let effect_entry name typ = { EffectRow.name; arguments = [typ]; higher_order = true } in
+    let effect_entry name typ = { EffectRow.name; arguments = [typ] } in
     let marker, c = Context.add_marker Context.empty in
     let c = solve (add a c) a int in
     let mask = ["E"; "E"; "F"] in
@@ -587,7 +587,6 @@ let suite = "Fresco scope exit" >::: [
        assert_equal ["E"; "F"; "E"] (List.map (fun e -> e.EffectRow.name) effects');
        assert_equal [int; Types.bool_type; int]
          (List.map (fun e -> descriptor (List.hd e.EffectRow.arguments)) effects');
-       assert_bool "Higher-order flags retained" (List.for_all (fun e -> e.EffectRow.higher_order) effects');
        assert_equal int (descriptor body)
     | _ -> assert_failure "Expected modal type");
 

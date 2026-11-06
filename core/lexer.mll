@@ -95,7 +95,6 @@ let keywords = [
  "lindo"      , LINDOOP;
  "effectname", EFFECTNAME;
  "effect"   , EFFECT;
- "higher"   , HIGHER;
  "freeze"   , FREEZE;
  "else"     , ELSE;
  "escape"   , ESCAPE;

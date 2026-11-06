@@ -352,7 +352,7 @@ let suite = "modal syntax" >::: [
 
   "shared printers produce parseable modal types" >:: (fun _ ->
     let arg = Types.int_type in
-    let entry name arguments = { EffectRow.name; arguments; higher_order = false } in
+    let entry name arguments = { EffectRow.name; arguments } in
     let q, a = Types.fresh_type_quantifier ~modal_kind:ModalKind.Abs (Linearity.Any, Restriction.Any) in
     let types = [
       Types.Modal (Modality.Absolute [entry "M.State" [arg]; entry "M.State" [Types.bool_type]],

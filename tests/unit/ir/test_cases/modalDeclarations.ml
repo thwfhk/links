@@ -46,7 +46,6 @@ let reject_type ?source ?filename ?(part="contextual type checker") action =
        assert_equal expected (Filename.basename (Position.start pos).Lexing.pos_fname)) filename
 let contextual_forms = [
   "effect State(a::Abs) { Get : () => a; Put : (a) => (); }", "State";
-  "effect higher Control { Run : (() -> Int) => Int; }", "Control";
   "do M.State.Get", "Get";
   "handle(1) { case <M.State.Get => k> -> k(1) }", "Get";
   "handle[State(Int)](1) { case x -> x }", "State(Int)";
@@ -60,7 +59,6 @@ let suite = "modal declarations" >::: [
     let d = declaration text in
     assert_equal "State" (node d.effect_name);
     assert_source text "State" d.effect_name;
-    assert_equal false d.effect_higher_order;
     assert_equal [ModalKind.Abs] (List.map SugarQuantifier.modal_kind d.effect_parameters);
     match d.effect_operations with
     | [get;put] ->
@@ -79,14 +77,10 @@ let suite = "modal declarations" >::: [
        | _ -> assert_failure "Expected parameter occurrence" end
     | _ -> assert_failure "Expected two operations");
 
-  "higher order and nullary declarations" >:: (fun _ ->
-    let d = declaration "effect higher Control(a::Any) { Run : (() -> a) => a; }" in
-    assert_bool "Higher-order flag" d.effect_higher_order;
-    assert_equal [ModalKind.Any] (List.map SugarQuantifier.modal_kind d.effect_parameters);
+  "nullary declarations" >:: (fun _ ->
     List.iter (fun text ->
       let d = declaration text in
-      assert_equal [] d.effect_parameters;
-      assert_equal false d.effect_higher_order)
+      assert_equal [] d.effect_parameters)
       ["effect Tick { Tick : () => Int; }"; "effect Empty() {}"]);
 
   "declarations in modules and local blocks" >:: (fun _ ->
@@ -99,6 +93,7 @@ let suite = "modal declarations" >::: [
   "malformed declarations and mutual declarations" >:: (fun _ ->
     List.iter reject_syntax [
       "effect state { Get : () => Int; }";
+      "effect higher Control { Run : (() -> Int) => Int; }";
       "effect State { get : () => Int; }";
       "effect State { Get : Int => Int; }";
       "effect State { Get : () -> Int; }";

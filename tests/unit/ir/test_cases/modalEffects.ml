@@ -3,15 +3,13 @@ open OUnit2
 module Row = Links_core.EffectRow
 module Modality = Links_core.Modality
 
-let entry ?(higher_order = false) name arguments =
-  { Row.name; arguments; higher_order }
+let entry name arguments = { Row.name; arguments }
 
 let state_int = entry "State" ["Int"]
 let state_bool = entry "State" ["Bool"]
 let a = entry "A" []
 let b = entry "B" []
-let h = entry ~higher_order:true "H" ["Unit"]
-let k = entry ~higher_order:true "K" []
+let h = entry "H" ["Unit"]
 
 let equal = Row.equal ~equal:String.equal
 let subeffect = Row.subeffect ~equal:String.equal
@@ -81,39 +79,25 @@ let suite =
       assert_bool "subeffecting rejects swapped arguments" (not (subeffect row swapped));
       assert_bool "subeffecting uses first occurrence" (not (subeffect [state_bool] row)));
 
-    "distinct ordinary labels exchange" >:: (fun _ ->
+    "distinct labels exchange" >:: (fun _ ->
       let left = [a; state_int; b; state_bool] in
       let right = [state_int; state_bool; b; a] in
-      assert_bool "ordinary equality" (equal left right && equal right left);
-      assert_bool "ordinary subeffecting" (subeffect left right && subeffect right left));
+      assert_bool "equality in both directions" (equal left right && equal right left);
+      assert_bool "subeffecting in both directions" (subeffect left right && subeffect right left));
 
-    "higher order equality reflexivity" >:: (fun _ ->
-      List.iter (fun row -> assert_bool "reflexivity" (equal row row))
-        [[a; h]; [h; a]; [state_int; h; state_bool]; [h; k; h]]);
-
-    "higher order equality blocks exchange" >:: (fun _ ->
-      assert_equal None (Row.match_equal [a; h] [h; a]);
-      assert_equal None (Row.match_equal [h; a] [a; h]);
-      assert_equal None (Row.match_equal [h; k] [k; h]);
-      assert_equal None (Row.match_equal [k; h] [h; k]);
-      assert_bool "ordinary segments exchange"
-        (equal [a; b; h; state_int; a] [b; a; h; a; state_int]));
-
-    "higher order subeffecting is directional" >:: (fun _ ->
-      assert_bool "ordinary moves right" (subeffect [a; h] [h; a]);
-      assert_bool "ordinary cannot move left" (not (subeffect [h; a] [a; h]));
-      assert_bool "empty source accepts higher order" (subeffect [] [h]);
-      assert_bool "target tail accepts weakening" (subeffect [h] [h; a]);
-      assert_bool "higher order requires target head" (not (subeffect [h] [a; h])));
+    "subeffecting allows extra target entries" >:: (fun _ ->
+      assert_bool "empty source accepts a non-empty target" (subeffect [] [h]);
+      assert_bool "extra entries before, between and after matches"
+        (subeffect [state_int; h] [a; h; b; state_int; state_bool]);
+      assert_bool "same name matches the first remaining occurrence"
+        (not (subeffect [state_bool; h] [a; h; b; state_int; state_bool])));
 
     "structural mismatches fail" >:: (fun _ ->
       assert_equal None (Row.match_equal [a] []);
       assert_equal None (Row.match_equal [] [a]);
       assert_equal None (Row.match_equal [a] [b]);
       assert_equal None (Row.match_subeffect [a] [b]);
-      assert_equal None (Row.match_equal [entry "M.State" ["Int"]] [entry "N.State" ["Int"]]);
-      assert_equal None (Row.match_equal [h] [entry "H" ["Unit"]]);
-      assert_equal None (Row.match_subeffect [entry "H" ["Unit"]] [h]));
+      assert_equal None (Row.match_equal [entry "M.State" ["Int"]] [entry "N.State" ["Int"]]));
 
     "arity mismatches fail" >:: (fun _ ->
       let short = [entry "State" []] in
@@ -200,7 +184,7 @@ let suite =
         (Modality.right_residual lock guard [state_int; state_bool]);
       assert_equal None (Modality.right_residual lock guard [state_int]));
 
-    "right residual preserves higher order positions" >:: (fun _ ->
+    "right residual preserves row order" >:: (fun _ ->
       assert_equal (Some (Modality.Relative (["H"], [h; a])))
         (Modality.right_residual (Modality.Relative (["A"], [])) Modality.identity [h; a]);
       assert_equal (Some (Modality.Relative (["A"], [a; h])))

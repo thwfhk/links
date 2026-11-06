@@ -64,18 +64,17 @@ let get_decl = "effect State { Get : () => Int; } "
 
 let suite = "modal resolution" >::: [
   "identities headers and source positions" >:: (fun _ ->
-    let text = "effect higher State(a::Abs) { Get : () => a; Put : (a) => (); } (do State.Get, do Get)" in
+    let text = "effect State(a::Abs) { Get : () => a; Put : (a) => (); } (do State.Get, do Get)" in
     let program, state = resolve text in
     let header = List.hd (headers state) in
     assert_equal "State" header.source_name;
     assert_equal 1 header.parameter_count;
-    assert_bool "Higher order" header.higher_order;
     assert_equal [0;1] (List.map (fun op -> op.argument_count) header.operations);
     let get = List.hd header.operations in
     assert_equal [get.id;get.id] (operation_ids program);
     assert_equal header.id get.owner;
     assert_equal "Get" get.source_name;
-    assert_equal 30 (Position.start get.position).Lexing.pos_cnum;
+    assert_equal 23 (Position.start get.position).Lexing.pos_cnum;
     let d = match fst program with [{ WithPos.node = EffectDeclaration d; _ }] -> d | _ -> assert_failure "Declaration" in
     assert_equal header.id (node d.effect_name);
     assert_equal [ModalKind.Abs] (List.map SugarQuantifier.modal_kind d.effect_parameters);

@@ -389,7 +389,7 @@ let any = any_pat dp
 %token <string> SLASHFLAGS
 %token UNDERSCORE AS
 %token <Operators.Associativity.t> FIXITY
-%token TYPENAME EFFECTNAME EFFECT HIGHER FREEZE
+%token TYPENAME EFFECTNAME EFFECT FREEZE
 %token TRY OTHERWISE RAISE
 %token <string> OPERATOR
 %token USING
@@ -558,10 +558,10 @@ typedecl:
 | EFFECTNAME CONSTRUCTOR typeargs_opt EQ effect_app             { alias $loc $2 $3 (Effectname (([], $5), None)) }
 
 effect_declaration:
-| EFFECT boption(HIGHER) CONSTRUCTOR effect_parameters LBRACE effect_operation* RBRACE
+| EFFECT CONSTRUCTOR effect_parameters LBRACE effect_operation* RBRACE
     { with_pos $loc (EffectDeclaration {
-        effect_name = with_pos $loc($3) $3; effect_parameters = $4;
-        effect_higher_order = $2; effect_operations = $6 }) }
+        effect_name = with_pos $loc($2) $2; effect_parameters = $3;
+        effect_operations = $5 }) }
 
 effect_parameters:
 | /* empty */                                                  { [] }

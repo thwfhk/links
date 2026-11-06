@@ -1,7 +1,6 @@
 type 'a entry = {
   name : string;
   arguments : 'a list;
-  higher_order : bool;
 } [@@deriving show]
 
 type 'a t = 'a entry list [@@deriving show]
@@ -66,21 +65,12 @@ let rec extract_prefix mask row =
             (extract_prefix mask rest)
       end
 
-let rec take_ordinary ~exchange_higher name = function
+let rec take_entry name = function
   | [] -> None
   | entry :: rest when entry.name = name -> Some (entry, rest)
-  | entry :: _ when entry.higher_order && not exchange_higher -> None
   | entry :: rest ->
       Option.map (fun (found, rest) -> found, entry :: rest)
-        (take_ordinary ~exchange_higher name rest)
-
-let take_entry ~exchange_higher entry target =
-  if entry.higher_order then
-    match target with
-    | first :: rest when first.name = entry.name -> Some (first, rest)
-    | _ -> None
-  else
-    take_ordinary ~exchange_higher entry.name target
+        (take_entry name rest)
 
 let rec pair_arguments pairs source target =
   match source, target with
@@ -93,13 +83,13 @@ let match_rows ~subeffect source target =
     match source with
     | [] -> if subeffect || target = [] then Some (List.rev pairs) else None
     | entry :: source ->
-        begin match take_entry ~exchange_higher:subeffect entry target with
-        | Some (matched, target) when entry.higher_order = matched.higher_order ->
+        begin match take_entry entry.name target with
+        | Some (matched, target) ->
             begin match pair_arguments pairs entry.arguments matched.arguments with
             | Some pairs -> loop pairs source target
             | None -> None
             end
-        | _ -> None
+        | None -> None
         end
   in
   loop [] source target

@@ -687,12 +687,11 @@ class map =
           (name, args, result))
 
     method effect_declaration : effect_declaration -> effect_declaration =
-      fun { effect_name; effect_parameters; effect_higher_order; effect_operations } ->
+      fun { effect_name; effect_parameters; effect_operations } ->
         let effect_name = o#positioned_name effect_name in
         let effect_parameters = o#list (fun o -> o#quantifier) effect_parameters in
-        let effect_higher_order = o#bool effect_higher_order in
         let effect_operations = o#list (fun o -> o#effect_operation) effect_operations in
-        { effect_name; effect_parameters; effect_higher_order; effect_operations }
+        { effect_name; effect_parameters; effect_operations }
 
     method effect_name : Datatype.effect_name -> Datatype.effect_name =
       WithPos.map2 ~f_pos:o#position ~f_node:(o#list (fun o -> o#name))
@@ -1544,10 +1543,9 @@ class fold =
           o
 
     method effect_declaration : effect_declaration -> 'self_type =
-      fun { effect_name; effect_parameters; effect_higher_order; effect_operations } ->
+      fun { effect_name; effect_parameters; effect_operations } ->
         let o = o#positioned_name effect_name in
         let o = o#list (fun o -> o#quantifier) effect_parameters in
-        let o = o#bool effect_higher_order in
         let o = o#list (fun o -> o#effect_operation) effect_operations in
         o
 
@@ -2530,12 +2528,11 @@ class fold_map =
           o, (name, args, result))
 
     method effect_declaration : effect_declaration -> 'self_type * effect_declaration =
-      fun { effect_name; effect_parameters; effect_higher_order; effect_operations } ->
+      fun { effect_name; effect_parameters; effect_operations } ->
         let o, effect_name = o#positioned_name effect_name in
         let o, effect_parameters = o#list (fun o -> o#quantifier) effect_parameters in
-        let o, effect_higher_order = o#bool effect_higher_order in
         let o, effect_operations = o#list (fun o -> o#effect_operation) effect_operations in
-        o, { effect_name; effect_parameters; effect_higher_order; effect_operations }
+        o, { effect_name; effect_parameters; effect_operations }
 
     method effect_name : Datatype.effect_name -> 'self_type * Datatype.effect_name =
       WithPos.traverse_map ~o ~f_pos:(fun o -> o#position)

@@ -202,12 +202,12 @@ let suite = "Fresco contexts and assignment" >::: [
     assert_equal (Some Types.bool_type) (Context.lookup_term "x" c);
     assert_equal None (Context.lookup_term "y" c);
     reject (wrong PrimaryKind.Type PrimaryKind.Row) (Context.add_term environment "bad" (row []) c);
-    let entry = { EffectRow.name = "E"; arguments = [variable a]; higher_order = false } in
+    let entry = { EffectRow.name = "E"; arguments = [variable a] } in
     reject (Context.Missing_variable a.id) (Context.add_lock environment (Modality.Absolute [entry]) [] c);
     let entry = { entry with arguments = [int] } in
     reject (kind_error (FrescoKind.Unknown_effect "E")) (Context.add_lock environment Modality.identity [entry] c);
     let env = { environment with lookup_effect = (fun name -> if name = "E" then
-      Some { FrescoKind.parameters = [parameter a]; higher_order = false } else None) } in
+      Some { FrescoKind.parameters = [parameter a] } else None) } in
     ignore (get (Context.add_lock env (Modality.Absolute [entry]) [entry] c)));
 
   "independent polymorphic row fails when used by value unknown" >:: (fun _ ->
@@ -399,9 +399,9 @@ let suite = "Fresco contexts and assignment" >::: [
     let r = declaration ~pk:PrimaryKind.Row () and s = declaration ~pk:PrimaryKind.Row ()
     and parameter_declaration = declaration () in
     let env = { environment with lookup_effect = (fun name -> if name = "E" then
-      Some { FrescoKind.parameters = [parameter parameter_declaration]; higher_order = true } else None) } in
+      Some { FrescoKind.parameters = [parameter parameter_declaration] } else None) } in
     let argument body = Types.Modal (Modality.Absolute
-      [{ EffectRow.name = "E"; arguments = [body]; higher_order = true }], int) in
+      [{ EffectRow.name = "E"; arguments = [body] }], int) in
     List.iter (fun wrap ->
       let c = context [r; s] in
       let result = solve ~env c r (field (wrap (record (variable s)))) in

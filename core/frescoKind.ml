@@ -211,7 +211,6 @@ let classify environment typ =
 
 type effect_parameters = {
   parameters : TypeParameter.t list;
-  higher_order : bool;
 }
 
 type checking_environment = {
@@ -411,8 +410,6 @@ let checker environment =
   and effect_row bindings recursive row =
     List.iter (fun entry ->
         let descriptor = effect_descriptor entry.EffectRow.name in
-        if descriptor.higher_order <> entry.EffectRow.higher_order then
-          malformed ("Higher-order flag: " ^ entry.EffectRow.name);
         if List.length descriptor.parameters <> List.length entry.EffectRow.arguments then
           raise (Error (Argument_count entry.EffectRow.name));
         List.iter2 (check bindings recursive) descriptor.parameters entry.EffectRow.arguments) row
@@ -547,13 +544,13 @@ let check_effect_row environment row =
   check_row IntMap.empty [] row;
   finish ()
 
-let check_effect_signature environment ~parameters ~higher_order ~operations =
+let check_effect_signature environment ~parameters ~operations =
   List.iter (fun q -> primary PrimaryKind.Type (Quantifier.to_primary_kind q)) parameters;
   let environment = { environment with classification =
       { environment.classification with variable = (fun _ -> None) } } in
   let bindings = bind_quantifiers IntMap.empty parameters in
   let parameter = TypeParameter.make
-      ~modal_kind:(if higher_order then ModalKind.Any else ModalKind.Abs)
+      ~modal_kind:ModalKind.Abs
       (PrimaryKind.Type, (Linearity.Any, Restriction.Any)) in
   let check, _, finish = checker environment in
   List.iter (fun (arguments, result) ->

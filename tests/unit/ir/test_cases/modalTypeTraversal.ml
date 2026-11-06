@@ -9,8 +9,7 @@ let empty = Types.make_empty_closed_row
 let tuple = Types.make_tuple_type
 let arrow args result = Types.Arrow (tuple args, result)
 let linear args result = Types.LinearArrow (tuple args, result)
-let entry ?(higher_order = false) name arguments =
-  { EffectRow.name; arguments; higher_order }
+let entry name arguments = { EffectRow.name; arguments }
 let absolute row t = Types.Modal (Modality.Absolute row, t)
 let relative mask row t = Types.Modal (Modality.Relative (mask, row), t)
 let var_id = function
@@ -184,7 +183,7 @@ let suite = "modal type traversals" >::: [
   "substitution preserves repeated entries and masks" >:: (fun _ ->
     let a = flexible () and b = flexible () in
     let m = Modality.Relative (["State"; "H"; "State"],
-      [entry "State" [a]; entry ~higher_order:true "H" [b]; entry "State" [b]]) in
+      [entry "State" [a]; entry "H" [b]; entry "State" [b]]) in
     let t = Types.Modal (m, arrow [a] (linear [b] a)) in
     let subst = IntMap.empty
       |> IntMap.add (var_id a) (PrimaryKind.Type, Types.int_type)
@@ -192,7 +191,7 @@ let suite = "modal type traversals" >::: [
     match Instantiate.datatype subst t with
     | Types.Modal (Modality.Relative (mask, row), payload) ->
        assert_equal ["State"; "H"; "State"] mask;
-       assert_equal [entry "State" [Types.int_type]; entry ~higher_order:true "H" [Types.bool_type];
+       assert_equal [entry "State" [Types.int_type]; entry "H" [Types.bool_type];
                      entry "State" [Types.bool_type]] row;
        assert_equal [Types.int_type] (TypeUtils.arg_types payload);
        let result = TypeUtils.return_type payload in
@@ -241,12 +240,12 @@ let suite = "modal type traversals" >::: [
         | t -> super#typ t
     end in
     let t = relative ["B"; "A"; "B"]
-      [entry "A" [Types.int_type]; entry ~higher_order:true "H" [Types.int_type];
+      [entry "A" [Types.int_type]; entry "H" [Types.int_type];
        entry "A" [Types.int_type]] (arrow [Types.int_type] (linear [] Types.int_type)) in
     match snd (visitor#typ t) with
     | Types.Modal (Modality.Relative (mask, row), payload) ->
        assert_equal ["B"; "A"; "B"] mask;
-       assert_equal [entry "A" [Types.bool_type]; entry ~higher_order:true "H" [Types.bool_type];
+       assert_equal [entry "A" [Types.bool_type]; entry "H" [Types.bool_type];
                      entry "A" [Types.bool_type]] row;
        assert_equal [Types.bool_type] (TypeUtils.arg_types payload);
        assert_equal Types.bool_type (TypeUtils.return_type (TypeUtils.return_type payload))
@@ -271,12 +270,12 @@ let suite = "modal type traversals" >::: [
   "normalisation preserves modal structure" >:: (fun _ ->
     let point = Unionfind.fresh Types.int_type in
     let t = relative ["State"; "State"]
-      [entry "State" [Types.Meta point]; entry ~higher_order:true "H" [Types.Meta point]]
+      [entry "State" [Types.Meta point]; entry "H" [Types.Meta point]]
       (linear [Types.Meta point] (absolute [] (Types.Meta point))) in
     match Types.normalise_datatype t with
     | Types.Modal (Modality.Relative (mask, row), payload) ->
        assert_equal ["State"; "State"] mask;
-       assert_equal [entry "State" [Types.int_type]; entry ~higher_order:true "H" [Types.int_type]] row;
+       assert_equal [entry "State" [Types.int_type]; entry "H" [Types.int_type]] row;
        assert_equal [Types.int_type] (TypeUtils.arg_types payload);
        assert_equal (absolute [] Types.int_type) (TypeUtils.return_type payload)
     | _ -> assert_failure "Expected a relative modal type");
@@ -369,13 +368,13 @@ let suite = "modal type traversals" >::: [
       assert_equal ~printer:Fun.id "() -> (forall a::Abs.a)"
         (print (arrow [] (Types.ForAll ([q], a)))))) [Types.Old; Types.Roundtrip]);
 
-  "derived printer retains flags and binders" >:: (fun _ ->
+  "derived printer retains effects and binders" >:: (fun _ ->
     with_printer Types.Derived (fun () ->
       let q, a = abs_rigid () in
-      let text = print (Types.ForAll ([q], absolute [entry ~higher_order:true "H" [a]] (linear [a] a))) in
-      List.iter (assert_contains text) ["Modal"; "Absolute"; "higher_order = true"; "LinearArrow"; "Abs"]));
+      let text = print (Types.ForAll ([q], absolute [entry "H" [a]] (linear [a] a))) in
+      List.iter (assert_contains text) ["Modal"; "Absolute"; "\"H\""; "LinearArrow"; "Abs"]));
 
-  "IR equality permits ordinary exchange" >:: (fun _ ->
+  "IR equality permits exchange of distinct effects" >:: (fun _ ->
     let a = entry "A" [Types.int_type] and b = entry "B" [Types.bool_type] in
     check_ir_equal (absolute [a; b] (arrow [] Types.int_type))
       (absolute [b; a] (arrow [] Types.int_type)));
@@ -384,12 +383,6 @@ let suite = "modal type traversals" >::: [
     let a = entry "State" [Types.int_type] and b = entry "State" [Types.bool_type] in
     check_ir_equal (absolute [a; b] Types.int_type) (absolute [a; b] Types.int_type);
     reject_ir "Type mismatch" (absolute [a; b] Types.int_type) (absolute [b; a] Types.int_type));
-
-  "IR equality preserves higher-order positions and flags" >:: (fun _ ->
-    let a = entry "A" [] and h = entry ~higher_order:true "H" [] in
-    reject_ir "Type mismatch" (absolute [a; h] Types.int_type) (absolute [h; a] Types.int_type);
-    reject_ir "Type mismatch" (absolute [h] Types.int_type)
-      (absolute [entry "H" []] Types.int_type));
 
   "IR equality compares relative masks as multisets" >:: (fun _ ->
     check_ir_equal (relative ["A"; "B"; "A"] [] Types.int_type)
