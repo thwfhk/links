@@ -76,7 +76,8 @@ Useful references. Refer to them when asked and when available.
   `~/code/algebraic-effects/linear-handlers`.
 - Aghilas' implementation of modal effects together with Fresco type
   inference is in the repo
-  `~/code/type/frost/paper/artifact/freso-implementation`.
+  `~/code/type/frost/paper/artifact/freso-implementation`. Use this
+  one as the main reference of implementation.
 - Ahilas' implementation of modal effects with a simple DK style
   bidirectional type inference is in the repo
   `~/code/algebraic-effects/aghilas-met-impl`.

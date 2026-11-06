@@ -51,12 +51,18 @@ compound element types, for example `List (List Int)` and `List ((Int) -> Int)`.
 The old list-type spelling `[A]` is rejected. List expressions and patterns
 retain their existing square-bracket and `::` syntax.
 
-Unannotated type binders have modal kind `Any`. Modal annotations apply to
-binders and may accompany an ordinary Links kind annotation, for example
-`a::Type(Any,Any)::Abs`. `::Any` retains its ordinary Links meaning and also
-specifies modal kind `Any`. Repeated or conflicting annotations are rejected.
-Row and presence binders retain their existing kinds; `::Abs` applies only
-to value-type binders.
+Combine ordinary and modal kind information in one annotation:
+`a::Type(Any,Any,Abs)`. The three fields are linearity, restriction and modal
+kind, in that order. Existing two-field forms such as `Type(Any,Any)` default
+the modal field to `Any`.
+
+Keep `a::Abs` as a shorthand fixing the modal kind while leaving ordinary
+subkind inference/defaults unchanged. It does not by itself specify ordinary
+linearity `Any`. `::Any` retains its existing ordinary meaning and also specifies
+modal kind `Any`. Replace the stacked spelling `Type(Any,Any)::Abs` with
+`Type(Any,Any,Abs)`; repeated or conflicting kind annotations are rejected.
+Row and presence binders retain their existing kinds; `Abs` applies only to
+value-type binders. Unannotated binders default to modal kind `Any`.
 
 ### 2.2 Effect declarations and invocation
 
@@ -107,11 +113,35 @@ handle <State(Int)> (do State.Get) {
 }
 ```
 
-The optional `<E>` annotation selects one effect and its type arguments. Without
-an annotation, the operation clauses determine the effect group. An annotated
-handler resolves unqualified clause names within the selected effect, even
-when another visible effect declares the same operation name. Qualified
-clauses must also belong to that effect.
+Handler annotations are optional. Resolve the operation labels in the clauses
+and infer their common owning effect. A qualified label such as `Reader.Ask`
+identifies its owner. An ambiguous unqualified label requires qualification or
+an effect annotation.
+
+When effect type arguments are omitted, introduce one fresh unification variable
+per declared parameter, with its ordinary and modal kind requirements. Infer
+these arguments from the handled computation and clauses, sharing the same
+variables across the whole handler. This also applies to a name-only annotation
+such as `<Reader>` for a parameterised effect. Name-only omission applies
+to handler annotations. Explicit argument lists and effect applications in
+modal types must have the declared arity.
+
+An annotation such as `<Reader(Int)>` supplies the type arguments explicitly.
+Programmers supply polymorphic or modal arguments through annotations; inferred
+arguments are monotypes. An annotated effect name resolves unqualified clause
+names within that effect, even when another visible effect declares the same
+short name. Qualified clauses must also belong to the selected effect.
+
+For example, the following handler infers the effect `Reader` with argument
+`Int`:
+
+```links
+effect Reader(a::Abs) { Ask : () => a; }
+handle (do Ask) {
+  case x -> x
+  case <Ask => k> -> k(42)
+}
+```
 
 A handler for an effect must contain one clause for each operation in that
 effect. Missing, repeated and foreign operation clauses are rejected.
@@ -161,7 +191,7 @@ modality. No new term-level boxing or unboxing syntax is required. Introduction
 of leading quantifiers and modalities applies only to values. A computation
 may still return a value whose type already has that structure.
 
-To use a variable of contextual type across effect-context changes, its leading
+To use a variable whose type depends on ambient effects across context changes, its leading
 modalities must allow those changes. Any remaining modality stays on the result.
 For distinct effects `A` and `B`, a value bound at
 `modal <A,B> (() -> ())` can be used at `modal <A> (() -> ())` within the
@@ -174,7 +204,7 @@ through subtyping.
 | Type | Modal kind |
 |---|---|
 | Primitive types such as `Int`, `Bool` and `()` | `Abs` |
-| A contextual function type | `Any` |
+| A function type `(A) -> B` or `(A) -@ B` using ambient effects | `Any` |
 | `modal [E] A` | `Abs`, for well-formed `A` |
 | `modal <L \| D> A` | The kind of `A` |
 | A record or variant | `Abs` when all possible payloads are absolute |
@@ -214,8 +244,8 @@ function and its arguments, then checks the arguments against the resulting
 parameter types. Annotations, expected types and freezing can supply
 first-class polymorphic or modal structure.
 
-Unknown value types are solved with monotypes, subject to kind, occurs and
-scope checks. A monotype solution contains no quantifiers or modal types.
+Unknown value types are solved by monotype unification, subject to kind, occurs
+and scope checks. A monotype solution contains no quantifiers or modal types.
 Supplied polymorphic/modal structure is retained by Fresco's instantiation
 rules. Record and variant fields may carry supplied polymorphic types.
 
@@ -315,11 +345,11 @@ must have an unlimited type, as required by Links' existing spawn checks.
 The actor signatures are:
 
 ```links
-sig Send : forall a::Type(Any,Any)::Abs.
+sig Send : forall a::Type(Any,Any,Abs).
   modal [Wild] ((Process(a), a) -> ())
-sig self : forall a::Type(Any,Any)::Abs.
+sig self : forall a::Type(Any,Any,Abs).
   modal [Wild, Receive(a)] (() -> Process(a))
-sig spawn : forall a::Type(Any,Any)::Abs, b.
+sig spawn : forall a::Type(Any,Any,Abs), b.
   modal [Wild] ((modal [Wild, Receive(a)] (() -@ b)) -> Process(a))
 ```
 
@@ -332,7 +362,7 @@ sig spawn : forall a::Type(Any,Any)::Abs, b.
 | List types `[A]` | `List A` |
 | Handled-effect annotations `handle [E]` and `shallowhandle [E]` | `handle <E>` and `shallowhandle <E>` |
 | Operation-based effect annotations and effect tails | Named effects and modal types |
-| Effect-annotated arrows, including `-e->` and `~e~>` | Contextual arrows with an enclosing modality where required |
+| Effect-annotated arrows, including `-e->` and `~e~>` | Arrows using ambient effects, with an enclosing modality where required |
 | `effectname` and effect-tail parameters | Named effect declarations and type parameters |
 | Implicit Hindley--Milner let generalisation | Explicit polymorphic signatures where polymorphism is required |
 | Unsigned recursive definitions | Signed recursive definitions |
@@ -345,7 +375,7 @@ the relevant source location, including effect names, signatures and clauses.
 
 ### 8.2 Migrating effect-annotated arrows
 
-Use contextual arrows and place modalities around the types whose effect
+Use arrows with implicit ambient effects and place modalities around the types whose effect
 requirements need to be stated. Preserve ordinary versus linear arrows as
 `->` versus `-@`.
 
@@ -365,7 +395,7 @@ A function using external primitives formerly marked by `~>` requires `Wild`,
 for example `modal [Wild] ((String) -> ())` for printing.
 
 For higher-order functions that share effects with their callbacks, keep the
-callback arrows contextual. The old arrow structure of `map` is:
+callback arrows without effect annotations. The old arrow structure of `map` is:
 
 ```links
 ((a) -e-> b, [a]) -e-> [b]
@@ -409,11 +439,25 @@ This program has type `Int` and evaluates to `42`.
 
 1. Invoking `Tick` without `Tick` in the ambient context.
 2. Handling `State` with only a `Get` clause when it also declares `Put`.
-3. Declaring a bare contextual function as an operation argument or result type.
+3. Declaring a bare function type using ambient effects as an operation argument or result type.
 4. Treating the contexts `State(Int),State(Bool)` and `State(Bool),State(Int)` as equal.
 5. Using an ambiguous unqualified operation name.
 6. Allowing a local rigid type variable to escape its scope.
-7. Violating a retained `Abs` requirement with a contextual function type.
+7. Violating a retained `Abs` requirement with a function type using ambient effects.
+
+### 8.5 Multiple independent effect variables
+
+Some existing signatures independently quantify over the effects of several
+callbacks or returned functions. Their full contracts can require explicit
+effect variables. The current language cannot preserve every such signature
+using only fixed absolute modalities and changes to one ambient context.
+
+The design records [concrete migration cases](modal-effects-design.md#signatures-with-independent-effect-variables),
+including a test returning two thunks with separate residual effect rows and
+callback interfaces in the JavaScript `wait` example and MVU library. Preserve
+the original contract in that record. Classify specialised uses separately;
+fixed effects or a changed interface may allow those uses to migrate. Counting
+effect variables in an old signature alone does not establish a limitation.
 
 ## 9. Initial effect context
 

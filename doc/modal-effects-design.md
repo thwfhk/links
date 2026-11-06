@@ -134,6 +134,43 @@ names/type arguments, source positions, handler parameters and existing resoluti
 rules. Test qualified effects, parameterised effects, nested handlers and XML
 inside the computation and clauses. Check the generated grammar for conflicts.
 
+### Combined kind syntax and inference reuse
+
+Present a value-type binder as `Type(linearity, restriction, modal_kind)`, for
+example `a::Type(Any,Any,Abs)`. Parse this as the existing ordinary kind plus
+modal metadata. Retain ordinary two-field annotations and the `::Abs` shorthand
+with their existing defaults. Replace the stacked spelling in target signatures
+and update both type printers and binder round-trip tests.
+
+Current storage in `commonTypes.ml` separates the components:
+
+```ocaml
+Kind.t = PrimaryKind.t * (Linearity.t * Restriction.t)
+TypeParameter.t = { kind : Kind.t; modal_kind : ModalKind.t }
+Quantifier.t = { var : int; kind : Kind.t; modal_kind : ModalKind.t }
+```
+
+Fresco declarations likewise store `kind` and `modal_kind`. The combined surface
+syntax does not require replacing these records. Keep ordinary and modal checks
+independent. In particular, `::Abs` leaves ordinary inference/defaulting intact;
+`Type(Any,Any,Abs)` explicitly permits linear values.
+
+Reuse the occurrence-based constraint collection, consistency checks and
+annotation/default handling in `desugarTypeVariables.ml`. Unannotated source
+binders still default to modal `Any`; solver refinement applies to flexible
+unknowns without narrowing declared rigid binders. Its `#add` operation
+accumulates kind information and `#unbind` applies defaults. Extend this pattern
+to collect modal requirements where needed. Solver refinement uses returned
+Fresco contexts instead of mutating the elaboration pass's shared points.
+Preserve the distinction between rigid source binders and flexible unknowns,
+and between modal classification and checking a requirement.
+
+Do not copy legacy ordinary-kind merges without checking their meaning:
+`Restriction.min` treats `Session` and `Mono` differently from Fresco's explicit
+entailment requirements. Retain both constraints when refining dependencies.
+The modal requirement order is `Abs` admissible at `Any`, with propagation
+through contributing type/row/presence dependencies as specified below.
+
 ### Reference choices
 
 Use Aghilas' named declarations to group operations while using the thesis'
@@ -228,6 +265,31 @@ Source-level binding and annotation requirements are specified in
 Keep unknown entries across unsigned top-level bindings and supply explicit
 Fresco cases for Links type abstraction/application. The reference parser's
 support for type application does not provide its missing inference case.
+
+### Reusing Links' monotype unification
+
+Fresco solves unknown monotypes by first-order unification, as described in
+`chapters/maetel/algorithm.tex`. Reuse and adapt the existing structural
+unification in `core/unify.ml`: primitive and constructor matching, type
+arguments, records/variants, row-label alignment, open tails and presences.
+Extend the arrow cases for `Arrow` and `LinearArrow`. Keep scoped effect-row
+matching and supplied polymorphic/modal structure with the Fresco rules.
+
+The current public `Unify.datatypes` and `Unify.rows` operate on mutable
+Unionfind points and return no context. Their legacy checks reject new arrows
+and modal metadata, and failure can follow earlier mutations. Adapt lookup,
+fresh-variable allocation, requirement propagation and binding to the ordered
+Fresco context. Route solutions through checked assignment and return the
+updated context. Failed alternatives must retain the input context. Reuse the
+structural rules without bypassing modal kinds, rigid scope, dependency ordering
+or monotype requirements.
+
+Preserve authored recursive types through the recursive-type operations.
+Legacy unification can infer recursive cycles according to a setting; Fresco's
+unknown assignment still performs its occurs check. Shared row/presence logic
+must retain constraints on later field solutions. Field comparisons involving
+supplied quantifiers or modalities use the corresponding Fresco judgement.
+Include accepted/rejected cases for all reused structures and failure rollback.
 
 ## Implementation in Links
 
@@ -352,6 +414,31 @@ subkinds during type-variable resolution; avoid guessed subkinds in early
 headers. Fresh rigid formal IDs prevent capture of outer variables. Contextual
 elaboration checks signature closure before allocating annotation unknowns.
 
+### Inferring handler effects and their arguments
+
+Effect ownership is resolved before typing the handler. The existing resolver
+already supports an absent handler annotation and selects the common owner of
+its operation clauses. Preserve ambiguity rejection for unqualified short names
+shared by different effects. Continue checking group completeness and ownership.
+
+When no type arguments are supplied, allocate one fresh flexible Type variable
+for each parameter of the selected effect. Preserve the parameter's ordinary
+and modal requirements and use the same arguments for the handled computation,
+operation signatures, resumptions and clauses. Solve monotype arguments using
+the adapted unifier. Apply ordinary scope-exit and escape checks to surviving
+arguments and handler results. An unused parameter can remain unsolved: discard
+its unknown if no surviving type needs it, otherwise retain it with its kind
+and scope requirements. Omission alone does not require an annotation.
+
+Distinguish omitted arguments on a handler from a malformed explicit argument
+list. Permit a name-only annotation for a parameterised handled effect; keep
+arity checks for explicitly supplied lists and for effect applications in modal
+types. The current `effect_application` resolver requires full arity, so the
+handler path needs separate handling of omission. Explicit polymorphic/modal
+arguments go through annotation elaboration and Fresco checks. Test inferred
+monotypes, explicit polymorphic/modal arguments, ordinary/modal kind failures,
+shared clause arguments, unused parameters, qualification and ambiguous short names.
+
 ### Shared type and traversal contracts
 
 `EffectRow.match_equal` and `EffectRow.match_subeffect` return ordered argument
@@ -363,7 +450,9 @@ and `ModalKind.t`; constructors default to `Any` and reject `Abs` on
 row/presence binders. Copies retain both kinds. Structural substitution
 preserves `Abs`; legacy inference and type application reject it.
 Binder identity equality remains separate from full binder comparison.
-Printers retain existing `Any` output and show `::Abs`.
+Printers use the combined kind annotation when both ordinary and modal fields
+need to be shown. Use `::Abs` alone only when ordinary inference/defaults
+reconstruct the same kind. Preserve existing ordinary-only output where valid.
 
 The legacy guard checks recursive arguments and raw declaration bodies,
 using `rec_appl.r_body` without unfolding or instantiation. It checks each
@@ -418,7 +507,7 @@ Use ordered contexts and checked assignment in
 by `Types.tid`: separate Unionfind points can denote the same variable.
 Context entries retain both ordinary and modal kinds. Store solutions
 in returned contexts; assignment must not mutate Unionfind points or
-call the legacy unifier. Resolve existing solutions, check occurs,
+call the unadapted mutable unifier. Resolve existing solutions, check occurs,
 kinds, and scope, then move flexible dependencies before the variable
 being assigned. Reject dependencies on younger rigid variables.
 Include record fields, row tails, presence variables, and effect
@@ -867,6 +956,65 @@ printing options format legacy types. Reclassify `effect_sugar.tests` as migrati
 rejection, unaffected structural-row and modal round-trip cases. A migrated
 `map` with an effectful callback should exercise the replacement of old effect
 sharing by contextual arrows and modal typing.
+
+## Signatures with independent effect variables
+
+Track the general signature separately from each concrete use during migration.
+Absolute modalities name fixed contexts; relative modalities add or remove named
+effects from the ambient context. Neither binds a new effect variable. Ordinary
+type variables may carry whole modal types but cannot occur as effect-row tails.
+
+### Two independently handled thunks
+
+`tests/effect_sugar.tests`, "Printer: presence_omit [3]: multiple shared effect
+rows", takes thunks `p` and `q`, handles `E` in `p` and `F` in `q`, then returns
+the two resulting thunks. Its printed legacy type is:
+
+```links
+(() {E:() => ()|a}~> (), () {F:() => ()|b}~> ())
+  -> (() ~a~> (), () ~b~> ())
+```
+
+The caller can choose unrelated residual rows `a` and `b` at the same construction
+call. Each returned thunk retains its matching row. A direct signature preserving
+this interface and both arbitrary row choices requires effect variables. Sharing
+one ambient context would relate them; fixed absolute modalities would specialise
+them. Record the general contract as deferred. The term and particular uses may
+still migrate with fixed contexts or a changed interface.
+
+### Callback interfaces requiring a migration audit
+
+| Source | Independent effects | Migration action |
+|---|---|---|
+| `examples/handlers/alert.links`, JavaScript `wait` declaration | Callback uses `e1`; scheduling call uses `e2` | Preserve the general contract as deferred; inspect actual callback effects before specialising |
+| `lib/stdlib/mvu.links`, `runHandle` and wrappers | View/update/subscription callbacks share `e`; caller uses separate `f` | Audit call sites against the fixed spawned-body context and actor migration |
+| `prelude.links`, `curry`; `tests/freezeml/a9.links` | Callback and final application share a row independent of closure construction | Record the general signature and test effectful uses at different contexts; pure uses alone do not establish preservation |
+
+The `wait` signature is:
+
+```links
+forall e1::Row, e2::Row. (Int, () ~e1~> ()) ~e2~> ()
+```
+
+Its JavaScript body in `examples/handlers/js/alert.js` schedules the callback with
+`setTimeout`. A concrete callback using only `Wild` may admit an absolute type;
+this does not preserve quantification over both original rows. MVU uses
+`spawnClient`, so its concrete migration also depends on the selected actor rules.
+Keep such specialisations visible and retain the original general cases for a
+future explicit-effect-variable extension.
+
+Several variables in a printed type do not alone establish a missing feature.
+The pure bodies of `choose` in `tests/polymorphism.tests` and the fresh collector-
+arrow tests in `tests/effect_sugar.tests` can use ambient arrows. Actor `Send` is already
+covered by the change from effect-indexed processes to `Process(a)`.
+
+References: thesis chapter 3 (`chapters/overview.tex`, "Effect polymorphism")
+and `chapters/metx/encoding-rows-no-effvar.tex` describe the distinction between
+fixed/relative contexts and explicit effect abstraction. The latter translation
+covers the lexically closest effect-variable fragment and uses term-level masks.
+It does not establish migration of every legacy Links signature into the current
+mask-free subset. Update this record with accepted/rejected migration cases as
+the source checker becomes available.
 
 ## Reference checks and regression coverage
 

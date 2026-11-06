@@ -71,26 +71,28 @@ also requires the affected build/tests and review described in AGENTS.md.
 | Task | Depends on | Completion check |
 |---|---|---|
 | D3e: remove higher-order effect extension | D1--D3d, D4b | Reject `effect higher`; restore `higher` as an identifier; ordinary row and absolute-signature checks pass |
-| D3f: list types and handler annotation syntax | D2--D3d | Parse/print `List A` and `handle <E>`/`shallowhandle <E>`; migrate signatures and fixtures; reject replaced forms; preserve XML, list expressions/patterns and type round trips |
+| D3f: list types, combined kinds and handler syntax | D2--D3d | Parse/print `List A`, `Type(l,r,m)` and `handle <E>`/`shallowhandle <E>`; migrate signatures and fixtures; reject replaced forms; preserve XML, list expressions/patterns and type round trips |
 | D4a2: thesis quantified-type classification | D4a--D4b | Classify quantified value-type binders at `Abs` without changing their declared kinds; test classification versus well-formedness/instantiation |
 | D4f2: skeleton solution expansion and scope exit | D4f1, D4d1 | Preserve ghosts, scope, live unknowns and recursive sharing; reject escapes without changing the input context |
 | D4g: ordinary/modal requirement refinement | D4f2, D4c, D4a2 | Enforce flexible `Abs` and structural payload requirements through later assignment, scope exit and export; never narrow rigid binders |
 | D4h: contextual recursive type operations | D4g | Alias application, unfolding and comparison preserve binders and terminate on tested equal/unequal recursive applications with changing arguments |
-| D4i: consistency and guessing | D4f2--D4h | Bound-variable/ghost restrictions, supplied polymorphic fields, monotype assignment and repeated-row reflexivity have positive/negative coverage |
+| D4i: monotype unification, consistency and guessing | D4f2--D4h | Adapt existing Links structural unification to checked Fresco assignment; cover ghosts, supplied polymorphic fields, kinds/scope, repeated rows and failed alternatives |
 | D4j: subtyping, constraints and `look` | D4i | Preserve supplied polymorphic/modal structure and kind/scope requirements; failed alternatives retain no assignments |
 | D4k: contextual annotation/declaration elaboration | D3e--D3f, D4 checking/refinement/recursive operations | Source annotations and closed signatures reach the contextual kind checker with positioned errors |
 | D5: pure Fresco source inference | D3, D4i--D4k, required IR/export support | Adapted Fresco examples typecheck or reject as specified; a pure example evaluates; top-level unknowns and REPL failure handling work |
-| D6: modal source inference and handlers | D3e--D3f, D4j--D4k, D5 | A handled operation evaluates to `42`; repeated rows, modal access/refinement, complete groups and combined polymorphism checks pass |
+| D6: modal source inference and handlers | D3e--D3f, D4j--D4k, D5 | A handled operation evaluates to `42`; infer omitted handler arguments (including unused parameters); repeated rows, modal access/refinement, complete groups and polymorphism checks pass |
 | D7: Links integration and migration | D5--D6 | Syntax/primitive inventory is covered; batch, REPL and typed rechecks use Fresco; programs migrate and old effect syntax rejects |
 | D8: backends, documentation and final review | D7 | Interpreter/JS deep-handler checks, migration guide and selected suites pass; in-scope legacy effect inference is removed |
 
-D3f covers lexer/parser rules, type printers and parentheses, built-in type
+D3f covers lexer/parser rules, combined kind annotations, type printers and
+parentheses, built-in type
 strings, prelude/library signatures, examples, documentation and affected test
 expectations. Preserve the existing internal list type and runtime representation.
 Change type annotations without changing list expressions or patterns. Migrate
 initialisation strings in the same buildable change that removes old list-type
 syntax. Check nested/function element types, qualified/parameterised handled
-effects, both handler depths, and XML/operation-pattern delimiter interactions.
+effects, parsing/resolution of omitted effect arguments, both handler depths,
+and XML/operation-pattern delimiter interactions. Retain ordinary kind inference/defaults and `::Abs` shorthand.
 
 D4k can proceed alongside the final solver work once its own dependencies are
 ready. D5 requires type-annotation elaboration; D6 also requires effect-signature
@@ -109,10 +111,14 @@ when those first examples need it; D8 performs the final audit.
 - Cover higher-rank fields, zero/n-ary functions, explicit type operations,
   signed recursion and both successful and failed interactive definitions.
 - Exercise deep/shallow handlers, handler parameters, qualified identities,
-  repeated effects and source-level `Any`-to-`Abs` refinement through lock access.
+  repeated effects, omitted handler annotations/type arguments, explicit modal or
+  polymorphic effect arguments, and `Any`-to-`Abs` refinement through lock access.
 - Inventory records/variants, patterns, lists/tuples, modules, actors, XML/web
   forms, FFI and existing sessions. Include `tests/messages.tests` for mailbox
   migration and preserve typed-IR/recheck settings.
+- Record general signatures needing independent effect variables and audit their
+  concrete uses separately. The design lists the two-thunk test, `wait`, MVU and
+  `curry`; do not claim a specialised migration preserves the original contract.
 - Audit ghosts, exported variable requirements, recursive type consumers,
   lowering, optimisation and both backends. Keep excluded features outside scope.
 
@@ -151,13 +157,14 @@ The final integrated revision passed the following checks:
 
 ## Latest documentation task
 
-6 November 2026: added D3f for `List A` type syntax and angle-bracket handled-effect
-annotations. Updated target syntax and examples in the specification and recorded
-the parser/printer/migration requirements in the design. Compiler work remains
-paused.
+6 November 2026: recorded reuse of Links' monotype unification and kind-inference
+ideas, combined kind syntax, optional handlers with inferred effect arguments,
+and existing signatures needing independent effect variables. Clarified ambient-
+effect wording in the specification. Updated D3f, D4i and integration coverage.
 
-Verification: inspected parser and type-printer paths, checked document links
-and whitespace; `git diff --check` passed. No compiler changes, build or tests.
+Verification: inspected compiler code, reference rules and existing examples;
+checked document consistency, links and whitespace. `git diff --check` passed.
+No compiler changes, build or tests.
 
 ## Next action
 
