@@ -905,6 +905,13 @@ copied data. Exported unfolding raises
 copy non-recursive nodes separately when their lexical scope changes, and
 close an active recursive node using its captured scope. Scope exit uses the
 same cycle rule and checks closing metadata before copying any roots.
+Identify active recursive nodes by their syntax identity, including nodes
+nested inside another point descriptor or supplied directly as roots. Reuse
+the destination point for an immediate recursive descriptor; otherwise keep
+a fresh point for back references while preserving the first constructor.
+Completed-point memo keys include the active recursive context as well as
+lexical scope. A result computed while a recursive node is active cannot be
+reused where that node's body must be checked or copied again.
 
 D4e adds a separate recursive `FrescoSkeleton` datatype. Mirror the supported
 shared constructors with skeleton children, including row fields, presences,
@@ -941,6 +948,33 @@ these distinctions. Guessing follows these operations: the reference fills
 ordinary ghosts and removes universal ghosts while preserving supplied
 quantifiers and modalities; assignment then checks the monotype requirement.
 `look` also collects and solves constraints.
+
+D4f1 distinguishes free-variable collection from root-scope substitution.
+Free-variable collection includes raw declaration captures under each
+declaration's own formals. Root substitution and quantifier opening traverse
+application arguments but retain referenced declaration records unchanged.
+For `D() = a`, opening `forall a. D()` freshens the root binder and leaves
+the raw free `a` unchanged. Opening binders to fresh IDs also separates these
+captures from the bound-variable sets used by consistency.
+
+Keep declaration identities and records shared across these root operations;
+reject distinct records with the same identity in a batch. Global substitution
+through raw declaration captures is deferred. It would need one coordinated
+declaration snapshot across roots, context solutions and callbacks, preserving
+nominal identities while preventing old and changed bodies from being mixed.
+
+`FrescoSkeletonOps` implements free-variable collection, simultaneous
+capture-avoiding root substitution and quantifier opening. It checks primary
+categories, nearest-binder categories, declaration identities and graph
+cycles. Ordinary/modal checks remain with the context. Opening preserves
+quantifier metadata and gives renamed occurrences fresh rigid IDs.
+
+Binder-renaming caches use finite source lexical identities and active
+recursive syntax identities; copied-point caches also retain output mappings.
+Inserted replacements are copied in a separate substitution mode. This
+prevents repeated substitution and preserves captured scope on cyclic graphs.
+Completed recursive constructors are reused in equal scopes so repeated bare
+roots preserve sharing and the identity of their back-reference descriptors.
 
 Later kind refinement needs an internal absolute-payload requirement for
 flexible row and presence variables. Keep their declared modal kind `Any`.

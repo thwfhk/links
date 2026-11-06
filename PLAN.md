@@ -53,6 +53,9 @@ rewrites surviving type roots, with review and selected checks complete.
 D4d2 adds detached export with variable metadata and copied raw declarations,
 also reviewed and tested. D4e adds separate recursive skeletons and checked
 conversion to and from shared types, with review and selected checks complete.
+D4f1 adds skeleton free variables, root substitution and quantifier opening.
+Its review and selected checks are complete. Work is paused at the user's
+request after D4f1.
 
 A read-only declaration investigation identified the module
 name-resolution changes and affected pattern-matching handlers. A
@@ -217,6 +220,7 @@ implementation defects. Record completed behaviour and deferred work.
 - [x] D4d1: add checked scope exit with rewritten type roots.
 - [x] D4d2: add detached type export with variable metadata and copied declarations.
 - [x] D4e: add recursive skeletons and checked shared-type conversion.
+- [x] D4f1: add skeleton free variables, root substitution and quantifier opening.
 - [ ] Implement and test modal syntax and scoped effect rows.
 - [ ] Refactor type inference to follow Fresco.
 - [ ] Implement modal inference and run the first working example.
@@ -780,9 +784,9 @@ incomplete. A read-only D4e investigation specified separate recursive
 skeletons and conversion that preserves context variable IDs and rejects
 remaining ghosts.
 
-## Latest task and verification
+## D4e verification
 
-6 November 2026, D4e: added a separate recursive skeleton representation with
+6 November 2026, D4e, commit `bb94d506`: added a separate recursive skeleton representation with
 Ghost and UniversalGhost nodes and checked batch conversion. Conversion
 preserves variable occurrences and leaves solutions and constraints in the
 persistent context. Raw nominal bodies are skeleton data; conversion back
@@ -817,9 +821,49 @@ solution expansion and scope exit that preserves ghosts. Later kind refinement
 also needs internal absolute-payload requirements for flexible row/presence
 variables. These operations and source inference remain incomplete.
 
+## Latest task and verification
+
+6 November 2026, D4f1: added skeleton free-variable collection, simultaneous
+capture-avoiding root substitution and quantifier opening. The operations
+preserve ghosts and declaration records, check structural primary categories,
+and keep raw declaration scope independent of application-site binders.
+Added 100 operation tests and seven related regression tests.
+
+Independent review found missing nearest-binder primary checks and recursive
+freshening/capture failures. A focused review established syntax-node guards
+for all active recursive binders, context-sensitive completed-point caches,
+and reuse of completed recursive constructors. These corrections also apply
+to skeleton conversion, scope exit and detached export. Tests cover bare and
+wrapped recursive nodes, repeated-root sharing, captured scopes and rejected
+unguarded cycles. Independent review reports no remaining findings.
+
+The initial build used a wrong TypeParameter accessor. Initial unit checks
+also found structural IntSet comparison, an expected constructor with a new
+identity, and unqualified module references causing a test-library dependency
+cycle. All four issues were corrected.
+
+Independent verification passed its build, all 672 unit tests, 37 datatype
+tests, 10 type-print tests and source checks. Main, implementation and review
+source snapshots match.
+
+| Integrated check | Result |
+|---|---|
+| `make no-db` | Passed |
+| `tests/handlers.tests` | 95 passed |
+| `tests/effect_sugar.tests` | 44 passed |
+| `tests/polymorphism.tests` | 55 passed |
+| `tests/typecheck_examples.tests` | 167 passed, 15 ignored by existing settings |
+| `tests/type_print.tests` | 10 passed |
+| `tests/desugar_datatypes.tests` | 37 passed |
+| `tests/modules.tests` | 41 passed |
+| `opam exec -- ./run-tests nodb-unit-tests` | 672 passed, including 107 new tests |
+| `make rule-check` | Passed; GNU-find tab check skipped, formatter check disabled |
+| Manual changed/new-file tab/trailing-whitespace check | Passed |
+| `git diff --check` | Passed |
+
 ## Next action
 
-Implement D4f1 skeleton free-variable collection, capture-avoiding substitution
-and quantifier freshening. Then add solution expansion and scope exit that
-preserves ghosts, followed by kind refinement, consistency, constraint
-collection/solving, and contextual datatype elaboration.
+Paused at the user's request after completing D4f1. On resumption, add
+solution expansion and scope exit that preserves ghosts, followed by kind
+refinement, consistency, constraint collection/solving, and contextual datatype
+elaboration. Keep unfinished milestones marked incomplete.

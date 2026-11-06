@@ -65,6 +65,50 @@ let effects_env = { environment with lookup_effect = (fun name ->
 let effect_entry name typ = { EffectRow.name; arguments = [typ]; higher_order = name = "E" }
 
 let suite = "Fresco skeletons" >::: ([
+  "bare and wrapped recursive syntax keeps its captured scope" >:: (fun _ ->
+    List.iter (fun wrapped -> List.iter (fun direct ->
+      let a = declaration () and r = declaration () in
+      let row_a = Quantifier.make a.id (kind PrimaryKind.Row) in
+      let p = Unionfind.fresh Types.Not_typed in
+      let recursive = Types.Recursive (r.id, r.kind,
+        Types.Arrow (variable a, Types.ForAll ([row_a], Types.Meta p))) in
+      Unionfind.change p (if wrapped then Types.Arrow (int, recursive) else recursive);
+      let typ = if direct then recursive else Types.Meta p in
+      let roots = [root typ] in let before = bytes roots in
+      let env = checking (context [a]) in
+      let middle = import ~env roots in
+      assert_bool "Captured free type variable" (IntSet.equal (IntSet.singleton a.id)
+        (get (Links_core.FrescoSkeletonOps.free_variables middle)));
+      ignore (export ~env middle);
+      assert_equal before (bytes roots)) [false; true]) [false; true]);
+
+  "skeleton recursive syntax keeps its captured scope on conversion" >:: (fun _ ->
+    List.iter (fun wrapped -> List.iter (fun direct ->
+      let a = declaration () and r = declaration () in
+      let row_a = Quantifier.make a.id (kind PrimaryKind.Row) in
+      let p = Unionfind.fresh S.Ghost in
+      let recursive = S.Recursive (r.id, r.kind,
+        S.Arrow (S.Var (a.id, a.kind, `Flexible), S.ForAll ([row_a], S.Meta p))) in
+      Unionfind.change p (if wrapped then S.Arrow (sint, recursive) else recursive);
+      let roots = [skeleton (if direct then recursive else S.Meta p)] in
+      let before = bytes roots in
+      ignore (export ~env:(checking (context [a])) roots);
+      assert_equal before (bytes roots)) [false; true]) [false; true]);
+
+  "repeated bare recursive roots retain body sharing through conversion" >:: (fun _ ->
+    let r = declaration () in let p = Unionfind.fresh (Types.Arrow (int, int)) in
+    let recursive = Types.Recursive (r.id, r.kind, Types.Meta p) in
+    let owner = Unionfind.fresh recursive in
+    let middle = import [root recursive; root recursive; root (Types.Meta owner)] in
+    begin match List.map (fun root -> root.S.typ) middle with
+    | [first; second; S.Meta owner] ->
+       assert_bool "Same skeleton constructor" (first == second && first == Unionfind.peek owner)
+    | _ -> assert_failure "Expected skeleton roots" end;
+    match List.map (fun root -> root.C.typ) (export middle) with
+    | [first; second; Types.Meta owner] ->
+       assert_bool "Same shared constructor" (first == second && first == Unionfind.peek owner)
+    | _ -> assert_failure "Expected shared roots");
+
   "empty batches" >:: (fun _ ->
     assert_equal [] (import []); assert_equal [] (export []));
 

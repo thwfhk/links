@@ -110,8 +110,8 @@ let any_parameter primary =
 let inspect environment context ?target required typ =
   let dependencies = ref IntSet.empty in
   let monotypes = ref IntSet.empty in
-  let rec visit bound recursive solutions declarations points required typ =
-    let child = visit bound recursive solutions declarations points required in
+  let rec visit bound recursive recursive_nodes solutions declarations points required typ =
+    let child = visit bound recursive recursive_nodes solutions declarations points required in
     let arguments args = List.iter (fun (_, body) -> child body) args in
     match typ with
     | Types.Meta point ->
@@ -120,7 +120,7 @@ let inspect environment context ?target required typ =
        begin match List.find_opt (fun (other, _) -> point == other) points with
        | Some (_, depth) -> if recursive <= depth then fail Cyclic_type
        | None ->
-          visit bound recursive solutions declarations ((point, recursive) :: points) required descriptor
+          visit bound recursive recursive_nodes solutions declarations ((point, recursive) :: points) required descriptor
        end
     | Types.Var (id, _, _) when IntSet.mem id bound -> ()
     | Types.Var (id, _, _) ->
@@ -135,19 +135,20 @@ let inspect environment context ?target required typ =
           | None -> ()
           | Some body ->
              if IntSet.mem id solutions then fail (Cyclic_solution id);
-             visit IntSet.empty 0 (IntSet.add id solutions) declarations points
+             visit IntSet.empty 0 [] (IntSet.add id solutions) declarations []
                (required || variable.requires_monotype) body
           end
        | Some (Term _ | Marker _ | Lock _) -> assert false
        end
     | Types.Recursive (id, _, body) ->
-       visit (IntSet.add id bound) (recursive + 1)
-         solutions declarations points required body
+       if not (List.exists (fun other -> typ == other) recursive_nodes) then
+         visit (IntSet.add id bound) (recursive + 1) (typ :: recursive_nodes)
+           solutions declarations points required body
     | Types.ForAll (quantifiers, body) ->
        if required && quantifiers <> [] then fail Expected_monotype;
        let bound = List.fold_left (fun bound q ->
            IntSet.add (Quantifier.to_var q) bound) bound quantifiers in
-       visit bound recursive solutions declarations points required body
+       visit bound recursive recursive_nodes solutions declarations points required body
     | Types.RecursiveApplication app ->
        arguments app.Types.r_args;
        let name = app.Types.r_unique_name in
@@ -157,7 +158,7 @@ let inspect environment context ?target required typ =
          | Some (formals, body) ->
             let bound = List.fold_left (fun bound q ->
                 IntSet.add (Quantifier.to_var q) bound) IntSet.empty formals in
-            visit bound 0 solutions (StringSet.add name declarations) [] required body
+            visit bound 0 [] solutions (StringSet.add name declarations) [] required body
        end
     | Types.Alias (_, (_, _, args, _), body) -> arguments args; child body
     | Types.Application (_, args) -> arguments args
@@ -178,7 +179,7 @@ let inspect environment context ?target required typ =
        (* The kind checker reports these unsupported constructors. *)
        raise (FrescoKind.Error (FrescoKind.Unsupported_type "Legacy or incomplete type"))
   in
-  visit IntSet.empty 0 IntSet.empty StringSet.empty [] required typ;
+  visit IntSet.empty 0 [] IntSet.empty StringSet.empty [] required typ;
   !dependencies, !monotypes
 
 let add_term environment name typ context = checked (fun () ->
@@ -317,32 +318,35 @@ let check_root_binders context roots =
 
 let expand_roots context roots =
   check_root_binders context roots;
-  let points = ref [] in
+  let points = ref [] and recursive_copies = ref [] in
   let solutions = ref IntMap.empty in
+  let next_anchor = ref 0 in
+  let fresh_anchor () = incr next_anchor; !next_anchor in
   let bind bound quantifiers =
     List.fold_left (fun bound q ->
         IntSet.add (Quantifier.to_var q) bound) bound quantifiers in
-  let rec expand bound recursive active solving typ =
-    let child = expand bound recursive active solving in
+  let rec expand bound recursive active recursive_nodes owner solving typ =
+    let child = expand bound recursive active recursive_nodes None solving in
     let arguments = List.map (fun (tag, body) -> tag, child body) in
     match typ with
     | Types.Meta point ->
        let point = Unionfind.representative point in
        let recursive_node = match Unionfind.peek point with Types.Recursive _ -> true | _ -> false in
+       let captured = List.map (fun (_, _, token) -> token) recursive_nodes in
        begin match List.find_opt (fun (source, scope, _, _) ->
            source == point && (recursive_node || IntSet.equal scope bound)) active with
        | Some (_, _, depth, copy) ->
           if recursive <= depth then fail Cyclic_type;
           Types.Meta copy
        | None ->
-          begin match List.find_opt (fun (source, scope, _) ->
-              source == point && IntSet.equal scope bound) !points with
-          | Some (_, _, copy) -> Types.Meta copy
+          begin match List.find_opt (fun (source, scope, context, _) ->
+              source == point && IntSet.equal scope bound && captured = context) !points with
+          | Some (_, _, _, copy) -> Types.Meta copy
           | None ->
              let copy = Unionfind.fresh Types.Not_typed in
-             points := (point, bound, copy) :: !points;
-             let body = expand bound recursive ((point, bound, recursive, copy) :: active) solving
-                 (Unionfind.peek point) in
+             points := (point, bound, captured, copy) :: !points;
+             let body = expand bound recursive ((point, bound, recursive, copy) :: active)
+                 recursive_nodes (Some (copy, fresh_anchor ())) solving (Unionfind.peek point) in
              Unionfind.change copy body;
              Types.Meta copy
           end
@@ -357,7 +361,7 @@ let expand_roots context roots =
           | None ->
              (* Stored solutions have their own lexical scope. Their free
                 variables may become bound where the expanded type is placed. *)
-             let body = expand IntSet.empty 0 active (IntSet.add id solving) body in
+             let body = expand IntSet.empty 0 [] [] None (IntSet.add id solving) body in
              solutions := IntMap.add id body !solutions;
              body
           end
@@ -366,10 +370,28 @@ let expand_roots context roots =
        | Some (Term _ | Marker _ | Lock _) -> assert false
        end
     | Types.Recursive (id, kind, body) ->
-       Types.Recursive (id, kind,
-         expand (IntSet.add id bound) (recursive + 1) active solving body)
+       begin match List.find_opt (fun (other, _, _) -> typ == other) recursive_nodes with
+       | Some (_, point, _) -> Types.Meta point
+       | None ->
+          let scope = IntSet.remove id bound in
+          let captured = List.map (fun (_, _, token) -> token) recursive_nodes in
+          begin match List.find_opt (fun (other, bound, context, _) ->
+              typ == other && IntSet.equal scope bound && captured = context) !recursive_copies with
+          | Some (_, _, _, result) -> result
+          | None ->
+            let point, token = match owner with
+              | Some owner -> owner
+              | None -> Unionfind.fresh Types.Not_typed, fresh_anchor () in
+            let body = expand (IntSet.add id bound) (recursive + 1) active
+                ((typ, point, token) :: recursive_nodes) None solving body in
+            let result = Types.Recursive (id, kind, body) in
+            Unionfind.change point result;
+            recursive_copies := (typ, scope, captured, result) :: !recursive_copies;
+            result
+          end
+       end
     | Types.ForAll (quantifiers, body) ->
-       Types.ForAll (quantifiers, expand (bind bound quantifiers) recursive active solving body)
+       Types.ForAll (quantifiers, expand (bind bound quantifiers) recursive active recursive_nodes None solving body)
     | Types.RecursiveApplication app ->
        Types.RecursiveApplication { app with Types.r_args = arguments app.Types.r_args }
     | Types.Alias (pk, (name, parameters, args, dual), body) ->
@@ -397,7 +419,7 @@ let expand_roots context roots =
        raise (FrescoKind.Error (FrescoKind.Unsupported_type "Legacy or incomplete type")) in
   List.map (fun root ->
       let bound = bind IntSet.empty root.binders in
-      { root with typ = expand bound 0 [] IntSet.empty root.typ }) roots
+      { root with typ = expand bound 0 [] [] None IntSet.empty root.typ }) roots
 
 let leave_scope environment marker ~roots context = checked (fun () ->
     let rec split before = function
@@ -485,7 +507,7 @@ let export environment ~roots context = checked (fun () ->
         let typ = root_type root in
         ignore (inspect environment context false typ);
         FrescoKind.check environment (any_parameter PrimaryKind.Type) typ) roots;
-    let points = ref [] in
+    let points = ref [] and recursive_copies = ref [] in
     let variables = ref IntMap.empty in
     let bodies = ref StringMap.empty in
     let next_scope = ref 0 in
@@ -502,8 +524,8 @@ let export environment ~roots context = checked (fun () ->
     check_root_binders context roots;
     let bind scope token quantifiers = List.fold_left (fun scope q ->
         bind_id scope token (Quantifier.to_var q)) scope quantifiers in
-    let rec copy bound output recursive active solving typ =
-      let child = copy bound output recursive active solving in
+    let rec copy bound output recursive active recursive_nodes owner solving typ =
+      let child = copy bound output recursive active recursive_nodes None solving in
       let arguments args = List.map (fun (tag, body) -> tag, child body) args in
       match typ with
       | Types.Meta source ->
@@ -522,20 +544,22 @@ let export environment ~roots context = checked (fun () ->
               point == source && source_scope = scope && output_scope = destination in
             (* An active recursive node retains the scope of its first entry. *)
             let recursive_node = match descriptor with Types.Recursive _ -> true | _ -> false in
+            let captured = List.sort compare
+                (List.map (fun (typ, _, token) -> node_scope typ, token) recursive_nodes) in
             begin match List.find_opt (fun (point, source_scope, output_scope, _, _) ->
                 point == source && (recursive_node || same_scope point source_scope output_scope)) active with
             | Some (_, _, _, depth, point) ->
                if recursive <= depth then fail Cyclic_type;
                Types.Meta point
             | None ->
-               begin match List.find_opt (fun (point, source_scope, output_scope, _) ->
-                   same_scope point source_scope output_scope) !points with
-               | Some (_, _, _, point) -> Types.Meta point
+               begin match List.find_opt (fun (point, source_scope, output_scope, context, _) ->
+                   same_scope point source_scope output_scope && captured = context) !points with
+               | Some (_, _, _, _, point) -> Types.Meta point
                | None ->
                   let point = Unionfind.fresh Types.Not_typed in
-                  points := (source, scope, destination, point) :: !points;
+                  points := (source, scope, destination, captured, point) :: !points;
                   let active = (source, scope, destination, recursive, point) :: active in
-                  let body = copy bound output recursive active solving descriptor in
+                  let body = copy bound output recursive active recursive_nodes (Some (point, fresh_scope ())) solving descriptor in
                   Unionfind.change point body;
                   Types.Meta point
                end
@@ -549,7 +573,7 @@ let export environment ~roots context = checked (fun () ->
             if IntSet.mem id solving then fail (Cyclic_solution id);
             (* Lookup uses the solution's scope; output binders still close
                matching variables after the solution has been expanded. *)
-            copy [] output 0 active (IntSet.add id solving) body
+            copy [] output 0 [] [] None (IntSet.add id solving) body
          | Some (Rigid declaration) ->
             variable_point output (Types.Var (id, declaration.kind, `Rigid))
          | Some (Flexible { declaration; _ }) ->
@@ -558,16 +582,34 @@ let export environment ~roots context = checked (fun () ->
          | Some (Term _ | Marker _ | Lock _) -> assert false
          end
       | Types.Recursive (id, kind, body) ->
-         let token = node_scope typ in
-         let scope = bind_id output token id in
-         let bound = bind_id bound token id in
-         Types.Recursive (id, kind,
-           copy bound scope (recursive + 1) active solving body)
+         begin match List.find_opt (fun (other, _, _) -> typ == other) recursive_nodes with
+         | Some (_, point, _) -> Types.Meta point
+         | None ->
+            let captured = List.sort compare
+                (List.map (fun (typ, _, token) -> node_scope typ, token) recursive_nodes) in
+            let key = List.remove_assoc id bound, List.remove_assoc id output, captured in
+            begin match List.find_opt (fun (other, context, _) -> typ == other && key = context) !recursive_copies with
+            | Some (_, _, result) -> result
+            | None ->
+              let point, anchor = match owner with
+                | Some owner -> owner
+                | None -> Unionfind.fresh Types.Not_typed, fresh_scope () in
+              let token = node_scope typ in
+              let scope = bind_id output token id in
+              let bound = bind_id bound token id in
+              let body = copy bound scope (recursive + 1) active
+                  ((typ, point, anchor) :: recursive_nodes) None solving body in
+              let result = Types.Recursive (id, kind, body) in
+              Unionfind.change point result;
+              recursive_copies := (typ, key, result) :: !recursive_copies;
+              result
+            end
+         end
       | Types.ForAll (quantifiers, body) ->
          let token = node_scope typ in
          let scope = bind output token quantifiers in
          let bound = bind bound token quantifiers in
-         Types.ForAll (quantifiers, copy bound scope recursive active solving body)
+         Types.ForAll (quantifiers, copy bound scope recursive active recursive_nodes None solving body)
       | Types.RecursiveApplication app ->
          let name = app.Types.r_unique_name in
          let body, linear = match StringMap.find_opt name !bodies with
@@ -580,7 +622,7 @@ let export environment ~roots context = checked (fun () ->
               | None -> raise (FrescoKind.Error (FrescoKind.Missing_declaration name))
               | Some (formals, typ) ->
                  let scope = bind [] (fresh_scope ()) formals in
-                 body := Some (formals, copy scope scope 0 [] solving typ)
+                 body := Some (formals, copy scope scope 0 [] [] None solving typ)
               end;
               body, linear in
          Types.RecursiveApplication {
@@ -631,7 +673,7 @@ let export environment ~roots context = checked (fun () ->
              root_scopes := (root.binders, token) :: !root_scopes;
              token in
         let scope = bind [] token root.binders in
-        { root with typ = copy scope scope 0 [] IntSet.empty root.typ }) roots in
+        { root with typ = copy scope scope 0 [] [] None IntSet.empty root.typ }) roots in
     (* Check the detached graph using only its own raw declaration callbacks
        and its free-variable table. This also excludes variables closed after
        solution expansion, and includes free dependencies in raw bodies. *)

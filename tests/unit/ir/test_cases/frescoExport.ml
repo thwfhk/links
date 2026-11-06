@@ -66,6 +66,33 @@ let export_error ?(env = environment) error roots c =
   assert_equal before (bytes (c, roots))
 
 let suite = "Fresco detached export" >::: [
+  "repeated bare recursive roots retain body sharing on export" >:: (fun _ ->
+    let r = declaration () in let p = Unionfind.fresh (Types.Arrow (int, int)) in
+    let recursive = Types.Recursive (r.id, r.kind, Types.Meta p) in
+    let owner = Unionfind.fresh recursive in
+    let roots, _ = export [root recursive; root recursive; root (Types.Meta owner)] Context.empty in
+    match List.map (fun root -> root.Context.typ) roots with
+    | [first; second; Types.Meta owner] ->
+       assert_bool "Same completed constructor" (first == second && first == Unionfind.peek owner)
+    | _ -> assert_failure "Expected roots");
+
+  "bare and wrapped recursive syntax preserves scope on export" >:: (fun _ ->
+    List.iter (fun wrapped -> List.iter (fun direct ->
+      let a = declaration () and r = declaration () in
+      let row_a = Quantifier.make a.id (PrimaryKind.Row, (Linearity.Any, Restriction.Any)) in
+      let p = Unionfind.fresh Types.Not_typed in
+      let recursive = Types.Recursive (r.id, r.kind,
+        Types.Arrow (variable a, Types.ForAll ([row_a], Types.Meta p))) in
+      Unionfind.change p (if wrapped then Types.Arrow (int, recursive) else recursive);
+      let roots = [root (if direct then recursive else Types.Meta p)] in
+      let c = context [a] in let before = bytes (c, roots) in
+      let output, table = export roots c in
+      assert_equal [a.id] (table_ids table);
+      let skeletons = get (Links_core.FrescoSkeleton.of_types (Context.checking_environment environment c) output) in
+      assert_bool "Captured free variable" (IntSet.equal (IntSet.singleton a.id)
+        (get (Links_core.FrescoSkeletonOps.free_variables skeletons)));
+      assert_equal before (bytes (c, roots))) [false; true]) [false; true]);
+
   "equal annotation binders share copied points in either order" >:: (fun _ ->
     let a = declaration () in
     let p = point a and q = point a in

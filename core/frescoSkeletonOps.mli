@@ -1,0 +1,47 @@
+(** Pure operations on skeleton roots. Context solutions, ordinary/modal kind
+    checks and monotype requirements remain with the caller's context. *)
+open CommonTypes
+
+type error =
+  | Cyclic_type
+  | Duplicate_replacement of Types.tid
+  | Duplicate_binder of Types.tid
+  | Conflicting_declaration of string
+  | Primary_kind_mismatch of { expected : PrimaryKind.t; actual : PrimaryKind.t }
+  | Invalid_application of string
+
+(** Include captures in all reachable raw declarations, each under its own
+    formal binders, independently of the application site's binders. Check
+    structural primary categories and require every point cycle to pass through
+    a [Recursive] node. Active Recursive syntax retains its captured scope,
+    including a Recursive node inside a point descriptor or a direct root.
+    Distinct declaration records must have distinct IDs. *)
+val free_variables : FrescoSkeleton.scoped_root list ->
+  (Utility.IntSet.t, error) result
+
+(** Simultaneous, capture-avoiding substitution in root syntax and application
+    actual arguments. Referenced raw declaration records and bodies are shared
+    unchanged; callers must keep these records and their points stable while
+    using the results. This operation does not substitute raw free captures.
+
+    Freshen only binders that would capture a replacement's free root-syntax
+    variables. Copy inserted replacements without applying the substitution to
+    them. Check every supplied replacement, including unused replacements, and
+    reject duplicate targets, conflicting declaration records and mismatched
+    primary categories. Ordinary and modal kinds require a later context check.
+
+    Copy source point classes within equal lexical/substitution and captured
+    Recursive scopes using
+    non-compressing reads. Input points and declarations are never mutated,
+    including on failure. Both ghost forms and all metadata are preserved. *)
+val substitute_root_variables :
+  replacements:(Types.tid * FrescoSkeleton.type_arg) list ->
+  FrescoSkeleton.scoped_root list -> (FrescoSkeleton.scoped_root list, error) result
+
+(** Open the supplied enclosing quantifiers with fresh IDs and rigid variable
+    occurrences, preserving ordinary and modal kinds. Nested binders shadow
+    normally. Return the fresh quantifiers and opened body separately; these
+    quantifiers can also open another body through root substitution. Raw
+    declarations retain their independent scope and original records. *)
+val open_quantifiers : Quantifier.t list -> FrescoSkeleton.t ->
+  (Quantifier.t list * FrescoSkeleton.t, error) result

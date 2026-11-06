@@ -83,6 +83,36 @@ let rec descriptor = function Types.Meta p -> descriptor (Unionfind.peek p) | t 
 let single = function [root] -> root.Context.typ | _ -> assert_failure "Expected one root"
 
 let suite = "Fresco scope exit" >::: [
+  "repeated bare recursive roots retain body sharing on exit" >:: (fun _ ->
+    let r = declaration () in let p = Unionfind.fresh (Types.Arrow (int, int)) in
+    let recursive = Types.Recursive (r.id, r.kind, Types.Meta p) in
+    let owner = Unionfind.fresh recursive in
+    let roots = [root recursive; root recursive; root (Types.Meta owner)] in
+    let marker, c = Context.add_marker Context.empty in
+    let _, roots = get (Context.leave_scope environment marker ~roots c) in
+    match List.map (fun root -> root.Context.typ) roots with
+    | [first; second; Types.Meta owner] ->
+       assert_bool "Same completed constructor" (first == second && first == Unionfind.peek owner)
+    | _ -> assert_failure "Expected roots");
+
+  "bare and wrapped recursive syntax preserves scope on exit" >:: (fun _ ->
+    List.iter (fun wrapped -> List.iter (fun direct ->
+      let a = declaration () and r = declaration () in
+      let row_a = Quantifier.make a.id (PrimaryKind.Row, (Linearity.Any, Restriction.Any)) in
+      let p = Unionfind.fresh Types.Not_typed in
+      let recursive = Types.Recursive (r.id, r.kind,
+        Types.Arrow (variable a, Types.ForAll ([row_a], Types.Meta p))) in
+      Unionfind.change p (if wrapped then Types.Arrow (int, recursive) else recursive);
+      let roots = [root (if direct then recursive else Types.Meta p)] in
+      let c = solve (context [a]) a int in
+      let marker, c = Context.add_marker c in
+      let before = bytes (c, roots) in
+      let _, output = get (Context.leave_scope environment marker ~roots c) in
+      let env = Context.checking_environment environment c in
+      let skeletons = get (Links_core.FrescoSkeleton.of_types env output) in
+      assert_bool "Solution expanded" (IntSet.is_empty (get (Links_core.FrescoSkeletonOps.free_variables skeletons)));
+      assert_equal before (bytes (c, roots))) [false; true]) [false; true]);
+
   "stored solution binders have independent metadata" >:: (fun _ ->
     let a = declaration ~modal:ModalKind.Abs () and r = declaration ~pk:PrimaryKind.Row () in
     let local = { a with Context.modal_kind = ModalKind.Any } in
