@@ -10,14 +10,49 @@ The goal of the `modal-effects` branch is to implement modal effect
 types for Links. Work on `modal-effects` unless the user requests
 another branch.
 
-Read [PLAN.md](PLAN.md) before starting work. After each task, update
-its progress, decisions, verification results, and next action.
-Record the technical design and reasons for design decisions in
-[doc/modal-effects-design.md](doc/modal-effects-design.md).
+Read [PLAN.md](PLAN.md) before starting work. Keep high-level progress,
+dependencies, completion checks, the latest verification results and
+the next action there. Record intended language behaviour in
+[doc/modal-effects-spec.md](doc/modal-effects-spec.md). Keep concrete
+implementation decisions, reasons, internal invariants and source
+comparisons in [doc/modal-effects-design.md](doc/modal-effects-design.md).
+Keep working procedures in this file. Link between these documents
+without repeating their contents. Earlier task logs remain in Git history.
 
-Database support, control-flow linearity, and session failure are out
-of scope for now. Do not extend their implementations or run their
-dedicated test suites unless the user requests it.
+Database support, control-flow linearity, session failure and higher-order
+effects are out of scope for now. Do not extend their implementations or
+run their dedicated test suites unless the user requests it.
+
+## Working procedure
+
+- Before an implementation task, read the applicable specification and
+  design sections and relevant source files as well as PLAN.md.
+- Use Sol 6.1 High subagents by default for coding, investigation and review.
+  Use Astra High for very difficult tasks. Use Astra x-high only for an
+  extremely challenging task after an earlier attempt has failed; state
+  the unresolved problem before escalating.
+- Give each agent a bounded task, relevant sources, allowed files and
+  completion checks. Delegate independent work in parallel. Keep one
+  writer per file; use separate worktrees when edits would overlap.
+  The main agent owns integration, final verification and progress records.
+- Choose minor language details using existing Links conventions, the
+  thesis and Aghilas' implementation. Check apparent reference defects
+  against the thesis and small examples. Record the choice and reason
+  in the design document, and update the specification if the choice
+  affects language behaviour. Ask before major choices affecting scope,
+  accepted programs, required annotations or runtime behaviour.
+- Keep changes small enough to review and independently review substantial
+  compiler changes. Reviewers should inspect rules, likely failure cases
+  and meaningful tests. Avoid repeating the full build and regression
+  suite in every worktree for an unchanged revision.
+- Run the required checks on the final integrated revision. After a review
+  fix, rerun the affected checks; repeat wider checks when the change or a
+  remaining concern requires them. Preserve source revisions with results.
+- Add source typing and execution checks as soon as their dependencies
+  permit. Internal unit-test counts do not establish source-level support.
+- Resolve review findings, inspect the combined diff and commit completed
+  implementation tasks with tests and progress records. Honour pauses and
+  keep documentation reviews separate from resuming compiler work.
 
 - Local worktrees should be at `.worktrees/<name>`.
 - `core/` contains parsing, type checking, compiler passes, evaluation,
