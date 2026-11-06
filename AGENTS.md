@@ -35,6 +35,10 @@ run their dedicated test suites unless the user requests it.
   completion checks. Delegate independent work in parallel. Keep one
   writer per file; use separate worktrees when edits would overlap.
   The main agent owns integration, final verification and progress records.
+- Assign each audit to one agent with a stated scope and expected result.
+  Other agents use that result. The independent reviewer checks the method,
+  inspects selected cases and investigates gaps. Repeat the full audit only
+  when a finding requires it.
 - Choose minor language details using existing Links conventions, the
   thesis and Aghilas' implementation. Check apparent reference defects
   against the thesis and small examples. Record the choice and reason
@@ -45,6 +49,10 @@ run their dedicated test suites unless the user requests it.
   compiler changes. Reviewers should inspect rules, likely failure cases
   and meaningful tests. Avoid repeating the full build and regression
   suite in every worktree for an unchanged revision.
+- Finish edits before integrated testing. Every writer reports readiness;
+  complete review fixes and inspect the combined diff before running the
+  integrated checks. Record the tested source revision with the results.
+  If code changes during testing, identify and rerun the affected checks.
 - Run the required checks on the final integrated revision. After a review
   fix, rerun the affected checks; repeat wider checks when the change or a
   remaining concern requires them. Preserve source revisions with results.
