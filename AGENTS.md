@@ -28,8 +28,9 @@ run their dedicated test suites unless the user requests it.
 - Before an implementation task, read the applicable specification and
   design sections and relevant source files as well as PLAN.md.
 - Use Sol 6.1 High subagents by default for coding, investigation and review.
-  Use Astra High for very difficult tasks. Use Astra x-high only for an
-  extremely challenging task after an earlier attempt has failed; state
+  Use Astra High for very difficult coding tasks or design tasks. Use
+  Astra x-high only for an extremely challenging task after an earlier
+  attempt has failed; state
   the unresolved problem before escalating.
 - Give each agent a bounded task, relevant sources, allowed files and
   completion checks. Delegate independent work in parallel. Keep one
@@ -45,6 +46,10 @@ run their dedicated test suites unless the user requests it.
   in the design document, and update the specification if the choice
   affects language behaviour. Ask before major choices affecting scope,
   accepted programs, required annotations or runtime behaviour.
+- Mark design choices made without user input that would benefit from
+  user review in the design document. Record the choice, reason and main
+  alternatives, and collect these marked choices in the milestone report
+  for discussion with the user.
 - Keep changes small enough to review and independently review substantial
   compiler changes. Reviewers should inspect rules, likely failure cases
   and meaningful tests. Avoid repeating the full build and regression

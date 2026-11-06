@@ -118,9 +118,11 @@ metadata separate through all syntax traversals.
 
 ### List types and handled-effect delimiters
 
-Parse `List A` as the existing list datatype node. Its element consumes a
-primary type, as modal payloads do. Nested prefix lists associate to the right;
-printers group compound elements. Keep the internal element kind, list
+Parse `List A` as the existing list datatype node. Require parentheses around
+nested list element types, as requested by the user on 6 November 2026.
+The list-element grammar must exclude an unparenthesised `List` type:
+accept `List (List Int)` and reject `List List Int`. Add both parser tests
+and retain the grouped printer output. Keep the internal element kind, list
 constructor and runtime representation. A separate `List` token selects the
 built-in type syntax; other constructor positions still accept `List`,
 including variant labels, patterns and module/effect names. Rename the custom

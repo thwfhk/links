@@ -13,8 +13,9 @@ implementation decisions, reasons, internal invariants and source comparisons.
 
 ## Current status
 
-D3e, D3f and D4a2 are complete. Implementation is paused at the user's
-request before D4f2; D4f2 has not been started.
+D3e, D3f and D4a2 were committed. D3f now needs the list-parentheses
+correction below. Implementation remains paused before D4f2;
+D4f2 has not been started.
 
 - D1--D3d provide row/modality operations, shared modal types, surface syntax,
   and effect/operation resolution. D4a--D4f1 provide kind checks, persistent
@@ -34,8 +35,8 @@ request before D4f2; D4f2 has not been started.
 - D4a2 implements the thesis' quantified-type classification while retaining
   declared binder requirements. Modal-kind refinement remains in D4g.
 
-The requested scope correction, syntax migration and classification update
-are complete. No unresolved decisions remain for these three milestones.
+The user requires parentheses around nested list element types. The
+specification and design record this rule; the parser correction is pending.
 The most recent compiler verification is recorded below. Passing legacy suites
 checks compatibility during construction; it does not complete Fresco inference.
 
@@ -64,7 +65,7 @@ checks compatibility during construction; it does not complete Fresco inference.
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
-results here. The D1--D3 scope and syntax corrections are complete.
+results here. The additional D3f list-parentheses correction remains pending.
 
 ## Remaining work
 
@@ -74,6 +75,7 @@ also requires the affected build/tests and review described in AGENTS.md.
 
 | Task | Depends on | Completion check |
 |---|---|---|
+| D3f correction: required list parentheses | D3f | Accept `List (List Int)`; reject `List List Int`; retain grouped printer output and round trips |
 | D4f2: skeleton solution expansion and scope exit | D4f1, D4d1 | Preserve ghosts, scope, live unknowns and recursive sharing; reject escapes without changing the input context |
 | D4g: ordinary/modal requirement refinement | D4f2, D4c, D4a2 | Enforce flexible `Abs` and structural payload requirements through later assignment, scope exit and export; never narrow rigid binders |
 | D4h: contextual recursive type operations | D4g | Alias application, unfolding and comparison preserve binders and terminate on tested equal/unequal recursive applications with changing arguments |
@@ -172,17 +174,16 @@ Handler argument inference follows in D6; D3f preserves omission in the AST.
 
 ## Latest documentation task
 
-6 November 2026: recorded reuse of Links' monotype unification and kind-inference
-ideas, combined kind syntax, optional handlers with inferred effect arguments,
-and existing signatures needing independent effect variables. Clarified ambient-
-effect wording in the specification. Updated D3f, D4i and integration coverage.
+6 November 2026: recorded the user's requirement for parentheses around nested
+list element types in the specification and design. Added the pending D3f
+parser correction above. Compiler work remains paused.
 
-Verification: inspected compiler code, reference rules and existing examples;
-checked document consistency, links and whitespace. `git diff --check` passed.
+Verification: checked document consistency and whitespace. `git diff --check` passed.
 No compiler changes, build or tests.
 
 ## Next action
 
-Remain paused before D4f2. On explicit resumption, implement skeleton solution
+Remain paused before D4f2. On explicit resumption, complete the D3f
+list-parentheses correction first. D4f2 then requires skeleton solution
 expansion and scope exit, preserving ghosts, scope, live unknowns and recursive
 sharing. D5 still requires its contextual annotation and solver dependencies.
