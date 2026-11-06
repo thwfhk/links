@@ -273,6 +273,15 @@ cannot settle equality, it reports â€œcannot establish recursive type equalityâ€
 Some equal recursive types can receive this error while a complete comparison
 algorithm remains deferred.
 
+Session comparison rejects an unresolved row tail equated with its own dual.
+This includes rigid tails and flexible tails related by earlier equations.
+Legacy Links accepts some of these cases and can change a channel's send type
+to a receive type without changing the channel. Fresco reports unsupported row
+duality for these cases. Unresolved presence duality is also unsupported.
+If comparing common fields resolves the tail, compare the exposed fields
+normally. Recursive row inference enabled by Links' `all` and `positive`
+settings remains deferred; Fresco retains its occurs check.
+
 ### 5.2 Bindings and annotations
 
 1. Local bindings retain their inferred types without implicit let

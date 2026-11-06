@@ -502,31 +502,43 @@ and rows env active ctx dl dr left right =
     let fields = if orientation then invert ctx fields else fields in
     assign env ctx PrimaryKind.Row id (row fields tail (orientation <> dual)) in
   let same_tail = match lt, rt with
-    | S.Var (a, _, _), S.Var (b, _, _) -> a = b && ld = rd
+    | S.Var (a, _, _), S.Var (b, _, _) -> a = b
     | S.Closed, S.Closed -> true
     | _ -> false in
-  let ctx, tail, dual =
-    if same_tail then absent (absent ctx only_left true) only_right false, lt, ld
-    else match flexible ctx lt, flexible ctx rt, lt, rt with
-      | Some l, Some r, _, _ when l = r -> fail Unsupported_row_duality
-      | Some l, Some r, _, _ ->
-         let ctx, tail = fresh ctx (parameter PrimaryKind.Row) in
-         let ctx = solve ctx l ld only_right tail false in
-         let ctx = solve ctx r rd only_left tail false in ctx, tail, false
-      | Some l, None, _, S.Closed ->
-         let ctx = absent ctx only_left true in
-         solve ctx l ld only_right S.Closed false, S.Closed, false
-      | None, Some r, S.Closed, _ ->
-         let ctx = absent ctx only_right false in
-         solve ctx r rd only_left S.Closed false, S.Closed, false
-      | Some l, None, _, _ when StringMap.is_empty only_left ->
-         solve ctx l ld only_right rt rd, rt, rd
-      | None, Some r, _, _ when StringMap.is_empty only_right ->
-         solve ctx r rd only_left lt ld, lt, ld
-      | _ -> fail Mismatch in
-  let fields = StringMap.union (fun _ a _ -> Some a) common
-      (StringMap.union (fun _ a _ -> Some a) only_left only_right) in
-  ctx, row fields tail dual
+  let tail_solved = function
+    | S.Var (id, _, _) ->
+       begin match C.lookup id ctx with
+       | Some (C.Flexible { solution = Some _; _ }) -> true
+       | _ -> false
+       end
+    | _ -> false in
+  (* Matching fields can solve a row tail, exposing more fields to compare. *)
+  if tail_solved lt || tail_solved rt then rows env active ctx dl dr left right
+  else
+    let ctx, tail, dual =
+      if same_tail then begin
+        if ld <> rd then fail Unsupported_row_duality;
+        absent (absent ctx only_left true) only_right false, lt, ld
+      end
+      else match flexible ctx lt, flexible ctx rt, lt, rt with
+        | Some l, Some r, _, _ ->
+           let ctx, tail = fresh ctx (parameter PrimaryKind.Row) in
+           let ctx = solve ctx l ld only_right tail false in
+           let ctx = solve ctx r rd only_left tail false in ctx, tail, false
+        | Some l, None, _, S.Closed ->
+           let ctx = absent ctx only_left true in
+           solve ctx l ld only_right S.Closed false, S.Closed, false
+        | None, Some r, S.Closed, _ ->
+           let ctx = absent ctx only_right false in
+           solve ctx r rd only_left S.Closed false, S.Closed, false
+        | Some l, None, _, _ when StringMap.is_empty only_left ->
+           solve ctx l ld only_right rt rd, rt, rd
+        | None, Some r, _, _ when StringMap.is_empty only_right ->
+           solve ctx r rd only_left lt ld, lt, ld
+        | _ -> fail Mismatch in
+    let fields = StringMap.union (fun _ a _ -> Some a) common
+        (StringMap.union (fun _ a _ -> Some a) only_left only_right) in
+    ctx, row fields tail dual
 and recursive_join env active ctx dl dr pk left right =
   let previous = List.find_opt (fun a -> a.primary_kind = pk &&
       same_syntax a.left left && same_syntax a.right right) !active in

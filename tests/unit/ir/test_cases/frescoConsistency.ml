@@ -330,6 +330,13 @@ let suite = "Fresco consistency" >::: [
     let target = S.Choice (row ["x", S.Present S.End]) in
     reject_error J.Unsupported_presence_duality (J.consistent environment ctx source target));
 
+  "resolved presence dualises its session continuation" >:: (fun _ ->
+    let p = q ~pk:PrimaryKind.Presence ~restriction:Restriction.Session () in
+    let ctx = solve (flex C.empty p) p (S.Present (S.Input (int, S.End))) in
+    let source = S.Dual (S.Select (row ["x", v p])) in
+    let target = S.Choice (row ["x", S.Present (S.Output (int, S.End))]) in
+    ignore (join ctx source target));
+
   "recursive flexible obligations thread solved context" >:: (fun _ ->
     let a = q () in let ctx = flex C.empty a in
     let ctx, _ = join ctx (regular "Left" (v a)) (regular "Right" int) in
@@ -387,6 +394,68 @@ let suite = "Fresco consistency" >::: [
     let r = q ~pk:PrimaryKind.Row ~restriction:Restriction.Session () in let ctx = flex C.empty r in
     reject_error J.Unsupported_row_duality (J.consistent environment ctx ~primary_kind:PrimaryKind.Row
       (row ~tail:(v r) []) (row ~tail:(v r) ~dual:true [])));
+
+  "shared rigid tail rejects opposite orientations" >:: (fun _ ->
+    let r = q ~pk:PrimaryKind.Row ~restriction:Restriction.Session () in
+    let s = q ~pk:PrimaryKind.Row ~restriction:Restriction.Session () in
+    let ctx = rigid (rigid C.empty r) s in
+    let source = S.Select (row ~tail:(v ~freedom:`Rigid r) ["x", S.Present S.End]) in
+    let target tail fields = S.Dual (S.Choice (row ~tail:(v ~freedom:`Rigid tail) fields)) in
+    let same = target r ["x", S.Present S.End] in
+    ignore (join ctx source source);
+    reject_error J.Unsupported_row_duality (J.consistent environment ctx source same);
+    reject_error J.Unsupported_row_duality (J.consistent environment ctx same source);
+    reject_error J.Mismatch (J.consistent environment ctx source (target s ["x", S.Present S.End]));
+    reject_error J.Unsupported_row_duality (J.consistent environment ctx source
+      (target r ["x", S.Present S.End; "y", S.Absent]));
+    reject (J.consistent environment ctx source (target r ["x", S.Present int])));
+
+  "failed rigid row duality retains the input context" >:: (fun _ ->
+    let r = q ~pk:PrimaryKind.Row ~restriction:Restriction.Session () in
+    let a = q ~restriction:Restriction.Session () in
+    let ctx = flex (rigid C.empty r) a in
+    let tail = v ~freedom:`Rigid r in
+    let source = S.Select (row ~tail ["x", S.Present (v a)]) in
+    let target = S.Dual (S.Choice (row ~tail ["x", S.Present S.End; "y", S.Absent])) in
+    reject_error J.Unsupported_row_duality (J.consistent environment ctx source target);
+    assert_bool "Input continuation remains unsolved" (unresolved ctx a));
+
+  "linked flexible tails reject opposite orientations without changing the input" >:: (fun _ ->
+    let r = q ~pk:PrimaryKind.Row ~restriction:Restriction.Session () in
+    let s = q ~pk:PrimaryKind.Row ~restriction:Restriction.Session () in
+    let ctx = flex (flex C.empty r) s in
+    let select_r = S.Select (row ~tail:(v r) []) in
+    let select_s = S.Select (row ~tail:(v s) []) in
+    let dual_s = S.Dual (S.Choice (row ~tail:(v s) [])) in
+    let next, _ = join ctx select_r dual_s in
+    assert_bool "The first field links the tails" (not (unresolved next r || unresolved next s));
+    let pair a b = record ["1", S.Present a; "2", S.Present b] in
+    reject_error J.Unsupported_row_duality
+      (J.consistent environment ctx (pair select_r select_r) (pair dual_s select_s));
+    assert_bool "Both input tails remain unsolved" (unresolved ctx r && unresolved ctx s));
+
+  "row comparison sees a tail solved by a common field" >:: (fun _ ->
+    let r = q ~pk:PrimaryKind.Row ~restriction:Restriction.Session () in
+    let ctx = flex C.empty r in
+    let payload row = S.Present (S.Input (S.Select row, S.End)) in
+    let source = S.Select (row ~tail:(v r) ["x", payload (row ~tail:(v r) [])]) in
+    let target fields = S.Select (row ~tail:(v r) ~dual:true ["x", payload (row fields)]) in
+    List.iter (fun fields ->
+      let next, joined = join ctx source (target fields) in
+      begin match solution next r with
+      | S.Row (extension, tail, false) ->
+         assert_equal S.Closed (head tail);
+         assert_equal fields (StringMap.bindings extension |> List.map (fun (label, field) -> label, head field))
+      | _ -> assert_failure "Expected a closed tail solution"
+      end;
+      begin match joined with
+      | S.Select (S.Row (joined_fields, S.Closed, false)) ->
+         assert_equal ("x" :: List.map fst fields) (List.map fst (StringMap.bindings joined_fields))
+      | _ -> assert_failure "Expected a closed joined row"
+      end) [[]; ["y", S.Present S.End]];
+    reject_error J.Mismatch (J.consistent environment ctx source
+      (target ["y", S.Present (S.Output (int, S.End))]));
+    assert_bool "Input tail remains unsolved" (unresolved ctx r));
 
   "growing recursive equality retains full arguments" >:: (fun _ ->
     ignore (join C.empty (growing "GrowthLeft" int int) (growing "GrowthRight" int int)));

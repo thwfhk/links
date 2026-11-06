@@ -280,6 +280,54 @@ Keep unknown entries across unsigned top-level bindings and supply explicit
 Fresco cases for Links type abstraction/application. The reference parser's
 support for type application does not provide its missing inference case.
 
+### Subtyping and instantiation information
+
+Follow the thesis' constraint order: collect equalities from left to right,
+then the final subtyping constraint. In function mode, collect domain equality
+before continuing with the result mode. Equality solving extracts information;
+it preserves left rigid and flexible variables without assigning them. The
+subtyping judgement subsequently checks the resulting instantiation. Full
+support fills remaining ghosts and enforces the quantified variable's
+requirements. Supplied quantifiers and modalities remain in explicit
+instantiation arguments. They cannot become solutions of Type unknowns.
+
+`FrescoConstraints` implements collection, extraction and `look`.
+`FrescoSubtype` returns the output skeleton, persistent context and explicit
+instantiation arguments. Each argument records the quantified parameter,
+enclosing target binders and its position in the comparison. Scope exit
+rewrites these arguments alongside the output skeleton, so target binders
+can close an argument without escaping into unknown solutions. Row and
+Presence parameters use their own primary categories, including unused
+parameters and residual row fields. Skeleton checking permits only `Ghost`
+as the expected type, as in the thesis' mode well-formedness rules.
+
+Skeleton instantiation checks supplied structure and refines existing unknowns
+by guessing under a temporary marker with the quantified parameter's
+requirements. Scope exit retains the original skeleton with its ghosts and
+discards temporary unknowns used only to fill those ghosts. Requirements on
+missing information are checked again during full inference from the source
+quantifier; ghosts do not store kind metadata.
+
+Modal checking first compares the source modality run and source payload with
+the target run. It then checks the payload under the target lock and transformed
+ambient row. Function mode applies the same transformation to the identity
+modality. Skeleton mode omits this transformation. The existing equality-first
+policy applies: an already absolute payload bypasses effect matching, a failed
+match may try absolute refinement from the original context, and a successful
+match remains committed if a later body check fails.
+
+The reference implementation differs in several places. Its equality collection
+prepends constraints during left-to-right traversal, and its modality solver
+folds right while consuming first matching effect occurrences. Preserve source
+order for both. Its modal check examines the payload before transformation,
+classifies the result rather than the source payload, and omits the target lock.
+Its modal function case omits the absolute-payload route. Follow the thesis'
+SI-ModCheck and SI-ModFun rules with the project's parameterised-effect policy.
+The reference's `get_guarded` already composes maximal modality runs.
+Its LE-FlexR case copies the right variable's modal kind; use a fresh Any variable
+as in the thesis. Apply effective kind requirements when guessing and splitting
+unknowns, as specified by the persistent context operations.
+
 ### Reusing Links' monotype unification
 
 Fresco solves unknown monotypes by first-order unification, as described in
@@ -347,14 +395,43 @@ metadata and raw declaration records. Fresh IDs avoid the input graph and
 context. Recursive demand checks close replacements over their defining scope;
 closed replacements are cached and unused substitutions are skipped.
 
-Two session duality cases remain unsupported. Dualising
-an unresolved presence reports `Unsupported_presence_duality`; the legacy helper
-asserts in this case. Comparing one unresolved row tail against its own dual
-reports `Unsupported_row_duality`. Choosing a closed row would discard other
-solutions, and inferring a recursive assignment would conflict with the occurs
-check. D4j must check these cases against current Links and preserve its
-accepted programs before session source migration. Resolved presences and
-open row tails in supported orientations work.
+Dualising an unresolved presence reports `Unsupported_presence_duality`; the
+legacy helper asserts in this case. Resolved presences dualise their session
+continuations. Common fields are compared first. If their comparison solves a
+row tail, flatten both rows again and compare any exposed fields. This preserves
+accepted Links cases where a common field closes the shared tail or extends it
+with `End`.
+
+A shared row tail that remains unresolved under opposite orientations
+reports `Unsupported_row_duality`. Legacy comparison times out for empty and
+disjoint flexible rows in the checked examples. It accepts rigid tails with
+matching labels and can also accept flexible tails linked by an earlier
+equation because its shortcut compares the original orientation flags.
+Both assign a receiving type to an unchanged sending channel through an identity
+function. A linked execution probe then waits indefinitely;
+the correctly typed control returns `43`. The user approved rejecting and
+documenting this legacy bug for both forms. Keep the unsupported-duality error
+after expanding solutions, including links introduced by earlier fields.
+
+The rigid-tail probe uses this identity function:
+
+```links
+sig convert : ([+||r::Session|+], [+||r|+]) ->
+  ([+||r|+], ~([&||r|&]))
+fun convert(a, b) { (a, b) }
+```
+
+Instantiating `r` with `X:!(Int).End` makes the second result receive on `X`.
+The flexible-tail probe changes the result to
+`(~([&||%s::Session|&]), [+||%s|+])` and uses `%r` in both inputs.
+
+A one-sided `X:End` field is rejected under the default
+`infer_recursive_types=guarded` setting; `all` and `positive`
+accept it by inferring a recursive row. Fresco assignment retains its occurs
+check. The user approved documenting and deferring support for these alternate
+settings in D4j. Preserve this source migration gap until recursive row inference
+has a separate design and tests. Choosing a closed row would discard other
+solutions.
 
 ## Implementation in Links
 
