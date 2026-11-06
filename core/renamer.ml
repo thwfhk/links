@@ -20,11 +20,12 @@ let build_instantiation_map
   assert (List.length qs_old == List.length qs_new);
   List.fold_right2
     (fun q_old q_new imap ->
-      let (var_old, (pk_old, sk_old)) = q_old in
-      let (var_new, (pk_new, sk_new)) = q_new in
-      (if pk_old <> pk_new || sk_old <> sk_new then
+      let var_old = Quantifier.to_var q_old in
+      let var_new = Quantifier.to_var q_new in
+      let kind = Quantifier.to_kind q_old in
+      (if not (Quantifier.same_kind q_old q_new) then
         raise (internal_error "build_instantiation_map: Kind missmatch"));
-     let meta_var = Types.make_rigid_variable var_new (pk_old, sk_new) in
+     let meta_var = Types.make_rigid_variable var_new kind in
      IntMap.add var_old meta_var imap)
     qs_old qs_new instantiation_map
 
@@ -34,7 +35,7 @@ let shadow_vars
       (maps : instantiation_map)
       (qs : Quantifier.t list) : instantiation_map =
   List.fold_right
-    (fun (var, _) imap -> IntMap.remove var imap)
+    (fun q imap -> IntMap.remove (Quantifier.to_var q) imap)
     qs maps
 
 let unwrap_meta = function
@@ -60,13 +61,13 @@ let renaming_type_visitor instantiation_map =
       | t -> super#typ t
 
     method! quantifier : Quantifier.t -> ('self_type * Quantifier.t) =
-      fun (var, kind) ->
-      begin match IntMap.lookup var inst_map with
+      fun q ->
+      begin match IntMap.lookup (Quantifier.to_var q) inst_map with
       | Some t -> begin match Unionfind.find (unwrap_meta t) with
-                  | Var (var', _, _) -> o, (var', kind)
+                  | Var (var', _, _) -> o, Quantifier.with_var var' q
                   | _ -> assert false
                   end
-      | None -> o, (var, kind)
+      | None -> o, q
       end
 
     method! meta_type_var : meta_type_var -> ('self_type * meta_type_var) =

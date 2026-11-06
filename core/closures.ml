@@ -665,7 +665,7 @@ struct
               let new_type_variable = make_new_type_variable () in
               let p = Types.Meta new_type_variable in
               (IntMap.add typevar (Presence, p) type_map) in
-          let new_quantifier = (newvar, (primary_kind, subkind)) in
+          let new_quantifier = Quantifier.with_var newvar oldq in
           (new_quantifier :: qs, updated_maps)
         ) free_type_vars ([], IntMap.empty)
 

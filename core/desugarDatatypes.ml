@@ -154,8 +154,8 @@ module Desugar = struct
               | None -> raise (unbound_tycon pos tycon)
               | Some (`Alias (k, qs, _dt)) ->
                   if k = pk_type then
-                    let ts = match_quantifiers snd qs in
-                    Instantiate.alias tycon ts alias_env
+                    let ts = match_quantifiers Quantifier.to_legacy_kind qs in
+                    Instantiate.alias ~allow_incomplete:true tycon ts alias_env
                   else
                     raise (type_application_global_kind_mismatch pos tycon
                         "Type" (PrimaryKind.to_string k))
@@ -165,7 +165,9 @@ module Desugar = struct
               | Some (`Mutual (qs, tygroup_ref)) ->
                   (* Check that the quantifiers / kinds match up, then generate
                    * a `RecursiveApplication. *)
-                  let r_args = match_quantifiers snd qs in
+                  let r_args = match_quantifiers Quantifier.to_legacy_kind qs in
+                  let r_body () =
+                    Option.map snd (StringMap.find_opt tycon !tygroup_ref.type_map) in
                   let r_unwind args dual =
                     let _, body = StringMap.find tycon !tygroup_ref.type_map in
                     let body = Instantiate.recursive_application tycon qs args body in
@@ -177,8 +179,8 @@ module Desugar = struct
                     { r_name = tycon;
                       r_dual = false;
                       r_unique_name;
-                      r_quantifiers = List.map snd qs;
-                      r_args; r_unwind; r_linear
+                      r_quantifiers = List.map Quantifier.to_legacy_kind qs;
+                      r_args; r_unwind; r_body; r_linear
                     }
             end
         | Primitive k -> Types.Primitive k
@@ -249,8 +251,8 @@ module Desugar = struct
               | None -> raise (unbound_tycon node.pos name)
               | Some (`Alias (k, qs, _r)) ->
                   if k = pk_row then
-                    let ts = match_quantifiers snd qs in
-                    begin match Instantiate.alias name ts alias_env with
+                    let ts = match_quantifiers Quantifier.to_legacy_kind qs in
+                    begin match Instantiate.alias ~allow_incomplete:true name ts alias_env with
                       | Alias(PrimaryKind.Row, _, body) -> body
                       | _ -> raise (internal_error "Instantiation failed")
                     end
@@ -263,7 +265,9 @@ module Desugar = struct
               | Some (`Mutual (qs, tygroup_ref)) ->
                   (* Check that the quantifiers / kinds match up, then generate
                    * a `RecursiveApplication. *)
-                  let r_args = match_quantifiers snd qs in
+                  let r_args = match_quantifiers Quantifier.to_legacy_kind qs in
+                  let r_body () =
+                    Option.map snd (StringMap.find_opt name !tygroup_ref.type_map) in
                   let r_unwind args dual =
                     let _, body = StringMap.find name !tygroup_ref.type_map in
                     let body = Instantiate.recursive_application name qs args body in
@@ -275,8 +279,8 @@ module Desugar = struct
                     { r_name = name;
                       r_dual = false;
                       r_unique_name;
-                      r_quantifiers = List.map snd qs;
-                      r_args; r_unwind; r_linear
+                      r_quantifiers = List.map Quantifier.to_legacy_kind qs;
+                      r_args; r_unwind; r_body; r_linear
                     }
             end
         | Closed -> Types.make_empty_closed_row ()

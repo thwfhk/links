@@ -40,13 +40,20 @@ let rec add_extras in_fun tyvars extras tyargs =
                Types.type_arg_of_quantifier (SugarQuantifier.get_resolved_exn sq  )
              else
                let open CommonTypes.PrimaryKind in
-               match SugarQuantifier.get_resolved_exn sq with
-               | _, (Type, sk)     -> Type, Types.fresh_type_variable sk
-               | _, (Row, sk)      -> Row, Types.make_empty_open_row sk
-               | _, (Presence, sk) -> Presence, Types.fresh_presence_variable sk
+               match CommonTypes.Quantifier.to_legacy_kind (SugarQuantifier.get_resolved_exn sq) with
+               | Type, sk     -> Type, Types.fresh_type_variable sk
+               | Row, sk      -> Row, Types.make_empty_open_row sk
+               | Presence, sk -> Presence, Types.fresh_presence_variable sk
      in q :: add_extras in_fun sqs extras tyargs
   | _::qs, Some i::extras -> List.nth tyargs i :: add_extras in_fun qs extras tyargs
   | _, _ -> raise (internal_error "Mismatch in number of quantifiers and type arguments")
+
+let add_extras in_fun tyvars extras tyargs =
+  List.iter
+    (fun sq -> CommonTypes.Quantifier.require_any (SugarQuantifier.get_resolved_exn sq))
+    tyvars;
+  List.iter (fun (_, t) -> Types.check_legacy_quantifiers t) tyargs;
+  add_extras in_fun tyvars extras tyargs
 
 let freeze = function
   | Var v -> FreezeVar v

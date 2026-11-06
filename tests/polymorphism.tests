@@ -1,3 +1,7 @@
+Recursive type passed to an alias while constructing its declaration
+typename Box(a) = [|Stop | More:a|]; typename Rec = Box(Rec); Stop : Rec
+stdout : Stop : Rec
+
 Let polymorphism [1]
 fun pair(x) { (x, x) } (pair('a'), pair(13))
 stdout : @\(\('a', 'a'\), \(13, 13\)\) : .*

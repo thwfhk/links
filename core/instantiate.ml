@@ -218,14 +218,17 @@ let instantiate_datatype = instantiates ->- fst3
 
     remove any quantifiers and rename bound type vars accordingly
 *)
-let instantiate_typ : bool -> datatype -> (type_arg list * datatype) = fun rigid t ->
+let instantiate_typ ?(allow_incomplete = false) rigid t : type_arg list * datatype =
+  check_legacy_quantifiers ~allow_incomplete t;
   match concrete_type t with
     | ForAll (quantifiers, t) as dtype ->
         let () =
           Debug.if_set (show_instantiation)
             (fun () -> "Instantiating datatype: " ^ string_of_datatype dtype) in
 
-        let typ (var, kind) (inst_env, tys) =
+        let typ q (inst_env, tys) =
+          let var = Quantifier.to_var q in
+          let kind = Quantifier.to_kind q in
           let var' = fresh_raw_variable () in
           let rigidity = if rigid then `Rigid else `Flexible in
           let new_var = Var (var', kind, rigidity) in
@@ -239,7 +242,7 @@ let instantiate_typ : bool -> datatype -> (type_arg list * datatype) = fun rigid
 
         let inst_map, tys =
           List.fold_left
-            (fun envs (var, kind) -> typ (var, kind) envs)
+            (fun envs q -> typ q envs)
             (IntMap.empty, [])
             quantifiers in
 
@@ -258,7 +261,7 @@ let instantiate_typ : bool -> datatype -> (type_arg list * datatype) = fun rigid
 *)
 let instantiate_rigid : datatype -> (type_arg list * datatype) = instantiate_typ true
 
-let instantiate_typ = instantiate_typ false
+let instantiate_typ ?allow_incomplete t = instantiate_typ ?allow_incomplete false t
 
 (*  fun t -> *)
 (*   match concrete_type t with *)
@@ -321,7 +324,7 @@ let rigid : environment -> string -> type_arg list * datatype =
       instantiate_rigid t
 
 let var = instantiate
-let typ = instantiate_typ
+let typ t = instantiate_typ t
 let typ_rigid = instantiate_rigid
 let datatype = instantiate_datatype
 let row = instantiates ->- snd3
@@ -329,7 +332,9 @@ let presence = instantiates ->- thd3
 
 module SEnv = Env.String
 
-let populate_instantiation_map ~name qs tyargs =
+let populate_instantiation_map ?(allow_incomplete = false) ~name qs tyargs =
+  List.iter Quantifier.require_any qs;
+  List.iter (fun (_, t) -> check_legacy_quantifiers ~allow_incomplete t) tyargs;
   List.fold_right2
     (fun q ((pk, _) as tyarg) inst_map ->
       if pk <> Quantifier.to_primary_kind q then
@@ -345,6 +350,8 @@ let populate_instantiation_map ~name qs tyargs =
 let instantiation_maps_of_type_arguments :
       bool -> Types.datatype -> Types.type_arg list -> (datatype * instantiation_maps) =
   fun must_instantiate_all_quantifiers pt tyargs ->
+    check_legacy_quantifiers pt;
+    List.iter (fun (_, t) -> check_legacy_quantifiers t) tyargs;
     let vars, t = TypeUtils.split_quantified_type pt in
     let tyargs_length = List.length tyargs in
     let vars_length   = List.length vars   in
@@ -385,7 +392,8 @@ let build_fresh_quantifiers :
   List.split
     ((List.map
        (fun q ->
-         let q, t = Types.fresh_quantifier (Quantifier.to_kind q) in
+         let q, t = Types.fresh_quantifier
+           ~modal_kind:(Quantifier.to_modal_kind q) (Quantifier.to_kind q) in
          (q, t)))
     qs)
 
@@ -400,8 +408,11 @@ let freshen_quantifiers t =
           match qs with
             | [] -> body
             | qs ->
-               let qs, tyargs = build_fresh_quantifiers qs in
-               ForAll (qs, apply_type t tyargs)
+               let qs', tyargs = build_fresh_quantifiers qs in
+               let inst_map = List.fold_right2
+                 (fun q arg -> IntMap.add (Quantifier.to_var q) arg)
+                 qs tyargs IntMap.empty in
+               ForAll (qs', instantiate_datatype inst_map body)
         end
     | t -> t
 
@@ -410,24 +421,33 @@ let freshen_quantifiers t =
 *)
 let replace_quantifiers t qs' =
   match concrete_type t with
-    | ForAll (qs, _) ->
-        let tyargs =
-          List.map2
-            (fun q q' ->
-              assert (Quantifier.to_primary_kind q = Quantifier.to_primary_kind q');
-              type_arg_of_quantifier q')
-            qs
-            qs'
-        in
-          ForAll (qs', apply_type t tyargs)
+    | ForAll (qs, body) ->
+        List.iter2
+          (fun q q' ->
+            if not (Quantifier.same_kind q q') then
+              invalid_arg "replace_quantifiers: incompatible kinds")
+          qs qs';
+        let inst_map = List.fold_right2
+          (fun q q' ->
+            let pk, sk = Quantifier.to_kind q' in
+            let var = Quantifier.to_var q' in
+            let arg = match pk with
+              | PrimaryKind.Type | PrimaryKind.Presence ->
+                 make_rigid_variable var (pk, sk)
+              | PrimaryKind.Row ->
+                 Row (StringMap.empty, make_rigid_row_variable var sk, false) in
+            IntMap.add (Quantifier.to_var q) (pk, arg))
+          qs qs' IntMap.empty in
+        ForAll (qs', instantiate_datatype inst_map body)
     | t -> t
 
 let recursive_application name qs tyargs body =
+  check_legacy_quantifiers body;
   let inst_map = populate_instantiation_map ~name qs tyargs in
   let (_, body) = typ (instantiate_datatype inst_map body) in
   body
 
-let alias name tyargs env : Types.typ =
+let alias ?(allow_incomplete = false) name tyargs env : Types.typ =
   (* This is just type application.
 
      (\Lambda x1 ... xn . t) (t1 ... tn) ~> t[ti/xi]
@@ -445,9 +465,10 @@ let alias name tyargs env : Types.typ =
           "Type alias %s applied with incorrect arity (%d instead of %d). This should have been checked prior to instantiation."
           name (List.length tyargs) (List.length vars)))
     | Some (`Alias (k, vars, body)) ->
-        let inst_map = populate_instantiation_map ~name vars tyargs in
+        check_legacy_quantifiers ~allow_incomplete body;
+        let inst_map = populate_instantiation_map ~allow_incomplete ~name vars tyargs in
         (* instantiate the type variables bound by the alias
            definition with the type arguments *and* instantiate any
            top-level quantifiers *)
-        let (_, body) = typ (instantiate_datatype inst_map body) in
-          Alias (k, (name, List.map snd vars, tyargs, false), body)
+        let (_, body) = instantiate_typ ~allow_incomplete (instantiate_datatype inst_map body) in
+          Alias (k, (name, List.map Quantifier.to_legacy_kind vars, tyargs, false), body)

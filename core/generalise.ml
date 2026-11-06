@@ -186,6 +186,7 @@ let generalise :
       datatype ->
       ((Quantifier.t list * type_arg list) * datatype) =
   fun ~rigidify_vars ?(unwrap=true) kind env t ->
+    Types.check_legacy_quantifiers t;
   (* throw away any existing top-level quantifiers *)
     Debug.if_set show_generalisation (fun () -> "Generalising : " ^ string_of_datatype t);
     let t = match Types.concrete_type t with
@@ -244,4 +245,5 @@ let generalise_without_mutation ?unwrap = generalise ~rigidify_vars:false ?unwra
 let generalise ?unwrap = generalise ~rigidify_vars:true ?unwrap All
 
 let get_quantifiers_rigid (env : environment) (t : datatype) : Quantifier.t list =
+  Types.check_legacy_quantifiers t;
   get_type_args Rigid (env_type_vars env) t |> Types.quantifiers_of_type_args

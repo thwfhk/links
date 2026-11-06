@@ -3826,13 +3826,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
            let args = List.map (snd ->- val_of) tyargs in
            let vars, _ = TypeUtils.split_quantified_type t in
            let rec quants_ok =
-             let open PrimaryKind in
              function
              | _, [] -> ()
              | [], _ -> Gripers.type_apply pos (uexp_pos e) t args
-             | (_, (Type, _)) :: qs, Type :: vs
-             | (_, (Row, _)) :: qs, Row :: vs
-             | (_, (Presence, _)) :: qs, Presence :: vs -> quants_ok (qs, vs)
+             | q :: qs, pk :: vs when Quantifier.to_primary_kind q = pk ->
+                Quantifier.require_any q;
+                quants_ok (qs, vs)
              | _ -> Gripers.type_apply pos (uexp_pos e) t args in
            quants_ok (vars, List.map fst args);
 
@@ -4885,7 +4884,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
           in
           (* Check that quantifiers have not escaped into the typing context *)
           let check_escaped_quantifiers quantifiers env =
-            let quantifier_set = IntSet.of_list (List.map fst quantifiers) in
+            let quantifier_set = IntSet.of_list (List.map Quantifier.to_var quantifiers) in
             (* Note that `type_predicate` returns true iff *all* child nodes of
              * the type satisfy the predicate. Thus the checker returns true if
              * *all* type variables are *not* in quantifier_set *)
@@ -4927,7 +4926,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                  | t_tyvars ->
                    if not (List.for_all
                              (fun q ->
-                               List.exists (Quantifier.eq q) t_tyvars) tyvars)
+                               List.exists (Quantifier.equal q) t_tyvars) tyvars)
                    then
                      Gripers.inconsistent_quantifiers ~pos ~t1:t ~t2:ft;
                    t_tyvars, t
@@ -5128,7 +5127,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                            if not
                                 (List.for_all
                                    (fun q ->
-                                     List.exists (Quantifier.eq q) outer_tyvars) body_tyvars) then
+                                     List.exists (Quantifier.equal q) outer_tyvars) body_tyvars) then
                              Gripers.inconsistent_quantifiers ~pos ~t1:outer ~t2:gen;
 
                            (* We could check that inner_tyvars is
@@ -5154,7 +5153,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                              let rec find p i =
                                function
                                | [] -> None
-                               | q :: _ when Quantifier.eq p q -> Some i
+                               | q :: _ when Quantifier.equal p q -> Some i
                                | _ :: qs -> find p (i+1) qs in
                              let find p = find p 0 inner_tyvars in
                              List.map find outer_tyvars

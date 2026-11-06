@@ -150,6 +150,7 @@ and rec_appl = {
   r_quantifiers : Kind.t list;
   r_args: type_arg list;
   r_unwind: type_arg list -> bool -> typ;
+  r_body: unit -> typ option;
   r_linear: unit -> bool option
   }
 and tid = int
@@ -1030,7 +1031,10 @@ module Env = Env.String
     Meta (build_type_variable `Rigid var kind)
 
   let type_arg_of_quantifier : Quantifier.t -> type_arg =
-    fun (var, (pk, sk)) ->
+    fun q ->
+    Quantifier.require_any q;
+    let var = Quantifier.to_var q in
+    let pk, sk = Quantifier.to_kind q in
     let open PrimaryKind in
     match pk with
     | Type     -> (Type, make_rigid_type_variable var sk)
@@ -1083,30 +1087,30 @@ module Env = Env.String
   let fresh_presence_variable subkind = make_presence_variable (fresh_raw_variable ()) subkind
   let fresh_rigid_presence_variable subkind = make_rigid_presence_variable (fresh_raw_variable ()) subkind
 
-  let fresh_type_quantifier subkind : Quantifier.t * datatype =
+  let fresh_type_quantifier ?(modal_kind = ModalKind.Any) subkind : Quantifier.t * datatype =
     let var = fresh_raw_variable () in
     let kind = (PrimaryKind.Type, subkind) in
     let point = Unionfind.fresh (Var (var, kind, `Rigid)) in
-      (var, kind), Meta point
+      Quantifier.make ~modal_kind var kind, Meta point
 
-  let fresh_row_quantifier subkind : Quantifier.t * row =
+  let fresh_row_quantifier ?(modal_kind = ModalKind.Any) subkind : Quantifier.t * row =
     let var = fresh_raw_variable () in
     let point = make_rigid_row_variable var subkind in
-      (var, (PrimaryKind.Row, subkind)), Row (FieldEnv.empty, point, false)
+      Quantifier.make ~modal_kind var (PrimaryKind.Row, subkind), Row (FieldEnv.empty, point, false)
 
-  let fresh_presence_quantifier subkind : Quantifier.t * field_spec =
+  let fresh_presence_quantifier ?(modal_kind = ModalKind.Any) subkind : Quantifier.t * field_spec =
     let var = fresh_raw_variable () in
     let kind = (PrimaryKind.Presence, subkind) in
     let point = Unionfind.fresh (Var (var, kind, `Rigid)) in
-      (var, kind), Meta point
+      Quantifier.make ~modal_kind var kind, Meta point
 
   let fresh_quantifier =
     let open PrimaryKind in
-    fun (pk, sk) ->
+    fun ?(modal_kind = ModalKind.Any) (pk, sk) ->
     match pk with
-    | Type     -> let q, t = fresh_type_quantifier sk in q, (Type, t)
-    | Row      -> let q, r = fresh_row_quantifier sk in q, (Row, r)
-    | Presence -> let q, p = fresh_presence_quantifier sk in q, (Presence, p)
+    | Type     -> let q, t = fresh_type_quantifier ~modal_kind sk in q, (Type, t)
+    | Row      -> let q, r = fresh_row_quantifier ~modal_kind sk in q, (Row, r)
+    | Presence -> let q, p = fresh_presence_quantifier ~modal_kind sk in q, (Presence, p)
     (* | (PrimaryKind.Type, sk) -> fresh_type_quantifier sk
      * | (PrimaryKind.Row , sk) -> fresh_row_quantifier sk
      * | (PrimaryKind.Presence, sk) -> fresh_presence_quantifier sk *)
@@ -1690,7 +1694,7 @@ let normalise_row = normalise_row IntSet.empty
 let quantifier_of_type_arg =
   let open PrimaryKind in
   let quantifier_of_point point = match Unionfind.find point with
-    | Var (var, kind, _) -> (var, kind)
+    | Var (var, kind, _) -> Quantifier.make var kind
     | _ -> assert false in
   function
   | Type, Meta point -> quantifier_of_point point
@@ -1703,6 +1707,41 @@ let quantifier_of_type_arg =
   | _, _ -> assert false
 
 let quantifiers_of_type_args = List.map quantifier_of_type_arg
+
+(* Legacy inference stores kinds on variable points without modal metadata.
+   Check the whole input before any inference step can mutate those points. *)
+let check_legacy_quantifiers ?(allow_incomplete = false) t =
+  let checked_bodies = ref StringSet.empty in
+  let visitor = object (self)
+    inherit type_iter as super
+
+    method! visit_type ((rec_appl, rec_vars, quant_vars) as vars) = function
+      | ForAll (qs, body) ->
+         List.iter Quantifier.require_any qs;
+         self#visit_type vars body
+      | Alias (_, (_, _, args, _), body) ->
+         List.iter (self#visit_type_arg vars) args;
+         self#visit_type vars body
+      | Table (_, read, write, needed) ->
+         List.iter (self#visit_type vars) [read; write; needed]
+      | RecursiveApplication app ->
+         List.iter (self#visit_type_arg vars) app.r_args;
+         if not (StringSet.mem app.r_unique_name !checked_bodies) then
+           begin match app.r_body () with
+           | Some body ->
+              checked_bodies := StringSet.add app.r_unique_name !checked_bodies;
+              self#visit_type vars body
+           | None when allow_incomplete -> ()
+           | None ->
+              invalid_arg "Legacy typing requires complete recursive type declarations"
+           end
+      | Recursive (var, _, body) ->
+         if not (IntSet.mem var rec_vars) then
+           self#visit_type (rec_appl, IntSet.add var rec_vars, quant_vars) body
+      | Not_typed | Var _ | Closed -> ()
+      | t -> super#visit_type vars t
+  end in
+  visitor#visit_type (StringSet.empty, IntSet.empty, IntSet.empty) t
 
 let for_all : Quantifier.t list * datatype -> datatype =
   fun (qs, t) -> concrete_type (ForAll (qs, t))
@@ -2427,7 +2466,8 @@ struct
   let quantifier : (policy * names) -> Quantifier.t -> string =
     fun (policy, vars) q ->
       let k = Quantifier.to_kind q in
-      Vars.find (Quantifier.to_var q) vars ^ has_kind (kind (policy, vars) k)
+      Vars.find (Quantifier.to_var q) vars ^ has_kind (kind (policy, vars) k) ^
+        (if Quantifier.to_modal_kind q = ModalKind.Abs then "::Abs" else "")
 
   (** If type variable names are hidden return a generic name n1. Otherwise
      pass name of type variable to n2 so that it can construct a name. *)
@@ -4044,7 +4084,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       Printer (fun ctx qr buf ->
           let vid = Quantifier.to_var qr in
           let knd = Quantifier.to_kind qr in
-          Printer.apply var ctx (vid, knd) buf)
+          Printer.apply var ctx (vid, knd) buf;
+          if Quantifier.to_modal_kind qr = ModalKind.Abs then
+            StringBuffer.write buf "::Abs")
 
   and forall : (Quantifier.t list * typ) printer
     = let open Printer in

@@ -330,14 +330,13 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
          | ForAll (qs', t') ->
             let (context', quantifiers_match) =
               List.fold_left2 (fun (context, prev_eq) lqvar rqvar ->
-                  let lid, _ = lqvar in
-                  let rid, _ = rqvar in
-                  let l_kind = Quantifier.to_kind lqvar in
+                  let lid = Quantifier.to_var lqvar in
+                  let rid = Quantifier.to_var rqvar in
                   let r_kind = Quantifier.to_kind rqvar in
                   let ctx' = { typevar_subst = IntMap.add lid rid context.typevar_subst;
                                tyenv = Env.bind rid r_kind context.tyenv
                              } in
-                  (ctx', prev_eq && l_kind = r_kind)
+                  (ctx', prev_eq && Quantifier.same_kind lqvar rqvar)
                 ) (context,true) qs qs' in
             if quantifiers_match then
               eqt (context', t, t')
@@ -501,7 +500,7 @@ let compare_quantifiers qs1 qs2 msg occurrence =
   List.iter2
   (fun q1 q2 ->
     ensure
-      (Kind.equal (Quantifier.to_kind q1) (Quantifier.to_kind q2))
+      (Quantifier.same_kind q1 q2)
       msg
       occurrence)
   qs1

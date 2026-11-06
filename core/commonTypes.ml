@@ -151,21 +151,46 @@ module Kind = struct
   let primary_kind (pk, _) = pk
 end
 
+module ModalKind = struct
+  type t = Abs | Any
+    [@@deriving show,eq]
+end
+
 module Quantifier = struct
-  type t = int * Kind.t
-    [@@deriving show]
+  type t = { var : int; kind : Kind.t; modal_kind : ModalKind.t }
 
-  let to_var = function
-    | (var, _) -> var
+  let make ?(modal_kind = ModalKind.Any) var kind =
+    if modal_kind = ModalKind.Abs && Kind.primary_kind kind <> PrimaryKind.Type then
+      invalid_arg "Abs quantifiers must have primary kind Type";
+    { var; kind; modal_kind }
 
-  let to_kind : t -> Kind.t = function
-    | (_, k) -> k
+  let to_var q = q.var
+  let to_kind q = q.kind
+  let to_modal_kind q = q.modal_kind
+  let with_var var q = { q with var }
 
-  let to_primary_kind : t -> PrimaryKind.t = function
-    | (_, (pk, _)) -> pk
+  let to_primary_kind q = Kind.primary_kind q.kind
+  let to_subkind q = Kind.subkind q.kind
 
-  let to_subkind : t -> Subkind.t = function
-    | (_, (_, sk)) -> sk
+  let same_kind q q' =
+    Kind.equal q.kind q'.kind && ModalKind.equal q.modal_kind q'.modal_kind
+
+  let equal q q' = q.var = q'.var && same_kind q q'
+
+  let pp fmt q =
+    Format.fprintf fmt "(@[%d,@ %a@])" q.var Kind.pp q.kind;
+    if q.modal_kind = ModalKind.Abs then Format.pp_print_string fmt "::Abs"
+
+  let show q = Format.asprintf "%a" pp q
+
+  let require_any q =
+    match q.modal_kind with
+    | ModalKind.Any -> ()
+    | ModalKind.Abs -> invalid_arg "Legacy typing does not support Abs quantifiers"
+
+  let to_legacy_kind q =
+    require_any q;
+    q.kind
 
   let to_string = Format.asprintf "%a" pp
 

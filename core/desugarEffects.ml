@@ -120,7 +120,7 @@ let simplify_tycon_env (tycon_env : Types.tycon_environment) : simple_tycon_env
   let simplify_tycon name tycon simpl_env =
     let param_kinds, internal_type =
       match tycon with
-      | `Alias (_, qs, tp) -> List.map Quantifier.to_kind qs, Some tp
+      | `Alias (_, qs, tp) -> List.map Quantifier.to_legacy_kind qs, Some tp
       | `Abstract abs -> Types.Abstype.arity abs, None
       | `Mutual _ -> raise (internal_error "Found `Mutual in global tycon env")
     in
@@ -195,7 +195,7 @@ module RowVarMap : ROW_VAR_MAP = struct
   let var_id_from_quantifier =
     let open SugarQuantifier in
     function
-    | QResolved (var, _) -> var
+    | QResolved q -> Quantifier.to_var q
     | QUnresolved (_, _, _) ->
         raise
           (internal_error
@@ -691,7 +691,7 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
         | Mu (v, t) ->
             let mtv = SugarTypeVar.get_resolved_type_exn v in
             let var, (_, sk) = unpack_var_id (Unionfind.find mtv) in
-            let q : Quantifier.t = (var, (pk_type, sk)) in
+            let q = Quantifier.make var (pk_type, sk) in
             let sq = SugarQuantifier.mk_resolved q in
             self#quantified (fun o -> o#datatype t) [ sq ]
         | Forall (qs, t) -> self#quantified (fun o -> o#datatype t) qs
@@ -746,7 +746,7 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
         | Recursive (v, r) ->
             let mtv = SugarTypeVar.get_resolved_type_exn v in
             let var, (_, sk) = unpack_var_id (Unionfind.find mtv) in
-            let q : Quantifier.t = (var, (pk_row, sk)) in
+            let q = Quantifier.make var (pk_row, sk) in
             let sq = SugarQuantifier.mk_resolved q in
             self#quantified (fun o -> o#row r) [ sq ]
 
@@ -1111,7 +1111,7 @@ class main_traversal simple_tycon_env =
               (fun (alias_env, tycons) { node = t, args, _; _ } ->
                 let params =
                   List.map
-                    (SugarQuantifier.get_resolved_exn ->- Quantifier.to_kind)
+                    (SugarQuantifier.get_resolved_exn ->- Quantifier.to_legacy_kind)
                     args
                 in
                 (* initially pretend that no type needs an implict parameter *)
@@ -1178,13 +1178,13 @@ class main_traversal simple_tycon_env =
               ({ node = t, args, b; pos } as tn) =
             if StringMap.find t implicits then
               let var = Types.fresh_raw_variable () in
-              let q = (var, (PrimaryKind.Row, (default_effect_lin, res_effect))) in
+              let q = Quantifier.make var (PrimaryKind.Row, (default_effect_lin, res_effect)) in
               (* Add the new quantifier to the argument list and rebind. *)
               (* let qs = List.map (snd ->- OptionUtils.val_of) args @ [q] in *)
               let args = args @ [ SugarQuantifier.mk_resolved q ] in
               let env_args =
                 List.map
-                  (SugarQuantifier.get_resolved_exn ->- Quantifier.to_kind)
+                  (SugarQuantifier.get_resolved_exn ->- Quantifier.to_legacy_kind)
                   args
               in
               (* TODO maybe this is already bound, take the type from inside

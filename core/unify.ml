@@ -150,7 +150,7 @@ let rec eq_types : (datatype * datatype) -> bool =
       | ForAll (qs, t) ->
           begin match unalias t2 with
           | ForAll (qs', t') ->
-             List.for_all2 Quantifier.eq qs qs' &&
+             List.for_all2 Quantifier.equal qs qs' &&
                eq_types (t, t')
           | _ -> false
           end
@@ -643,7 +643,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
     (* FIXME: what about Lens? *)
     | ForAll l, ForAll r ->
        let check_quantifier_kinds l r =
-         if Quantifier.to_kind l <> Quantifier.to_kind r then
+         if not (Quantifier.same_kind l r) then
            raise (Failure (`Msg ("incompatible quantifier kinds")))
          else
            () in
@@ -1218,6 +1218,8 @@ and unify_type_args' : unify_env -> (type_arg * type_arg) -> unit =
      raise (Failure (`Msg ("Couldn't match "^ string_of_type_arg (lpk, lt) ^" against "^ string_of_type_arg (rpk, rt))))
 
 let unify (t1, t2) =
+  Types.check_legacy_quantifiers t1;
+  Types.check_legacy_quantifiers t2;
   unify'
     { tenv = RecIdMap.empty
     ; renv = IntMap.empty
@@ -1226,6 +1228,8 @@ let unify (t1, t2) =
 
 (* Debug.if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1) *)
 and unify_rows (row1, row2) =
+  Types.check_legacy_quantifiers (Row row1);
+  Types.check_legacy_quantifiers (Row row2);
   unify_rows'
     { tenv = RecIdMap.empty
     ; renv = IntMap.empty

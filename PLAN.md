@@ -36,8 +36,10 @@ comparison now records the selected rules, syntax, Links integration,
 reference defects, and dependency-ordered changes D1--D8 in the design
 document. Independent design review is complete and its four findings
 are resolved. D1's scoped row and modality modules are implemented,
-integrated, tested, and independently reviewed. Shared type integration,
-syntax, Fresco inference, and migration remain incomplete.
+integrated, tested, and independently reviewed. D2a's modal quantifier
+metadata is also integrated, tested, and independently reviewed.
+Contextual arrows and modal type constructors, syntax, Fresco inference,
+and migration remain incomplete.
 
 Baseline checked on 5 November 2026 at commit `7100e289`:
 
@@ -184,6 +186,7 @@ implementation defects. Record completed behaviour and deferred work.
   language choices and implementation dependencies.
 - [x] Complete independent design review and resolve findings.
 - [x] D1: implement and review scoped row and modality operations.
+- [x] D2a: preserve modal quantifier kinds through shared type operations.
 - [ ] Implement and test modal syntax and scoped effect rows.
 - [ ] Refactor type inference to follow Fresco.
 - [ ] Implement modal inference and run the first working example.
@@ -278,9 +281,9 @@ Design commit: `396fd639`. `git diff --check` passed.
 is unavailable, and its formatter check is disabled by repository
 configuration.
 
-## Latest task and verification
+## D1 verification
 
-6 November 2026, D1: Added `core/effectRow.ml/.mli` and
+6 November 2026, D1, commit `af7ff947`: Added `core/effectRow.ml/.mli` and
 `core/modality.ml/.mli`, with 28 unit tests registered in the no-database
 unit suite. The main agent reviewed and integrated the implementation
 from `.worktrees/modal-rows`. Independent review in a separate worktree
@@ -308,10 +311,48 @@ Finite tests cover 7,225 row pairs, 416,500 composition inputs, and
 use the old representation; D1 provides the operations for D2--D6.
 No milestone beyond the design comparison is complete yet.
 
+## Latest task and verification
+
+6 November 2026, D2a: added `Abs`/`Any` quantifier metadata, preserving
+it through structural substitution, freshening, renaming, closure
+conversion, binder comparisons, and printing. Existing callers default
+to `Any`. Legacy inference rejects unsupported `Abs` binders before
+mutation. Added 32 unit tests and a recursive-alias acceptance test.
+The main agent reviewed and integrated the changes from
+`.worktrees/modal-types`.
+
+Independent review found premature recursive alias unfolding in the
+first guard implementation. The first integrated typecheck-example
+run had seven missing-map errors; the implementation worktree also
+had nine timeouts. The corrected guard reads raw declaration bodies
+once per check. Only alias construction during desugaring permits
+incomplete bodies. Independent review confirmed the correction and
+reported no further findings.
+
+| Integrated check | Result |
+|---|---|
+| `make no-db` | Passed |
+| `tests/handlers.tests` | 95 passed |
+| `tests/effect_sugar.tests` | 44 passed |
+| `tests/polymorphism.tests` | 55 passed, including the new regression |
+| `tests/typecheck_examples.tests` | 167 passed, 15 ignored by existing settings |
+| `opam exec -- ./run-tests nodb-unit-tests` | 104 passed, including 32 new tests |
+| `make rule-check` | Passed; GNU-find tab check skipped, formatter check disabled |
+| Manual changed-file tab/trailing-whitespace check | Passed |
+| `git diff --check` | Passed |
+
+Main, implementation, and review source snapshots match. A separate
+reference test investigation checked all 43 Fresco acceptance files,
+14 rejection files, and the combined modal/Fresco example. The design
+document records representative pairs and additional Links coverage.
+Read-only investigations also recorded the D3 parser transition and
+the D4 context/assignment design.
+
 ## Next action
 
-Implement D2: integrate scoped rows and modal types into the shared
-type representation, including all type traversals, substitution,
-free-variable collection, and printers. Keep the compiler building
-and preserve record/variant row behaviour. Then proceed to D3 and D4
-using the dependencies in the design document.
+Implement D2b: add contextual arrow and modal type constructors with
+complete type traversals, structural substitution, free-variable
+collection, and printers. Test variables in effect arguments, repeated
+labels, nested binders, recursive types, ordinary linearity, and
+explicit rejection by legacy inference. Keep each change building
+before proceeding to D3 declarations/syntax and D4 Fresco contexts.

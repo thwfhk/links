@@ -146,6 +146,25 @@ there do not enter XML mode. `[A]` remains a list type. The reference
 `{| e |}` freezing syntax already means page placement in Links.
 Validate the grammar with Menhir during implementation.
 
+During migration, distinguish implicit arrows in the surface syntax
+from explicitly annotated legacy arrows. The legacy frontend converts
+implicit arrows to its existing function nodes and anonymous effect
+rows before type-variable and effect desugaring. The Fresco frontend
+elaborates implicit arrows to contextual arrows. Apply the same
+temporary legacy conversion in the built-in type-string reader;
+its current initialisation path uses the ordinary parser. Remove the
+legacy conversion and reader routing in D7. This keeps one grammar
+and preserves the parsed distinction until inference selects the
+appropriate representation.
+
+`::Any` already denotes the Links kind `Type(Any,Any)`. Preserve that
+interpretation and record modal kind `Any`; `::Abs` adds modal kind
+`Abs`. Permit a modal annotation alongside an ordinary kind annotation,
+matching the combined printer output, and reject repeated or
+conflicting annotations. Modal angle delimiters must also be separate
+from the lexer's effect-pattern chevron counter, which is activated
+by `case`. Include both interactions in D3 parser tests.
+
 Declarations bind effect identities and their operation signatures.
 Reject duplicate operation names in a declaration and ambiguous
 unqualified uses. Preserve declaration identities through module
@@ -312,6 +331,28 @@ serialisation, and printing. Separate Fresco modes, skeletons,
 contexts, and constraints from user types, and connect inference to
 typed Links syntax. Preserve source positions in errors.
 
+Use `Arrow of typ * typ` and `LinearArrow of typ * typ` for contextual
+arrows, retaining Links' tuple domain convention. Use
+`Modal of typ Modality.t * typ` for modal types. Keep scoped effect
+rows as `typ EffectRow.t` in contexts and modalities; they are neither
+value-type constructors nor row-kinded type arguments. The old
+`Function`/`Lolli` constructors remain during migration. Their latent
+effect rows must not be used to encode contextual arrows.
+
+Add modal kind metadata to quantifier records, with `Any` as the
+default for existing callers. Keep `Kind.t` and its existing
+record/variant/linearity restrictions unchanged. Fresco contexts bind
+modal kinds by variable identity, as in Aghilas' context. Freshening,
+renaming, closure conversion, and binder copies preserve the metadata.
+Legacy HM operations that cannot retain an `Abs` constraint reject it
+before mutating type variables. Named type/effect declaration parameter
+metadata must also retain modal kinds when D3 introduces declarations.
+
+Split D2 into D2a, quantifier metadata and its preservation, and D2b,
+contextual arrows/modal types and their traversals. D2a changes no
+surface syntax. Test freshening, renaming, and rejection by legacy
+inference explicitly before adding the new type constructors.
+
 | Stage | Files and required changes |
 |---|---|
 | Parsing | `lexer.mll`, `parser.mly`, `sugartypes.ml`: declarations, modalities, handler annotations, freezing |
@@ -389,7 +430,56 @@ prefix construction. The 28 tests in
 `tests/unit/ir/test_cases/modalEffects.ml` include duplicate and
 higher-order acceptance/rejection cases and finite algebraic checks.
 Independent code review reported no findings. Parser and inference
-integration begins with D2; the old path is still present.
+integration follows in D2b--D6; the old path is still present.
+
+D2a is implemented. `Quantifier` stores variable identity, `Kind.t`,
+and `ModalKind.t`; constructors default to `Any` and reject `Abs` on
+row/presence binders. Copies retain both kinds. Structural substitution
+preserves `Abs`; legacy inference and type application reject it.
+Binder identity equality remains separate from full binder comparison.
+Printers retain existing `Any` output and show `::Abs`.
+
+The legacy guard checks recursive arguments and raw declaration bodies,
+using `rec_appl.r_body` without unfolding or instantiation. It checks
+each body once per call and every occurrence's arguments. An earlier
+version unfolded recursive aliases before their declaration groups
+were complete, causing internal errors. Only alias construction during
+desugaring permits incomplete bodies; inference requires complete
+declarations before mutation. Unit tests cover this boundary and
+`tests/polymorphism.tests` contains the recursive-alias regression.
+All 104 no-database unit tests and the four selected regression suites
+pass. Independent review confirmed the fix and reported no further
+findings. D2b still needs the contextual arrow/modal type constructors.
+
+Begin D4 with ordered contexts and checked assignment in
+`frescoContext.ml/.mli` and `frescoTypeOps.ml/.mli`. Identify variables
+by `Types.tid`: separate Unionfind points can denote the same variable.
+Context entries retain both ordinary and modal kinds. Store solutions
+in returned contexts; assignment must not mutate Unionfind points or
+call the legacy unifier. Resolve existing solutions, check occurs,
+kinds, and scope, then move flexible dependencies before the variable
+being assigned. Reject dependencies on younger rigid variables.
+Include record fields, row tails, presence variables, and effect
+arguments in these checks.
+
+Scope exit retains surviving flexible declarations and solutions,
+removes local bindings and locks, and checks returned types and
+retained solutions for escaping rigid variables. Follow
+`lib/type.ml:protect_context`, which preserves flexible entries;
+`lib/context.ml:protect_context` drops them. Export resolved types
+using fresh, memoised points before later compiler passes can mutate
+them. Keep row and presence unknowns in the same ordered context,
+with structural solutions checked according to their primary kinds.
+
+Subsequent D4 changes add recursive skeletons with `Ghost` and
+`UniversalGhost`, including holes inside fields and effect arguments,
+then consistency and constraint collection/solving. Conversion to
+shared types rejects remaining ghosts. Test the thesis consistency
+rules' bound-variable restrictions explicitly when adapting the
+reference's `join_sk` ghost cases. A value-type unknown's solution
+must be a monotype; supplied polymorphic/modal structure is handled
+by `look`. Structural row solutions may contain supplied polymorphic
+field types, whose comparisons use Fresco.
 
 ## Examples and expected behaviour
 
@@ -463,6 +553,38 @@ pass: 57 Fresco and 25 modal/data-type tests. Additional probes found:
    and normalised masks of the composed modalities.
 
 Keep tests for these corrections alongside the adapted reference tests.
+
+### Fresco regression coverage
+
+Rechecked all 57 files in `tests/fresco/`: 43 acceptance files succeed
+and 14 rejection files report typing errors. The combined
+`tests/pass/fresco.mle` also succeeds. Use the following pairs when
+adapting the reference tests to Links:
+
+| Files under `tests/fresco/` | Behaviour to preserve |
+|---|---|
+| `pass/a7`, `fail/a8` | Quantifier position changes whether `choose id auto` checks |
+| `fail/c1a`, `pass/c1b`, `pass/c1c` | Parameter annotations and expected function types supply polymorphism |
+| `fail/e1a`, `pass/e1b` | Eta expansion permits the required quantifier position |
+| `pass/` and `fail/` versions of `e3b`, `e7`, `f2`, `f4` | Freezing supplies polymorphic argument information |
+| `pass/f11a`, `pass/f11b`, `fail/f11b` | Local lets preserve inferred types without generalisation |
+| `pass/f7`, `fail/f7` | Freezing retains the outer Church-list quantifier |
+
+Split the native and Church examples in rejection files `b7`, `e1a`,
+`e5a`, `e5b`, `f3`, and `f11b` into separate Links tests: the reference
+driver stops at the first error. Each isolated Church example was
+also checked and rejects. Assert inferred type structure for `a1`,
+`a2`, `b1`, `f6`, and `f8`--`f10`, where successful exit alone does
+not distinguish unknown monotypes from retained quantifiers.
+
+Add direct context tests for unknown-variable ordering, moving
+dependent unknowns before assignment, rigid-variable escape, occurs
+checking, modal kinds, ghost refinement, and retention of live unknown
+entries on scope exit. Add Links tests for n-ary and zero-argument
+functions, polymorphic record/variant fields, row and presence
+variables, explicit type abstraction/application, and signed recursion.
+Reference pairs are nominal datatypes and functions are curried.
+Provide implementations for reference `val` helpers in runnable tests.
 
 ## Design decisions
 

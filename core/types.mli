@@ -122,6 +122,9 @@ and rec_appl = {
   r_quantifiers : Kind.t list;
   r_args: type_arg list;
   r_unwind: type_arg list -> bool -> typ;
+  (* The raw declaration body, without substitution or unfolding. It is absent
+     only while the recursive declaration group is being constructed. *)
+  r_body: unit -> typ option;
   r_linear: unit -> bool option
   }
 and tid = int
@@ -264,9 +267,18 @@ val free_bound_type_vars          : typ      -> Vars.vars_list
 val free_bound_row_type_vars      : row      -> Vars.vars_list
 val free_bound_type_arg_type_vars : type_arg -> Vars.vars_list
 
+(** Make an occurrence of an [Any] binder. Reject [Abs], since type arguments
+    do not retain modal kinds. *)
 val type_arg_of_quantifier : Quantifier.t -> type_arg
+(** Recover an [Any] binder from a legacy variable argument. *)
 val quantifier_of_type_arg : type_arg -> Quantifier.t
 val quantifiers_of_type_args : type_arg list -> Quantifier.t list
+
+(** Reject [Abs] binders before legacy inference changes any type variables.
+    Structural substitution and binder copying do not need this check.
+    [allow_incomplete] permits unfinished recursive declarations during type
+    desugaring; inference must use the default [false]. *)
+val check_legacy_quantifiers : ?allow_incomplete:bool -> datatype -> unit
 
 val primary_kind_of_type_arg : type_arg -> PrimaryKind.t
 
@@ -295,10 +307,10 @@ val fresh_presence_variable : Subkind.t -> field_spec
 val fresh_rigid_presence_variable : Subkind.t -> field_spec
 
 (** fresh quantifiers *)
-val fresh_type_quantifier : Subkind.t -> Quantifier.t * datatype
-val fresh_row_quantifier : Subkind.t -> Quantifier.t * row
-val fresh_presence_quantifier : Subkind.t -> Quantifier.t * field_spec
-val fresh_quantifier : Kind.t -> Quantifier.t * type_arg
+val fresh_type_quantifier : ?modal_kind:ModalKind.t -> Subkind.t -> Quantifier.t * datatype
+val fresh_row_quantifier : ?modal_kind:ModalKind.t -> Subkind.t -> Quantifier.t * row
+val fresh_presence_quantifier : ?modal_kind:ModalKind.t -> Subkind.t -> Quantifier.t * field_spec
+val fresh_quantifier : ?modal_kind:ModalKind.t -> Kind.t -> Quantifier.t * type_arg
 
 (** {0 rows} *)
 (** empty row constructors *)
@@ -409,6 +421,8 @@ val combine_per_kind_envs : datatype Utility.IntMap.t * row Utility.IntMap.t * f
 
 (** pretty printing *)
 val print_types_pretty : bool Settings.setting
+type pretty_printer_engine = Old | Roundtrip | Derived
+val print_types_pretty_engine : pretty_printer_engine list Settings.setting
 
 val string_of_datatype   : ?policy:(unit -> Policy.t)
                         -> ?refresh_tyvar_names:bool -> datatype   -> string

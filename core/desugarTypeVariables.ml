@@ -375,7 +375,7 @@ object (o : 'self)
           | Some (var, _, _) -> var
           | None -> raise (internal_error "must have a Unionfind Var at this time")
       in
-      let q : Quantifier. t = var, (pk, sk) in
+      let q = Quantifier.make var (pk, sk) in
       let rq = SugarQuantifier.mk_resolved q in
       o, (rq :: rqs)
     in

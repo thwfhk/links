@@ -257,14 +257,14 @@ let presence_var v = tvar ~pk:CT.PrimaryKind.Presence v
 let wi_q ?(pk = CT.PrimaryKind.Type) ?(sk = default_subkind) tid =
   let kind = (pk, sk) in
   let+ () = Repr.add_tid ~tid in
-  (tid, kind) |> State.return
+  CT.Quantifier.make tid kind |> State.return
 
 let q ?(pk = CT.PrimaryKind.Type) ?(sk = default_subkind) tname =
   let kind = (pk, sk) in
   let* () = Repr.add_tname ~tname in
   let stage2 =
     let+ id = Repr.lookup_tname ~tname in
-    (id, kind)
+    CT.Quantifier.make id kind
   in
   State.return stage2
 
