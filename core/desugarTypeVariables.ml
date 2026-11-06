@@ -238,6 +238,8 @@ object (o : 'self)
 
   (** Allow implicitly bound type/row/presence variables in the current context? *)
   val allow_implictly_bound_vars = allow_implicits
+  val declaration_scope = false
+  method private declaration_scope = {< declaration_scope = true >}
 
   (* part of legacy compatibility, remove later *)
   val at_toplevel = true
@@ -324,7 +326,8 @@ object (o : 'self)
       end
     else
       begin
-        (if (not allow_implictly_bound_vars)  && freedom = `Rigid then
+        (if (declaration_scope && not anon) ||
+            ((not allow_implictly_bound_vars) && freedom = `Rigid) then
            let name_opt = if anon then None else Some name in
            raise (free_type_variable ?var:name_opt pos));
 
@@ -568,9 +571,23 @@ object (o : 'self)
       o,b
     in
      match b with
-    | EffectDeclaration _ ->
-       (* Contextual declaration parameters are bound by the modal resolver. *)
-       o, b
+    | EffectDeclaration declaration ->
+       let pos = SourceCode.WithPos.pos declaration.effect_name in
+       let parameters = List.map (function
+         | SugarQuantifier.QUnresolved (name, (pk, sk), modal_kind, freedom) ->
+            (match pk with
+             | Some (PrimaryKind.Row | PrimaryKind.Presence) ->
+                raise (Errors.Type_error (pos, "Effect parameters must have primary kind Type"))
+             | _ -> ());
+            SugarQuantifier.QUnresolved (name, (Some pk_type, sk), modal_kind, freedom)
+         | SugarQuantifier.QResolved _ -> raise (internal_error "Effect parameters already resolved"))
+         declaration.effect_parameters in
+       let local = ((o#set_vars StringMap.empty)#set_allow_implictly_bound_vars false)#declaration_scope in
+       let _, effect_parameters, effect_operations =
+         Errors.rethrow_errors_if_better_position pos
+           (fun () -> local#quantified ~rigidify:true parameters
+             (fun local -> local#list (fun local -> local#effect_operation) declaration.effect_operations)) () in
+       o, EffectDeclaration { declaration with effect_parameters; effect_operations }
     | Funs fs ->
        (* Toplevel mutuals don't share type variables *)
        let (o, fs) =

@@ -190,6 +190,11 @@ clauses. Reject mixed groups in one handler; nesting handles several
 groups. Return-only identity handlers remain valid Links programs and
 introduce no effect group.
 
+An annotated handler resolves unqualified operation clauses against
+its selected effect, as confirmed by the user. Thus `handle [State]`
+selects `State.Get` for a `Get` clause even when another visible effect
+also declares `Get`. Qualified clauses still undergo owner checks.
+
 Split the remaining declaration work into syntax with legacy rejection,
 then effect and operation resolution. Allocate stable identities before
 checking declaration bodies, permitting signatures to mention their
@@ -198,6 +203,30 @@ handler annotations until contextual elaboration can check their kinds.
 Module scopes must retain all candidates for an unqualified operation;
 opening the same declaration twice does not create an ambiguity.
 Use the same resolved operation identity in invocations and patterns.
+
+Use separate effect lexical frames and module exports. An unqualified
+operation uses the nearest frame containing candidates for that name;
+one identity succeeds and several are ambiguous. Declarations and opened
+module exports contribute candidates within a frame. Repeated opens
+deduplicate identities. Inner frames hide outer operation candidates;
+distinct effects within one frame remain ambiguous. Effect short names
+introduced by opens follow Links' existing module/type name shadowing.
+Qualified `E.Op` resolves E first, then Op in E's declaration.
+
+Provide contextual resolution with explicit input/output state containing
+scopes, headers, loaded modules, and identity allocation. Failed resolution
+must leave the input state unchanged, and repeated interactive imports
+reuse existing identities. Keep legacy operation handling unchanged in
+the legacy module wrapper. The future Fresco frontend commits resolution
+and typing states together after successful checking.
+
+Header metadata used during resolution needs identities, source names,
+positions, parameter and operation arities, ownership, and higher-order
+flags. Preserve full parameter binders and signature syntax in declaration
+nodes. Ordinary parameter subkinds can be inferred during type-variable
+resolution; do not freeze guessed subkinds in an earlier header table.
+Named effect parameters have primary kind `Type`. Header-first registration
+permits self references; other declarations remain sequentially scoped.
 
 ### Scoped rows and modalities
 
@@ -573,7 +602,38 @@ constructor span queued by the existing effect-pattern lexer so a
 qualified effect name excludes its opening `<`. Name resolution and
 contextual typing remain to be implemented.
 
-Begin D4 with ordered contexts and checked assignment in
+D3d implements effect and operation resolution through explicit
+`DesugarModules.resolve_program` and `resolve_sentence` state.
+`EffectHeaders` retains declaration identities, source positions,
+ownership, arities, and higher-order flags. Local effect names leave
+scope while their headers remain available. Imported module roots
+are reused across interactive sentences. Resolution copies the mutable
+module-name allocator before traversal, preserving input state on failure.
+
+The resolver checks declaration duplicates, effect and operation arities,
+and handler ownership, duplicate clauses, and completeness. Annotated
+handlers resolve bare operation clauses against their selected effect.
+Type-variable resolution gives each declaration fresh rigid parameter
+binders, preserves modal kinds and inferred ordinary subkinds, and rejects
+free named variables, including flexible variables. Anonymous row syntax
+remains for contextual elaboration to check. Full signature typing and
+modal-kind checks remain D4--D6 work. Legacy entry points retain their
+existing operation handling and reject modal declarations before changing
+their module state.
+
+Split D4 into buildable changes. D4a adds non-mutating point reads,
+raw recursive declaration binders, and modal kind classification.
+D4b checks type well-formedness. D4c adds ordered contexts and checked
+assignment; D4d adds scope exit and export before skeletons and constraints.
+
+Add `Unionfind.peek` without changing `find`. Change `rec_appl.r_body`
+to return the formal `Quantifier.t` list alongside the raw body;
+`tygroup.type_map` already stores this pair. Existing legacy guards
+continue to inspect the body. Encode recursive declaration identities
+with a separator between the name and group number: concatenation alone
+can confuse `T1` in group 2 with `T` in group 12.
+
+Use ordered contexts and checked assignment in
 `frescoContext.ml/.mli` and `frescoTypeOps.ml/.mli`. Identify variables
 by `Types.tid`: separate Unionfind points can denote the same variable.
 Context entries retain both ordinary and modal kinds. Store solutions
@@ -645,6 +705,10 @@ this analysis.
 Implement classification and well-formedness separately in
 `frescoKind.ml/.mli`, using callbacks for variable solutions, raw
 declarations, abstract constructor rules, and effect declarations.
+Classification takes variable, raw-declaration, and abstract-constructor
+callbacks, so it has no dependency on the later context module.
+Local quantifier and formal-parameter bindings take precedence over the
+variable callback. Classification alone does not establish well-formedness.
 Well-formedness visits every child, including absolute-modal payloads
 and unused constructor arguments. Check argument bodies as well as
 their supplied primary-kind tags.

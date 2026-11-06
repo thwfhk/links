@@ -288,10 +288,14 @@ let suite = "modal declarations" >::: [
     assert_equal Position.dummy (WithPos.pos mapped.qo_effect);
     assert_equal Position.dummy (WithPos.pos mapped.qo_operation));
 
-  "standalone type variable pass preserves unresolved declarations" >:: (fun _ ->
+  "standalone type variable pass resolves declaration parameters" >:: (fun _ ->
     let p = parse "effect State(a::Abs) { Get : () => a; Put : (a) => (); }" in
     let Transform.Untyped.Result { program; _ } = DesugarTypeVariables.Untyped.program Context.empty p in
-    assert_equal (strip#program p) (strip#program program));
+    match fst program with
+    | [{ WithPos.node = EffectDeclaration d; _ }] ->
+       let q = SugarQuantifier.get_resolved_exn (List.hd d.effect_parameters) in
+       assert_equal ModalKind.Abs (Quantifier.to_modal_kind q)
+    | _ -> assert_failure "Expected resolved declaration");
 
   "module pass visits ordinary names within contextual syntax" >:: (fun _ ->
     let p = parse "module M { typename T = Int; var value = 1; } effect E(a) { Op : (M.T) => M.T; } handle[E(M.T)](freeze(M.value)) { case x -> x }" in

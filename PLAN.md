@@ -42,7 +42,9 @@ integrated, tested, and independently reviewed. D3a preserves modal
 kinds on declaration parameters. D3b adds modal type and binder syntax,
 implicit arrows, and temporary legacy normalisation. D3c adds effect
 declarations, qualified operations, handler annotations, and freezing
-syntax. Effect resolution, Fresco inference, and migration remain incomplete.
+syntax. D3d adds effect resolution and declaration/handler checks,
+with independent review and all selected checks complete.
+Fresco inference and migration remain incomplete.
 
 A read-only declaration investigation identified the module
 name-resolution changes and affected pattern-matching handlers. A
@@ -200,6 +202,7 @@ implementation defects. Record completed behaviour and deferred work.
 - [x] D3a: preserve modal kinds on declaration parameters.
 - [x] D3b: add modal type/binder syntax and temporary legacy normalisation.
 - [x] D3c: add declaration, qualified operation, handler, and freezing syntax.
+- [x] D3d: resolve effects/operations and check declarations and handler groups.
 - [ ] Implement and test modal syntax and scoped effect rows.
 - [ ] Refactor type inference to follow Fresco.
 - [ ] Implement modal inference and run the first working example.
@@ -260,6 +263,8 @@ Add acceptance and rejection tests for each changed typing behaviour.
 - 6 November 2026: Qualify operations by their owning effect, using
   `State.Get` and `M.State.Get`, as confirmed by the user. Reject
   ambiguous unqualified operation names.
+- 6 November 2026: An annotated handler resolves unqualified operation
+  clauses against its selected effect, as confirmed by the user.
 - 6 November 2026: Follow Aghilas for unresolved language choices.
   Include its higher-order effects with restricted exchange, fixed
   modal kinds, monomorphic lets, and signed recursion. Use a `modal`
@@ -474,9 +479,9 @@ Reference probes also confirmed incorrect modal-kind classification of
 nested and recursive datatype applications. The design records D4's
 required correction and tests.
 
-## Latest task and verification
+## D3c verification
 
-6 November 2026, D3c: added named effect declarations with positioned
+6 November 2026, D3c, commit `55d7a760`: added named effect declarations with positioned
 operation signatures, effect-qualified operations and patterns, handler
 annotations, and `freeze(e)`. Generic traversals and free-variable
 collection handle their children. Legacy entry points reject the new
@@ -515,8 +520,54 @@ requirements propagated through flexible row/presence dependencies.
 Rigid row/presence variables remain monotype atoms subject to scope checks.
 The design also records the selected quantified-type kind rule.
 
+A further D4 investigation set the implementation order: non-mutating
+point reads and modal kind classification, well-formedness, ordered
+contexts and assignment, then scope exit and export. Raw recursive
+declarations must retain their formal binders. Recursive declaration
+identities also need a separator between their name and group number.
+
+## Latest task and verification
+
+6 November 2026, D3d: added effect headers and contextual resolution state,
+lexical effect/operation scopes, stable identities, repeated import reuse,
+and declaration/handler structural checks. Annotated handlers resolve
+unqualified clauses against their selected effect. Declaration parameters
+have fresh rigid identities, retain modal kinds and inferred ordinary
+subkinds, and cannot capture outer type variables. Free named variables,
+including flexible variables, are rejected in operation signatures.
+Added 30 unit test groups.
+
+Main review identified that the existing type-variable pass permits free
+flexible variables. A declaration-local check now rejects them without
+changing legacy alias behaviour. Initial unit failures were invalid test
+syntax and a wrong expected source offset; corrected fixtures pass.
+Independent review found no further issues and passed its build, all
+225 unit tests, 41 module tests and 37 datatype tests. Main, implementation,
+and review source snapshots match.
+
+| Integrated check | Result |
+|---|---|
+| `make no-db` | Passed |
+| `tests/handlers.tests` | 95 passed |
+| `tests/effect_sugar.tests` | 44 passed |
+| `tests/polymorphism.tests` | 55 passed |
+| `tests/typecheck_examples.tests` | 167 passed, 15 ignored by existing settings |
+| `tests/type_print.tests` | 10 passed |
+| `tests/desugar_datatypes.tests` | 37 passed |
+| `tests/modules.tests` | 41 passed |
+| `opam exec -- ./run-tests nodb-unit-tests` | 225 passed, including 30 new groups |
+| `make rule-check` | Passed; GNU-find tab check skipped, formatter check disabled |
+| Manual changed-file tab/trailing-whitespace check | Passed |
+| `git diff --check` | Passed |
+
+Anonymous row syntax remains for contextual elaboration to check.
+Operation signature typing, modal-kind checks, and the Fresco frontend
+remain incomplete.
+
 ## Next action
 
-Implement D3d: effect and operation name resolution, declaration parameter
-scopes, and declaration/handler structural checks. Contextual
-datatype elaboration follows D4's kind checks, contexts, and constraints.
+Implement D4a: non-mutating Unionfind reads, raw recursive declaration
+binders, and modal kind classification. Use callbacks for variable solutions
+and declaration bodies. Check nested and argument-changing recursive
+applications against the recorded reference defect. Well-formedness,
+ordered contexts, assignment, and contextual datatype elaboration follow.

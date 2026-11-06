@@ -85,14 +85,15 @@ let rec add_module_bindings deps dep_map =
           ~message:"Impossible pattern in add_module_bindings")
 
 
-let rec add_dependencies_inner module_name module_prog visited deps dep_map =
+let rec add_dependencies_inner loaded module_name module_prog visited deps dep_map =
   if StringSet.mem module_name visited then (visited, [], dep_map) else
   let visited1 = StringSet.add module_name visited in
   let dep_map1 = StringMap.add module_name module_prog dep_map in
 
   (* With this, get import candidates *)
   let mt = create_module_info_map module_prog in
-  let ics = find_external_refs module_prog mt in
+  let ics = List.filter (fun name -> not (StringSet.mem name loaded))
+    (find_external_refs module_prog mt) in
   (* Next, run the dependency analysis on each one to get us an adjacency list *)
   List.fold_left (
     fun (visited_acc, deps_acc, dep_map_acc) name ->
@@ -101,17 +102,17 @@ let rec add_dependencies_inner module_name module_prog visited deps dep_map =
       let (prog, pos_ctx) = try_parse_file filename in
       let prog = (ResolvePositions.resolve_positions pos_ctx)#program prog in
       let (visited_acc', deps_acc', dep_map_acc') =
-        add_dependencies_inner name prog visited_acc [] dep_map_acc in
+        add_dependencies_inner loaded name prog visited_acc [] dep_map_acc in
       (visited_acc', deps_acc @ deps_acc', dep_map_acc')
   ) (visited1, (module_name, ics) :: deps, dep_map1) ics
 
 (* Top-level function: given a module name + program, return a program with
  * all necessary files added to the binding list as top-level modules. *)
-let add_dependencies module_prog =
+let add_dependencies ?(loaded=StringSet.empty) module_prog =
   let (bindings, phrase) = module_prog in
   (* Firstly, get the dependency graph *)
   let (_, deps, dep_binding_map) =
-    add_dependencies_inner "" module_prog (StringSet.empty) [] (StringMap.empty) in
+    add_dependencies_inner loaded "" module_prog (StringSet.empty) [] (StringMap.empty) in
   (* Next, do a topological sort to get the dependency graph and identify cyclic dependencies *)
   let sorted_deps = Graph.topo_sort_sccs deps in
   (* Each entry should be *precisely* one element (otherwise we have cycles) *)
@@ -123,6 +124,6 @@ let add_dependencies module_prog =
   let module_bindings = add_module_bindings sorted_deps dep_binding_map in
   (module_bindings @ bindings, phrase)
 
-let add_dependencies_sentence = function
-  | Definitions defs -> Definitions (fst (add_dependencies (defs, None)))
+let add_dependencies_sentence ?(loaded=StringSet.empty) = function
+  | Definitions defs -> Definitions (fst (add_dependencies ~loaded (defs, None)))
   | s -> s

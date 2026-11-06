@@ -49,6 +49,7 @@ open CommonTypes
 open Utility
 open Sugartypes
 open SourceCode.WithPos
+open EffectHeaders
 
 (* TODO FIXME: use ropes rather than strings to build names. *)
 module Epithet = struct
@@ -94,7 +95,8 @@ module BasicScope = struct
   type t =
     { modules: module_member StringMap.t;
       typenames: type_member StringMap.t;
-      terms: term_member StringMap.t }
+      terms: term_member StringMap.t;
+      effects: string StringMap.t }
   and module_member = t
   and type_member = string
   and term_member = string
@@ -102,7 +104,8 @@ module BasicScope = struct
   let empty =
     { modules = StringMap.empty;
       typenames = StringMap.empty;
-      terms = StringMap.empty }
+      terms = StringMap.empty;
+      effects = StringMap.empty }
 
   module Resolve = struct
     let rec module' : Name.t list -> t -> t
@@ -119,6 +122,12 @@ module BasicScope = struct
       | [name] -> StringMap.find name scope.terms
       | prefix :: names ->
          var names (StringMap.find prefix scope.modules)
+
+    let rec effect_header names scope =
+      match names with
+      | [] -> assert false
+      | [name] -> StringMap.find name scope.effects
+      | prefix :: names -> effect_header names (StringMap.find prefix scope.modules)
 
     let rec typename : Name.t list -> t -> Name.t
       = fun names scope ->
@@ -141,7 +150,8 @@ module BasicScope = struct
     let terms =
       StringMap.union select_mask scope.terms mask.terms
     in
-    { modules; typenames; terms }
+    let effects = StringMap.union select_mask scope.effects mask.effects in
+    { modules; typenames; terms; effects }
 
   module Extend = struct
     let module' module_name module_scope scope =
@@ -240,29 +250,42 @@ module Scope = struct
     { scopes with delta = S.empty }
 end
 
-let rec desugar_module : ?toplevel:bool -> Epithet.t -> Scope.t -> Sugartypes.binding -> binding list * Scope.t
-  = fun ?(toplevel=false) renamer scope binding ->
-  match binding.node with
-  | Module { binder; members } ->
-     let name = Binder.to_name binder in
-     let visitor = desugar ~toplevel (Epithet.remember ~escapes:(not toplevel) name renamer) (Scope.renew scope) in
-     let bs'    = visitor#bindings members in
-     let scope' = visitor#get_scope in
-     let scope'' = Scope.Extend.module' name scope' scope in
-     (bs', scope'')
-  | _ -> assert false
-and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
+type effect_frame = {
+  declared : StringSet.t;
+  candidates : StringSet.t StringMap.t;
+}
+let empty_effect_frame = { declared = StringSet.empty; candidates = StringMap.empty }
+
+type contextual_data = { headers : EffectHeaders.t; next_effect : int }
+
+let resolution_error pos message = raise (Errors.Type_error (pos, message))
+
+let add_candidates headers effects frame =
+  StringMap.fold (fun _ id frame ->
+    let effect_header = Option.get (EffectHeaders.find_effect id headers) in
+    List.fold_left (fun frame (op : EffectHeaders.operation) ->
+      let ids = Option.value ~default:StringSet.empty
+        (StringMap.lookup op.source_name frame.candidates) in
+      { frame with candidates = StringMap.add op.source_name
+          (StringSet.add op.id ids) frame.candidates }) frame effect_header.operations)
+    effects frame
+
+let rec desugar ?(toplevel=false) ?contextual
+    ?(frames=[empty_effect_frame]) (renamer' : Epithet.t) (scope' : Scope.t) =
   let open Sugartypes in
   object(self : 'self_type)
     inherit SugarTraversals.map as super
 
     val mutable scope = scope'
     val mutable renamer = renamer'
+    val mutable effect_frames = frames
+    method get_effect_frames = effect_frames
     method get_renamer = renamer
     method get_scope = scope
 
     method clone =
-      desugar ~toplevel:false renamer scope
+      desugar ~toplevel:false ?contextual
+        ~frames:(empty_effect_frame :: effect_frames) renamer scope
 
     method type_binder : Name.t -> Name.t
       = fun name ->
@@ -296,6 +319,10 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
       try
         let module_scope = Scope.Resolve.module' path scope in
         scope <- Scope.open_module module_scope scope;
+        (match contextual, effect_frames with
+         | Some data, frame :: rest ->
+            effect_frames <- add_candidates (!data).headers module_scope.BasicScope.effects frame :: rest
+         | _ -> ());
       with Notfound.NotFound _ ->
         raise (Errors.module_error ~pos (Printf.sprintf "Unbound module %s" (Scope.Resolve.best_guess path)))
 
@@ -305,6 +332,160 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
         scope <- Scope.Extend.synthetic_module path module_scope scope
       with Notfound.NotFound _ ->
         raise (Errors.module_error ~pos (Printf.sprintf "Unbound module %s" (Scope.Resolve.best_guess path)))
+
+    method private headers = match contextual with
+      | Some data -> (!data).headers | None -> assert false
+
+    method private effect_header pos path =
+      try
+        let id = BasicScope.Resolve.effect_header path scope.Scope.visible in
+        Option.get (EffectHeaders.find_effect id self#headers)
+      with Notfound.NotFound _ ->
+        resolution_error pos ("Unknown effect " ^ String.concat "." path)
+
+    method private operation_in_effect pos (effect_header : EffectHeaders.effect_header) name =
+      match List.find_opt (fun (op : EffectHeaders.operation) -> op.source_name = name) effect_header.operations with
+      | Some op -> op
+      | None -> resolution_error pos ("Unknown operation " ^ effect_header.source_name ^ "." ^ name)
+
+    method private operation pos name =
+      let rec find = function
+        | [] -> resolution_error pos ("Unknown operation " ^ name)
+        | frame :: rest ->
+           match StringMap.lookup name frame.candidates with
+           | None -> find rest
+           | Some ids when StringSet.cardinal ids = 1 ->
+              Option.get (EffectHeaders.find_operation (StringSet.choose ids) self#headers)
+           | Some _ -> resolution_error pos ("Ambiguous operation " ^ name)
+      in find effect_frames
+
+    method private qualified_operation_header q =
+      let effect_header = self#effect_header q.qo_effect.pos q.qo_effect.node in
+      self#operation_in_effect q.qo_operation.pos effect_header q.qo_operation.node
+
+    method private check_operation_arity pos (op : EffectHeaders.operation) count =
+      if op.argument_count <> count then
+        resolution_error pos (Printf.sprintf "Operation %s expects %d arguments, received %d"
+          op.source_name op.argument_count count)
+
+    method! effect_name name = match contextual with
+      | None -> super#effect_name name
+      | Some _ -> with_node name [(self#effect_header name.pos name.node).id]
+
+    method! effect_application application = match contextual with
+      | None -> super#effect_application application
+      | Some _ ->
+         let path, arguments = application.node in
+         let effect_header = self#effect_header application.pos path in
+         if effect_header.parameter_count <> List.length arguments then
+           resolution_error application.pos
+             (Printf.sprintf "Effect %s expects %d arguments, received %d"
+               effect_header.source_name effect_header.parameter_count (List.length arguments));
+         let arguments = List.map self#datatype arguments in
+         with_node application ([effect_header.id], arguments)
+
+    method private operation_pattern selected pattern =
+      let make_operation op args k linearity =
+        self#check_operation_arity pattern.pos op (List.length args);
+        with_node pattern (Pattern.Operation (op.EffectHeaders.id, args, k, linearity)), op
+      in
+      match pattern.node with
+      | Pattern.HasType (inner, datatype) ->
+         let inner, op = self#operation_pattern selected inner in
+         with_node pattern (Pattern.HasType (inner, datatype)), op
+      | Pattern.Operation (name, args, k, linearity) ->
+         let op = match selected with
+           | None -> self#operation pattern.pos name
+           | Some effect_header -> self#operation_in_effect pattern.pos effect_header name in
+         make_operation op args k linearity
+      | Pattern.QualifiedOperation (q, args, k, linearity) ->
+         make_operation (self#qualified_operation_header q) args k linearity
+      | _ -> resolution_error pattern.pos "Expected an operation pattern"
+
+    method! phrase phrase = match contextual, phrase.node with
+      | Some _, Operation name ->
+         with_node phrase (Operation (self#operation phrase.pos name).id)
+      | Some _, QualifiedOperation q ->
+         with_node phrase (Operation (self#qualified_operation_header q).id)
+      | Some _, DoOperation (operation, arguments, datatype, linearity) ->
+         let operation = self#phrase operation in
+         (match operation.node with
+          | Operation id -> self#check_operation_arity operation.pos
+              (Option.get (EffectHeaders.find_operation id self#headers)) (List.length arguments)
+          | _ -> ());
+         let arguments = List.map self#phrase arguments in
+         with_node phrase (DoOperation (operation, arguments, datatype, linearity))
+      | Some _, Handle handler ->
+         let shd_effect = Option.map self#effect_application handler.sh_descr.shd_effect in
+         let selected = Option.map (fun application ->
+           let ids, _ = application.node in
+           Option.get (EffectHeaders.find_effect (List.hd ids) self#headers)) shd_effect in
+         let clauses = List.map (fun (pattern, body) ->
+           let pattern, op = self#operation_pattern selected pattern in
+           pattern, body, op) handler.sh_effect_cases in
+         let owner = match selected, clauses with
+           | Some effect_header, _ -> Some effect_header
+           | None, (_, _, op) :: _ -> EffectHeaders.find_effect op.owner self#headers
+           | None, [] -> None in
+         let seen = List.fold_left (fun seen (pattern, _, (op : EffectHeaders.operation)) ->
+           (match owner with
+            | Some effect_header when effect_header.id <> op.owner ->
+               resolution_error pattern.pos "Handler clauses must belong to one effect"
+            | _ -> ());
+           if StringSet.mem op.id seen then
+             resolution_error pattern.pos ("Duplicate operation clause " ^ op.source_name);
+           StringSet.add op.id seen) StringSet.empty clauses in
+         Option.iter (fun (effect_header : EffectHeaders.effect_header) ->
+           let missing = List.filter (fun (op : EffectHeaders.operation) -> not (StringSet.mem op.id seen)) effect_header.operations in
+           if missing <> [] then resolution_error phrase.pos
+             ("Missing operation clauses: " ^ String.concat ", " (List.map (fun (op : EffectHeaders.operation) -> op.source_name) missing))) owner;
+         let sh_expr = self#phrase handler.sh_expr in
+         let shd_params = self#option (fun o -> o#handle_params) handler.sh_descr.shd_params in
+         let sh_effect_cases = self#cases (List.map (fun (p, b, _) -> p, b) clauses) in
+         let sh_value_cases = self#cases handler.sh_value_cases in
+         with_node phrase (Handle { sh_expr; sh_effect_cases; sh_value_cases;
+             sh_descr = { handler.sh_descr with shd_effect; shd_params } })
+      | _ -> super#phrase phrase
+
+    method! effect_declaration declaration = match contextual with
+      | None -> super#effect_declaration declaration
+      | Some data ->
+         let name = declaration.effect_name.node in
+         let pos = declaration.effect_name.pos in
+         let frame, rest = match effect_frames with frame :: rest -> frame, rest | [] -> assert false in
+         if StringSet.mem name frame.declared then resolution_error pos ("Duplicate effect " ^ name);
+         ignore (List.fold_left (fun names parameter ->
+           let parameter_name, (pk, _), _ = SugarQuantifier.get_unresolved_exn parameter in
+           if StringSet.mem parameter_name names then resolution_error pos ("Duplicate effect parameter " ^ parameter_name);
+           (match pk with
+            | Some (PrimaryKind.Row | PrimaryKind.Presence) -> resolution_error pos "Effect parameters must have primary kind Type"
+            | _ -> ());
+           StringSet.add parameter_name names) StringSet.empty declaration.effect_parameters);
+         let id = Printf.sprintf "effect_%d$%s" (!data).next_effect name in
+         let _, operations = List.fold_left (fun (names, operations) operation ->
+           let source, arguments, _ = operation.node in
+           if StringSet.mem source.node names then resolution_error source.pos ("Duplicate operation " ^ source.node);
+           let op : EffectHeaders.operation = { id = id ^ "$" ^ source.node;
+             source_name = source.node; position = source.pos; owner = id;
+             argument_count = List.length arguments } in
+           StringSet.add source.node names, op :: operations)
+           (StringSet.empty, []) declaration.effect_operations in
+         let effect_header : EffectHeaders.effect_header = { id; source_name = name; position = pos;
+           parameter_count = List.length declaration.effect_parameters;
+           higher_order = declaration.effect_higher_order; operations = List.rev operations } in
+         let headers = EffectHeaders.add effect_header (!data).headers in
+         data := { headers; next_effect = (!data).next_effect + 1 };
+         let extend (scope : BasicScope.t) = { scope with effects = StringMap.add name id scope.effects } in
+         scope <- { Scope.visible = extend scope.Scope.visible; delta = extend scope.Scope.delta };
+         let frame = { frame with declared = StringSet.add name frame.declared } in
+         effect_frames <- add_candidates headers (StringMap.singleton name id) frame :: rest;
+         let effect_operations = List.map2 (fun operation (op : EffectHeaders.operation) ->
+           let source, arguments, result = operation.node in
+           let arguments = List.map self#datatype arguments in
+           let result = self#datatype result in
+           with_node operation (with_node source op.id, arguments, result))
+           declaration.effect_operations effect_header.operations in
+         { declaration with effect_name = with_node declaration.effect_name id; effect_operations }
 
     method! funlit : funlit -> funlit
       = fun f ->
@@ -509,8 +690,15 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
          self#open_module pos names; self#bindings bs
       | ({ node = Module _; _ } as module') :: bs ->
       (* Affects [scope] and hoists [bs'] *)
-         let bs', scope' = desugar_module ~toplevel renamer scope module' in
-         scope <- scope'; bs' @ self#bindings bs
+         let binder, members = match module'.node with
+           | Module { binder; members } -> binder, members | _ -> assert false in
+         let name = Binder.to_name binder in
+         let visitor = desugar ~toplevel ?contextual
+           ~frames:(empty_effect_frame :: effect_frames)
+           (Epithet.remember ~escapes:(not toplevel) name renamer) (Scope.renew scope) in
+         let bs' = visitor#bindings members in
+         scope <- Scope.Extend.module' name visitor#get_scope scope;
+         bs' @ self#bindings bs
       | b :: bs ->
          let b = self#binding b in
          b :: self#bindings bs
@@ -553,6 +741,46 @@ let desugar_sentence ?(normalise_types=Fun.id) sentence =
   let visitor = desugar ~toplevel:true !renamer !scope in
   let result = visitor#sentence sentence in
   scope := visitor#get_scope; renamer := visitor#get_renamer; result
+
+type resolution_state = {
+  resolution_scope : Scope.t;
+  resolution_renamer : Epithet.t;
+  resolution_frames : effect_frame list;
+  resolution_data : contextual_data;
+  loaded_modules : StringSet.t;
+}
+
+let empty_resolution_state = {
+  resolution_scope = Scope.empty;
+  resolution_renamer = { Epithet.next = 0; prefix = [] };
+  resolution_frames = [empty_effect_frame];
+  resolution_data = { headers = EffectHeaders.empty; next_effect = 0 };
+  loaded_modules = StringSet.empty;
+}
+
+let effect_headers state = state.resolution_data.headers
+
+let resolve state action =
+  let contextual = ref state.resolution_data in
+  let renamer = { state.resolution_renamer with next = state.resolution_renamer.next } in
+  let visitor = desugar ~toplevel:true ~contextual ~frames:state.resolution_frames
+    renamer state.resolution_scope in
+  let result = action visitor in
+  let scope = visitor#get_scope in
+  let loaded_modules = StringMap.fold (fun name _ loaded -> StringSet.add name loaded)
+    scope.Scope.visible.BasicScope.modules state.loaded_modules in
+  result, { resolution_scope = scope; resolution_renamer = visitor#get_renamer;
+    resolution_frames = visitor#get_effect_frames; resolution_data = !contextual; loaded_modules }
+
+let resolve_program state program =
+  let program = Chaser.add_dependencies ~loaded:state.loaded_modules program in
+  let program = DesugarAlienBlocks.transform_alien_blocks program in
+  resolve state (fun visitor -> visitor#program program)
+
+let resolve_sentence state sentence =
+  let sentence = Chaser.add_dependencies_sentence ~loaded:state.loaded_modules sentence in
+  let sentence = DesugarAlienBlocks.sentence sentence in
+  resolve state (fun visitor -> visitor#sentence sentence)
 
 module Untyped = struct
   open Transform.Untyped
