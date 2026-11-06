@@ -11,7 +11,7 @@ fun println(msg) {
 
 # Don't use a for comprehension to define concatMap, as
 # for comprehensions are desugared into concatMap!
-unsafe sig concatMap : ((a) -b-> [c], [a]) -b-> [c]
+unsafe sig concatMap : ((a) -b-> List c, List a) -b-> List c
 fun concatMap(f, l) {
   switch (l) {
     case [] -> []
@@ -19,7 +19,7 @@ fun concatMap(f, l) {
   }
 }
 
-unsafe sig map : ((a) -b-> c, [a]) -b-> [c]
+unsafe sig map : ((a) -b-> c, List a) -b-> List c
 fun map(f, l) {
   switch (l) {
     case []     -> []
@@ -39,7 +39,7 @@ fun iter(f, xs) {
 }
 
 # TBD: rename this 'sortOn' to follow Haskell usage?
-sig sortBy : ((a) ~b~> c, [a]) ~b~> [a]
+sig sortBy : ((a) ~b~> c, List a) ~b~> List a
 fun sortBy (f, l) {
   switch (l) {
     case [] -> []
@@ -51,7 +51,7 @@ fun sortBy (f, l) {
   }
 }
 
-unsafe sig sortByBase : ((a) -b-> (| _::Base), [a]) -b-> [a]
+unsafe sig sortByBase : ((a) -b-> (| _::Base), List a) -b-> List a
 fun sortByBase(f, l) {
   switch (l) {
     case [] -> []
@@ -162,7 +162,7 @@ fun unzip(l) {
   }
 }
 
-sig zip : ([a], [b]) ~> [(a, b)]
+sig zip : (List a, List b) ~> List (a, b)
 fun zip(l, r) {
   switch ((l, r)) {
     case ([], []) -> []
@@ -222,7 +222,7 @@ fun mapi(f, xs) {
   mi(0, xs)
 }
 
-sig substAt : ([a], Int, a) ~> [a]
+sig substAt : (List a, Int, a) ~> List a
 fun substAt(xs, i, y) {
   switch (xs) {
     case [] -> []
@@ -257,13 +257,13 @@ fun join(glue,list) {
   }
 }
 
-# break :: ((a) -> Bool) -> ([a]) -> ([a],[a])
-# concat :: [[a]] -> [a]
+# break :: ((a) -> Bool) -> (List a) -> (List a,List a)
+# concat :: List (List a) -> List a
 # const :: const :: (a) -> b -> a
-# elemBy :: ((a) -> (a) -> Bool) -> (a) -> ([a]) -> Bool
-# notElemBy :: ((a) -> (a) -> Bool) -> (a) -> ([a]) -> Bool
-# span :: ((a) -> Bool) -> ([a]) -> ([a],[a])
-sig span : ((a) ~b~> Bool, [a]) ~b~> ([a], [a])
+# elemBy :: ((a) -> (a) -> Bool) -> (a) -> (List a) -> Bool
+# notElemBy :: ((a) -> (a) -> Bool) -> (a) -> (List a) -> Bool
+# span :: ((a) -> Bool) -> (List a) -> (List a,List a)
+sig span : ((a) ~b~> Bool, List a) ~b~> (List a, List a)
 fun span(p, xs) {
   fun go(acc, xs, p) {
     switch(xs) {
@@ -278,20 +278,20 @@ fun span(p, xs) {
   }
   go([], xs, p)
 }
-# splitAt :: Int -> ([a]) -> ([a],[a])
+# splitAt :: Int -> (List a) -> (List a,List a)
 
-sig takeWhile : ((a) ~b~> Bool, [a]) ~b~> [a]
+sig takeWhile : ((a) ~b~> Bool, List a) ~b~> List a
 fun takeWhile(pred, list) {
   first(span(pred, list))
 }
 
-sig dropWhile : ((a) ~b~> Bool, [a]) ~b~> [a]
+sig dropWhile : ((a) ~b~> Bool, List a) ~b~> List a
 fun dropWhile(pred, list) {
   second(span(pred, list))
 }
 
 # until :: ((a) -> Bool) -> ((a) -> a) -> (a) -> a
-# zipWith :: ((a) -> b -> c) -> ([a]) -> [b] -> [c]
+# zipWith :: ((a) -> b -> c) -> (List a) -> List b -> List c
 
 # div :: Int -> Int -> Int
 # gcd :: Int -> Int -> Int
@@ -312,7 +312,7 @@ fun abs(i) {
   if (i < 0) -i else i
 }
 
-sig init : ([a]) ~> [a]
+sig init : (List a) ~> List a
 fun init(list) {
   switch (list) {
     case [y] -> []
@@ -322,7 +322,7 @@ fun init(list) {
 
 fun curtail(list) { init(list) }
 
-sig last : ([a]) ~> a
+sig last : (List a) ~> a
 fun last(list) {
   switch (list) {
     case [x] -> x
@@ -338,18 +338,18 @@ fun intercalate(bone, rushes) {
   }
 }
 
-sig unlines : ([String]) ~> String
+sig unlines : (List String) ~> String
 fun unlines(ws) {
   implode(intercalate(explode("\n"), map(explode, ws)))
 }
 
-sig unwords : ([String]) ~> String
+sig unwords : (List String) ~> String
 fun unwords(ws) {
   implode(intercalate(explode(" "), map(explode, ws)))
 }
 
-# lines :: String -> [String]
-# words :: String -> [String]
+# lines :: String -> List String
+# words :: String -> List String
 
 ### Defined internally to Links:
 # ceiling :: Float -> Int
@@ -385,7 +385,7 @@ fun isJust(x) {
   }
 }
 
-sig search : ((a) ~b~> Bool, [a]) ~b~> Maybe (a)
+sig search : ((a) ~b~> Bool, List a) ~b~> Maybe (a)
 fun search(p,l) {
   switch (l) {
     case [] -> Nothing
@@ -394,7 +394,7 @@ fun search(p,l) {
   }
 }
 
-sig find : ((a) ~b~> Bool, [a]) ~b~> a
+sig find : ((a) ~b~> Bool, List a) ~b~> a
 fun find(p,l) {
   switch (l) {
     case [] -> error("Not_found")
@@ -422,7 +422,7 @@ fun fromMaybe(x, y) {
 
 # FIXME: for some reason placing this further up the file where it should be
 # leads to an error
-sig empty : ([a]) -> Bool
+sig empty : (List a) -> Bool
 fun empty(l) {
   switch (l) {
     case [] -> true
@@ -430,7 +430,7 @@ fun empty(l) {
   }
 }
 
-unsafe sig sum : ([Int]) -> Int
+unsafe sig sum : (List Int) -> Int
 fun sum(ns) {
   switch (ns) {
     case [] -> 0
@@ -438,7 +438,7 @@ fun sum(ns) {
   }
 }
 
-unsafe sig sumF : ([Float]) -> Float
+unsafe sig sumF : (List Float) -> Float
 fun sumF(ns) {
   switch (ns) {
     case [] -> 0.0
@@ -472,7 +472,7 @@ fun maximum(a,b) {
   else { b }
 }
 
-unsafe sig max_list : ([Int]) -> Int
+unsafe sig max_list : (List Int) -> Int
 fun max_list(ns) {
   switch (ns) {
     case [] -> min_int
@@ -480,7 +480,7 @@ fun max_list(ns) {
  }
 }
 
-unsafe sig maxF_list : ([Float]) -> Float
+unsafe sig maxF_list : (List Float) -> Float
 fun maxF_list(ns) {
   switch (ns) {
     case [] -> neg_infinity
@@ -488,7 +488,7 @@ fun maxF_list(ns) {
   }
 }
 
-unsafe sig min_list : ([Int]) -> Int
+unsafe sig min_list : (List Int) -> Int
 fun min_list(ns) {
   switch (ns) {
     case [] -> max_int
@@ -496,7 +496,7 @@ fun min_list(ns) {
   }
 }
 
-unsafe sig minF_list : ([Float]) -> Float
+unsafe sig minF_list : (List Float) -> Float
 fun minF_list(ns) {
   switch (ns) {
     case [] -> infinity
@@ -506,7 +506,7 @@ fun minF_list(ns) {
 
 # association lists
 # TBD: memassoc is an old LISP word. Perhaps a more modern name would fit better?
-sig memassoc : (a,[(a,b)]) ~> Bool
+sig memassoc : (a,List (a,b)) ~> Bool
 fun memassoc(x,l) {
   switch (l) {
     case []    -> false
@@ -514,7 +514,7 @@ fun memassoc(x,l) {
   }
 }
 
-sig lookup : (a,[(a,b)]) ~> Maybe (b)
+sig lookup : (a,List (a,b)) ~> Maybe (b)
 fun lookup(x,l) {
   switch (l) {
     case [] -> Nothing
@@ -523,7 +523,7 @@ fun lookup(x,l) {
   }
 }
 
-sig assoc : (String,[(String,b)]) ~> b
+sig assoc : (String,List (String,b)) ~> b
 fun assoc(x,l) {
   switch (l) {
     case []    -> error("Not found " ^^ x)
@@ -532,7 +532,7 @@ fun assoc(x,l) {
   }
 }
 
-sig assocDefault : (String,[(String,b)],b) ~> b
+sig assocDefault : (String,List (String,b),b) ~> b
 fun assocDefault(x,l,d) {
   switch (l) {
     case []    -> d
@@ -541,7 +541,7 @@ fun assocDefault(x,l,d) {
   }
 }
 
-sig removeAssoc : (a,[(a,b)]) ~> [(a,b)]
+sig removeAssoc : (a,List (a,b)) ~> List (a,b)
 fun removeAssoc(x,l) {
   switch (l) {
     case [] -> []
@@ -550,7 +550,7 @@ fun removeAssoc(x,l) {
   }
 }
 
-sig assocAll : (String,[(String,b)]) ~> [b]
+sig assocAll : (String,List (String,b)) ~> List b
 fun assocAll(x,l) {
   switch (l) {
     case []    -> []
@@ -567,7 +567,7 @@ fun isInt (x) { x =~ /-?[0-9]+$/ }
 sig isFloat : (String) -> Bool
 fun isFloat (x) { x =~ /-?[0-9]+(\.[0-9]+)?$/ }
 
-sig asList : (TableHandle((|a::Base),(|_::Base),(|_::Base))) {}-> [(|a::Base)]
+sig asList : (TableHandle((|a::Base),(|_::Base),(|_::Base))) {}-> List (|a::Base)
 fun asList(t) server {
   for (x <-- t) [x]
 }
@@ -575,14 +575,14 @@ fun asList(t) server {
 fun dedup(l) server {
   # an unsafe local definition of elem, only for use within dedup!
   # (ensures dedup is tame, while keeping the global def of elem wild)
-  unsafe sig elem : (a,[a]) -b-> Bool
+  unsafe sig elem : (a,List a) -b-> Bool
   fun elem(x, l) {
     switch (l) {
       case [] -> false
       case hd::tl -> x == hd || x `elem` tl
     }
   }
-  unsafe sig aux : ([a],[a]) -> [a]
+  unsafe sig aux : (List a,List a) -> List a
   fun aux(vl, rl) {
     switch (rl) {
       case [] -> []
@@ -593,33 +593,33 @@ fun dedup(l) server {
           r::aux(r::vl, rl0)
     }
   }
-  aux([]:[a], l)
+  aux([]:List a, l)
 }
 
 fun distinct(t) server {
 	dedup(asList(t))
 }
 
-sig concatMapKey : ((a) -b-> [c], [(a,[d])]) -b-> [c]
+sig concatMapKey : ((a) -b-> List c, List (a,List d)) -b-> List c
 fun concatMapKey(f, l) {
   for (x <- l) f(x.1)
 }
 
 # XXX: I believe the arguments are in the wrong order, but see sortBy
-sig groupBy : ((a) -b-> c, [a]) -b-> [(c, [a])]
+sig groupBy : ((a) -b-> c, List a) -b-> List (c, List a)
 fun groupBy(f, l) {
   var is = dedup(map(f, l));
   for (i <- is) [(i, filter(fun (x) { f(x) == i }, l))]
 }
 
-sig groupByMap : ((a) -b-> c, [(d,[a])]) -b-> [((c,d), [a])]
+sig groupByMap : ((a) -b-> c, List (d,List a)) -b-> List ((c,d), List a)
 fun groupByMap(f, xs) {
   for (x <- xs) 
     for (k <- dedup(map(f,x.2))) 
       [((k,x.1), filter(fun (v) { f(v) == k }, x.2))]
 }
 
-unsafe sig lookupG : (a,[(a,[b])]) -> [b]
+unsafe sig lookupG : (a,List (a,List b)) -> List b
 fun lookupG(x,l) {
   switch (l) {
     case [] -> []
@@ -628,7 +628,7 @@ fun lookupG(x,l) {
   }
 }
 
-sig aggBy : ([(a, [b])], ([b]) -c-> d) -c-> [(a, d)]
+sig aggBy : (List (a, List b), (List b) -c-> d) -c-> List (a, d)
 fun aggBy(q, agg) {
   concatMapKey(fun (k) {
     [(k, agg(lookupG(k, q)))]
@@ -761,7 +761,7 @@ fun replaceChildren (item, newChildren) {
 ####   compiled. If we had a purity analysis then all of these could
 ####   be safely eta-reduced again.
 
-typename Env = [(String,String)];
+typename Env = List (String,String);
 typename Gen = Int;
 typename State (d,a) = (d) {}~> (a,d);
 typename Collector (a) = (Env) {}~> a;
@@ -769,7 +769,7 @@ typename CheckedCollector (a) = Collector((Xml, Maybe(a)));
 typename Formlet (a) = State (Gen, (Xml, CheckedCollector(a)));
 typename XmlContext = (Xml) {}~> Xml;
 
-typename Attributes = [(String, String)];
+typename Attributes = List (String, String);
 
 # attributes for a multipart form
 var multipart = [("enctype", "multipart/form-data")];
@@ -850,7 +850,7 @@ fun makeName(i) { "input_" ^^ intToString(i) }
 sig nextName : State (Int,String)
 var nextName = fun (i) { (makeName(i), i+1) };
 
-sig sequence : ([State(a,b)]) ~> State(a,[b])
+sig sequence : (List State(a,b)) ~> State(a,List b)
 fun sequence(xs) {
   switch (xs) {
     case [] -> return([])
@@ -860,7 +860,7 @@ fun sequence(xs) {
   }
 }
 
-sig formlets : ([Formlet (a)]) ~> Formlet ([a])
+sig formlets : (List Formlet (a)) ~> Formlet (List a)
 fun formlets(fs) {
   switch (fs) {
     case []    -> formlet <#/> yields []
@@ -870,11 +870,11 @@ fun formlets(fs) {
 }
 #
 # Page stuff
-typename RecForms = [mu a.(([a]) {}~> Xml)];
-typename MultiXmlContext = ([Xml]) {}~> Xml;
+typename RecForms = List (mu a.((List a) {}~> Xml));
+typename MultiXmlContext = (List Xml) {}~> Xml;
 
 typename CheckedFormBuilder = (MultiXmlContext, RecForms, Int) {}~> Xml;
-typename Page = (Int, MultiXmlContext, (Gen) {}~> ([CheckedFormBuilder], Gen));
+typename Page = (Int, MultiXmlContext, (Gen) {}~> (List CheckedFormBuilder, Gen));
 typename Handler (a) = (a) {}~> Page;
 
 sig pickleCont : (() { |e}-> Page) ~> String
@@ -896,7 +896,7 @@ fun joinP((i1, k1, fs1), (i2, k2, fs2)) {
    })
 }
 
-sig joinManyP : ([Page]) ~> Page
+sig joinManyP : (List Page) ~> Page
 fun joinManyP(gs) {
   fold_left(joinP, unitP, gs)
 }
@@ -1122,7 +1122,7 @@ var checkbox = fun(gen) {checkboxDefault(false)(gen)};
 # and passes this list of pairs to the 'layout' function, which should
 # return XML. The result is a formlet that will return the value from
 # 'items' that is associated with the radio button selected by the user.
-sig inputRadiogroup : ([a], a, ([(Xml, a)]) {}~> Xml) ->
+sig inputRadiogroup : (List a, a, (List (Xml, a)) {}~> Xml) ->
                      Formlet (a)
 fun inputRadiogroup(items, selected, layout) {
   nextName >>= fun (name) {
@@ -1150,7 +1150,7 @@ fun inputRadiogroup(items, selected, layout) {
 # ('choice' and 'choices'). Constructs an <option> element and an associated
 # function for determining whether this option was selected.
 sig preludeOptionKeyed : (String, (a,String), Bool) ~>
-                        (Xml, ((String) -c-> [a]) -> (String) -c-> [a])
+                        (Xml, ((String) -c-> List a) -> (String) -c-> List a)
 fun preludeOptionKeyed (key, (data,text), selected) {
   if (selected) {
      ((<option value="{key}" selected="SELECTED">{stringToXml(text)}</option>,
@@ -1161,8 +1161,8 @@ fun preludeOptionKeyed (key, (data,text), selected) {
   }
 }
 
-sig preludeOptionsKeyed : ([(String,(a,String))], a) { |e}~>
-                         (Xml, (String) -> [a])
+sig preludeOptionsKeyed : (List (String,(a,String)), a) { |e}~>
+                         (Xml, (String) -> List a)
 fun preludeOptionsKeyed(items, def) {
   switch (items) {
      case [] -> ((<#/>, fun (_) { [] }))
@@ -1174,7 +1174,7 @@ fun preludeOptionsKeyed(items, def) {
 }
 
 sig preludeMultiOptionsKeyed
-    : ([(String, (a,String,Bool))]) { |e}~> (Xml, (String) -> [a])
+    : (List (String, (a,String,Bool))) { |e}~> (Xml, (String) -> List a)
 fun preludeMultiOptionsKeyed(items) {
   switch (items) {
      case [] -> ((<#/>, fun (_) { [] }))
@@ -1186,7 +1186,7 @@ fun preludeMultiOptionsKeyed(items) {
   }
 }
 
-sig choiceDefault : ([(a,String)], a) ~> Formlet (a)
+sig choiceDefault : (List (a,String), a) ~> Formlet (a)
 fun choiceDefault (items, selected) {
   # generate a fresh name for the field (menu) as a whole
   nextName >>= fun (fieldName) {
@@ -1211,7 +1211,7 @@ fun choiceDefault (items, selected) {
   }
 }
 
-sig choices : ([(a,String, Bool)]) ~> Formlet ([a])
+sig choices : (List (a,String, Bool)) ~> Formlet (List a)
 fun choices (items) {
   # generate a fresh name for the field (menu) as a whole
   nextName >>= fun (fieldName) {
@@ -1237,12 +1237,12 @@ fun choices (items) {
   }
 }
 
-sig choicesNone : ([(a, String)]) ~> Formlet ([a])
+sig choicesNone : (List (a, String)) ~> Formlet (List a)
 fun choicesNone (items) {
   choices (map (fun ((v, text)) {(v, text, false)}, items))
 }
 
-sig choice : ([(a,String)]) ~> Formlet (a)
+sig choice : (List (a,String)) ~> Formlet (a)
 fun choice (items) {
   var (selected, _) = hd(items);
   choiceDefault(items, selected)
@@ -1511,7 +1511,7 @@ fun gen2(f) {
 
 ## Utility functions
 # Returns Just the index of x in xs if x is an element in xs, otherwise Nothing.
-sig elemIndex : (a, [a]) ~> Maybe(Int)
+sig elemIndex : (a, List a) ~> Maybe(Int)
 fun elemIndex(x, xs) {
   var n = fold_left(fun(acc, y) {
     switch (acc) {
@@ -1525,7 +1525,7 @@ fun elemIndex(x, xs) {
 
 ####
 
-sig partition : ((a) ~b~> Bool, [a]) ~b~> ([a], [a])
+sig partition : ((a) ~b~> Bool, List a) ~b~> (List a, List a)
 fun partition(pred, xs) {
   fun go(ayes, noes, xs) {
     switch(xs) {
@@ -1541,7 +1541,7 @@ fun partition(pred, xs) {
   go([], [], xs)
 }
 
-sig groupByFlat : ((a) -b-> c, [a]) -b-> [(c, [a])]
+sig groupByFlat : ((a) -b-> c, List a) -b-> List (c, List a)
 fun groupByFlat(project, ts) {
   for(t <- ts)
     [(project(t),for (u <- ts) where (project(t) == project(u)) [u])]
@@ -1592,7 +1592,7 @@ fun serveThis(p) {
   servePages()
 }
 
-sig serveThese : ([(String,() {hear{_}}~> Page)]) ~> ()
+sig serveThese : (List (String,() {hear{_}}~> Page)) ~> ()
 fun serveThese(routes) {
   var _ = map(fun ((s,p)) {addRoute(s,fun (_) {p()})}, routes);
   servePages()

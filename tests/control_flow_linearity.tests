@@ -149,12 +149,12 @@ stdout : 84 : Int
 Linear choice and unlimited choice
 tests/control_flow_linearity/choose.links
 filemode : true
-stdout : [10, 10, 18, 12, 20] : [Int]
+stdout : [10, 10, 18, 12, 20] : List Int
 
 Combining unlimited choice and unlimited state
 tests/control_flow_linearity/choose_and_state.links
 filemode : true
-stdout : [3, 4, 9, 10, 3, 3, 3, 3] : [Int]
+stdout : [3, 4, 9, 10, 3, 3, 3, 3] : List Int
 
 Combining linear choice and unlimited state
 tests/control_flow_linearity/choose_and_state2.links

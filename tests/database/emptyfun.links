@@ -1,6 +1,6 @@
 var db = database "links";
 var factorials = table "factorials" with (i : Int, f : Int) from db;
-sig contains : ([a]) ~> ((a) {}-> Bool)
+sig contains : (List a) ~> ((a) {}-> Bool)
 fun contains(xs) {
   fun containsInner(xs, q) {
     switch(xs) {

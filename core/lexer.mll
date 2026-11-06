@@ -105,6 +105,7 @@ let keywords = [
  "fun"      , FUN;
  "formlet"  , FORMLET;
  "handle"   , HANDLE;
+ "List"     , LIST;
  "if"       , IF;
  "in"       , IN;
  "lens"     , LENS;
@@ -213,7 +214,7 @@ rule lex ctxt nl = parse
   | '\n'                                { nl (); bump_lines lexbuf 1; lex ctxt nl lexbuf }
   | '_'                                 { UNDERSCORE }
   | '='                                 { EQ }
-  | "->"                                { RARROW }
+  | "->"                                { if ctxt#togglable then ctxt#toggle; RARROW }
   | "~>"                                { SQUIGRARROW }
   | "-@"                                { LOLLI }
   | "~@"                                { SQUIGLOLLI }
@@ -297,6 +298,7 @@ rule lex ctxt nl = parse
                                             ignore (match keyword with
                                               | CASE when not ctxt#effect_mode -> ctxt#toggle
                                               | MODAL -> ctxt#push_lexer (modal_start ctxt nl)
+                                              | HANDLE | SHALLOWHANDLE -> ctxt#push_lexer (handler_start ctxt nl)
                                               | _ -> ());
                                             keyword
                                           with Not_found | NotFound _ ->
@@ -304,22 +306,30 @@ rule lex ctxt nl = parse
                                             else VARIABLE var }
   | def_blank                           { lex ctxt nl lexbuf }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
-(* Modal delimiters do not affect the chevron count for operation patterns. *)
+(* Effect annotations use separate delimiters from operation patterns and XML. *)
 and modal_start ctxt nl = parse
   | '#' ([^ '\n'] *)                   { modal_start ctxt nl lexbuf }
   | '\n'                               { nl (); bump_lines lexbuf 1; modal_start ctxt nl lexbuf }
   | def_blank                          { modal_start ctxt nl lexbuf }
   | '['                                { ctxt#pop_lexer; LBRACKET }
-  | '<'                                { ctxt#pop_lexer; ctxt#push_lexer (modal_row ctxt nl); MODAL_LANGLE }
+  | '<'                                { ctxt#pop_lexer; ctxt#push_lexer (effect_angle ctxt nl); EFFECT_LANGLE }
   | _                                  { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
-and modal_row ctxt nl = parse
-  | '#' ([^ '\n'] *)                   { modal_row ctxt nl lexbuf }
-  | '\n'                               { nl (); bump_lines lexbuf 1; modal_row ctxt nl lexbuf }
-  | def_blank                          { modal_row ctxt nl lexbuf }
+and handler_start ctxt nl = parse
+  | eof                                { EOF }
+  | '#' ([^ '\n'] *)                   { handler_start ctxt nl lexbuf }
+  | '\n'                               { nl (); bump_lines lexbuf 1; handler_start ctxt nl lexbuf }
+  | def_blank                          { handler_start ctxt nl lexbuf }
+  | '('                                { ctxt#pop_lexer; LPAREN }
+  | '<'                                { ctxt#pop_lexer; ctxt#push_lexer (effect_angle ctxt nl); EFFECT_LANGLE }
+  | _                                  { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
+and effect_angle ctxt nl = parse
+  | '#' ([^ '\n'] *)                   { effect_angle ctxt nl lexbuf }
+  | '\n'                               { nl (); bump_lines lexbuf 1; effect_angle ctxt nl lexbuf }
+  | def_blank                          { effect_angle ctxt nl lexbuf }
   | "|]"                               { BARRBRACKET }
   | "|+]"                              { BARPLUSRBRACKET }
   | "|&]"                              { BARAMPRBRACKET }
-  | '>'                                { ctxt#pop_lexer; MODAL_RANGLE }
+  | '>'                                { ctxt#pop_lexer; EFFECT_RANGLE }
   | '|'                                { VBAR }
   | ""                                 { lex ctxt nl lexbuf }
 and upd_qual ctxt nl = parse

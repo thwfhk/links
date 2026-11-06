@@ -26,7 +26,7 @@ var mc =
         c: Int)
   from db;
 
-sig marketers : () -> [(name:String, clients:[Int])]
+sig marketers : () -> List (name:String, clients:List Int)
 fun marketers () {
   query nested {
     for (m <-- marketers_names)
@@ -34,7 +34,7 @@ fun marketers () {
   }
 }
 
-sig u : () -> [((id:Int), [String])]
+sig u : () -> List ((id:Int), List String)
 fun u () {
   query nested {
     for (c <-- clients)
@@ -44,7 +44,7 @@ fun u () {
   }
 }
 
-sig v : () -> [(name:String)]
+sig v : () -> List (name:String)
 fun v () {
   query nested {
     for (x <-- marketers_names)
@@ -53,7 +53,7 @@ fun v () {
   }
 }
 
-sig marketers2 : () -> [(name:String, clients:[Int])]
+sig marketers2 : () -> List (name:String, clients:List Int)
 fun marketers2 () {
   query nested {
     for (m <-- marketers_names)
@@ -61,7 +61,7 @@ fun marketers2 () {
   }
 }
 
-sig marketers3 : () -> [(name:String, clients:[Int])]
+sig marketers3 : () -> List (name:String, clients:List Int)
 fun marketers3 () {
   query nested {
     for (m <-- marketers_names)

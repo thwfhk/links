@@ -52,7 +52,7 @@ fun manage(c) {
     }
 
 
-sig draggableList : (String, [String]) ~> Xml
+sig draggableList : (String, List String) ~> Xml
 fun draggableList(id, items)
 {
   var accessPoint = new();

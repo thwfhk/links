@@ -16,7 +16,7 @@ var paperId = "paper";
 var authorLabel = "Author";
 var paperLabel = "Paper";
 
-sig distinct : ([(id:Int|r)]) ~> [(id:Int|r)]
+sig distinct : (List (id:Int|r)) ~> List (id:Int|r)
 fun distinct(xs) {
   fold_left(
     fun (ys, x) {
@@ -43,7 +43,7 @@ fun header(title) {
   </head>
 }
 
-sig getPapersAndCollaborators : (Author) ~> ([Paper], [Author])
+sig getPapersAndCollaborators : (Author) ~> (List Paper, List Author)
 fun getPapersAndCollaborators(author) server {
   var papers =
     query {
@@ -105,7 +105,7 @@ fun getPapersAndCollaborators(author) server {
 }
 
 
-sig getAuthors : (Paper) -> [Author]
+sig getAuthors : (Paper) -> List Author
 fun getAuthors(paper) server {
   query {
     for (r <-- paperauthorTable)
@@ -117,7 +117,7 @@ fun getAuthors(paper) server {
 }
 
 mutual {
-  sig formatPaperList : ([Paper]) ~> Xml
+  sig formatPaperList : (List Paper) ~> Xml
   fun formatPaperList(papers) server {
     for (p <- papers)
       <#><a l:href="{showPaperInfo(p)}">{renderPaper(p)}</a><br/></#>
@@ -179,7 +179,7 @@ mutual {
      </html>
   }
 
-  sig formatAuthorList : ([Author]) ~> Xml
+  sig formatAuthorList : (List Author) ~> Xml
   fun formatAuthorList(authors) server {
     for (a <- authors)
       <#><a l:href="{showAuthorInfo(a)}">{renderAuthor(a)}</a><br/></#>

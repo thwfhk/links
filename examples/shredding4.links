@@ -1,8 +1,8 @@
 typename Task         = String;
-typename Employee     = (name:String, tasks:[Task], salary:Int);
+typename Employee     = (name:String, tasks:List Task, salary:Int);
 typename Contact      = (name:String, "client":Bool);
-typename Department   = (name:String, employees:[Employee], contacts:[Contact]);
-typename Organisation = [Department];
+typename Department   = (name:String, employees:List Employee, contacts:List Contact);
+typename Organisation = List Department;
 
 var db = database "organisation";
 
@@ -35,7 +35,7 @@ fun organisation() {
 
 
 
-sig emptyDepartments : (() {}-> (Organisation)) -> [(name:String)]
+sig emptyDepartments : (() {}-> (Organisation)) -> List (name:String)
 fun emptyDepartments(org) {
   query {
   for (x <- org())

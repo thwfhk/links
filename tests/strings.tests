@@ -12,7 +12,7 @@ stdout : "Links" : String
 
 concatenation
 "abc" ^^ "def"
-stdout : @"abcdef" : (\[Char\]|String)
+stdout : @"abcdef" : (List Char|String)
 
 comparision
 "a" < "z"

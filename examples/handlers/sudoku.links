@@ -1,7 +1,7 @@
 # We represent a Sudoku board as row major list of lists.
 # The grid size is always assumed to be 9x9.
 typename Status = [|Unknown|Valid|Invalid|];
-typename Sudoku = (name:String,grid:[[Maybe(Int)]],status:Status);
+typename Sudoku = (name:String,grid:List (List Maybe(Int)),status:Status);
 
 sig copySudoku : (Sudoku, String) -> Sudoku
 fun copySudoku(sudoku, copyName) {
@@ -14,7 +14,7 @@ fun emptySudoku() {
   (name="empty", grid=map(fun(_) { map(fun(_) { Nothing }, range) }, range), status=Unknown)
 }
 
-sig intersperse : (a, [a]) ~> [a]
+sig intersperse : (a, List a) ~> List a
 fun intersperse(y, xs) {
    switch (xs) {
      case []      -> []
@@ -23,7 +23,7 @@ fun intersperse(y, xs) {
    }
 }
 
-sig dup : ([a]) ~> [a]
+sig dup : (List a) ~> List a
 fun dup(xs) {
   fun aux(xs, visited, dups) {
     switch (xs) {
@@ -46,7 +46,7 @@ fun transpose(xss) {
   }
 }
 
-sig concatString : ([String]) ~> String
+sig concatString : (List String) ~> String
 fun concatString(ss) {
   fold_left(fun(acc, s) { acc ^^ s }, "", ss)
 }

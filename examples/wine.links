@@ -450,7 +450,7 @@ mutual {
       result
   }
 
-  sig update_cart : (Int, Int, [(Int,Int)]) ~> ()
+  sig update_cart : (Int, Int, List (Int,Int)) ~> ()
   fun update_cart(cust_id, order_id, qtys) {
     # Gosh, here's an ugly idiom:
     ignore(for ((item_id, newQty) <- qtys) {

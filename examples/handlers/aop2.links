@@ -57,7 +57,7 @@ typename Expr =
    | Var : String
    | Plus : (Expr, Expr)
    | Assign : (String, Expr)
-   | Sequence : [Expr]
+   | Sequence : List Expr
    | While : (Expr, Expr)
    |];
 
@@ -89,7 +89,7 @@ sig suspend :
         {Suspend:(Expr, SComp({ |e}, a)) => a|e}~> a
 fun suspend(e)(m) {do Suspend(e, m)}
 
-typename Env = [(String, Int)];
+typename Env = List (String, Int);
 fun showEnv(env) {
   fun showEntry((x, i)) {x ^^ "=" ^^ intToString(i)}
 

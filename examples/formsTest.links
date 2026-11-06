@@ -49,7 +49,7 @@ var theFormlet =
      colour=colour,
      file=file);
 
-sig stringConcat : (String, [String]) ~> String
+sig stringConcat : (String, List String) ~> String
 fun stringConcat(delimiter, ss) {
   switch (ss) {
     case [] -> ""

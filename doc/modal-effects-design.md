@@ -118,8 +118,13 @@ metadata separate through all syntax traversals.
 
 ### List types and handled-effect delimiters
 
-Parse `List A` as the existing list datatype node. Keep the internal element
-kind, list constructor and runtime representation. Update both type printers
+Parse `List A` as the existing list datatype node. Its element consumes a
+primary type, as modal payloads do. Nested prefix lists associate to the right;
+printers group compound elements. Keep the internal element kind, list
+constructor and runtime representation. A separate `List` token selects the
+built-in type syntax; other constructor positions still accept `List`,
+including variant labels, patterns and module/effect names. Rename the custom
+`List` aliases in mutual-recursion fixtures to `RecursiveList`. Update both type printers
 in `core/types.ml` to emit prefix list types with the necessary parentheses.
 Cover nested lists, function/modal/quantified element types, and parse/print
 round trips. Preserve expression/pattern list syntax while migrating type
@@ -131,8 +136,11 @@ annotation. Enter a suitable lexer mode after those keywords so angle brackets
 remain independent of XML and the operation-pattern chevron counter. The mode
 must also allow an unannotated handler followed directly by `(`. Preserve effect
 names/type arguments, source positions, handler parameters and existing resolution
-rules. Test qualified effects, parameterised effects, nested handlers and XML
-inside the computation and clauses. Check the generated grammar for conflicts.
+rules. The lexer shares its effect-angle mode between modalities and handler
+annotations. A case's outer `->` leaves operation-pattern mode before scanning
+the clause body. Test qualified effects, parameterised effects, nested handlers
+and XML inside the computation and clauses. Check the generated grammar for
+conflicts.
 
 ### Combined kind syntax and inference reuse
 
@@ -435,8 +443,9 @@ and scope requirements. Omission alone does not require an annotation.
 Distinguish omitted arguments on a handler from a malformed explicit argument
 list. Permit a name-only annotation for a parameterised handled effect; keep
 arity checks for explicitly supplied lists and for effect applications in modal
-types. The current `effect_application` resolver requires full arity, so the
-handler path needs separate handling of omission. Explicit polymorphic/modal
+types. The generic `effect_application` resolver requires full arity; the handler
+path permits a name without arguments. Empty explicit argument lists fail
+parsing, so an empty argument list in the handler AST means omission. Explicit polymorphic/modal
 arguments go through annotation elaboration and Fresco checks. Test inferred
 monotypes, explicit polymorphic/modal arguments, ordinary/modal kind failures,
 shared clause arguments, unused parameters, qualification and ambiguous short names.

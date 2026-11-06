@@ -434,6 +434,9 @@ expressions between brackets::
     [true, false, x, true]
 
 Note that *all elements of a list must be of the same type*.
+Write a list type as ``List A``, where ``A`` is the element type. For
+example, a list of integers has type ``List Int`` and a list of lists of
+integers has type ``List (List Int)``.
 
 Lists support the "concatenate" operation, denoted by two plus
 characters::
@@ -446,7 +449,7 @@ The "cons" operator ``::`` appends an element to the start of a
 list::
 
   links> 1 :: [2,3,4,5];
-  [1, 2, 3, 4, 5] : [Int]
+  [1, 2, 3, 4, 5] : List Int
 
 The head ``hd`` and tail ``tl`` functions each take a single list as
 an argument. The ``hd`` function returns the first element of the list, and the
@@ -456,7 +459,7 @@ an argument. The ``hd`` function returns the first element of the list, and the
   1 : Int
 
   links> tl([1,2,3]);
-  [2, 3] : [Int]
+  [2, 3] : List Int
 
 Both functions are partial in that they can fail at runtime if given an empty
 list.
@@ -467,9 +470,9 @@ a list, and all *but* the first ``n`` elements of a list, respectively.
 ::
 
   links> take(2,[1,2,3]);
-  [1, 2] : [Int]
+  [1, 2] : List Int
   links> drop(2,[1,2,3]);
-  [3] : [Int]
+  [3] : List Int
 
 Pattern matching on lists
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -492,7 +495,7 @@ The syntax ``[a .. b]`` constructs a list of all the integers between
 As an example::
 
   links> [1..10];
-  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] : [Int]
+  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] : List Int
 
 Comprehensions
 --------------
@@ -587,7 +590,7 @@ For example::
        [(i, fruit)];
    [(1, "apple"),  (2, "apple"),  (3, "apple"),  (4, "apple"),
     (1, "banana"), (2, "banana"), (3, "banana"), (4, "banana"),
-    (1, "orange"), (2, "orange"), (3, "orange"), (4, "orange")] : [(Int, String)]
+    (1, "orange"), (2, "orange"), (3, "orange"), (4, "orange")] : List (Int, String)
 
 You can also impose an order on all the elements produced by the
 series of generators in a comprehension header, as in::
@@ -598,7 +601,7 @@ series of generators in a comprehension header, as in::
        [(i, fruit)];
    [(1, "apple"),  (2, "apple"),  (3, "apple"),  (4, "apple"),
     (1, "banana"), (2, "banana"), (3, "banana"), (4, "banana"),
-    (1, "orange"), (2, "orange"), (3, "orange"), (4, "orange")] : [(Int, String)]
+    (1, "orange"), (2, "orange"), (3, "orange"), (4, "orange")] : List (Int, String)
 
 Links will produce a list of tuple elements as dictated by the
 generators, then sort them, and finally evaluate the body expression
@@ -631,4 +634,4 @@ result than may not obey the desired ordering. For example::
               [(i, fruit)];
    [(1, "apple"),  (2, "apple"),  (3, "apple"),  (4, "apple"),
     (1, "banana"), (2, "banana"), (3, "banana"), (4, "banana"),
-    (1, "orange"), (2, "orange"), (3, "orange"), (4, "orange")] : [(Int, String)]
+    (1, "orange"), (2, "orange"), (3, "orange"), (4, "orange")] : List (Int, String)

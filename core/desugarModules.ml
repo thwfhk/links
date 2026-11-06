@@ -372,17 +372,20 @@ let rec desugar ?(toplevel=false) ?contextual
       | None -> super#effect_name name
       | Some _ -> with_node name [(self#effect_header name.pos name.node).id]
 
+    method private resolve_effect_application ~allow_omitted (application : Datatype.effect_application) =
+      let path, arguments = application.node in
+      let effect_header = self#effect_header application.pos path in
+      if not (allow_omitted && arguments = []) &&
+         effect_header.parameter_count <> List.length arguments then
+        resolution_error application.pos
+          (Printf.sprintf "Effect %s expects %d arguments, received %d"
+            effect_header.source_name effect_header.parameter_count (List.length arguments));
+      let arguments = List.map self#datatype arguments in
+      with_node application ([effect_header.id], arguments), effect_header
+
     method! effect_application application = match contextual with
       | None -> super#effect_application application
-      | Some _ ->
-         let path, arguments = application.node in
-         let effect_header = self#effect_header application.pos path in
-         if effect_header.parameter_count <> List.length arguments then
-           resolution_error application.pos
-             (Printf.sprintf "Effect %s expects %d arguments, received %d"
-               effect_header.source_name effect_header.parameter_count (List.length arguments));
-         let arguments = List.map self#datatype arguments in
-         with_node application ([effect_header.id], arguments)
+      | Some _ -> fst (self#resolve_effect_application ~allow_omitted:false application)
 
     method private operation_pattern selected pattern =
       let make_operation op args k linearity =
@@ -416,10 +419,11 @@ let rec desugar ?(toplevel=false) ?contextual
          let arguments = List.map self#phrase arguments in
          with_node phrase (DoOperation (operation, arguments, datatype, linearity))
       | Some _, Handle handler ->
-         let shd_effect = Option.map self#effect_application handler.sh_descr.shd_effect in
-         let selected = Option.map (fun application ->
-           let ids, _ = application.node in
-           Option.get (EffectHeaders.find_effect (List.hd ids) self#headers)) shd_effect in
+         let shd_effect, selected = match handler.sh_descr.shd_effect with
+           | None -> None, None
+           | Some application ->
+              let application, effect_header = self#resolve_effect_application ~allow_omitted:true application in
+              Some application, Some effect_header in
          let clauses = List.map (fun (pattern, body) ->
            let pattern, op = self#operation_pattern selected pattern in
            pattern, body, op) handler.sh_effect_cases in

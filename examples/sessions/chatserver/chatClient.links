@@ -104,7 +104,7 @@ fun outgoingLoop(ap, s) {
   }
 }
 
-sig beginChat : (Topic, [Nickname], ClientReceive, ClientSend) ~> ()
+sig beginChat : (Topic, List Nickname, ClientReceive, ClientSend) ~> ()
 fun beginChat(topic, nicks, incoming, outgoing) {
   var ap = (new() : AP(?Message.End));
 

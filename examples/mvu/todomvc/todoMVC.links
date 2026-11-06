@@ -4,7 +4,7 @@ open import MvuAttrs;
 open import MvuEvents;
 
 typename Entry = (description : String, completed : Bool, editing : Bool, id : Int);
-typename Model = (entries : [Entry], field : String, uid : Int, visibility : String);
+typename Model = (entries : List Entry, field : String, uid : Int, visibility : String);
 typename Msg =
   [| NoOp
    | UpdateField : String
@@ -193,7 +193,7 @@ fun viewEntry(todo) {
     ]))
 }
 
-sig viewEntries : (String, [Entry]) ~> HTML(Msg)
+sig viewEntries : (String, List Entry) ~> HTML(Msg)
 fun viewEntries(visibility, entries) {
   var isVisible = fun (todo) {
     switch(visibility) {
@@ -245,7 +245,7 @@ fun viewControlsFilters(visibility) {
   ]))
 }
 
-sig viewControls : (String, [Entry]) ~> HTML(Msg)
+sig viewControls : (String, List Entry) ~> HTML(Msg)
 fun viewControls(visibility, entries) {
   var entriesCompleted = length(filter(fun(x) { x.completed }, entries));
   var entriesLeft = length(entries) - entriesCompleted;

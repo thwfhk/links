@@ -13,7 +13,7 @@ fun choose(x,y) {if (choice()) {x} else {y}}
 sig fail : Comp(a, {Failure:(()) => Zero|_})
 fun fail() {switch (do Failure(())) { }}
 
-sig allResults : (CF(a, {})) {}~> [a]
+sig allResults : (CF(a, {})) {}~> List a
 fun allResults(m) {
   handle(m()) {
     case x     -> [x]
@@ -33,7 +33,7 @@ fun drunkToss() {
   }
 }
 
-sig drunkTosses : (Int) -> CF([Toss])
+sig drunkTosses : (Int) -> CF(List Toss)
 fun drunkTosses(n)() {
   for (_ <- [1..n]) [drunkToss()]
 }

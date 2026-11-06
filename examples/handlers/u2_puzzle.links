@@ -43,7 +43,7 @@ fun memberToString(member) {
   }
 }
 
-sig showMembers : ([U2]) ~> String
+sig showMembers : (List U2) ~> String
 fun showMembers(members) {
   switch (members) {
     case [] -> ""
@@ -73,10 +73,10 @@ fun compareMembers(x, y) {
 }
 
 # Either side of the bridge.
-typename Side = [U2];
+typename Side = List U2;
 
 # Non-determinstic choice.
-sig choose : ([a]) {Choose:([a]) => a|_}-> a
+sig choose : (List a) {Choose:(List a) => a|_}-> a
 fun choose(xs) { do Choose(xs) }
 
 # Failure.
@@ -84,7 +84,7 @@ sig fail : () {Fail:Zero|_}-> a
 fun fail() { switch (do Fail) { } }
 
 # Selects one or two to cross the bridge.
-sig selectParty : (Side) {Choose:(Side) => U2, Fail:Zero|_}~> [U2]
+sig selectParty : (Side) {Choose:(Side) => U2, Fail:Zero|_}~> List U2
 fun selectParty(side) {
   var m1 = choose(side);
   var m2 = choose(side);
@@ -111,7 +111,7 @@ fun without(xs, ys) {
 }
 
 # The main loop.
-sig solve : (Bool, Int, ([U2], [U2])) {Choose:([U2]) => U2, Fail:Zero|_}~> [([U2], Bool)]
+sig solve : (Bool, Int, (List U2, List U2)) {Choose:(List U2) => U2, Fail:Zero|_}~> List (List U2, Bool)
 fun solve(forward, timeLeft, sides) {
   fun step(sideFrom, sideTo) {
     var party = selectParty(sideFrom);

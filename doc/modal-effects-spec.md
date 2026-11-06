@@ -46,7 +46,8 @@ payloads, for example `modal [] ((Int) -> Int)` and
 
 Removal lists contain names without type arguments, such as `State` or
 `M.State`. Extension lists contain effect applications, such as `State(Int)`.
-Empty effect lists are permitted. List types use `List A`. Parenthesise
+Empty effect lists are permitted. List types use `List A`, with a primary
+type as the element. Nested prefix lists associate to the right. Parenthesise
 compound element types, for example `List (List Int)` and `List ((Int) -> Int)`.
 The old list-type spelling `[A]` is rejected. List expressions and patterns
 retain their existing square-bracket and `::` syntax.

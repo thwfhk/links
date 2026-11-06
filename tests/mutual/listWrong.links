@@ -1,6 +1,6 @@
-typename List(a) = [| Cons:(a, List(a)) | Nil |];
+typename RecursiveList(a) = [| Cons:(a, RecursiveList(a)) | Nil |];
 
-sig example : () -> List(String)
+sig example : () -> RecursiveList(String)
 fun example() {
     Cons(1, Cons(2, Cons(3, Nil)))
 }

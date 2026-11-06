@@ -3,7 +3,7 @@ typename Domain = String;
 typename Subject = String;
 typename MessageBody = String;
 
-typename Message = (sender:Address, recipients:[Address], subject:Subject, body:MessageBody);
+typename Message = (sender:Address, recipients:List Address, subject:Subject, body:MessageBody);
 
 ### helper functions ###
 sig parseServerAnswer : (String) ~> Int

@@ -87,7 +87,7 @@ fun move(pl, n){
     do Move(pl, n)
 }
 
-sig chooseRandom: ([Int]) ~> Int
+sig chooseRandom: (List Int) ~> Int
 fun chooseRandom(numbers){
     switch(numbers){
         case [] -> 0
@@ -109,7 +109,7 @@ fun chooseRandom(numbers){
     }
 }
 
-sig validMoves : (Int) -> [Int]
+sig validMoves : (Int) -> List Int
 fun validMoves(n)
  { filter(fun(m) {m <= n}, [1,2,3]) }
 

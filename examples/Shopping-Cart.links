@@ -42,7 +42,7 @@ fun updateItem(item, pId) client{
     pId ! Update(item.id, getQuantityInput(item.id, item.quantity))
 }
 
-sig attachActionToItems: ([Item], Process( {hear : Cmd} )) ~%~>  [ActionableItem({ |_})]
+sig attachActionToItems: (List Item, Process( {hear : Cmd} )) ~%~>  List ActionableItem({ |_})
 fun attachActionToItems(items, pid){
     map(fun(item) {
             var del = fun() {
@@ -67,7 +67,7 @@ fun formatToPounds(n){
     "GBP " ^^ intToString(floatToInt(n)) ^^ "." ^^ intToString(getNDecimals(n, 2))
 }
 
-sig getTotalPrice : ([ActionableItem({ | _})]) ~%~> Float
+sig getTotalPrice : (List ActionableItem({ | _})) ~%~> Float
 fun getTotalPrice(items){
     fun loop(items, acc){
         switch(items){
@@ -77,7 +77,7 @@ fun getTotalPrice(items){
     }
     loop(items, 0.0)
 }
-sig itemsToXml : ([ActionableItem({ |_})]) ~> Xml
+sig itemsToXml : (List ActionableItem({ |_})) ~> Xml
 fun itemsToXml(items){
     <#>
         {
@@ -114,13 +114,13 @@ fun itemsToXml(items){
     </#>
 }
 
-sig renderItemList : ([ActionableItem({ |_})]) {hear: Cmd | %}~> ()
+sig renderItemList : (List ActionableItem({ |_})) {hear: Cmd | %}~> ()
 fun renderItemList(items){
     var node = getNodeById("content");
     domReplaceChildren(itemsToXml(items), node)
 }
 
-sig cartProcess : ([ActionableItem({ |_})]) {hear:Cmd|%}~> ()
+sig cartProcess : (List ActionableItem({ |_})) {hear:Cmd|%}~> ()
 fun cartProcess(content) client{
     renderItemList(content);
     var cmd = recv();

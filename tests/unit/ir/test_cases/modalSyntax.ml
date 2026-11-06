@@ -141,19 +141,37 @@ let suite = "modal syntax" >::: [
       | _ -> assert_failure text)
       ["?Int.End"; "!(M.T).End"; "?modal [] Int.End";
        "!(modal [] M.T).End"; "?(modal [] M.T(Int)).End";
-       "?modal <> modal [] Int.End"]);
+       "?modal <> modal [] Int.End"; "?List (M.T).End"]);
+
+  "prefix list types" >:: (fun _ ->
+    List.iter (fun (text, check) -> match node (parse text) with
+      | Datatype.List element -> assert_bool text (check (node element))
+      | _ -> assert_failure text) [
+      "List Int", (function Datatype.Primitive Primitive.Int -> true | _ -> false);
+      "List (List Int)", (function Datatype.List _ -> true | _ -> false);
+      "List ((Int) -> Int)", (function Datatype.ImplicitArrow _ -> true | _ -> false);
+      "List (forall a. a)", (function Datatype.Forall _ -> true | _ -> false);
+      "List (modal <E> Int)", (function Datatype.Modal _ -> true | _ -> false);
+      "List (M.T)", (function Datatype.QualifiedTypeApplication (["M"; "T"], []) -> true | _ -> false);
+    ];
+    List.iter reject_syntax ["[Int]"; "List"; "List (Int) -> Int"; "List forall a. a"]);
 
   "binder modal and ordinary kinds" >:: (fun _ ->
-    List.iter (fun text ->
+    List.iter (fun (text, expected) ->
       let q = quantifier (parse text) in
-      assert_equal ModalKind.Abs (SugarQuantifier.modal_kind q))
-      ["forall a::Abs. a"; "forall a::Type(Unl,Any)::Abs. a";
-       "forall a::Abs::Type(Unl,Any). a"; "forall a::(Any,Any)::Abs. a"];
+      assert_equal ModalKind.Abs (SugarQuantifier.modal_kind q);
+      let _, kind, _ = SugarQuantifier.get_unresolved_exn q in
+      assert_equal expected kind)
+      ["forall a::Abs. a", (None, None);
+       "forall a::Type(Unl,Base,Abs). a", (Some PrimaryKind.Type, Some (Linearity.Unl, Restriction.Base));
+       "forall a::Type(Any,Any,Abs). a", (Some PrimaryKind.Type, Some (Linearity.Any, Restriction.Any))];
     let q = quantifier (parse "forall a::Any. a") in
     assert_equal ModalKind.Any (SugarQuantifier.modal_kind q);
     let _, k, _ = SugarQuantifier.get_unresolved_exn q in
     assert_equal (Some PrimaryKind.Type, Some (Linearity.Any, Restriction.Any)) k;
-    assert_equal ModalKind.Any (SugarQuantifier.modal_kind (quantifier (parse "forall a. a"))));
+    List.iter (fun text ->
+      assert_equal ModalKind.Any (SugarQuantifier.modal_kind (quantifier (parse text))))
+      ["forall a. a"; "forall a::Type(Any,Any). a"; "forall a::Type(Any,Any,Any). a"]);
 
   "invalid binder kinds and occurrence annotations" >:: (fun _ ->
     List.iter reject_syntax [
@@ -161,6 +179,10 @@ let suite = "modal syntax" >::: [
       "forall a::Abs::Any. a"; "forall a::Any::Abs. a";
       "forall a::Type::Type. a"; "forall a::Row::Abs. Int";
       "forall a::Abs::Presence. Int"; "forall a::Abs::Row(Any,Any). Int";
+      "forall a::Type(Unl,Any)::Abs. a"; "forall a::Abs::Type(Unl,Any). a";
+      "forall a::(Any,Any)::Abs. a"; "forall a::Type::Abs. Int";
+      "forall a::Row(Any,Any,Any). Int"; "forall a::Presence(Any,Any,Abs). Int";
+      "forall a::Type(Unl,Any,Base). a";
       "forall a. a::Abs";
     ];
     ignore (parse "forall a::Any. a::Any"));
@@ -188,7 +210,7 @@ let suite = "modal syntax" >::: [
         let q = SugarQuantifier.get_resolved_exn (quantifier (resolve text)) in
         assert_equal PrimaryKind.Type (Quantifier.to_primary_kind q);
         assert_equal ModalKind.Abs (Quantifier.to_modal_kind q))
-        ["forall a::Abs. Int"; "forall a::Type::Abs. Int"];
+        ["forall a::Abs. Int"; "forall a::Type(Unl,Any,Abs). Int"];
       let q = SugarQuantifier.get_resolved_exn (quantifier (resolve "forall a. Int")) in
       assert_equal ModalKind.Any (Quantifier.to_modal_kind q);
       List.iter (fun text -> reject_type (fun () -> resolve text))
@@ -346,8 +368,11 @@ let suite = "modal syntax" >::: [
     List.iter (fun text -> ignore (parse_program text)) [
       "var xs = [1,2]; <State>{xs}</State>";
       "sig value : modal <|> Int var value = 1; <State/>";
+      "switch (List([1])) { case List([x]) -> <List>{x}</List> }";
       "handle(1) { case x:modal <> Int -> x case <Read => k> -> k(1) }";
       "handle(1) { case <Read(x:modal <E> Int) => k> -> k(x) case <Write => k> -> k(1) }";
+      "handle # comment\n (<State/>) { case x -> <State>{x}</State> }";
+      "handle <M.State(List (modal <E> Int))> (shallowhandle <State> (<State/>) { case x -> x }) { case <List(x:List Int) => k> -> <State>{k(x)}</State> case x -> x }";
     ]);
 
   "shared printers produce parseable modal types" >:: (fun _ ->
@@ -364,7 +389,7 @@ let suite = "modal syntax" >::: [
     let expected = List.map parse [
       "modal [M.State(Int),M.State(Bool)] ((Int) -> Int)";
       "modal <M.State,M.State|M.State(Int)> (() -@ Int)";
-      "forall a::Type(Any,Any)::Abs. modal [] ((a) -> a)";
+      "forall a::Type(Any,Any,Abs). modal [] ((a) -> a)";
     ] in
     let strip = object
       inherit SugarTraversals.map

@@ -9,7 +9,7 @@ alien javascript "/examples/handlers/js/runtime.js" {
     systemYield : ((()) {}~> ()) ~> ();
     delayExecution: (Int) ~> ();
     sysEnqueue: (a) ~> ();
-    sysDequeue: () ~> [a];
+    sysDequeue: () ~> List a;
     sysQueueLength: () -> Int;
 }
 
@@ -21,7 +21,7 @@ fun system(f){
 }
 
 typename Point = (x:Int, y:Int);
-typename Queue(a) = (rear: [a], front: [a]);
+typename Queue(a) = (rear: List a, front: List a);
 typename PrioQueue(a) = (high: Queue(a), low: Queue(a));
 typename Priority = [|High|Low|];
 typename Co(e::Eff) = () {Fork: (Co({ |e}), Priority) => (), Yield:() |e}~> ();
@@ -82,7 +82,7 @@ fun fiberEnqueue(f, q){
     priorityEnqueue(f, f.prio, q)
 }
 
-sig fiberBulkEnqueue: ([Fiber({ |e})], FiberQueue({ |e})) ~> FiberQueue({ |e})
+sig fiberBulkEnqueue: (List Fiber({ |e}), FiberQueue({ |e})) ~> FiberQueue({ |e})
 fun fiberBulkEnqueue(fibers, q){
     switch(fibers){
         case [] -> q

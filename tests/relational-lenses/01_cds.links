@@ -19,7 +19,7 @@ var joinedLens = lensjoin albumsLens with tracksLens on album delete_left;
 var droppedLens = lensdrop date determined by track default 2018 from joinedLens;
 var filteredLens = lensselect from droppedLens by fun (x) { x.quantity > 2 };
 
-sig assertEqSorted : ([a],[a]) ~> ()
+sig assertEqSorted : (List a,List a) ~> ()
 fun assertEqSorted(l1,l2) {
   assertEq(sortBy(id,l1),sortBy(id,l2))
 }

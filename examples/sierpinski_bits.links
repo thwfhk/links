@@ -6,7 +6,7 @@
 # the bitwise-and operation.
 
 # We represent a bitvector as a list of booleans.
-typename Bits = [Bool];
+typename Bits = List Bool;
 
 # The following function zips two bitvectors together, padding with
 # zeroes (false) if needed.

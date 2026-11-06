@@ -74,31 +74,31 @@ ignore(pid ! 1);
 
 ignore(self());
 
-# hd               : ([b]) -> b
+# hd               : (List b) -> b
 
 ignore(hd([9,5,4,1]));
 
-# tl               : ([b]) -> [b]
+# tl               : (List b) -> List b
 
 ignore(tl([9,5,4,1]));
 
-# length           : ([b]) -> Int
+# length           : (List b) -> Int
 
 ignore(length([77, 88, 102]));
 
-# take             : (Int, [b]) -> [b]
+# take             : (Int, List b) -> List b
 
 ignore(take(4, [1, 2, 3, 4, 5, 6, 7, 8, 9]));
 
-# drop             : (Int, [b]) -> [b]
+# drop             : (Int, List b) -> List b
 
 ignore(drop(4, [1, 2, 3, 4, 5, 6, 7, 8, 9]));
 
-# max              : ([b]) -> [|None:()|Some:b|]
+# max              : (List b) -> [|None:()|Some:b|]
 
 ignore(max([6, 1, 4, 9, 1, 9]));
 
-# min              : ([b]) -> [|None:()|Some:b|]
+# min              : (List b) -> [|None:()|Some:b|]
 
 ignore(min([6, 1, 4, 9, 1, 9]));
 
@@ -198,7 +198,7 @@ swapNodes(getNodeById("item:1"),getNodeById("item:2"));
 # isNull           : (DomNode) -> Bool
 # getTagName       : (Xml) -> String
 # getTextContent   : (Xml) -> String
-# getAttributes    : (Xml) -> [(String, String)]
+# getAttributes    : (Xml) -> List (String, String)
 # hasAttribute     : (Xml, String) -> Bool
 # getAttribute     : (Xml, String) -> String
 # getChildNodes    : (Xml) -> Xml
@@ -246,10 +246,10 @@ sleep(1);
 
 ignore(serverTime());
 
-# asList           : (TableHandle(c,b)) -> [c]
-# insertrows       : (TableHandle(c,b), [b]) -> ()
+# asList           : (TableHandle(c,b)) -> List c
+# insertrows       : (TableHandle(c,b), List b) -> ()
 # updaterows       : (TableHandle(c,b), [(c, b)]) -> ()
-# deleterows       : (TableHandle(c,b), [c]) -> ()
+# deleterows       : (TableHandle(c,b), List c) -> ()
 # getDatabaseConfig : () -> (args:String,driver:String)
 
 ignore(getDatabaseConfig());
@@ -307,9 +307,9 @@ ignore(log(17.0));
 
 ignore(sqrt(49.0));
 
-# ~                : (String, mu a . [|Any:()|Range:(Char, Char)|Repeat:([|Plus:()|Question:()|Star:()|], a)|Seq:[a]|Simply:String|]) -> Bool
+# ~                : (String, mu a . [|Any:()|Range:(Char, Char)|Repeat:([|Plus:()|Question:()|Star:()|], a)|Seq:List a|Simply:String|]) -> Bool
 
-# environment      : () -> [(String, String)]
+# environment      : () -> List (String, String)
 
 # ignore(environment());      # Not implemented
 

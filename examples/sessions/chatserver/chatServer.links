@@ -2,7 +2,7 @@ open import ChatSessions;
 open import ChatClient;
 open import LinearList;
 
-typename ServerState = (Topic, [Nickname]);
+typename ServerState = (Topic, List Nickname);
 
 typename Supervisor =
   [&|Join:?ChatServer          .End,
@@ -16,8 +16,8 @@ sig sap : AP(Supervisor)
 var sap = new();
 
 sig disconnect :
-  (Nickname, [Nickname], LinList(WorkerSend)) ~>
-  ([Nickname], LinList(WorkerSend))
+  (Nickname, List Nickname, LinList(WorkerSend)) ~>
+  (List Nickname, LinList(WorkerSend))
 fun disconnect(nick, ns, cs) {
   switch ((ns, cs)) {
     case ([], LinNil) -> ([], LinNil)
@@ -85,7 +85,7 @@ fun worker(nick, c) {
 # Main supervisor loop, containing server state. Awaits
 # (non-session) control messages to update the state, or broadcast
 # instructions to send things along session channels.
-sig supervisor : (Topic, [Nickname], LinList(WorkerSend)) ~> ()
+sig supervisor : (Topic, List Nickname, LinList(WorkerSend)) ~> ()
 fun supervisor(topic, nicks, cs) {
   var s = accept(sap);
   offer(s) {

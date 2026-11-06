@@ -162,20 +162,13 @@ let subkind_of p =
   | "Eff"     -> Some (default_effect_lin, res_effect)
   | sk        -> raise (ConcreteSyntaxError (pos p, "Invalid subkind: " ^ sk))
 
-let attach_binder_kinds p name annotations =
-  let kind, modal_kind, _, _ =
-    List.fold_left (fun (kind, modal_kind, has_kind, has_modal) (k, m) ->
-      let duplicate = (has_kind && Option.is_some k) || (has_modal && Option.is_some m) in
-      if duplicate then
-        raise (ConcreteSyntaxError (pos p, "Repeated or conflicting binder kind annotation"));
-      (Option.value ~default:kind k, Option.value ~default:modal_kind m,
-       has_kind || Option.is_some k, has_modal || Option.is_some m))
-      ((None, None), ModalKind.Any, false, false) annotations
-  in
-  (match fst kind, modal_kind with
-   | Some (PrimaryKind.Row | PrimaryKind.Presence), ModalKind.Abs ->
-      raise (ConcreteSyntaxError (pos p, "Abs requires a type binder"))
-   | _ -> ());
+let modal_kind_of p = function
+  | "Abs" -> ModalKind.Abs
+  | "Any" -> ModalKind.Any
+  | kind -> raise (ConcreteSyntaxError (pos p, "Invalid modal kind: " ^ kind))
+
+let type_binder name annotation =
+  let kind, modal_kind = Option.value ~default:((None, None), ModalKind.Any) annotation in
   SugarQuantifier.mk_unresolved ~modal_kind name kind `Rigid
 
 let attach_subkind_helper update sk = update sk
@@ -379,7 +372,8 @@ let any = any_pat dp
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
 %token MU FORALL ALIEN SIG UNSAFE
-%token MODAL MODAL_LANGLE MODAL_RANGLE
+%token MODAL EFFECT_LANGLE EFFECT_RANGLE
+%token LIST
 %token MODULE MUTUAL OPEN IMPORT
 %token BANG QUESTION
 %token CAPITAL_LAMBDA
@@ -450,10 +444,14 @@ directive:
 args:
 | arg*                                                         { $1 }
 
+%inline constructor_name:
+| CONSTRUCTOR                                                  { $1 }
+| LIST                                                         { "List" }
+
 arg:
 | STRING                                                       { $1 }
 | VARIABLE                                                     { $1 }
-| CONSTRUCTOR                                                  { $1 }
+| constructor_name                                             { $1 }
 | UINTEGER                                                     { string_of_int    $1 }
 | UFLOAT                                                       { string_of_float' $1 }
 | TRUE                                                         { "true"  }
@@ -495,7 +493,7 @@ nofun_declaration:
 | effect_declaration                                         { $1 }
 | typedecl SEMICOLON                                           { $1 }
 | links_module | links_open SEMICOLON                          { $1 }
-| pollute = boption(OPEN) IMPORT CONSTRUCTOR SEMICOLON         { import ~ppos:$loc($2) ~pollute [$3] }
+| pollute = boption(OPEN) IMPORT constructor_name SEMICOLON    { import ~ppos:$loc($2) ~pollute [$3] }
 
 alien_datatype:
 | VARIABLE COLON datatype SEMICOLON                            { (binder ~ppos:$loc($1) $1, datatype $3) }
@@ -504,7 +502,7 @@ alien_datatypes:
 | alien_datatype+                                              { $1 }
 
 links_module:
-| MODULE name = CONSTRUCTOR members = moduleblock              { module_binding ~ppos:$loc($1) (binder ~ppos:$loc(name) name) members }
+| MODULE name = constructor_name members = moduleblock         { module_binding ~ppos:$loc($1) (binder ~ppos:$loc(name) name) members }
 
 alien_block:
 | ALIEN VARIABLE STRING LBRACE alien_datatypes RBRACE          { let lang = parse_foreign_language (pos $loc($1)) $2 in
@@ -553,12 +551,13 @@ signature:
 | SIG sigop COLON datatype                                     { with_pos $loc ($2, datatype $4) }
 
 typedecl:
-| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                 { alias $loc $2 $3 (Typename   ( $5     , None)) }
-| EFFECTNAME CONSTRUCTOR typeargs_opt EQ LBRACE erow RBRACE     { alias $loc $2 $3 (Effectname ( $6     , None)) }
-| EFFECTNAME CONSTRUCTOR typeargs_opt EQ effect_app             { alias $loc $2 $3 (Effectname (([], $5), None)) }
+| TYPENAME constructor_name typeargs_opt EQ datatype           { alias $loc $2 $3 (Typename   ( $5     , None)) }
+| EFFECTNAME constructor_name typeargs_opt EQ LBRACE erow RBRACE
+                                                               { alias $loc $2 $3 (Effectname ( $6     , None)) }
+| EFFECTNAME constructor_name typeargs_opt EQ effect_app       { alias $loc $2 $3 (Effectname (([], $5), None)) }
 
 effect_declaration:
-| EFFECT CONSTRUCTOR effect_parameters LBRACE effect_operation* RBRACE
+| EFFECT constructor_name effect_parameters LBRACE effect_operation* RBRACE
     { with_pos $loc (EffectDeclaration {
         effect_name = with_pos $loc($2) $2; effect_parameters = $3;
         effect_operations = $5 }) }
@@ -568,7 +567,7 @@ effect_parameters:
 | LPAREN separated_list(COMMA, typearg) RPAREN                  { $2 }
 
 effect_operation:
-| CONSTRUCTOR COLON parenthesized_datatypes FATRARROW datatype SEMICOLON
+| constructor_name COLON parenthesized_datatypes FATRARROW datatype SEMICOLON
     { with_pos $loc (with_pos $loc($1) $1, $3, $5) }
 
 (* Lists of quantifiers in square brackets denote type abstractions *)
@@ -580,22 +579,26 @@ typeargs_opt:
 | LPAREN varlist RPAREN                                        { $2 }
 
 binder_kind:
-| COLONCOLON LPAREN CONSTRUCTOR COMMA CONSTRUCTOR RPAREN        { Some (Some pk_type, full_subkind_of $loc $3 $5), None }
+| COLONCOLON LPAREN CONSTRUCTOR COMMA CONSTRUCTOR RPAREN        { (Some pk_type, full_subkind_of $loc $3 $5), ModalKind.Any }
 | COLONCOLON CONSTRUCTOR LPAREN CONSTRUCTOR COMMA CONSTRUCTOR RPAREN
-                                                               { Some (full_kind_of $loc $2 $4 $6), None }
+                                                               { full_kind_of $loc $2 $4 $6, ModalKind.Any }
+| COLONCOLON CONSTRUCTOR LPAREN CONSTRUCTOR COMMA CONSTRUCTOR COMMA CONSTRUCTOR RPAREN
+                                                               { let kind = full_kind_of $loc $2 $4 $6 in
+                                                                 if fst kind <> Some pk_type then
+                                                                   raise (ConcreteSyntaxError (pos $loc($2), "A modal kind requires a type binder"));
+                                                                 kind, modal_kind_of $loc($8) $8 }
 | COLONCOLON CONSTRUCTOR LPAREN CONSTRUCTOR RPAREN
-                                                               { Some (linrow_kind_of $loc $2 $4), None }
+                                                               { linrow_kind_of $loc $2 $4, ModalKind.Any }
 | COLONCOLON CONSTRUCTOR                                       { match $2 with
-                                                                 | "Abs" -> None, Some ModalKind.Abs
-                                                                 | "Any" -> Some (kind_of $loc($2) $2), Some ModalKind.Any
-                                                                 | _ -> Some (kind_of $loc($2) $2), None }
+                                                                 | "Abs" -> (None, None), ModalKind.Abs
+                                                                 | _ -> kind_of $loc($2) $2, ModalKind.Any }
 
 subkind:
 | COLONCOLON LPAREN CONSTRUCTOR COMMA CONSTRUCTOR RPAREN       { full_subkind_of $loc $3 $5 }
 | COLONCOLON CONSTRUCTOR                                       { subkind_of $loc($2) $2     }
 
 typearg:
-| VARIABLE binder_kind*                                        { attach_binder_kinds $loc $1 $2 }
+| VARIABLE binder_kind?                                        { type_binder $1 $2 }
 
 varlist:
 | separated_nonempty_list(COMMA, typearg)                      { $1 }
@@ -614,14 +617,15 @@ constant:
 | CHAR                                                         { Constant.Char $1    }
 
 qualified_name:
-| CONSTRUCTOR DOT qualified_name_inner                         { $1 :: $3 }
+| constructor_name DOT qualified_name_inner                    { $1 :: $3 }
 
 qualified_name_inner:
-| CONSTRUCTOR DOT qualified_name_inner                         { $1 :: $3 }
+| constructor_name DOT qualified_name_inner                    { $1 :: $3 }
 | VARIABLE                                                     { [$1]     }
 
 qualified_type_name:
-| CONSTRUCTOR DOT separated_nonempty_list(DOT, CONSTRUCTOR)    { $1 :: $3 }
+| constructor_name DOT separated_nonempty_list(DOT, constructor_name)
+                                                               { $1 :: $3 }
 
 qualified_operation:
 | names = positioned_constructor DOT tail = separated_nonempty_list(DOT, positioned_constructor)
@@ -636,13 +640,13 @@ qualified_operation:
         qo_operation = operation } }
 
 positioned_constructor:
-| CONSTRUCTOR                                                  { (* The lexer queues a constructor following `<` with the same token span. *)
+| constructor_name                                             { (* The lexer queues a constructor following `<` with the same token span. *)
                                                                  let finish = $endpos in
                                                                  let start = { finish with Lexing.pos_cnum = finish.Lexing.pos_cnum - String.length $1 } in
                                                                  with_pos (start, finish) $1 }
 
 operation_expression:
-| CONSTRUCTOR                                                  { with_pos $loc (Operation $1) }
+| constructor_name                                             { with_pos $loc (Operation $1) }
 | qualified_operation                                          { with_pos $loc (QualifiedOperation $1) }
 
 atomic_expression:
@@ -660,7 +664,7 @@ cp_name:
 | VARIABLE                                                     { binder ~ppos:$loc($1) $1 }
 
 cp_label:
-| CONSTRUCTOR                                                  { $1 }
+| constructor_name                                             { $1 }
 
 cp_case:
 | CASE cp_label RARROW cp_expression                           { ($2, $4) }
@@ -698,7 +702,7 @@ primary_expression:
 | DOLLAR primary_expression                                    { with_pos $loc (Generalise $2) }
 
 constructor_expression:
-| CONSTRUCTOR parenthesized_thing?                             { constructor ~ppos:$loc ?body:$2 $1 }
+| constructor_name parenthesized_thing?                        { constructor ~ppos:$loc ?body:$2 $1 }
 
 parenthesized_thing:
 | LPAREN binop RPAREN                                          { with_pos $loc (Section $2)              }
@@ -911,7 +915,7 @@ case_expression:
 
 handler_annotation:
 | /* empty */                                                  { None }
-| LBRACKET modal_effect_application RBRACKET                   { Some $2 }
+| EFFECT_LANGLE modal_effect_application EFFECT_RANGLE          { Some $2 }
 
 handle_params:
 | separated_nonempty_list(COMMA,
@@ -1066,7 +1070,7 @@ record_labels:
 | separated_list(COMMA, record_label)                          { $1 }
 
 links_open:
-| OPEN separated_nonempty_list(DOT, CONSTRUCTOR)               { with_pos $loc (Open $2) }
+| OPEN separated_nonempty_list(DOT, constructor_name)          { with_pos $loc (Open $2) }
 
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { val_binding ~ppos:$loc $2 $4 }
@@ -1208,7 +1212,7 @@ primary_datatype_pos:
 | primary_datatype                                             { with_pos $loc $1 }
 
 modal_effect_name:
-| separated_nonempty_list(DOT, CONSTRUCTOR)                    { with_pos $loc $1 }
+| separated_nonempty_list(DOT, constructor_name)               { with_pos $loc $1 }
 
 modal_effect_application:
 | modal_effect_name                                            { with_pos $loc (WithPos.node $1, []) }
@@ -1218,10 +1222,10 @@ modal_effect_application:
 modal_modality:
 | LBRACKET separated_list(COMMA, modal_effect_application) RBRACKET
                                                                { Datatype.Absolute $2 }
-| MODAL_LANGLE separated_list(COMMA, modal_effect_application) MODAL_RANGLE
+| EFFECT_LANGLE separated_list(COMMA, modal_effect_application) EFFECT_RANGLE
                                                                { Datatype.Relative ([], $2) }
-| MODAL_LANGLE separated_list(COMMA, modal_effect_application) VBAR
-  separated_list(COMMA, modal_effect_application) MODAL_RANGLE { let mask = List.map (fun e ->
+| EFFECT_LANGLE separated_list(COMMA, modal_effect_application) VBAR
+  separated_list(COMMA, modal_effect_application) EFFECT_RANGLE { let mask = List.map (fun e ->
                                                                   match WithPos.node e with
                                                                   | name, [] -> WithPos.with_node e name
                                                                   | _, _ -> raise (ConcreteSyntaxError (WithPos.pos e,
@@ -1260,7 +1264,7 @@ primary_datatype_with(modal_type):
      LPAREN temporality_type COMMA datatype COMMA datatype COMMA datatype RPAREN
                                                                { Datatype.Table ($3, $5, $7, $9) }
 | LBRACKETBAR vrow BARRBRACKET                                 { Datatype.Variant $2 }
-| LBRACKET datatype RBRACKET                                   { Datatype.List $2 }
+| LIST primary_datatype_with_pos(modal_type)                    { Datatype.List $2 }
 | type_var                                                     { $1 }
 | kinded_type_var                                              { $1 }
 | CONSTRUCTOR                                                  { let open Datatype in
@@ -1321,11 +1325,11 @@ fields:
 | fields_def(field, COMMA, row_var, kinded_row_var)                   { $1 }
 
 field:
-| CONSTRUCTOR /* allows nullary variant labels */              { ($1, present) }
+| constructor_name /* allows nullary variant labels */         { ($1, present) }
 | field_label fieldspec                                        { ($1, $2) }
 
 field_label:
-| CONSTRUCTOR                                                  { $1 }
+| constructor_name                                             { $1 }
 | VARIABLE                                                     { $1 }
 | STRING                                                       { $1 }
 | UINTEGER                                                     { string_of_int $1 }
@@ -1349,8 +1353,8 @@ vfields:
 | kinded_vrow_var                                              { ([]  , $1             ) }
 
 vfield:
-| CONSTRUCTOR                                                  { ($1, present) }
-| CONSTRUCTOR fieldspec                                        { ($1, $2)      }
+| constructor_name                                             { ($1, present) }
+| constructor_name fieldspec                                   { ($1, $2)      }
 
 efields:
 | efield                                                       { ([$1], make_effect_var ~is_dot:false $loc) }
@@ -1364,12 +1368,12 @@ efield:
 | effect_label efieldspec                                       { ($1, $2)      }
 
 effect_label:
-| CONSTRUCTOR                                                  { $1 }
+| constructor_name                                             { $1 }
 | VARIABLE                                                     { $1 }
 
 effect_app:
-| CONSTRUCTOR                                                  { Datatype.EffectApplication($1, []) }
-| CONSTRUCTOR LPAREN type_arg_list RPAREN                      { Datatype.EffectApplication($1, $3) }
+| constructor_name                                             { Datatype.EffectApplication($1, []) }
+| constructor_name LPAREN type_arg_list RPAREN                 { Datatype.EffectApplication($1, $3) }
 
 fieldspec:
 | braced_fieldspec                                             { $1 }
@@ -1515,7 +1519,7 @@ operation_pattern:
 | operation_pattern_name multi_args                           { ($1, $2) }
 
 operation_pattern_name:
-| CONSTRUCTOR                                                  { fun ps k lin -> Pattern.Operation ($1, ps, k, lin) }
+| constructor_name                                             { fun ps k lin -> Pattern.Operation ($1, ps, k, lin) }
 | qualified_operation                                          { fun ps k lin -> Pattern.QualifiedOperation ($1, ps, k, lin) }
 
 typed_pattern:
@@ -1528,14 +1532,14 @@ cons_pattern:
 
 constructor_pattern:
 | negative_pattern                                             { $1 }
-| CONSTRUCTOR parenthesized_pattern?                           { with_pos $loc (Pattern.Variant ($1, $2)) }
+| constructor_name parenthesized_pattern?                      { with_pos $loc (Pattern.Variant ($1, $2)) }
 
 constructors:
-| separated_nonempty_list(COMMA, CONSTRUCTOR)                  { $1 }
+| separated_nonempty_list(COMMA, constructor_name)             { $1 }
 
 negative_pattern:
 | primary_pattern                                              { $1 }
-| MINUS CONSTRUCTOR                                            { with_pos $loc (Pattern.Negative [$2]) }
+| MINUS constructor_name                                       { with_pos $loc (Pattern.Negative [$2]) }
 | MINUS LPAREN constructors RPAREN                             { with_pos $loc (Pattern.Negative $3)   }
 
 parenthesized_pattern:

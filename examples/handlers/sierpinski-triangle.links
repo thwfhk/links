@@ -7,13 +7,13 @@ alien javascript "/examples/handlers/js/runtime.js" {
     requestAnimationFrame: (() -> (), Int) ~> ();
     setIntervalForF: (Int, () ~> ()) ~> ();
     sysEnqueue: (a) ~> ();
-    sysDequeue: () ~> [a];
+    sysDequeue: () ~> List a;
     sysQueueLength: () -> Int;
     delayExecutionOfF: (Int, () ~> ()) ~> ();
 }
 
 typename Point = (x:Int, y:Int);
-typename Queue(a) = (rear: [a], front: [a]);
+typename Queue(a) = (rear: List a, front: List a);
 typename PrioQueue(a) = (high: Queue(a), low: Queue(a));
 typename Priority = [|High|Low|];
 typename Co(e::Eff) = () {Fork: (Co({ |e}), Priority) => (), Yield:() |e}~> ();
@@ -22,7 +22,7 @@ typename SchedulerState(a) = (runQ: PrioQueue(a), prio: Priority, startTime: Int
 typename Fiber(e::Eff) = (prio:Priority, f: (SchedulerState(Fiber({ |e}))) ~e~> ());
 typename FiberQueue(e::Eff) = PrioQueue(Fiber({ |e}));
 typename Update = [|TextUpdate: String | LocationUpdate: Float|];
-typename STriangle(e::Eff) = (point: Point, targetSize: Int, text: String, children: [STriangle({ |e})]);
+typename STriangle(e::Eff) = (point: Point, targetSize: Int, text: String, children: List STriangle({ |e}));
 
 var dotSize = 25;
 var hoverColor = "#ff0";
@@ -82,7 +82,7 @@ fun fiberEnqueue(f, q){
     priorityEnqueue(f, f.prio, q)
 }
 
-sig fiberBulkEnqueue: ([Fiber({ |e})], FiberQueue({ |e})) ~> FiberQueue({ |e})
+sig fiberBulkEnqueue: (List Fiber({ |e}), FiberQueue({ |e})) ~> FiberQueue({ |e})
 fun fiberBulkEnqueue(fibers, q){
     switch(fibers){
         case [] -> q
@@ -306,7 +306,7 @@ fun gensymHandler(f){
 # Page Functionality
 
 
-sig makeSTriangle: (Point, Int, String, [STriangle({ |e})]) -> STriangle({ |e})
+sig makeSTriangle: (Point, Int, String, List STriangle({ |e})) -> STriangle({ |e})
 fun makeSTriangle(p, s, text, children){
     (point = p, targetSize = s, text=text, children=children)
 }

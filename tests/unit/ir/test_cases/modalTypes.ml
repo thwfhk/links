@@ -278,6 +278,76 @@ let suite =
       let q, _ = Types.fresh_type_quantifier subkind in
       assert_equal q (Types.quantifier_of_type_arg (Types.type_arg_of_quantifier q)));
 
+    "combined modal kinds round trip through both printers" >:: (fun _ ->
+      let setting = Types.print_types_pretty_engine in
+      let previous = Settings.get setting in
+      Fun.protect ~finally:(fun () -> Settings.set setting previous) (fun () ->
+        List.iter (fun engine ->
+          Settings.set setting [engine];
+          List.iter (fun subkind ->
+            let q, a = Types.fresh_type_quantifier ~modal_kind:ModalKind.Abs subkind in
+            List.iter (fun kinds ->
+              let policy () = Types.Policy.default_policy ()
+                |> Types.Policy.set_quantifiers true |> Types.Policy.set_kinds kinds in
+              let printed = Types.string_of_datatype ~policy (Types.ForAll ([q], a)) in
+              let parsed = fst (Parse.parse_string Parse.datatype printed)
+                |> DesugarTypeVariables.standalone_signature in
+              match SourceCode.WithPos.node parsed with
+              | Sugartypes.Datatype.Forall ([binder], _) ->
+                 let binder = Sugartypes.SugarQuantifier.get_resolved_exn binder in
+                 assert_equal ~msg:printed (Quantifier.to_kind q) (Quantifier.to_kind binder);
+                 assert_equal ModalKind.Abs (Quantifier.to_modal_kind binder)
+              | _ -> assert_failure printed)
+              [Types.Policy.Default; Types.Policy.Full])
+            [Linearity.Unl, Restriction.Any; Linearity.Any, Restriction.Any;
+             Linearity.Unl, Restriction.Base; Linearity.Any, Restriction.Session])
+          [Types.Old; Types.Roundtrip]));
+
+    "list element structure round trips through both printers" >:: (fun _ ->
+      let open SourceCode in
+      let setting = Types.print_types_pretty_engine in
+      let previous = Settings.get setting in
+      let parse text = fst (Parse.parse_string Parse.datatype text) in
+      let strip = object
+        inherit SugarTraversals.map
+        method! position _ = Position.dummy
+        method! type_variable v =
+          let name, (is_eff, _), freedom = Sugartypes.SugarTypeVar.get_unresolved_exn v in
+          Sugartypes.SugarTypeVar.mk_unresolved ~is_eff name None freedom
+      end in
+      let int = Types.int_type in
+      let q, a = Types.fresh_type_quantifier (Linearity.Unl, Restriction.Any) in
+      let arrow = Types.Arrow (Types.make_tuple_type [int], int) in
+      let row label payload = Types.Row (StringMap.singleton label (Types.Present payload),
+        Unionfind.fresh Types.Closed, false) in
+      let recursive_id = Types.fresh_raw_variable () in
+      let point = Unionfind.fresh (Types.Var (recursive_id, kind, `Rigid)) in
+      Unionfind.change point (Types.Recursive (recursive_id, kind,
+        Types.Variant (row "Next" (Types.Meta point))));
+      let cases = [
+        int, "List Int";
+        Types.make_list_type int, "List (List Int)";
+        arrow, "List ((Int) -> Int)";
+        Types.Modal (Modality.Absolute [], arrow), "List (modal [] ((Int) -> Int))";
+        Types.ForAll ([q], a), "List (forall a. a)";
+        Types.make_tuple_type [int; Types.make_list_type int], "List (Int, List Int)";
+        Types.Input (int, Types.End), "List (?Int.End)";
+        Types.Select (row "Done" Types.End), "List ([+|Done:End|+])";
+        Types.Choice (row "Done" Types.End), "List ([&|Done:End|&])";
+        Types.Meta point, "List (mu a. [|Next:a|])";
+        Types.Alias (PrimaryKind.Type, ("M_1$T", [], [], false), int), "List (M.T)";
+      ] in
+      Fun.protect ~finally:(fun () -> Settings.set setting previous) (fun () ->
+        List.iter (fun engine ->
+          Settings.set setting [engine];
+          List.iter (fun (element, expected) ->
+            let policy () = Types.Policy.default_policy ()
+              |> Types.Policy.set_quantifiers true |> Types.Policy.set_hide_fresh false in
+            let printed = Types.string_of_datatype ~policy (Types.make_list_type element) in
+            assert_equal ~msg:printed (strip#datatype (parse expected))
+              (strip#datatype (parse printed))) cases)
+          [Types.Old; Types.Roundtrip]));
+
     "Abs argument conversion rejected" >:: (fun _ ->
       let q, _ = absolute () in
       reject (fun () -> ignore (Types.type_arg_of_quantifier q)));

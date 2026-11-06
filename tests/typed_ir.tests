@@ -40,7 +40,7 @@ stdout : () : ()
 Bound quantifiers in a query (#694)
 tests/typed_ir/T694.links
 filemode : true
-stdout : fun : forall a::Row,b::Row(Any,Base).() -a-> [(|b::(Any,Base))]
+stdout : fun : forall a::Row,b::Row(Any,Base).() -a-> List (|b::(Any,Base))
 
 Curry (#574)
 tests/typed_ir/T574.links
@@ -100,7 +100,7 @@ sig isInt : (String) -> Bool fun isInt (x) { x =~ /-?[0-9]+$/ }
 stdout : () : ()
 
 function pattern matching has right effects (#691)
-sig f : ([a]) {}-> a fun f ([x]) { x }
+sig f : (List a) {}-> a fun f ([x]) { x }
 stdout : () : ()
 
 Generalisation obeys value restriction / Freshening of generalised type variables when turning lambda into named fun (#871)

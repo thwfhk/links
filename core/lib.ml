@@ -372,7 +372,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
              let attrs = List.map (fun p -> Value.unbox_pair p) attrs in
                `List (List.map (add_attributes attrs) xmlitems)
          | _ -> raise (runtime_type_error "addAttributes takes an XML forest and a list of attributes")),
-   datatype "(Xml, [(String, String)]) -> Xml",
+   datatype "(Xml, List (String, String)) -> Xml",
    PURE);
 
   "Send",
@@ -557,19 +557,19 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* Lists and collections *)
   "Nil",
   (`List [],
-   datatype "[a]",
+   datatype "List a",
    PURE);
 
   "Cons",
   (p2 (fun x xs ->
          Value.box_list (x :: (Value.unbox_list xs))),
-   datatype "(a, [a]) -> [a]",
+   datatype "(a, List a) -> List a",
    PURE);
 
   "Concat",
   (p2 (fun xs ys ->
          Value.box_list (Value.unbox_list xs @ Value.unbox_list ys)),
-   datatype "([a], [a]) -> [a]",
+   datatype "(List a, List a) -> List a",
    PURE);
 
   "hd",
@@ -578,7 +578,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
           | [] -> runtime_error "hd() of empty list"
           | x :: _ -> x
       ),
-   datatype "([a]) ~> a",
+   datatype "(List a) ~> a",
   IMPURE);
 
   "tl",
@@ -587,7 +587,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
             | [] -> runtime_error "tl() of empty list"
             | _x :: xs -> Value.box_list xs
       ),
-   datatype "([a]) ~> [a]",
+   datatype "(List a) ~> List a",
   IMPURE);
 
   (* HACK: tame versions of head and tail for use in pattern matching *)
@@ -597,7 +597,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
           | [] -> runtime_error "hd() of empty list"
           | x :: _ -> x
       ),
-   datatype "([a]) -> a",
+   datatype "(List a) -> a",
   IMPURE);
 
   "$$tl",
@@ -606,29 +606,29 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
             | [] -> runtime_error "tl() of empty list"
             | _x :: xs -> Value.box_list xs
       ),
-   datatype "([a]) -> [a]",
+   datatype "(List a) -> List a",
   IMPURE);
 
   "length",
   (p1 (Value.unbox_list ->- List.length ->- Value.box_int),
-   datatype "([a]) -> Int",
+   datatype "(List a) -> Int",
   PURE);
 
   "Sum",
   (p1 (Value.unbox_list ->- List.fold_left (fun x y -> x + Value.unbox_int y) 0 ->- Value.box_int),
-   datatype "([Int]) -> Int",
+   datatype "(List Int) -> Int",
    PURE);
 
   "take",
   (p2 (fun n l ->
          Value.box_list (Utility.take (Value.unbox_int n) (Value.unbox_list l))),
-   datatype "(Int, [a]) ~> [a]",
+   datatype "(Int, List a) ~> List a",
   PURE);
 
   "drop",
   (p2 (fun n l ->
          Value.box_list (Utility.drop (Value.unbox_int n) (Value.unbox_list l))),
-   datatype "(Int, [a]) ~> [a]",
+   datatype "(Int, List a) ~> List a",
   PURE);
 
   "max",
@@ -637,7 +637,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
            | `List [] -> `Variant ("Nothing", `Record [])
            | `List (x::xs) -> `Variant ("Just", List.fold_left max2 x xs)
            | _ -> raise (runtime_type_error "Internal error: non-list passed to max")),
-   datatype "([a]) ~> [|Just:a | Nothing:()|]",
+   datatype "(List a) ~> [|Just:a | Nothing:()|]",
   PURE);
 
   "min",
@@ -646,7 +646,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
            | `List [] -> `Variant ("Nothing", `Record [])
            | `List (x::xs) -> `Variant ("Just", List.fold_left min2 x xs)
            | _ -> raise (runtime_type_error "Internal error: non-list passed to min")),
-   datatype "([a]) ~> [|Just:a | Nothing:()|]",
+   datatype "(List a) ~> [|Just:a | Nothing:()|]",
   PURE);
 
   (* We need to have these here in order to patch through to the underlying SQL functions. *)
@@ -829,7 +829,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
       ) attrs))
     )
     | _ -> raise (runtime_type_error "non-XML in makeXml")),
-  datatype "(String, [(String, String)], Xml) -> XmlItem",
+  datatype "(String, List (String, String), Xml) -> XmlItem",
   IMPURE);
 
   (* XML <-> variant conversion *)
@@ -843,7 +843,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                    | (`XML x) -> Value.value_of_xmlitem x
                    | _ -> raise (runtime_type_error "non-XML passed to xmlToVariant")) xs)
           | _ -> raise (runtime_type_error "non-XML passed to xmlToVariant")),
-  datatype "(Xml) ~> mu n.[ [|Text:String | Attr:(String, String) | Node:(String, n) | NsAttr: (String, String, String) | NsNode: (String, String, n) |] ]",
+  datatype "(Xml) ~> mu n.List [|Text:String | Attr:(String, String) | Node:(String, n) | NsAttr: (String, String, String) | NsNode: (String, String, n) |]",
   IMPURE);
 
   "xmlItemToVariant",
@@ -851,17 +851,17 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
       match v with
         | (`XML x) -> Value.value_of_xmlitem x
         | _ -> raise (runtime_type_error "non-XML passed to xmlItemToVariant")),
-    datatype "(XmlItem) ~> mu n. [|Text:String | Attr:(String, String) | Node:(String, [ n ]) | NsAttr: (String, String, String) | NsNode: (String, String, [ n ]) |]",
+    datatype "(XmlItem) ~> mu n. [|Text:String | Attr:(String, String) | Node:(String, List n) | NsAttr: (String, String, String) | NsNode: (String, String, List n) |]",
     IMPURE);
 
   "variantToXml",
   (p1 (fun v -> `List (List.map (fun i -> `XML (i)) (Value.xml_of_variants v))),
-   datatype "(mu n.[ [|Text:String | Attr:(String, String) | Node:(String, n) | NsAttr: (String, String, String) | NsNode: (String, String, n) |] ]) ~> Xml",
+   datatype "(mu n.List [|Text:String | Attr:(String, String) | Node:(String, n) | NsAttr: (String, String, String) | NsNode: (String, String, n) |]) ~> Xml",
    IMPURE);
 
   "variantToXmlItem",
   (p1 (fun v -> `XML (Value.xmlitem_of_variant v)),
-    datatype "(mu n. [| Text: String | Attr: (String, String) | Node: (String, [ n ]) | NsAttr: (String, String, String) | NsNode: (String, String, [ n ]) |]) ~> XmlItem",
+    datatype "(mu n. [| Text: String | Attr: (String, String) | Node: (String, List n) | NsAttr: (String, String, String) | NsNode: (String, String, List n) |]) ~> XmlItem",
     IMPURE);
 
   (* Section: Accessors for XML *)
@@ -901,7 +901,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
       | `List [ `XML (Value.Node (_, children)) ]      -> `List (List.map attr_to_record (List.filter Value.is_attr children))
       | `List [ `XML (Value.NsNode (_, _, children)) ] -> `List (List.map attr_to_record (List.filter Value.is_attr children))
       | _ -> raise (runtime_type_error "non-element given to getAttributes")),
-  datatype "(Xml) ~> [(String,String)]",
+  datatype "(Xml) ~> List (String,String)",
   IMPURE);
 
   "hasAttribute",
@@ -957,7 +957,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   IMPURE);
 
   "domGetChildrenFromRef",
-  (`Client, datatype "(DomNode) ~> [ DomNode ]",
+  (`Client, datatype "(DomNode) ~> List DomNode",
   IMPURE);
 
   "domSetStyleAttrFromRef",
@@ -994,7 +994,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* what effect annotation should the inner arrow have? *)
   "registerEventHandlers",
   (`PFun (fun _ -> assert false),
-  datatype "([(String, (Event) { |e}~> ())]) ~> String",
+  datatype "(List (String, (Event) { |e}~> ())) ~> String",
   IMPURE);
 
   (* getPageX : (Event) -> Int *)
@@ -1032,7 +1032,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   PURE);
 
   "getRadioGroupValue",
-  (`Client, datatype "([String]) ~> String",
+  (`Client, datatype "(List String) ~> String",
   PURE);
 
   "event",
@@ -1309,22 +1309,22 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* Database functions *)
   "AsList",
   (p1 (fun _ -> raise (internal_error "Unoptimized table access!!!")),
-   datatype "(TableHandle(r, w, n)) {}-> [r]",
+   datatype "(TableHandle(r, w, n)) {}-> List r",
   IMPURE);
 
   "AsListT",
   (p1 (fun _ -> raise (internal_error "Unoptimized table access!!!")),
-   datatype "(TemporalTable(Transaction, r, w, n)) {}-> [TransactionTime(r)]",
+   datatype "(TemporalTable(Transaction, r, w, n)) {}-> List TransactionTime(r)",
   IMPURE);
 
   "AsListV",
   (p1 (fun _ -> raise (internal_error "Unoptimized table access!!!")),
-   datatype "(TemporalTable(Valid, r, w, n)) {}-> [ValidTime(r)]",
+   datatype "(TemporalTable(Valid, r, w, n)) {}-> List ValidTime(r)",
   IMPURE);
 
   "Distinct",
   (p1 (fun _ -> raise (internal_error "Unoptimized table access!!!")),
-   datatype "(TableHandle(r, w, n)) {}-> [r]",
+   datatype "(TableHandle(r, w, n)) {}-> List r",
   IMPURE);
 
   "getDatabaseConfig",
@@ -1368,7 +1368,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
              let makestrpair (x1, x2) = `Record [("1", Value.box_string x1); ("2", Value.box_string x2)] in
              let is_internal s = Str.string_match (Str.regexp "^_") s 0 in
                Lwt.return (`List (List.map makestrpair (List.filter (not -<- is_internal -<- fst) cgi_params)))),
-    datatype "() ~> [(String,String)]",
+    datatype "() ~> List (String,String)",
     IMPURE));
 
   (* regular expression matching *)
@@ -1398,7 +1398,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     with
        NotFound _ -> accumMatches ((`String "")::l) (i - 1)) in
        accumMatches [] ngroups))),
-     datatype "(String, Regex) ~> [String]",
+     datatype "(String, Regex) ~> List String",
    PURE));
 
   (* regular expression substitutions --- don't yet support global substitutions *)
@@ -1476,7 +1476,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
            in
              aux 0 chars;
              Value.box_string (Bytes.to_string s)),
-    datatype ("([Char]) ~> String"),
+    datatype ("(List Char) ~> String"),
     PURE));
 
   ("explode",
@@ -1491,7 +1491,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                let chars = aux ((String.length s) - 1) [] in
              Value.box_list (List.map Value.box_char chars)
                | _  -> raise (runtime_type_error "Internal error: non-String in implode")),
-    datatype ("(String) ~> [Char]"),
+    datatype ("(String) ~> List Char"),
     PURE));
 
   ("unsafePickleCont",
@@ -1687,7 +1687,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      IMPURE);
     "addStaticRoute",
     (`PFun (fun _ -> assert false),
-     datatype "(String, String, [(String, String)]) ~> ()",
+     datatype "(String, String, List (String, String)) ~> ()",
      IMPURE);
     "unsafeAddRoute",
     (`PFun (fun _ -> assert false),
@@ -1723,7 +1723,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     (`Server
        (pure_pfun (fun _ ->
             Value.(box_list (List.map box_string (Settings.get_rest_arguments ()))))),
-     datatype "() ~> [String]",
+     datatype "() ~> List String",
      IMPURE);
 
     (* SPARQL *)
@@ -1737,7 +1737,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                  Lwt.return (Value.box_list (List.map (fun s ->
                                Value.box_list (List.map (fun (k,v) ->
                                        (Value.box_pair (Value.box_string k) (Value.box_string v))) s)) result)))),
-     datatype "(String,String,String) ~> [[(String,String)]]",
+     datatype "(String,String,String) ~> List (List (String,String))",
      IMPURE)
 
 ]

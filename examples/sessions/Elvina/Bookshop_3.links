@@ -20,8 +20,8 @@ typename Address = (street:String, houseNo:Int, city:String);
 typename OrderSummary = String;
 
 # Session types for mother's choice.
-typename ShopOffer  = mu a.[&|Add:?Product.a, Remove:?Product.a, Checkout:?Card.?Address.![OrderSummary].End|&];
-typename ShopSelect = mu a.[+|Add:!Product.a, Remove:!Product.a, Checkout:!Lunchers.!Address.?[OrderSummary].End|+];
+typename ShopOffer  = mu a.[&|Add:?Product.a, Remove:?Product.a, Checkout:?Card.?Address.!List OrderSummary.End|&];
+typename ShopSelect = mu a.[+|Add:!Product.a, Remove:!Product.a, Checkout:!Lunchers.!Address.?List OrderSummary.End|+];
 
 # Session types for son's choice.
 typename SonSelect = [&|Choice:!Product.End|&];
@@ -48,7 +48,7 @@ fun turnProductToString(product) client
 }
 
 # Turns a list of products into a single string.
-sig concatenateProducts : ([Product], String) ~> (String)
+sig concatenateProducts : (List Product, String) ~> (String)
 fun concatenateProducts(products, fullList) client
 {
     switch(products) {
@@ -58,14 +58,14 @@ fun concatenateProducts(products, fullList) client
 }
 
 # Turns order summary into a single readable string.
-sig summariseOrder : (Int, String, [Product], String) ~> ([String])
+sig summariseOrder : (Int, String, List Product, String) ~> (List String)
 fun summariseOrder(card, address, products, removed) client
 {
     [concatenateProducts(products, ""), removed, intToString(card), address]
 }
 
 # Removes sendn element.
-sig removeProduct : (Product, [Product]) ~> ([Product])
+sig removeProduct : (Product, List Product) ~> (List Product)
 fun removeProduct(item, products) client
 {
     switch (products) {
@@ -76,7 +76,7 @@ fun removeProduct(item, products) client
 }
 
 # A shop. Accepts orders and allows checkout.
-sig waitForClient : (ShopOffer, [Product], String) ~> ()
+sig waitForClient : (ShopOffer, List Product, String) ~> ()
 fun waitForClient(s, orderedProducts, removedProducts) client
 {
 
@@ -124,7 +124,7 @@ fun getSonBook(s) client
 }
 
 # Mom picks out the products, allows the son to do it, goes to checkout.
-sig orderBooks : (ShopSelect) ~> ([String])
+sig orderBooks : (ShopSelect) ~> (List String)
 fun orderBooks(c) client
 {
     var myAddress = (street="Princes Street", houseNo=14, city="Edinburgh");

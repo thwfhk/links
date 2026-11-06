@@ -44,7 +44,7 @@ fun parseServerAnswer(packet) {
 sig extractDomain : (String) ~> String
 fun extractDomain(address) {
 
-    sig extractDomain0 : ([Char]) ~> [Char]
+    sig extractDomain0 : (List Char) ~> List Char
     fun extractDomain0(address) {
         switch(address) {
           case [] -> address
@@ -167,7 +167,7 @@ mutual {
 
 
 mutual {
-  sig mailClient : (~SMTPServer, (1:String, 2:[String], 3:String, 4:String), !().EndBang) ~> EndBang
+  sig mailClient : (~SMTPServer, (1:String, 2:List String, 3:String, 4:String), !().EndBang) ~> EndBang
   fun mailClient(c, mail_form, return) {
     var domain = extractDomain(mail_form.1);
        <| HELO c.c[domain].{ println("C: HELO " ^^ domain);
@@ -231,7 +231,7 @@ mutual {
   }
 }
 
-sig startCommunication : (String, [String], String, String) ~> ()
+sig startCommunication : (String, List String, String, String) ~> ()
 fun startCommunication(sender, recipients, subject, message) {
     var mail_form = (sender, recipients, subject, message);
     runSync (fun(return){<| nu s.({mailServer(s)}|{mailClient(s, mail_form, return)}) |>})

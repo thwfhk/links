@@ -2423,6 +2423,22 @@ let modal_payload_needs_parentheses t =
   | Arrow _ | LinearArrow _ | Function _ | Lolli _ | ForAll _ | Operation _ -> true
   | _ -> false
 
+let rec list_element_needs_parentheses = function
+  | Primitive _ | Record _ | Variant _ | End | Var _
+  | Application (_, []) -> false
+  | Alias (_, (name, _, [], _), _)
+  | RecursiveApplication { r_name = name; r_args = []; _ } ->
+     String.contains (Module_hacks.Name.prettify name) '.'
+  | Meta point -> list_element_needs_parentheses (Unionfind.find point)
+  | _ -> true
+
+let absolute_quantifier_kind policy q =
+  let lin, res = Kind.subkind (Quantifier.to_kind q) in
+  match Policy.kinds policy, lin, res with
+  | Policy.Hide, _, _ | Policy.Default, Linearity.Unl, Restriction.Any -> "Abs"
+  | _ -> Printf.sprintf "Type(%s,%s,Abs)"
+           (Linearity.to_string lin) (Restriction.to_string res)
+
 module Print : PRETTY_PRINTER =
 struct
   module BS = Basicsettings
@@ -2547,8 +2563,10 @@ struct
   let quantifier : (policy * names) -> Quantifier.t -> string =
     fun (policy, vars) q ->
       let k = Quantifier.to_kind q in
-      Vars.find (Quantifier.to_var q) vars ^ has_kind (kind (policy, vars) k) ^
-        (if Quantifier.to_modal_kind q = ModalKind.Abs then "::Abs" else "")
+      let annotation = if Quantifier.to_modal_kind q = ModalKind.Abs then
+          absolute_quantifier_kind policy q
+        else kind (policy, vars) k in
+      Vars.find (Quantifier.to_var q) vars ^ has_kind annotation
 
   (** If type variable names are hidden return a generic name n1. Otherwise
      pass name of type variable to n2 so that it can construct a name. *)
@@ -2703,7 +2721,9 @@ struct
                  (Module_hacks.Name.prettify s)
                  (String.concat "," ts)
             end
-         | Application (l, [elems]) when Abstype.equal l list ->  "["^ (type_arg context p) elems ^"]"
+         | Application (l, [(_, element) as elems]) when Abstype.equal l list ->
+            let body = type_arg context p elems in
+            "List " ^ (if list_element_needs_parentheses element then "(" ^ body ^ ")" else body)
          | Application (s, []) -> Abstype.name s
          | Application (s, ts) ->
             let vars = String.concat "," (List.map (type_arg context p) ts) in
@@ -3987,10 +4007,12 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     = let open Printer in
       Printer (fun ctx p buf ->
           match p with
-          | (abstp, [el]) when Abstype.equal abstp list ->
-             StringBuffer.write buf "[";
+          | (abstp, [(_, element) as el]) when Abstype.equal abstp list ->
+             StringBuffer.write buf "List ";
+             let parenthesise = list_element_needs_parentheses element in
+             if parenthesise then StringBuffer.write buf "(";
              Printer.apply type_arg ctx el buf;
-             StringBuffer.write buf "]"
+             if parenthesise then StringBuffer.write buf ")"
           | (abstp, []) ->
              StringBuffer.write buf (Abstype.name abstp)
           | (abstp, args) ->
@@ -4202,9 +4224,14 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       Printer (fun ctx qr buf ->
           let vid = Quantifier.to_var qr in
           let knd = Quantifier.to_kind qr in
-          Printer.apply var ctx (vid, knd) buf;
-          if Quantifier.to_modal_kind qr = ModalKind.Abs then
-            StringBuffer.write buf "::Abs")
+          if Quantifier.to_modal_kind qr = ModalKind.Abs then begin
+            let name_ctx = Context.(ctx
+              |> with_policy (Policy.set_kinds Policy.Hide (policy ctx))
+              |> set_ambient Type_arg |> bind_tyvars [vid]) in
+            Printer.apply var name_ctx (vid, knd) buf;
+            StringBuffer.write buf ("::" ^ absolute_quantifier_kind (Context.policy ctx) qr)
+          end else
+            Printer.apply var ctx (vid, knd) buf)
 
   and forall : (Quantifier.t list * typ) printer
     = let open Printer in

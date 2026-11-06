@@ -48,7 +48,7 @@ struct
        | Any                                            \
        | StartAnchor                                    \
        | EndAnchor                                      \
-       | Seq : [regex]                                  \
+       | Seq : List regex                               \
        | Alternate : (regex, regex)                     \
        | Group : regex                                  \
        | Repeat : ([| Star | Plus | Question |], regex) \

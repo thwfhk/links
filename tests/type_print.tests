@@ -9,8 +9,8 @@ stdout : fun : ((Int) -> Int) -> (Int) -> Int
 args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
 
 Effect sugar: Implicit effect variables (3)
-(map, id) : (((a) -e-> b, [a]) -e-> [b], (c) -e-> c)
-stdout : (fun, fun) : (((a) -> c, [a]) -> [c], (d) -> d)
+(map, id) : (((a) -e-> b, List a) -e-> List b, (c) -e-> c)
+stdout : (fun, fun) : (((a) -> c, List a) -> List c, (d) -> d)
 args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
 
 Effect sugar: Implicit effect variables (4)

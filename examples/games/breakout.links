@@ -1,7 +1,7 @@
 #
 # HELPER
 #
-sig catMaybes: ([Maybe(a)]) -> [a]
+sig catMaybes: (List Maybe(a)) -> List a
 fun catMaybes(ls) {
     for (x <- ls) {
         switch (x) {
@@ -50,7 +50,7 @@ typename Vector = (Float, Float);
 typename PlayerState = (xPos: Float);
 typename BallState = (ballPos: Vector, ballSpeed: Vector);
 typename BlockState = (blockPos: Vector, blockLives: Int);
-typename GameState = [| ProperGameState:(player: PlayerState, ball: BallState, blocks: [BlockState]) | LostScreen | WonScreen |];
+typename GameState = [| ProperGameState:(player: PlayerState, ball: BallState, blocks: List BlockState) | LostScreen | WonScreen |];
 typename BallCollision = [| LeftBounce | RightBounce | UpBounce | DownBounce |];
 typename BlockCollision = [| BlockCollision |];
 typename Rect = (x: Float, y: Float, width: Float, height: Float);
@@ -93,7 +93,7 @@ fun main() {
     var initBlockStates =
         (for (x <- [20.0, 120.0, 220.0, 320.0, 420.0, 520.0],
                 (y, lives) <- [(60.0,2), (100.0,1), (140.0,2), (180.0,1), (220.0,1), (260.0,1)])
-                    [(blockPos = (x, y), blockLives = lives)]): [BlockState];
+                    [(blockPos = (x, y), blockLives = lives)]): List BlockState;
     var blockColor1 = "#4a4";
     var blockColor2 = "#aa4";
 
@@ -259,7 +259,7 @@ fun main() {
         else []
     }
 
-    fun ballBlocksCollisions(ballState: BallState, blockStates: [BlockState]) {
+    fun ballBlocksCollisions(ballState: BallState, blockStates: List BlockState) {
         var ballR = ballRect(ballState);
         fun foldStep((ballC, blockC), blockState) {
             if (rectOverlap(ballR, blockRect(blockState)))
@@ -285,14 +285,14 @@ fun main() {
     }
     fun gameOver(gs: GameState) {
         switch(gs) {
-            case ProperGameState((player = _: PlayerState, ball = (ballPos = (_, ballY), ballSpeed = _): BallState, blocks = _: [BlockState])) -> ballY > screenHeight
+            case ProperGameState((player = _: PlayerState, ball = (ballPos = (_, ballY), ballSpeed = _): BallState, blocks = _: List BlockState)) -> ballY > screenHeight
             case _ -> false
         }
     }
 
     fun gameWon(gs: GameState) {
         switch(gs) {
-            case ProperGameState((player = _: PlayerState, ball = _: BallState, blocks = b: [BlockState])) ->
+            case ProperGameState((player = _: PlayerState, ball = _: BallState, blocks = b: List BlockState)) ->
                 switch (b) { case [] -> true case _ -> false }
             case _ -> false
         }
@@ -314,7 +314,7 @@ fun main() {
         xPos
     }
 
-    fun ballVelocity((vx, vy), coll: [BallCollision]) {
+    fun ballVelocity((vx, vy), coll: List BallCollision) {
         fun bounce((vx, vy), coll) {
             switch (coll) {
                 case LeftBounce -> (fabs(vx), vy)
@@ -328,7 +328,7 @@ fun main() {
     }
 
 
-    fun ballState(bs: BallState, collEvents: [BallCollision]) {
+    fun ballState(bs: BallState, collEvents: List BallCollision) {
         var vel = ballVelocity(bs.ballSpeed, collEvents);
 
         var pos = vectorAdd(bs.ballPos, vel);
@@ -346,7 +346,7 @@ fun main() {
         fold_left(updatef, Just(initState), blockColls)
     }
 
-    fun blockStates(obs: [BlockState], blockColls: [[BlockCollision]]) {
+    fun blockStates(obs: List BlockState, blockColls: List (List BlockCollision)) {
         var res = map(blockState, zip(obs, blockColls));
         var result = filter(isJust, res);
         catMaybes(result)
@@ -354,7 +354,7 @@ fun main() {
 
 
 
-    fun mainGameLogic(gs: GameState, inEvents: [Input]) {
+    fun mainGameLogic(gs: GameState, inEvents: List Input) {
         if (gameOver(gs)) { # meh
             LostScreen
         } else if (gameWon(gs)) {
@@ -398,7 +398,7 @@ fun main() {
         var i = i ++ [recv()];
         ()
     }
-    var dummyProcId = spawnClient { dummyProc([]: [Input]) };
+    var dummyProcId = spawnClient { dummyProc([]: List Input) };
 
     # logic, depends on masterProc
     fun updateLogic(dt, st, i) {
@@ -407,7 +407,7 @@ fun main() {
 
             var stprim = mainGameLogic(st, i);
 
-            updateLogic(dt -. step, stprim, []: [Input])
+            updateLogic(dt -. step, stprim, []: List Input)
         } else (st, dt)
     }
 
@@ -440,7 +440,7 @@ fun main() {
              loFps = 1000000.0, hiFps = 0.0, loFpsFrame = 0,
              upFrames = 0, downFrames = 0));
 
-        if (not(haveMail())) self() ! ([]: [Input]) else ();
+        if (not(haveMail())) self() ! ([]: List Input) else ();
         updateState()
     }
     var updateProcId = spawnClient { updateState() };
@@ -448,7 +448,7 @@ fun main() {
     fun inputStateLoop(i) {
         var r = recv();
 
-        var i = if (not(r == KeyDown(-1))) i ++ [r] else ([]: [Input]);
+        var i = if (not(r == KeyDown(-1))) i ++ [r] else ([]: List Input);
 
         if (not(r == KeyDown(-1)))
             updateProcId ! i
@@ -456,7 +456,7 @@ fun main() {
 
         inputStateLoop(i)
     }
-    var inputProcId = spawnClient { inputStateLoop([]: [Input]) };
+    var inputProcId = spawnClient { inputStateLoop([]: List Input) };
 
 
     fun onKeyDown(e) {
@@ -478,7 +478,7 @@ fun main() {
 
         ignore(domSetStyleAttrFromRef(getNodeById("info"), "display", "none"));
 
-        updateProcId ! ([]: [Input])
+        updateProcId ! ([]: List Input)
     }
     var initializeProcId = spawnClient { initialize() };
 

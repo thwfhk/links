@@ -46,7 +46,7 @@ let type_binary_op env tycon_env =
       and replacep = List.exists ((=) RegexReplace) flags in
         (match replacep, listp, nativep with
            | true,   _   , false -> (* stilde  *) datatype "(String, Regex) -> String"
-           | false, true , false -> (* ltilde *)  datatype "(String, Regex) -> [String]"
+           | false, true , false -> (* ltilde *)  datatype "(String, Regex) -> List String"
            | false, false, false -> (* tilde *)   datatype "(String, Regex) -> Bool"
            | _,     _,     true  -> assert false)
 

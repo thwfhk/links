@@ -67,7 +67,7 @@ fun vectorAddI((v1x, v1y), (v2x, v2y)) {
 #
 # OTHER
 #
-sig catMaybes: ([Maybe(a)]) -> [a]
+sig catMaybes: (List Maybe(a)) -> List a
 fun catMaybes(ls) {
     for (x <- ls) {
         switch (x) {
@@ -114,7 +114,7 @@ fun maybe(n, f, m) {
 }
 
 # intMap* -- emulates Haskell's IntMap
-typename IntMap(a) = [(Int, a)];
+typename IntMap(a) = List (Int, a);
 
 fun intMapFromList(xs) {
     xs
@@ -254,12 +254,12 @@ typename Color = (Float, Float, Float, Float);
 typename Stack = IntMap(IntMap(Maybe(Color)));
 
 typename TilePos = (Int, Int);
-typename Piece = (pos: TilePos, pts: [TilePos], color: Color);
+typename Piece = (pos: TilePos, pts: List TilePos, color: Color);
 
 typename GameState = [| Run | Restart | Download |];
 typename Game = (activePiece: Maybe(Piece), queue: Piece, stack: Stack,
                     score: Int, countdown: Int, dropped: Bool,
-                    clearing: [Int], font: String, state: GameState);
+                    clearing: List Int, font: String, state: GameState);
 
 #
 # MAIN
@@ -312,7 +312,7 @@ fun main() {
         makePiece([(0,0),  (0,1),  (1,1),  (1,0)], (0.6, 0.6, 0.6)),
         makePiece([(-1,0), (0,0),  (0,1),  (1,1)], (0.6, 1.0, 0.3)),
         makePiece([(1,0),  (0,0),  (0,1), (-1,1)], (0.3, 1.0, 0.6)),
-        makePiece([(-1,0), (0,0),  (1,0),  (0,1)], (0.3, 1.0, 1.0))]: [Piece];
+        makePiece([(-1,0), (0,0),  (1,0),  (0,1)], (0.3, 1.0, 1.0))]: List Piece;
 
     fun getRandomPiece() {
         pieces !! floatToInt((random() *. intToFloat(length(pieces))) -. 1.0)
@@ -712,7 +712,7 @@ fun main() {
             var now = clientTimeMilliseconds();
             var dt = dt +. fmin(1.0, intToFloat(now - lastTime) /. 1000.0);
 
-            fun aux(auxi: [Input]) {
+            fun aux(auxi: List Input) {
                 if (haveMail()) {
                     aux(recv()::auxi)
                 } else auxi

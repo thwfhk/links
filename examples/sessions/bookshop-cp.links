@@ -20,14 +20,14 @@ typename Address = (street:String, houseNo:Int, city:String);
 typename OrderSummary = String;
 
 # Session types for mother's choice.
-typename Shop = mu a.[&|Add:?Product.a, Remove:?Product.a, Checkout:?Card.?Address.![OrderSummary].EndBang|&];
+typename Shop = mu a.[&|Add:?Product.a, Remove:?Product.a, Checkout:?Card.?Address.!List OrderSummary.EndBang|&];
 
 # Session types for son's choice.
 typename Son = [&|Choice:!Product.EndBang|&];
 
 
 # Removes given element.
-sig removeProduct : (Product, [Product]) ~> ([Product])
+sig removeProduct : (Product, List Product) ~> (List Product)
 fun removeProduct(item, products) client
 {
         switch (products) {
@@ -57,7 +57,7 @@ intToString(address.houseNo) ^^ ", City: " ^^ address.city].
 }
 
 # Turns a list of products into a single string.
-sig concatenateProducts : ([Product], String) ~> (String)
+sig concatenateProducts : (List Product, String) ~> (String)
 fun concatenateProducts(products, fullList) client
 {
         switch(products) {
@@ -67,14 +67,14 @@ fun concatenateProducts(products, fullList) client
 }
 
 # Turns order summary into a single readable string.
-sig summariseOrder : (Int, String, [Product], String) ~> ([String])
+sig summariseOrder : (Int, String, List Product, String) ~> (List String)
 fun summariseOrder(card, address, products, removed) client
 {
         [concatenateProducts(products, ""), removed, intToString(card), address]
 }
 
 # A shop. Accepts orders and allows checkout.
-#sig waitForClient : (Shop, [Product], String) ~> ()
+#sig waitForClient : (Shop, List Product, String) ~> ()
 fun waitForClient(s, orderedProducts, removedProducts) client
 {
  <| offer s {
@@ -110,7 +110,7 @@ fun getSonBook(s) {
 
 
 # Mom picks out the products, allows the son to do it, goes to checkout.
-sig orderBooks : (~Shop) ~> ([String])
+sig orderBooks : (~Shop) ~> (List String)
 fun orderBooks(c) client
 {
         var myAddress = (street="Princes Street", houseNo=14, city="Edinburgh");

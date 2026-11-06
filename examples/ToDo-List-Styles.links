@@ -12,7 +12,7 @@ sig deleteItem : (Int, Process( {hear : Cmd |_} )) ~> ()
 fun deleteItem(id, pId) client {
     pId ! Done(id)
 }
-sig itemsToXml : ([(Int, String)]) {hear:Cmd | _}~> Xml
+sig itemsToXml : (List (Int, String)) {hear:Cmd | _}~> Xml
 fun itemsToXml(items) client {
     var pid = self();
     <#>
@@ -29,13 +29,13 @@ fun itemsToXml(items) client {
     </#>
 }
 
-sig renderItemList : ([(Int, String)]) {hear: Cmd | %}~> ()
+sig renderItemList : (List (Int, String)) {hear: Cmd | %}~> ()
 fun renderItemList(items){
     var list = getNodeById("item-list");
     domReplaceChildren(itemsToXml(items), list)
 }
 
-sig todoProcess : ([(Int, String)], Int) {hear:Cmd|_}~> a
+sig todoProcess : (List (Int, String), Int) {hear:Cmd|_}~> a
 fun todoProcess(prevList, nextId) client {
     var cmd = recv();
     var (items, nextId) = switch(cmd){

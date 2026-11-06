@@ -17,7 +17,7 @@ var tracksLens = lens tracksTable with { track -> date rating };
 
 var joinedLens = lensjoin albumsLens with tracksLens on album delete_left;
 
-sig assertEqSorted : ([a],[a]) ~> ()
+sig assertEqSorted : (List a,List a) ~> ()
 fun assertEqSorted(l1,l2) {
   assertEq(sortBy(id,l1),sortBy(id,l2))
 }

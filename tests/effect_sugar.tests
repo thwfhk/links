@@ -24,8 +24,8 @@ stdout : fun : forall a::Row,b::Row,c::Row,d::Row,e::Row.(() -a-> () -b-> () -c-
 args : --enable-handlers --set=effect_sugar=true --set=show_quantifiers=true --set=effect_sugar_policy=final_arrow
 
 Desugaring [6]: Higher order, aliases
-typename Comp(a) = () ~> a; sig mapc : ((a) -> Comp(b)) -> ([a]) -> [Comp(b)] fun mapc(c)(lst) { map(c, lst) } mapc
-stdout : fun : forall a,b::Row,c,d::Row.((a) -b-> Comp (c,{ |b})) -d-> ([a]) -b-> [Comp (c,{ |b})]
+typename Comp(a) = () ~> a; sig mapc : ((a) -> Comp(b)) -> (List a) -> List Comp(b) fun mapc(c)(lst) { map(c, lst) } mapc
+stdout : fun : forall a,b::Row,c,d::Row.((a) -b-> Comp (c,{ |b})) -d-> (List a) -b-> List (Comp (c,{ |b}))
 args : --enable-handlers --set=effect_sugar=true --set=show_quantifiers=true --set=effect_sugar_policy=final_arrow
 
 Desugaring [7]: Structure containing own helper
@@ -70,23 +70,23 @@ stdout : fun : T (_)
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=alias_omit
 
 Printer: none [5], no chf
-sig map : ((a) ~> b) -> ([a]) ~> [b] fun map(f)(xs) { switch(xs) { case [] -> [] case (x::xs) -> f(x) :: map(f)(xs) }} map
-stdout : fun : ((a) ~> c) -_-> ([a]) ~> [c]
+sig map : ((a) ~> b) -> (List a) ~> List b fun map(f)(xs) { switch(xs) { case [] -> [] case (x::xs) -> f(x) :: map(f)(xs) }} map
+stdout : fun : ((a) ~> c) -_-> (List a) ~> List c
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=none
 
 Printer: none [6], no chf
-sig map : ((a) ~> b) -> ([a]) -> () ~> [b] fun map(f)(xs)() { switch(xs) { case [] -> [] case (x::xs) -> f(x) :: map(f)(xs)() }} map
-stdout : fun : ((a) ~> c) -_-> ([a]) -_-> () ~> [c]
+sig map : ((a) ~> b) -> (List a) -> () ~> List b fun map(f)(xs)() { switch(xs) { case [] -> [] case (x::xs) -> f(x) :: map(f)(xs)() }} map
+stdout : fun : ((a) ~> c) -_-> (List a) -_-> () ~> List c
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=none
 
 Printer: none [7], no arrows_show_implicit_effect_variable
-sig map : ((a) ~e~> b, [a]) ~e~> [b] fun map(f, lst) { switch(lst) { case [] -> [] case (x::xs) -> f(x) :: map(f, xs) }} map
-stdout : fun : ((a) ~> c, [a]) ~> [c]
+sig map : ((a) ~e~> b, List a) ~e~> List b fun map(f, lst) { switch(lst) { case [] -> [] case (x::xs) -> f(x) :: map(f, xs) }} map
+stdout : fun : ((a) ~> c, List a) ~> List c
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=none
 
 Printer: none [8], no arrows_show_implicit_effect_variable
-sig map : ((a) ~e~> b) -> ([a]) ~e~> [b] fun map(f)(lst) { switch(lst) { case [] -> [] case (x::xs) -> f(x) :: map(f)(xs) }} map
-stdout : fun : ((a) ~> c) -_-> ([a]) ~> [c]
+sig map : ((a) ~e~> b) -> (List a) ~e~> List b fun map(f)(lst) { switch(lst) { case [] -> [] case (x::xs) -> f(x) :: map(f)(xs) }} map
+stdout : fun : ((a) ~> c) -_-> (List a) ~> List c
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=none
 
 Printer: none [9], dot when not open_default not allowed
@@ -161,23 +161,23 @@ stdout : fun : (a) {E:(a) => ()}-> ()
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=contract
 
 Printer: chf [1]
-sig map : ((a) ~> b) -> ([a]) ~> [b] fun map(f)(xs) { switch(xs) { case [] -> [] case (x::xs) -> f(x) :: map(f)(xs) }} map
-stdout : fun : ((a) ~> c) -> ([a]) ~> [c]
+sig map : ((a) ~> b) -> (List a) ~> List b fun map(f)(xs) { switch(xs) { case [] -> [] case (x::xs) -> f(x) :: map(f)(xs) }} map
+stdout : fun : ((a) ~> c) -> (List a) ~> List c
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=chf
 
 Printer: chf [2]
-sig map : ((a) ~> b) -> ([a]) -> () ~> [b] fun map(f)(xs)() { switch(xs) { case [] -> [] case (x::xs) -> f(x) :: map(f)(xs)() }} map
-stdout : fun : ((a) ~> c) -> ([a]) -> () ~> [c]
+sig map : ((a) ~> b) -> (List a) -> () ~> List b fun map(f)(xs)() { switch(xs) { case [] -> [] case (x::xs) -> f(x) :: map(f)(xs)() }} map
+stdout : fun : ((a) ~> c) -> (List a) -> () ~> List c
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=chf
 
 Printer: arrows_show_implicit_effect_variable [1]
-sig map : ((a) ~e~> b, [a]) ~e~> [b] fun map(f, lst) { switch(lst) { case [] -> [] case (x::xs) -> f(x) :: map(f, xs) }} map
-stdout : fun : ((a) ~b~> c, [a]) ~b~> [c]
+sig map : ((a) ~e~> b, List a) ~e~> List b fun map(f, lst) { switch(lst) { case [] -> [] case (x::xs) -> f(x) :: map(f, xs) }} map
+stdout : fun : ((a) ~b~> c, List a) ~b~> List c
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=arrows_show_implicit_effect_variable
 
 Printer: arrows_show_implicit_effect_variable [2]
-sig map : ((a) ~e~> b) -> ([a]) ~e~> [b] fun map(f)(lst) { switch(lst) { case [] -> [] case (x::xs) -> f(x) :: map(f)(xs) }} map
-stdout : fun : ((a) ~b~> c) -> ([a]) ~b~> [c]
+sig map : ((a) ~e~> b) -> (List a) ~e~> List b fun map(f)(lst) { switch(lst) { case [] -> [] case (x::xs) -> f(x) :: map(f)(xs) }} map
+stdout : fun : ((a) ~b~> c) -> (List a) ~b~> List c
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=arrows_show_implicit_effect_variable
 
 Printer: open_default [1], open

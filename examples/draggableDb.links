@@ -63,7 +63,7 @@ fun load() server {
   map ((.name), items)
 }
 
-sig save : ([String]) ~> ()
+sig save : (List String) ~> ()
 fun save(itemsList) server {
   ignore(mapi(
     fun (item, i) {

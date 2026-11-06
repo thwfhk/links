@@ -1,4 +1,4 @@
-unsafe sig map : ((a) -b-> c, [a]) -b-> [c]
+unsafe sig map : ((a) -b-> c, List a) -b-> List c
 fun map(f, l) {
   switch (l) {
     case []     -> []

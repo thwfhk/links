@@ -28,12 +28,12 @@ Implementation has resumed for D3e, D3f and D4a2. Pause before D4f2.
   Annotation elaboration, runtime integration and migration also remain.
 - D3e removes higher-order effect flags, syntax and row rules. Ordinary
   operation arguments and results must be absolute.
-- List types will use `List A`, and handled-effect annotations will use angle
-  brackets, for example `handle <Reader> (...)`. D3f applies these source changes.
+- D3f implements `List A`, combined kind annotations and angle-bracket
+  handled-effect annotations, for example `handle <Reader> (...)`.
 - Modal-kind refinement and the thesis' quantified-type classification are
   required. D4g adds refinement; D4a2 below updates the implemented classifier.
 
-D3e resumes compiler work after the pause recorded at `87264380`.
+D3e and D3f resume compiler work after the pause recorded at `87264380`.
 The most recent compiler verification is recorded below. Passing legacy suites
 checks compatibility during construction; it does not complete Fresco inference.
 
@@ -56,11 +56,12 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D4d2 | Detached export with variable metadata | `c143fb84` |
 | D4e | Recursive skeletons and checked shared-type conversion | `bb94d506` |
 | D4f1 | Skeleton free variables, root substitution and quantifier opening | `7af62207` |
-| D3e | Remove higher-order effect declarations and row rules | This commit |
+| D3e | Remove higher-order effect declarations and row rules | `29a9ba43` |
+| D3f | Prefix list types, combined kinds and handler delimiters | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
-results here. D3f remains before final syntax acceptance.
+results here. The D1--D3 scope and syntax corrections are complete.
 
 ## Remaining work
 
@@ -70,7 +71,6 @@ also requires the affected build/tests and review described in AGENTS.md.
 
 | Task | Depends on | Completion check |
 |---|---|---|
-| D3f: list types, combined kinds and handler syntax | D2--D3d | Parse/print `List A`, `Type(l,r,m)` and `handle <E>`/`shallowhandle <E>`; migrate signatures and fixtures; reject replaced forms; preserve XML, list expressions/patterns and type round trips |
 | D4a2: thesis quantified-type classification | D4a--D4b | Classify quantified value-type binders at `Abs` without changing their declared kinds; test classification versus well-formedness/instantiation |
 | D4f2: skeleton solution expansion and scope exit | D4f1, D4d1 | Preserve ghosts, scope, live unknowns and recursive sharing; reject escapes without changing the input context |
 | D4g: ordinary/modal requirement refinement | D4f2, D4c, D4a2 | Enforce flexible `Abs` and structural payload requirements through later assignment, scope exit and export; never narrow rigid binders |
@@ -82,16 +82,6 @@ also requires the affected build/tests and review described in AGENTS.md.
 | D6: modal source inference and handlers | D3e--D3f, D4j--D4k, D5 | A handled operation evaluates to `42`; infer omitted handler arguments (including unused parameters); repeated rows, modal access/refinement, complete groups and polymorphism checks pass |
 | D7: Links integration and migration | D5--D6 | Syntax/primitive inventory is covered; batch, REPL and typed rechecks use Fresco; programs migrate and old effect syntax rejects |
 | D8: backends, documentation and final review | D7 | Interpreter/JS deep-handler checks, migration guide and selected suites pass; in-scope legacy effect inference is removed |
-
-D3f covers lexer/parser rules, combined kind annotations, type printers and
-parentheses, built-in type
-strings, prelude/library signatures, examples, documentation and affected test
-expectations. Preserve the existing internal list type and runtime representation.
-Change type annotations without changing list expressions or patterns. Migrate
-initialisation strings in the same buildable change that removes old list-type
-syntax. Check nested/function element types, qualified/parameterised handled
-effects, parsing/resolution of omitted effect arguments, both handler depths,
-and XML/operation-pattern delimiter interactions. Retain ordinary kind inference/defaults and `::Abs` shorthand.
 
 D4k can proceed alongside the final solver work once its own dependencies are
 ready. D5 requires type-annotation elaboration; D6 also requires effect-signature
@@ -135,24 +125,45 @@ choices in refinement, signature elaboration and modal integration tests.
 
 ## Latest task and verification
 
-6 November 2026, D3e, this commit (base `aba99313`): removed higher-order
-effect syntax, flags and row rules. Independent review found no issues.
-The final integrated revision passed:
+6 November 2026, D3f, this commit (base `29a9ba43`): implemented prefix list
+types, combined kind annotations, angle-bracket handlers and handler-only
+omission of effect arguments. Migrated signatures and fixtures. Independent
+review identified three printer grouping cases; all were fixed and covered by
+round-trip tests. No findings remain.
 
 | Integrated check | Result |
 |---|---|
 | `make no-db` | Passed |
 | `tests/handlers.tests` | 95 passed |
 | `tests/effect_sugar.tests` | 44 passed |
-| `tests/desugar_datatypes.tests` | 38 passed |
-| `opam exec -- ./run-tests nodb-unit-tests` | 669 passed |
+| `tests/polymorphism.tests` | 55 passed |
+| `tests/typecheck_examples.tests` | 167 passed, 15 ignored by existing settings |
+| `tests/type_print.tests` | 10 passed |
+| `tests/desugar_datatypes.tests` | 42 passed |
+| `tests/modules.tests` | 41 passed |
+| `tests/mutual.tests` | 17 passed |
+| `tests/collections.tests` | 37 passed |
+| `tests/library.tests` | 4 passed |
+| `tests/freezeml.tests` | 59 passed |
+| `tests/typed_ir.tests` | 26 passed |
+| `tests/binaryTrees.tests` | 5 passed |
+| `tests/cliArgs.tests` | 7 passed |
+| `tests/operators.tests` | 21 passed |
+| `tests/roundtrippable_types.tests` | 5 passed |
+| `tests/strings.tests` | 5 passed |
+| `tests/xml.tests` | 74 passed |
+| `tests/bindings.tests` | 25 passed |
+| `tests/conditionals.tests` | 6 passed |
+| `opam exec -- ./run-tests nodb-unit-tests` | 673 passed |
+| Menhir conflict check | Zero conflicts before and after the grammar change |
+| Parse-only source and expected-type comparison | No unexpected parse regressions; 1,374 programs and 838 type strings parse |
 | `make rule-check` | Passed; GNU-find tab check skipped, formatter check disabled |
-| Manual changed-file tab/trailing-whitespace check | Passed |
+| Manual added-line tab/trailing-whitespace check | Passed |
 | `git diff --check` | Passed |
 
-Three obsolete higher-order row tests were removed. Source tests check rejection
-of `effect higher` and execution of an ordinary `higher` binding. Signature unit
-tests cover absolute arguments/results and rejection of contextual payloads.
+The parse-only audit also covered excluded-feature fixtures without executing
+those suites. Existing invalid examples and deliberate rejection cases remain.
+Handler argument inference follows in D6; D3f preserves omission in the AST.
 
 ## Latest documentation task
 
@@ -167,7 +178,7 @@ No compiler changes, build or tests.
 
 ## Next action
 
-Complete D3f's syntax changes and D4a2's quantified-classification update,
-reviewing, testing and committing each milestone. Pause before D4f2's skeleton
+Complete D4a2's quantified-classification update, then review, test and commit
+that milestone. Pause before D4f2's skeleton
 solution expansion and scope exit. D5 requires its contextual annotation and
 solver dependencies.

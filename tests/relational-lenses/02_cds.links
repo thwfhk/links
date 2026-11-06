@@ -22,7 +22,7 @@ var quantityLimit = 2;
 fun filter(x) { x.quantity > quantityLimit }
 var filteredLens = lenscheck (lensselect from droppedLens by filter);
 
-sig assertEqSorted : ([a],[a]) ~> ()
+sig assertEqSorted : (List a,List a) ~> ()
 fun assertEqSorted(l1,l2) {
   assertEq(sortBy(id,l1),sortBy(id,l2))
 }

@@ -5,7 +5,7 @@ fun replica(x, y) {
     else y :: replica(x - 1, y)
 }
 
-sig transpose: ([[a]]) ~> [[a]]
+sig transpose: (List (List a)) ~> List (List a)
 fun transpose(xs) {
     switch (xs) {
         case ([]::_) -> []
@@ -15,7 +15,7 @@ fun transpose(xs) {
 
 # the game 2048
 # ported from https://github.com/gregorulm/h2048/blob/master/h2048.hs
-typename Grid = [[Int]];
+typename Grid = List (List Int);
 
 var leftKeyCode = 37;
 var rightKeyCode = 39;

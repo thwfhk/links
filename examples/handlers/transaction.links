@@ -2,7 +2,7 @@
 # links> runState(1, transBool(transaction(comp)));
 
 # Queue API
-typename Queue(a) = ([a], [a]);
+typename Queue(a) = (List a, List a);
 var emptyQueue = ([], []);
 
 sig enqueue : (a, Queue(a)) -> Queue(a)
@@ -83,7 +83,7 @@ fun beginTransaction(m) {
 
 # Bank model
 typename Account = (String, Int);
-typename Bank = [Account];
+typename Bank = List Account;
 
 var accounts = [("Alice", 100), ("Bob", 25)];
 

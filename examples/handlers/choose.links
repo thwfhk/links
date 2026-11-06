@@ -24,7 +24,7 @@ fun positive(m)() {
 }
 
 # The "I'll-take-everything" handler
-sig enumerate : (Comp(a, {Choose:Bool |e})) -> Comp([a], {Choose{_} |e})
+sig enumerate : (Comp(a, {Choose:Bool |e})) -> Comp(List a, {Choose{_} |e})
 fun enumerate(m)() {
   handle(m()) {
     case <Choose => k> -> k(true) ++ k(false)

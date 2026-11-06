@@ -30,7 +30,7 @@ typename ClientSend =
 #
 # * If the chosen nickname is already in use then the server refuses to
 #   allow the connection with a Nope message.
-typename ChatClient = !Nickname.[&|Join:?(Topic, [Nickname], ClientReceive).ClientSend,
+typename ChatClient = !Nickname.[&|Join:?(Topic, List Nickname, ClientReceive).ClientSend,
                                    Nope:End|&];
 
 # Server endpoints

@@ -48,8 +48,8 @@ let contextual_forms = [
   "effect State(a::Abs) { Get : () => a; Put : (a) => (); }", "State";
   "do M.State.Get", "Get";
   "handle(1) { case <M.State.Get => k> -> k(1) }", "Get";
-  "handle[State(Int)](1) { case x -> x }", "State(Int)";
-  "shallowhandle[State(Int)](1) { case x -> x }", "State(Int)";
+  "handle <State(Int)>(1) { case x -> x }", "State(Int)";
+  "shallowhandle <State(Int)>(1) { case x -> x }", "State(Int)";
   "freeze(1)", "freeze(1)";
 ]
 
@@ -144,7 +144,7 @@ let suite = "modal declarations" >::: [
 
   "handler annotation retains depth and parameters" >:: (fun _ ->
     List.iter (fun (prefix, depth) ->
-      let text = prefix ^ "[M.State(Int)](1) { case x -> x }" in
+      let text = prefix ^ " <M.State(Int)>(1) { case x -> x }" in
       let h = handler text in
       assert_equal depth h.sh_descr.shd_depth;
       assert_equal None h.sh_descr.shd_params;
@@ -156,18 +156,20 @@ let suite = "modal declarations" >::: [
          assert_equal [Datatype.Primitive Primitive.Int] (List.map node args)
       | None -> assert_failure "Missing handler annotation")
       ["handle",Deep; "shallowhandle",Shallow];
-    let h = handler "handle[State(Int)](1)(state <- 0) { case x -> state }" in
+    let h = handler "handle <State(Int)>(1)(state <- 0) { case x -> state }" in
     assert_equal Deep h.sh_descr.shd_depth;
     assert_equal 1 (List.length (Option.get h.sh_descr.shd_params).shp_bindings));
 
   "handler annotation accepts exactly one group" >:: (fun _ ->
     List.iter reject_syntax [
-      "handle[](1) { case x -> x }";
-      "handle[A,B](1) { case x -> x }";
-      "handle[A,A](1) { case x -> x }";
-      "shallowhandle[A,B](1) { case x -> x }";
-      "handle[A()](1) { case x -> x }";
-      "handle[A|e](1) { case x -> x }";
+      "handle [State](1) { case x -> x }";
+      "shallowhandle [State(Int)](1) { case x -> x }";
+      "handle <>(1) { case x -> x }";
+      "handle <A,B>(1) { case x -> x }";
+      "handle <A,A>(1) { case x -> x }";
+      "shallowhandle <A,B>(1) { case x -> x }";
+      "handle <A()>(1) { case x -> x }";
+      "handle <A|e>(1) { case x -> x }";
     ]);
 
   "unannotated handlers and variable freezing are unchanged" >:: (fun _ ->
@@ -192,7 +194,7 @@ let suite = "modal declarations" >::: [
     List.iter (fun text -> ignore (parse text)) [
       "freeze(<State>{x}</State>)";
       "freeze({ var x = 1; x })";
-      "freeze(handle[State(Int)](do State.Get) { case <State.Get => k> -> k(1) })";
+      "freeze(handle <State(Int)>(do State.Get) { case <State.Get => k> -> k(1) })";
     ];
     reject_syntax "freeze()";
     reject_syntax "freeze(x,y)");
@@ -203,7 +205,7 @@ let suite = "modal declarations" >::: [
     assert_equal ["x"] (Utility.StringSet.elements (Freevars.phrase (expression "do M.State.Put(x)"))));
 
   "map visits declaration annotation operation and freeze children" >:: (fun _ ->
-    let text = "effect E(a::Abs) { Op : (Int) => Int; } handle[E(Int)](freeze(do M.E.Op(x))) { case <M.E.Op(y) => k> -> k(y) }" in
+    let text = "effect E(a::Abs) { Op : (Int) => Int; } handle <E(Int)>(freeze(do M.E.Op(x))) { case <M.E.Op(y) => k> -> k(y) }" in
     let mapper = object
       inherit SugarTraversals.map as super
       method! name n = if n = "E" then "F" else if n = "x" then "z" else n
@@ -212,7 +214,7 @@ let suite = "modal declarations" >::: [
         | Datatype.Primitive Primitive.Int -> Datatype.Primitive Primitive.Bool
         | t -> super#datatypenode t
     end in
-    let expected = parse "effect F(a) { Op : (Bool) => Bool; } handle[F(Bool)](freeze(do M.F.Op(z))) { case <M.F.Op(y) => k> -> k(y) }" in
+    let expected = parse "effect F(a) { Op : (Bool) => Bool; } handle <F(Bool)>(freeze(do M.F.Op(z))) { case <M.F.Op(y) => k> -> k(y) }" in
     assert_equal (strip#program expected) (strip#program (mapper#program (parse text))));
 
   "fold visits declaration parameters signatures and annotation arguments" >:: (fun _ ->
@@ -230,7 +232,7 @@ let suite = "modal declarations" >::: [
           let a,b,c = o#counts in {< counts = a,b,c+1 >}
         | _ -> o
     end in
-    let p = parse "effect E(a::Abs) { Op : (Int) => Int; } handle[E(Int)](do E.Op(1)) { case <E.Op(x) => k> -> k(x) }" in
+    let p = parse "effect E(a::Abs) { Op : (Int) => Int; } handle <E(Int)>(do E.Op(1)) { case <E.Op(x) => k> -> k(x) }" in
     assert_equal (1,2,3) (visitor#program p)#counts);
 
   "fold_map visits all new children and positioned names" >:: (fun _ ->
@@ -244,10 +246,10 @@ let suite = "modal declarations" >::: [
         | Datatype.Primitive Primitive.Int -> {< count = count+1 >}, Datatype.Primitive Primitive.Bool
         | t -> super#datatypenode t
     end in
-    let p = parse "effect E(a::Abs) { Op : (Int) => Int; } handle[E(Int)](freeze(do E.Op(x))) { case <E.Op(y) => k> -> k(y) }" in
+    let p = parse "effect E(a::Abs) { Op : (Int) => Int; } handle <E(Int)>(freeze(do E.Op(x))) { case <E.Op(y) => k> -> k(y) }" in
     let visitor, mapped = visitor#program p in
     assert_equal 8 visitor#count;
-    let expected = parse "effect F(a) { Op : (Bool) => Bool; } handle[F(Bool)](freeze(do F.Op(x))) { case <F.Op(y) => k> -> k(y) }" in
+    let expected = parse "effect F(a) { Op : (Bool) => Bool; } handle <F(Bool)>(freeze(do F.Op(x))) { case <F.Op(y) => k> -> k(y) }" in
     assert_equal (strip#program expected) (strip#program mapped));
 
   "all visitor position hooks include qualified effect and operation names" >:: (fun _ ->
@@ -293,7 +295,7 @@ let suite = "modal declarations" >::: [
     | _ -> assert_failure "Expected resolved declaration");
 
   "module pass visits ordinary names within contextual syntax" >:: (fun _ ->
-    let p = parse "module M { typename T = Int; var value = 1; } effect E(a) { Op : (M.T) => M.T; } handle[E(M.T)](freeze(M.value)) { case x -> x }" in
+    let p = parse "module M { typename T = Int; var value = 1; } effect E(a) { Op : (M.T) => M.T; } handle <E(M.T)>(freeze(M.value)) { case x -> x }" in
     let p = DesugarModules.desugar_program p in
     let visitor = object
       inherit SugarTraversals.fold as super

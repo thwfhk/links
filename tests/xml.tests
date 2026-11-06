@@ -94,7 +94,7 @@ stdout : foo<a/><b>bar</b>fubar : Xml
 
 Labelization bug
 (escape cc in <form l:action="{exit (cc)}" />) ++ <p/>
-stdout : @.* : \[XmlItem\]
+stdout : @.* : List XmlItem
 
 XML Construction
 <#>{[makeXml("foo", [ ("id", "bar"), ("class", "baz") ], <div/>)]}</#>
@@ -205,7 +205,7 @@ stdout : Just("myid") : [|Just:String|Nothing|]
 
 Get attributes
 getAttributes(<div id="myid" ns:foo="bar" />)
-stdout : [("ns:foo", "bar"), ("id", "myid")] : [(String, String)]
+stdout : [("ns:foo", "bar"), ("id", "myid")] : List (String, String)
 
 Top level comment
 <!-- This is an XML comment --> ()

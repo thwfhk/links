@@ -275,13 +275,13 @@ fun peek() { do Peek }
 sig succeed : (a) -> Parser(a)
 fun succeed(x)() { x }
 
-sig many : (Parser(a)) ~> Parser([a])
+sig many : (Parser(a)) ~> Parser(List a)
 fun many(p)() {
   if (choose()) p() :: many(p)()
   else []
 }
 
-sig many1 : (Parser(a)) -> Parser([a])
+sig many1 : (Parser(a)) -> Parser(List a)
 fun many1(p)() {
   p() :: many(p)()
 }
@@ -435,7 +435,7 @@ mutual {
     else parseAtomicExpr()
   }
 
-  sig parse : (Parser(a, { |e}), [Char]) -> Comp(a, {Choose-,Satisfies-,Peek-,Fail: Zero |e})
+  sig parse : (Parser(a, { |e}), List Char) -> Comp(a, {Choose-,Satisfies-,Peek-,Fail: Zero |e})
   fun parse(m, input)() {
     handle(m())(tokens <- input) {
       case x -> x

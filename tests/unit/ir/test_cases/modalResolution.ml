@@ -158,14 +158,16 @@ let suite = "modal resolution" >::: [
   "effect application and operation arities" >:: (fun _ ->
     List.iter (fun (text, part) -> reject_resolution part text) [
       "effect E(a) {} var x = (1 : modal [E] Int);", "expects 1 arguments";
+      "effect E(a) {} var x = (1 : modal <E> Int);", "expects 1 arguments";
       "effect E {} var x = (1 : modal [E(Int)] Int);", "expects 0 arguments";
-      "effect E(a) {} handle[E](1) { case x -> x }", "expects 1 arguments";
+      "effect E(a,b) {} handle <E(Int)>(1) { case x -> x }", "expects 2 arguments";
+      "effect E(a) {} shallowhandle <E(Int,Bool)>(1) { case x -> x }", "expects 1 arguments";
       state_decl ^ "do Put", "expects 1 arguments";
       state_decl ^ "do State.Get(1)", "expects 0 arguments";
     ]);
 
   "complete handlers preserve annotation depth parameters and types" >:: (fun _ ->
-    let program, state = resolve (state_decl ^ "handle[State](do State.Get)(s <- 0) { case <Get => k>:Int -> k(s) case <Put(x:Int) => k> -> k(()) case x -> x }") in
+    let program, state = resolve (state_decl ^ "handle <State>(do State.Get)(s <- 0) { case <Get => k>:Int -> k(s) case <Put(x:Int) => k> -> k(()) case x -> x }") in
     let h = match node (expression program) with Handle h -> h | _ -> assert_failure "Handler" in
     assert_equal Deep h.sh_descr.shd_depth;
     assert_equal 1 (List.length (Option.get h.sh_descr.shd_params).shp_bindings);
@@ -174,10 +176,29 @@ let suite = "modal resolution" >::: [
     match node (fst (List.hd h.sh_effect_cases)) with Pattern.HasType _ -> () | _ -> assert_failure "Typed pattern");
 
   "annotated clauses use their selected effect" >:: (fun _ ->
-    let program, state = resolve (get_decl ^ "effect Store { Get : () => Int; } handle[State](do State.Get) { case <Get => k> -> k(1) }") in
+    let program, state = resolve (get_decl ^ "effect Store { Get : () => Int; } handle <State>(do State.Get) { case <Get => k> -> k(1) }") in
     let header = List.find (fun h -> h.source_name = "State") (headers state) in
     assert_bool "Invocation and clause share identity"
       (List.for_all ((=) (List.hd header.operations).id) (operation_ids program)));
+
+  "parameterised handlers resolve with omitted or explicit arguments" >:: (fun _ ->
+    List.iter (fun (annotation, arguments) ->
+      let text = "module M { effect State(a::Abs,b::Type(Any,Any,Abs)) { Get : () => a; } } " ^
+        "effect Other { Get : () => Int; } shallowhandle " ^ annotation ^
+        " (do M.State.Get) { case <Get => k> -> k(1) }" in
+      let program, state = resolve text in
+      let header = List.find (fun h -> h.source_name = "State") (headers state) in
+      assert_equal 2 header.parameter_count;
+      let handler = match node (expression program) with
+        | Handle h -> h
+        | _ -> assert_failure "Expected handler" in
+      let ids, actual_arguments = node (Option.get handler.sh_descr.shd_effect) in
+      assert_equal [header.id] ids;
+      assert_equal arguments (List.map node actual_arguments);
+      let operation = List.hd header.operations in
+      assert_equal [operation.id; operation.id] (operation_ids program))
+      ["<M.State>", [];
+       "<M.State(Int,Bool)>", [Datatype.Primitive Primitive.Int; Datatype.Primitive Primitive.Bool]]);
 
   "unannotated handlers infer their owner" >:: (fun _ ->
     ignore (resolve (get_decl ^ "handle(do Get) { case <Get => k> -> k(1) }"));
@@ -185,18 +206,18 @@ let suite = "modal resolution" >::: [
 
   "handler missing duplicate foreign and wrong arity clauses" >:: (fun _ ->
     List.iter (fun (text, part) -> reject_resolution part text) [
-      state_decl ^ "handle[State](1) { case <Get => k> -> k(1) }", "Missing operation clauses: Put";
+      state_decl ^ "handle <State>(1) { case <Get => k> -> k(1) }", "Missing operation clauses: Put";
       get_decl ^ "handle(1) { case <Get => k> -> k(1) case <State.Get => k> -> k(2) }", "Duplicate operation clause";
-      get_decl ^ "effect Store { Get : () => Int; } handle[State](1) { case <Store.Get => k> -> k(1) }", "one effect";
+      get_decl ^ "effect Store { Get : () => Int; } handle <State>(1) { case <Store.Get => k> -> k(1) }", "one effect";
       get_decl ^ "effect Store { Put : () => Int; } handle(1) { case <Get => k> -> k(1) case <Put => k> -> k(2) }", "one effect";
       get_decl ^ "handle(1) { case <Get(x) => k> -> k(x) }", "expects 0 arguments";
-      get_decl ^ "handle[State](1) { case <Put => k> -> k(1) }", "Unknown operation";
-      get_decl ^ "handle[State](1) { case x -> x }", "Missing operation clauses";
+      get_decl ^ "handle <State>(1) { case <Put => k> -> k(1) }", "Unknown operation";
+      get_decl ^ "handle <State>(1) { case x -> x }", "Missing operation clauses";
     ]);
 
   "return only and empty group handlers" >:: (fun _ ->
     ignore (resolve "handle(1) { case x -> x }");
-    ignore (resolve "effect Empty {} handle[Empty](1) { case x -> x }"));
+    ignore (resolve "effect Empty {} handle <Empty>(1) { case x -> x }"));
 
   "failed resolution preserves scope and both allocators" >:: (fun _ ->
     let _, state = resolve get_decl in
@@ -268,7 +289,7 @@ let suite = "modal resolution" >::: [
     | _ -> assert_failure "Anonymous row was changed");
 
   "shallow handlers retain their depth" >:: (fun _ ->
-    let program, _ = resolve (get_decl ^ "shallowhandle[State](1) { case <Get => k> -> k(1) }") in
+    let program, _ = resolve (get_decl ^ "shallowhandle <State>(1) { case <Get => k> -> k(1) }") in
     match node (expression program) with
     | Handle h -> assert_equal Shallow h.sh_descr.shd_depth
     | _ -> assert_failure "Handler");

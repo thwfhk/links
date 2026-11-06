@@ -167,7 +167,7 @@ mutual {
       implode(domain)
   }
 
-  sig extractDomain0 : ([Char]) ~> [Char]
+  sig extractDomain0 : (List Char) ~> List Char
   fun extractDomain0(address) {
       switch(address) {
         case [] -> address
@@ -178,7 +178,7 @@ mutual {
 }
 
 mutual {
-  sig mailClient : (~SMTPServer, (1:String, 2:[String], 3:String, 4:String)) ~> ()
+  sig mailClient : (~SMTPServer, (1:String, 2:List String, 3:String, 4:String)) ~> ()
   fun mailClient(c, mail_form) {
   var domain = extractDomain(mail_form.1);
   var c = send(domain, select HELO c);
@@ -253,7 +253,7 @@ mutual {
   }
 }
 
-sig startCommunication : (String, [String], String, String) ~> ()
+sig startCommunication : (String, List String, String, String) ~> ()
 fun startCommunication(sender, recipients, subject, message) {
     var mail_form = (sender, recipients, subject, message);
     mailClient(forkSync(mailServer), mail_form)

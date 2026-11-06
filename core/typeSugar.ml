@@ -1343,7 +1343,7 @@ end
       die pos ("The two subpatterns of a cons pattern " ^ code "p1::p2 "    ^
                "must have compatible types: if " ^ code "p1" ^ " has type " ^
                 code "t'" ^ " then " ^ code "p2" ^ " must have type "       ^
-                code "[t]" ^ ". However, the pattern"              ^ nli () ^
+                code "List t" ^ ". However, the pattern"           ^ nli () ^
                 code lexpr                                         ^ nl  () ^
                "has type"                                          ^ nli () ^
                 code ppr_lt                                        ^ nl  () ^
@@ -2005,7 +2005,7 @@ let type_binary_op pos ctxt =
         begin
           match replacep, listp, nativep with
            | true,   _   , false -> (* stilde  *) add_empty_usages (datatype "(String, Regex) -> String")
-           | false, true , false -> (* ltilde *)  add_empty_usages (datatype "(String, Regex) -> [String]")
+           | false, true , false -> (* ltilde *)  add_empty_usages (datatype "(String, Regex) -> List String")
            | false, false, false -> (* tilde *)   add_empty_usages (datatype "(String, Regex) -> Bool")
            | _    , _    , true  -> assert false
         end

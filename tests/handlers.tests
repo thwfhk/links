@@ -10,22 +10,22 @@ args : --enable-handlers
 
 Listify handler (1)
 { handle(42) {case x -> [x]} }
-stdout : [42] : [Int]
+stdout : [42] : List Int
 args : --enable-handlers
 
 Listify handler (2)
 handle(42) {case x -> [x]}
-stdout : [42] : [Int]
+stdout : [42] : List Int
 args : --enable-handlers
 
 Listify handler (3)
 { handle([42, 41, 40, 39]) {case x -> [x]} }
-stdout : [[42, 41, 40, 39]] : [[Int]]
+stdout : [[42, 41, 40, 39]] : List (List Int)
 args : --enable-handlers
 
 Listify handler (4)
 handle([42, 41, 40, 39]) {case x -> [x]}
-stdout : [[42, 41, 40, 39]] : [[Int]]
+stdout : [[42, 41, 40, 39]] : List (List Int)
 args : --enable-handlers
 
 Top level operation invocation
@@ -98,12 +98,12 @@ args : --enable-handlers
 
 Binary choice handling (1)
 { handle({ var x = if (do Choose) 40 else 20; var y = if (do Choose) 2 else -20; x + y }) {case <Choose => k> -> k(true) ++ k(false) case x -> [x]} }
-stdout : [42, 20, 22, 0] : [Int]
+stdout : [42, 20, 22, 0] : List Int
 args : --enable-handlers
 
 Binary choice handling (2)
 handle({ var x = if (do Choose) 40 else 20; var y = if (do Choose) 2 else -20; x + y }) {case <Choose => k> -> k(true) ++ k(false) case x -> [x]}
-stdout : [42, 20, 22, 0] : [Int]
+stdout : [42, 20, 22, 0] : List Int
 args : --enable-handlers
 
 Deep continuation escape (1)
@@ -119,32 +119,32 @@ exit : 0
 args : --enable-handlers
 
 Type-and-effect signature for deep handler (1)
-sig allChoices : (Comp(a, {Choose:Bool|e})) {Choose{_}|e}~> [a] fun allChoices(m) {handle(m()) {case x -> [x] case <Choose => k> -> k(true) ++ k(false) }}
+sig allChoices : (Comp(a, {Choose:Bool|e})) {Choose{_}|e}~> List a fun allChoices(m) {handle(m()) {case x -> [x] case <Choose => k> -> k(true) ++ k(false) }}
 stdout : () : ()
 args : --enable-handlers
 
 Type-and-effect signature for deep handler (2)
-sig allChoices : (Comp(a, {Choose:Bool|e})) -> Comp([a], {Choose{_}|e}) fun allChoices(m)() {handle(m()) {case x -> [x] case <Choose => k> -> k(true) ++ k(false)}}
+sig allChoices : (Comp(a, {Choose:Bool|e})) -> Comp(List a, {Choose{_}|e}) fun allChoices(m)() {handle(m()) {case x -> [x] case <Choose => k> -> k(true) ++ k(false)}}
 stdout : () : ()
 args : --enable-handlers
 
 Type-and-effect signature for deep handler (3)
-sig allChoices : (Comp(a, {Choose:Bool|e})) -> Comp([a], {Choose- |e}) fun allChoices(m)() {handle(m()) {case x -> [x] case <Choose => k> -> k(true) ++ k(false)}}
+sig allChoices : (Comp(a, {Choose:Bool|e})) -> Comp(List a, {Choose- |e}) fun allChoices(m)() {handle(m()) {case x -> [x] case <Choose => k> -> k(true) ++ k(false)}}
 stdout : () : ()
 args : --enable-handlers
 
 Type-and-effect signature for shallow handler (1)
-sig allChoices : (Comp(a, {Choose:Bool|e})) {Choose{_}|e}~> [a] fun allChoices(m) {shallowhandle(m()) {case x -> [x] case <Choose -> k> -> allChoices(fun() {k(true)}) ++ allChoices(fun(){k(false)}) }}
+sig allChoices : (Comp(a, {Choose:Bool|e})) {Choose{_}|e}~> List a fun allChoices(m) {shallowhandle(m()) {case x -> [x] case <Choose -> k> -> allChoices(fun() {k(true)}) ++ allChoices(fun(){k(false)}) }}
 stdout : () : ()
 args : --enable-handlers
 
 Type-and-effect signature for shallow handler (2)
-sig allChoices : (Comp(a, {Choose:Bool|e})) -> Comp([a], {Choose{_}|e}) fun allChoices(m)() {shallowhandle(m()) {case x -> [x] case <Choose -> k> -> allChoices(fun(){k(true)})() ++ allChoices(fun(){k(false)})()}}
+sig allChoices : (Comp(a, {Choose:Bool|e})) -> Comp(List a, {Choose{_}|e}) fun allChoices(m)() {shallowhandle(m()) {case x -> [x] case <Choose -> k> -> allChoices(fun(){k(true)})() ++ allChoices(fun(){k(false)})()}}
 stdout : () : ()
 args : --enable-handlers
 
 Type-and-effect signature for shallow handler (3)
-sig allChoices : (Comp(a, {Choose:Bool|e})) -> Comp([a], {Choose- |e}) fun allChoices(m)() {shallowhandle(m()) {case x -> [x] case <Choose -> k> -> allChoices(fun(){k(true)})() ++ allChoices(fun(){k(false)})()}}
+sig allChoices : (Comp(a, {Choose:Bool|e})) -> Comp(List a, {Choose- |e}) fun allChoices(m)() {shallowhandle(m()) {case x -> [x] case <Choose -> k> -> allChoices(fun(){k(true)})() ++ allChoices(fun(){k(false)})()}}
 stdout : () : ()
 args : --enable-handlers
 

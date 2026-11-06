@@ -1,11 +1,11 @@
-typename List(a) = [| Cons:(a, List(a)) | Nil |];
+typename RecursiveList(a) = [| Cons:(a, RecursiveList(a)) | Nil |];
 
-sig example : () -> List(Int)
+sig example : () -> RecursiveList(Int)
 fun example() {
     Cons(1, Cons(2, Cons(3, Nil)))
 }
 
-sig map : (((a) ~%~> b), List(a)) ~> List(b)
+sig map : (((a) ~%~> b), RecursiveList(a)) ~> RecursiveList(b)
 fun map(f, xs) {
   switch (xs) {
     case Nil -> Nil

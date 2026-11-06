@@ -4,8 +4,8 @@ typename ClientState = (nick:Nickname,
                         numPlayers:Int,
                         lastCard:Int,
                         failed:Bool,
-                        cards:[Int],
-                        players:[(Nickname, Int)]);
+                        cards:List Int,
+                        players:List (Nickname, Int));
 
 sig cardId : (Int) -> String
 fun cardId(card) {

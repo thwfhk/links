@@ -6,7 +6,7 @@ typename HTML(a :: Type(Any, Any)) =
    | HTMLAppend: (HTML(a), HTML(a))
    | HTMLText: (String)
    | HTMLRaw: (String)
-   | HTMLWidget: (String, [(String, String)])
+   | HTMLWidget: (String, List (String, String))
    | HTMLTag: (tagName: String, attrs: Attr(a), children: HTML(a))
    |];
 

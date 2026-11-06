@@ -106,8 +106,8 @@ stdout : fun : Comp (())
 args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
 
 Implicit effect variables are shared across different functions
-(map, id) : (((a) -> b, [a]) -> [b], (c) -> c)
-stdout : (fun, fun) : (((a) -> c, [a]) -> [c], (d) -> d)
+(map, id) : (((a) -> b, List a) -> List b, (c) -> c)
+stdout : (fun, fun) : (((a) -> c, List a) -> List c, (d) -> d)
 args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
 
 Sugar for implicit effect variables in typenames
@@ -125,6 +125,11 @@ typename X = Comp((), {Var:() => ()}); fun() { } : X({ |_})
 exit : 1
 stderr : @.*Arity mismatch: Type X expects 0 type arguments, but 1 arguments were provided.*
 args : --set=effect_sugar=true
+
+Bracketed list types are rejected
+[42] : [Int]
+exit : 1
+stderr : @.*Parse error.*
 
 Modal types require the contextual type checker
 sig f : modal [] ((Int) -> Int) fun f(x) { x }
@@ -144,7 +149,12 @@ stderr : @.*Abs binders require the contextual type checker.*
 Repeated modal binder annotations are rejected
 sig f : forall a::Abs::Abs. (a) -> a fun f(x) { x }
 exit : 1
-stderr : @.*Repeated or conflicting binder kind annotation.*
+stderr : @.*Parse error.*
+
+Stacked ordinary and modal binder annotations are rejected
+sig f : forall a::Type(Any,Any)::Abs. (a) -> a fun f(x) { x }
+exit : 1
+stderr : @.*Parse error.*
 
 Any binder annotations preserve the ordinary kind
 sig identity : forall a::Any. (a) {wild:()}-> a fun identity(x) { x } identity(1)
@@ -175,14 +185,24 @@ exit : 1
 stderr : @.*Effect-qualified operations require the contextual type checker.*
 
 Deep handler annotations require the contextual type checker
-handle[State(Int)](1) { case x -> x }
+handle <State(Int)>(1) { case x -> x }
 exit : 1
 stderr : @.*Handler effect annotations require the contextual type checker.*
 
 Shallow handler annotations require the contextual type checker
-shallowhandle[State(Int)](1) { case x -> x }
+shallowhandle <State(Int)>(1) { case x -> x }
 exit : 1
 stderr : @.*Handler effect annotations require the contextual type checker.*
+
+Bracketed deep handler annotations are rejected
+handle[State](1) { case x -> x }
+exit : 1
+stderr : @.*Parse error.*
+
+Bracketed shallow handler annotations are rejected
+shallowhandle[State](1) { case x -> x }
+exit : 1
+stderr : @.*Parse error.*
 
 General freezing requires the contextual type checker
 freeze(<State/>)

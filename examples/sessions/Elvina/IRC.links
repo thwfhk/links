@@ -47,7 +47,7 @@ mutual {
   }
 
   # Expression matched the pattern. Extracts it and calculates the result.
-  sig parseExpression : ([Char]) ~> String
+  sig parseExpression : (List Char) ~> String
   fun parseExpression(message) {
     var expression = extractExpression(message, explode("LinksCalc:"), 0); # Takes out the expression.
     var (operand1, operand2, operator) = convert(expression); # Divides expression in operand 1, operator, operand 2.
@@ -67,13 +67,13 @@ mutual {
   }
 
   # Helper function for convert0.
-  sig convert : ([Char]) ~> (String, String, Char)
+  sig convert : (List Char) ~> (String, String, Char)
   fun convert(expression) {
     convert0(expression, expression, 0)
   }
 
   # Converts expression into operands and operator.
-  sig convert0 : ([Char], [Char], Int) ~> (String, String, Char)
+  sig convert0 : (List Char, List Char, Int) ~> (String, String, Char)
   fun convert0(expression, currentExp, index) {
     switch(currentExp) {
       case [] -> ("4", "3", '+') # Should never reach this.
@@ -86,7 +86,7 @@ mutual {
   }
 
   # Extracts expression. For example, "45+3".
-  sig extractExpression : ([Char], [Char], Int) ~> ([Char])
+  sig extractExpression : (List Char, List Char, Int) ~> (List Char)
   fun extractExpression(message, keyword, currentKeyLetter) {
     switch(message) {
       case [] -> message
@@ -106,8 +106,8 @@ mutual {
     implode(parsePing0(explode(message)))
   }
 
-  # Internal parsePing with [Char].
-  sig parsePing0 : ([Char]) ~> ([Char])
+  # Internal parsePing with List Char.
+  sig parsePing0 : (List Char) ~> (List Char)
   fun parsePing0(message) {
     switch(message) {
       case [] -> message

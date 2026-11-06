@@ -33,7 +33,7 @@ fun randomPoints() {
 }
 
 # Synchronous take operation
-sig take : (Int, Comp(b, {Yield: (a) => () |e})) {Yield{_} |e}~> [a]
+sig take : (Int, Comp(b, {Yield: (a) => () |e})) {Yield{_} |e}~> List a
 fun take(n, m) {
   handle(m())(n <- n, st <- []) {
     case _ -> st

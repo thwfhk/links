@@ -40,16 +40,16 @@ fun shuffle(n) {
   shuffler(n, [1..n], [])
 }
 
-typename PlayerState = (Nickname, [Int]);
+typename PlayerState = (Nickname, List Int);
 typename Mode = [|Waiting|Playing|Done|];
 typename SupervisorState = (lastCard: Int,
                             mode:Mode,
-                            pack:[Int],
-                            players:[PlayerState]);
+                            pack:List Int,
+                            players:List PlayerState);
 
 sig disconnect :
-  (Nickname, [(Nickname, [Int])], LinList(WorkerSend)) ~>
-  ([(Nickname, [Int])], LinList(WorkerSend))
+  (Nickname, List (Nickname, List Int), LinList(WorkerSend)) ~>
+  (List (Nickname, List Int), LinList(WorkerSend))
 fun disconnect(nick, players, cs) {
   switch ((players, cs)) {
     case ([], LinNil) -> ([], LinNil)
