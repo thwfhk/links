@@ -14,6 +14,7 @@ let suites =
            ModalTypes.suite;
            ModalTypeTraversal.suite;
            ModalSyntax.suite;
+           ModalDeclarations.suite;
            Quantifiers.suite;
            Closures.suite;
            Variants.suite;

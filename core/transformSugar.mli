@@ -27,7 +27,8 @@ val listu :
     ('self_type -> 'a -> 'self_type * 'a) ->
   'a list -> 'self_type * 'a list
 
-(* Transform a term and construct its type *)
+(* Transform a typed legacy term and construct its type.
+   Contextual declarations, annotations and terms are rejected. *)
 class transform : Types.typing_environment ->
 object ('self)
   val var_env : Types.environment

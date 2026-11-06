@@ -368,13 +368,14 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
         let body' = visitor#phrase body in
         Escape (bndr', body')
       | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
+         let shd_effect = self#option (fun o -> o#effect_application) sh_descr.shd_effect in
          let sh_expr = self#phrase sh_expr in
          let shd_params =
            self#option (fun o -> o#handle_params) sh_descr.shd_params
          in
          let sh_effect_cases = self#cases sh_effect_cases in
          let sh_value_cases = self#cases sh_value_cases in
-         Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr = { sh_descr with shd_params } }
+         Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr = { sh_descr with shd_params; shd_effect } }
       | Switch (expr, cases, dt) ->
         let expr' = self#phrase expr in
         let cases' = self#cases cases in

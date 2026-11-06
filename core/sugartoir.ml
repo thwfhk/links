@@ -878,6 +878,8 @@ struct
       in
         let open Sugartypes in
         match e with
+          | Freeze _ | QualifiedOperation _ ->
+             DesugarLegacyTypes.check_phrase_node pos e; assert false
           | Constant c -> cofv (I.constant c)
           | Var x -> cofv (lookup_var x)
           | FreezeVar x -> cofv (lookup_var x)
@@ -1250,6 +1252,8 @@ struct
             begin
               let open Sugartypes in
               match b with
+                | EffectDeclaration _ ->
+                   DesugarLegacyTypes.check_binding_node b; assert false
                 | Val ({node=Pattern.Variable bndr; _}, (tyvars, body), _, _)
                      when Binder.has_type bndr ->
                     let x  = Binder.to_name bndr in
@@ -1412,6 +1416,7 @@ struct
 
 
   let compile env (bindings, body) =
+    DesugarLegacyTypes.check_program (bindings, body);
     Debug.if_set Basicsettings.show_stages (fun () -> "Compiling to IR...");
     let body =
       match body with

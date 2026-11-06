@@ -214,6 +214,7 @@ class map =
       function
       | Constant _x -> let _x = o#constant _x in Constant _x
       | Var _x -> let _x = o#name _x in Var _x
+      | Freeze p -> let p = o#phrase p in Freeze p
       | FreezeVar _x -> let _x = o#name _x in FreezeVar _x
       | QualifiedVar _xs ->
           let _xs = o#list (fun o -> o#name) _xs in QualifiedVar _xs
@@ -324,6 +325,7 @@ class map =
           let _x_i1 = o#option (fun o -> o#phrase) _x_i1 in
           let _x_i2 = o#option (fun o -> o#typ) _x_i2 in
           ConstructorLit ((_x, _x_i1, _x_i2))
+      | QualifiedOperation name -> let name = o#qualified_operation name in QualifiedOperation name
       | DoOperation (op, ps, t, b) ->
           let op  = o#phrase op in
           let ps  = o#list (fun o -> o#phrase) ps in
@@ -337,6 +339,7 @@ class map =
       | Unlet _x ->
           let _x = o#phrase _x in Unlet _x
       | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
+         let handled_effect = o#option (fun o -> o#effect_application) sh_descr.shd_effect in
          let m = o#phrase sh_expr in
          let params =
             o#option (fun o -> o#handle_params) sh_descr.shd_params
@@ -357,7 +360,7 @@ class map =
          )
              sh_value_cases
      in
-         Handle { sh_expr = m; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = { sh_descr with shd_params = params } }
+         Handle { sh_expr = m; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = { sh_descr with shd_params = params; shd_effect = handled_effect } }
       | Switch ((_x, _x_i1, _x_i2)) ->
           let _x = o#phrase _x in
           let _x_i1 =
@@ -572,6 +575,12 @@ class map =
           let _x = o#name _x in
           let _x_i1 = o#option (fun o -> o#pattern) _x_i1
           in Variant ((_x, _x_i1))
+      | QualifiedOperation (name, ps, k, b) ->
+         let name = o#qualified_operation name in
+         let ps = o#list (fun o -> o#pattern) ps in
+         let k = o#pattern k in
+         let b = o#linearity b in
+         QualifiedOperation (name, ps, k, b)
       | Operation (name, ps, k, b) ->
          let name = o#name name in
          let ps = o#list (fun o -> o#pattern) ps in
@@ -660,6 +669,30 @@ class map =
       fun (_x, _x_i1) ->
         let _x = o#string _x in
         let _x_i1 = o#list (fun o -> o#string) _x_i1 in (_x, _x_i1)
+
+    method positioned_name : Name.t WithPos.t -> Name.t WithPos.t =
+      WithPos.map2 ~f_pos:o#position ~f_node:o#name
+
+    method qualified_operation : qualified_operation -> qualified_operation =
+      fun { qo_effect; qo_operation } ->
+        let qo_effect = o#effect_name qo_effect in
+        let qo_operation = o#positioned_name qo_operation in
+        { qo_effect; qo_operation }
+
+    method effect_operation : effect_operation -> effect_operation =
+      WithPos.map2 ~f_pos:o#position ~f_node:(fun (name, args, result) ->
+          let name = o#positioned_name name in
+          let args = o#list (fun o -> o#datatype) args in
+          let result = o#datatype result in
+          (name, args, result))
+
+    method effect_declaration : effect_declaration -> effect_declaration =
+      fun { effect_name; effect_parameters; effect_higher_order; effect_operations } ->
+        let effect_name = o#positioned_name effect_name in
+        let effect_parameters = o#list (fun o -> o#quantifier) effect_parameters in
+        let effect_higher_order = o#bool effect_higher_order in
+        let effect_operations = o#list (fun o -> o#effect_operation) effect_operations in
+        { effect_name; effect_parameters; effect_higher_order; effect_operations }
 
     method effect_name : Datatype.effect_name -> Datatype.effect_name =
       WithPos.map2 ~f_pos:o#position ~f_node:(o#list (fun o -> o#name))
@@ -785,6 +818,7 @@ class map =
 
     method bindingnode : bindingnode -> bindingnode =
       function
+      | EffectDeclaration e -> let e = o#effect_declaration e in EffectDeclaration e
       | Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
           let _x    = o#pattern _x in
           let _x_i1 = o#list (fun o -> o#quantifier) _x_i1 in
@@ -1100,6 +1134,7 @@ class fold =
       function
       | Constant _x -> let o = o#constant _x in o
       | Var _x -> let o = o#name _x in o
+      | Freeze p -> let o = o#phrase p in o
       | FreezeVar _x -> let o = o#name _x in o
       | QualifiedVar _xs ->
           let o = o#list (fun o -> o#name) _xs in o
@@ -1181,6 +1216,7 @@ class fold =
       | ConstructorLit ((_x, _x_i1, _x_i2)) ->
           let o = o#name _x in
           let o = o#option (fun o -> o#phrase) _x_i1 in o
+      | QualifiedOperation name -> let o = o#qualified_operation name in o
       | DoOperation (op,ps,t,b) ->
          let o = o#phrase op in
          let o = o#option (fun o -> o#unknown) t in
@@ -1193,6 +1229,7 @@ class fold =
       | Unlet _x ->
           let o = o#phrase _x in o
       | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
+         let o = o#option (fun o -> o#effect_application) sh_descr.shd_effect in
          let o = o#phrase sh_expr in
          let o =
            o#option (fun o -> o#handle_params) sh_descr.shd_params
@@ -1403,6 +1440,12 @@ class fold =
       | Variant ((_x, _x_i1)) ->
           let o = o#name _x in
           let o = o#option (fun o -> o#pattern) _x_i1 in o
+      | QualifiedOperation (name, ps, k, b) ->
+         let o = o#qualified_operation name in
+         let o = o#list (fun o -> o#pattern) ps in
+         let o = o#pattern k in
+         let o = o#linearity b in
+         o
       | Operation (name, ps, k, b) ->
          let o = o#name name in
          let o = o#list (fun o -> o#pattern) ps in
@@ -1481,6 +1524,32 @@ class fold =
     method directive : directive -> 'self_type =
       fun (_x, _x_i1) ->
         let o = o#string _x in let o = o#list (fun o -> o#string) _x_i1 in o
+
+    method positioned_name : Name.t WithPos.t -> 'self_type =
+      fun n -> let o = o#position (WithPos.pos n) in o#name (WithPos.node n)
+
+    method qualified_operation : qualified_operation -> 'self_type =
+      fun { qo_effect; qo_operation } ->
+        let o = o#effect_name qo_effect in
+        let o = o#positioned_name qo_operation in
+        o
+
+    method effect_operation : effect_operation -> 'self_type =
+      fun signature ->
+        let o = o#position (WithPos.pos signature) in
+        let name, args, result = WithPos.node signature in
+          let o = o#positioned_name name in
+          let o = o#list (fun o -> o#datatype) args in
+          let o = o#datatype result in
+          o
+
+    method effect_declaration : effect_declaration -> 'self_type =
+      fun { effect_name; effect_parameters; effect_higher_order; effect_operations } ->
+        let o = o#positioned_name effect_name in
+        let o = o#list (fun o -> o#quantifier) effect_parameters in
+        let o = o#bool effect_higher_order in
+        let o = o#list (fun o -> o#effect_operation) effect_operations in
+        o
 
     method effect_name : Datatype.effect_name -> 'self_type =
       WithPos.traverse ~o ~f_pos:(fun o -> o#position)
@@ -1601,6 +1670,7 @@ class fold =
 
     method bindingnode : bindingnode -> 'self_type =
       function
+      | EffectDeclaration e -> let o = o#effect_declaration e in o
       | Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
           let o = o#pattern _x in
           let o = o#list (fun o -> o#quantifier) _x_i1 in
@@ -1917,6 +1987,7 @@ class fold_map =
       function
       | Constant _x -> let (o, _x) = o#constant _x in (o, (Constant _x))
       | Var _x -> let (o, _x) = o#name _x in (o, (Var _x))
+      | Freeze p -> let o, p = o#phrase p in o, Freeze p
       | FreezeVar _x -> let (o, _x) = o#name _x in (o, (FreezeVar _x))
       | QualifiedVar _xs ->
           let (o, _xs) = o#list (fun o n -> o#name n) _xs in
@@ -2037,6 +2108,7 @@ class fold_map =
           let (o, _x_i1) = o#option (fun o -> o#phrase) _x_i1 in
           let o, _x_i2 = o#option (fun o -> o#typ) _x_i2 in
           (o, (ConstructorLit ((_x, _x_i1, _x_i2))))
+      | QualifiedOperation name -> let o, name = o#qualified_operation name in o, QualifiedOperation name
       | DoOperation (op, ps, t, b) ->
           let (o, op) = o#phrase op in
           let (o, t) = o#option (fun o -> o#typ) t in
@@ -2052,6 +2124,7 @@ class fold_map =
           let (o, _x) = o#phrase _x in
           (o, Unlet _x)
       | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
+         let o, handled_effect = o#option (fun o -> o#effect_application) sh_descr.shd_effect in
           let (o, m) = o#phrase sh_expr in
           let (o, params) =
             o#option (fun o -> o#handle_params) sh_descr.shd_params
@@ -2072,7 +2145,7 @@ class fold_map =
           )
               sh_value_cases
       in
-          (o, (Handle { sh_expr = m; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = { sh_descr with shd_params = params } }))
+          (o, (Handle { sh_expr = m; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = { sh_descr with shd_params = params; shd_effect = handled_effect } }))
       | Switch ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) =
@@ -2329,6 +2402,12 @@ class fold_map =
           let (o, _x) = o#name _x in
           let (o, _x_i1) = o#option (fun o -> o#pattern) _x_i1
           in (o, (Variant ((_x, _x_i1))))
+      | QualifiedOperation (name, ps, k, b) ->
+         let o, name = o#qualified_operation name in
+         let o, ps = o#list (fun o -> o#pattern) ps in
+         let o, k = o#pattern k in
+         let o, b = o#linearity b in
+         o, QualifiedOperation (name, ps, k, b)
       | Operation (name, ps, k, b) ->
          let (o, name) = o#name name in
          let (o, ps) = o#list (fun o -> o#pattern) ps in
@@ -2432,6 +2511,31 @@ class fold_map =
         let (o, _x) = o#row _x in
         let (o, _x_i1) = o#option (fun o -> o#typ) _x_i1
         in (o, (_x, _x_i1))
+
+    method positioned_name : Name.t WithPos.t -> 'self_type * Name.t WithPos.t =
+      WithPos.traverse_map ~o ~f_pos:(fun o -> o#position) ~f_node:(fun o -> o#name)
+
+    method qualified_operation : qualified_operation -> 'self_type * qualified_operation =
+      fun { qo_effect; qo_operation } ->
+        let o, qo_effect = o#effect_name qo_effect in
+        let o, qo_operation = o#positioned_name qo_operation in
+        o, { qo_effect; qo_operation }
+
+    method effect_operation : effect_operation -> 'self_type * effect_operation =
+      WithPos.traverse_map ~o ~f_pos:(fun o -> o#position)
+        ~f_node:(fun o (name, args, result) ->
+          let o, name = o#positioned_name name in
+          let o, args = o#list (fun o -> o#datatype) args in
+          let o, result = o#datatype result in
+          o, (name, args, result))
+
+    method effect_declaration : effect_declaration -> 'self_type * effect_declaration =
+      fun { effect_name; effect_parameters; effect_higher_order; effect_operations } ->
+        let o, effect_name = o#positioned_name effect_name in
+        let o, effect_parameters = o#list (fun o -> o#quantifier) effect_parameters in
+        let o, effect_higher_order = o#bool effect_higher_order in
+        let o, effect_operations = o#list (fun o -> o#effect_operation) effect_operations in
+        o, { effect_name; effect_parameters; effect_higher_order; effect_operations }
 
     method effect_name : Datatype.effect_name -> 'self_type * Datatype.effect_name =
       WithPos.traverse_map ~o ~f_pos:(fun o -> o#position)
@@ -2581,6 +2685,7 @@ class fold_map =
 
     method bindingnode : bindingnode -> ('self_type * bindingnode) =
       function
+      | EffectDeclaration e -> let o, e = o#effect_declaration e in o, EffectDeclaration e
       | Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
           let (o, _x   ) = o#pattern _x in
           let (o, _x_i1) = o#list (fun o -> o#quantifier) _x_i1 in

@@ -568,6 +568,9 @@ object (o : 'self)
       o,b
     in
      match b with
+    | EffectDeclaration _ ->
+       (* Contextual declaration parameters are bound by the modal resolver. *)
+       o, b
     | Funs fs ->
        (* Toplevel mutuals don't share type variables *)
        let (o, fs) =

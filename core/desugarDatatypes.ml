@@ -559,13 +559,16 @@ let toplevel_bindings alias_env bs =
 
 let program typing_env (bindings, p : Sugartypes.program) :
     Sugartypes.program =
+  DesugarLegacyTypes.check_program (bindings, p);
   let alias_env = typing_env.tycon_env in
   let alias_env, bindings =
     toplevel_bindings alias_env bindings in
   (* let typing_env = { typing_env with tycon_env = alias_env } in *)
   (bindings, opt_map ((phrase alias_env) ->- snd) p)
 
-let sentence typing_env = function
+let sentence typing_env sentence =
+  DesugarLegacyTypes.check_sentence sentence;
+  match sentence with
   | Definitions bs ->
       let _alias_env, bs' = toplevel_bindings typing_env.tycon_env bs in
         Definitions bs'

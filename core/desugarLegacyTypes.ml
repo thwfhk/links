@@ -3,6 +3,40 @@
 open Sugartypes
 open SourceCode
 
+let reject pos feature =
+  raise (Errors.Type_error (pos, feature ^ " require the contextual type checker"))
+
+let check_phrase_node pos = function
+  | Freeze _ -> reject pos "General freezing expressions"
+  | QualifiedOperation name
+  | DoOperation ({ WithPos.node = QualifiedOperation name; _ }, _, _, _) ->
+     reject (WithPos.pos name.qo_operation) "Effect-qualified operations"
+  | Handle { sh_descr = { shd_effect = Some application; _ }; _ } ->
+     reject (WithPos.pos application) "Handler effect annotations"
+  | _ -> ()
+
+let check_pattern_node = function
+  | Pattern.QualifiedOperation (name, _, _, _) ->
+     reject (WithPos.pos name.qo_operation) "Effect-qualified operations"
+  | _ -> ()
+
+let check_binding_node = function
+  | EffectDeclaration declaration ->
+     reject (WithPos.pos declaration.effect_name) "Named effect declarations"
+  | _ -> ()
+
+let check = object
+  inherit SugarTraversals.fold as super
+  method! phrase p =
+    check_phrase_node (WithPos.pos p) (WithPos.node p);
+    super#phrase p
+  method! patternnode p = check_pattern_node p; super#patternnode p
+  method! bindingnode b = check_binding_node b; super#bindingnode b
+end
+
+let check_program p = ignore (check#program p)
+let check_sentence s = ignore (check#sentence s)
+
 let fresh_effects () =
   [], Datatype.Open (SugarTypeVar.mk_unresolved ~is_eff:true "$eff" None `Rigid)
 
@@ -29,10 +63,16 @@ let normalise = object
     Errors.rethrow_errors_if_better_position (WithPos.pos t) super#datatype t
 
   method! phrase p =
+    check_phrase_node (WithPos.pos p) (WithPos.node p);
     Errors.rethrow_errors_if_better_position (WithPos.pos p) super#phrase p
 
   method! binding b =
+    check_binding_node (WithPos.node b);
     Errors.rethrow_errors_if_better_position (WithPos.pos b) super#binding b
+
+  method! patternnode p =
+    check_pattern_node p;
+    super#patternnode p
 
   method! alias a =
     Errors.rethrow_errors_if_better_position (WithPos.pos a) super#alias a

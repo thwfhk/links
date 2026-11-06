@@ -162,7 +162,8 @@ module type SugarConstructorsSig = sig
 
   (* Handlers *)
   val untyped_handler
-      :?parameters:((Pattern.with_pos * phrase) list)
+      : ?handled_effect:Datatype.effect_application
+     -> ?parameters:((Pattern.with_pos * phrase) list)
      -> phrase -> (clause list * clause list) -> handler_depth
      -> handler
 

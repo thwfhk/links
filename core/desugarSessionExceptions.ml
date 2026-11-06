@@ -139,6 +139,7 @@ object (o : 'self_type)
 
         let hndl_desc = {
           shd_depth = Deep;
+          shd_effect = None;
           shd_types = types;
           shd_raw_row = raw_row;
           shd_params = None;

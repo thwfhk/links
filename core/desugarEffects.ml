@@ -1297,13 +1297,15 @@ class main_traversal simple_tycon_env =
   end
 
 let program (tycon_env : Types.tycon_environment) p =
+  DesugarLegacyTypes.check_program p;
   let s_env = simplify_tycon_env tycon_env in
   let v = new main_traversal s_env in
   snd (v#program p)
 
-let sentence (tycon_env : Types.tycon_environment) =
+let sentence (tycon_env : Types.tycon_environment) sentence =
+  DesugarLegacyTypes.check_sentence sentence;
   let s_env = simplify_tycon_env tycon_env in
-  function
+  match sentence with
   | Definitions bs ->
       let v = new main_traversal s_env in
       let _, bs = v#list (fun o b -> o#binding b) bs in

@@ -149,3 +149,38 @@ stderr : @.*Repeated or conflicting binder kind annotation.*
 Any binder annotations preserve the ordinary kind
 sig identity : forall a::Any. (a) {wild:()}-> a fun identity(x) { x } identity(1)
 stdout : 1 : Int
+
+Named effects require the contextual type checker
+effect State(a::Abs) { Get : () => a; Put : (a) => (); }
+exit : 1
+stderr : @.*Named effect declarations require the contextual type checker.*
+
+Higher-order effects require the contextual type checker
+effect higher Control { Run : (() -> Int) => Int; }
+exit : 1
+stderr : @.*Named effect declarations require the contextual type checker.*
+
+Qualified operation invocations require the contextual type checker
+do M.State.Get()
+exit : 1
+stderr : @.*Effect-qualified operations require the contextual type checker.*
+
+Qualified operation patterns require the contextual type checker
+handle(1) { case <State.Get => k> -> k(1) }
+exit : 1
+stderr : @.*Effect-qualified operations require the contextual type checker.*
+
+Deep handler annotations require the contextual type checker
+handle[State(Int)](1) { case x -> x }
+exit : 1
+stderr : @.*Handler effect annotations require the contextual type checker.*
+
+Shallow handler annotations require the contextual type checker
+shallowhandle[State(Int)](1) { case x -> x }
+exit : 1
+stderr : @.*Handler effect annotations require the contextual type checker.*
+
+General freezing requires the contextual type checker
+freeze(<State/>)
+exit : 1
+stderr : @.*General freezing expressions require the contextual type checker.*

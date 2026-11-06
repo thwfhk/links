@@ -330,6 +330,13 @@ also describes refining unknown kinds from `Any` to `Abs`; that
 behaviour is not present in the selected implementation. Record this
 difference in acceptance tests.
 
+Classify a quantified type under its declared binder kinds, following
+`context.ml:get_kind`. Thus `forall a::Any. a` has kind `Any` and
+`forall a::Abs. a` has kind `Abs`. The thesis' improved rule in
+`met/extensions.tex` checks type binders at `Abs` when classifying the
+whole quantified type, making the first example absolute too. Retain
+the reference behaviour for this implementation and test the difference.
+
 Local lets bind inferred types without generalisation. Explicit
 polymorphic annotations and Fresco's quantifier introduction provide
 polymorphism. Require signatures for recursive definitions; install
@@ -553,6 +560,19 @@ Modal type annotations and `Abs` binders receive positioned legacy
 rejections. Effect declarations, resolution, and contextual elaboration
 remain to be implemented.
 
+D3c adds declaration, handler annotation, qualified operation, and
+general freezing syntax. Operation references store a positioned effect
+path and operation name. Declarations retain their parameter binders,
+higher-order flag, and positioned operation arguments and results.
+Handler annotations preserve existing depth and parameter fields.
+Generic syntax traversals visit the new children; the standalone
+type-variable pass preserves declarations until D3d supplies their
+parameter scopes. The legacy normaliser and typed entry points reject
+these constructs with source positions. The parser corrects the
+constructor span queued by the existing effect-pattern lexer so a
+qualified effect name excludes its opening `<`. Name resolution and
+contextual typing remain to be implemented.
+
 Begin D4 with ordered contexts and checked assignment in
 `frescoContext.ml/.mli` and `frescoTypeOps.ml/.mli`. Identify variables
 by `Types.tid`: separate Unionfind points can denote the same variable.
@@ -563,6 +583,10 @@ kinds, and scope, then move flexible dependencies before the variable
 being assigned. Reject dependencies on younger rigid variables.
 Include record fields, row tails, presence variables, and effect
 arguments in these checks.
+
+`Unionfind.find` performs path compression. Add a non-compressing
+descriptor reader for these checks; avoid mutable unfolding and
+normalisation helpers. Exported types use fresh points.
 
 Scope exit retains surviving flexible declarations and solutions,
 removes local bindings and locks, and checks returned types and
@@ -586,6 +610,23 @@ must be a monotype; supplied polymorphic/modal structure is handled
 by `look`. Structural row solutions may contain supplied polymorphic
 field types, whose comparisons use Fresco.
 
+Preserve the monotype restriction through later row and presence
+solutions. When a value unknown's proposed solution reaches a flexible
+row or presence unknown, mark that dependency as requiring a monotype.
+Apply the same check when solving it and propagate the requirement to
+further dependencies. Follow existing solutions and reject `ForAll`
+or `Modal` anywhere reached. Store solutions and requirements together
+in the returned context, preserving requirements through moves, merges,
+and scope exit. Independent rows may still contain polymorphic fields.
+
+Rigid row and presence variables count as monotype atoms, as rigid
+type variables do in the reference. Apply the ordinary scope checks;
+do not impose a new source-level row kind. Later instantiation of a
+quantified row may supply polymorphic fields without changing an earlier
+flexible context solution. Test both assignment orders, propagation
+through tails and presences, older/younger rigid dependencies, and
+quantified record identities instantiated with polymorphic fields.
+
 Modal kind analysis must account for declaration arguments. The
 reference's `context.ml:get_kind` returns `Abs` when a constructor name
 has already been visited, even if its arguments differ. Use a finite
@@ -600,6 +641,30 @@ formal variable identities map to the argument-kind vector. The current
 `rec_appl.r_quantifiers` parameter descriptors do not contain those
 identities; `r_body` alone is insufficient. Avoid legacy unfolding in
 this analysis.
+
+Implement classification and well-formedness separately in
+`frescoKind.ml/.mli`, using callbacks for variable solutions, raw
+declarations, abstract constructor rules, and effect declarations.
+Well-formedness visits every child, including absolute-modal payloads
+and unused constructor arguments. Check argument bodies as well as
+their supplied primary-kind tags.
+
+Use an internal Boolean summary for row and presence payloads without
+giving their binders modal kind `Abs`. Closed rows and absent fields
+contribute no contextual payload; present fields use their payload
+kinds. Unresolved row/presence variables prevent an enclosing record
+or variant from being classified as absolute. Inspect known solutions.
+Session input/output types combine payload and continuation kinds;
+selection/choice types combine branch kinds. Ordinary linearity and
+session restrictions remain separate checks.
+
+Create fixed-point states on demand and revisit callers when results
+or argument summaries change. An `Any` result remains `Any` if more
+arguments become possibly contextual. Include captured parameter
+summaries in recursive-binder states. Abstract constructors use explicit
+rules keyed by identity: lists and map entries depend on their payloads,
+access points on their protocols, and unknown abstract constructors
+default to `Any`. Preserve the current process representation until D7.
 
 ## Examples and expected behaviour
 

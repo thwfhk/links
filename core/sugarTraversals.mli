@@ -36,6 +36,10 @@ class map :
     method kind            : kind -> kind
     method freedom         : Freedom.t -> Freedom.t
     method modal_kind : ModalKind.t -> ModalKind.t
+    method positioned_name : Name.t WithPos.t -> Name.t WithPos.t
+    method qualified_operation : qualified_operation -> qualified_operation
+    method effect_operation : effect_operation -> effect_operation
+    method effect_declaration : effect_declaration -> effect_declaration
     method effect_name : Datatype.effect_name -> Datatype.effect_name
     method effect_application : Datatype.effect_application -> Datatype.effect_application
     method modality : Datatype.modality -> Datatype.modality
@@ -126,6 +130,10 @@ class fold :
     method freedom         : Freedom.t -> 'self
     method type_variable   : SugarTypeVar.t -> 'self
     method modal_kind : ModalKind.t -> 'self
+    method positioned_name : Name.t WithPos.t -> 'self
+    method qualified_operation : qualified_operation -> 'self
+    method effect_operation : effect_operation -> 'self
+    method effect_declaration : effect_declaration -> 'self
     method effect_name : Datatype.effect_name -> 'self
     method effect_application : Datatype.effect_application -> 'self
     method modality : Datatype.modality -> 'self
@@ -242,6 +250,10 @@ object ('self)
   method kind            : kind -> 'self * kind
   method freedom         : Freedom.t -> 'self * Freedom.t
   method modal_kind : ModalKind.t -> 'self * ModalKind.t
+  method positioned_name : Name.t WithPos.t -> 'self * Name.t WithPos.t
+  method qualified_operation : qualified_operation -> 'self * qualified_operation
+  method effect_operation : effect_operation -> 'self * effect_operation
+  method effect_declaration : effect_declaration -> 'self * effect_declaration
   method effect_name : Datatype.effect_name -> 'self * Datatype.effect_name
   method effect_application : Datatype.effect_application -> 'self * Datatype.effect_application
   method modality : Datatype.modality -> 'self * Datatype.modality

@@ -94,6 +94,9 @@ let keywords = [
  "do"       , DOOP;
  "lindo"      , LINDOOP;
  "effectname", EFFECTNAME;
+ "effect"   , EFFECT;
+ "higher"   , HIGHER;
+ "freeze"   , FREEZE;
  "else"     , ELSE;
  "escape"   , ESCAPE;
  "false"    , FALSE;

@@ -40,8 +40,9 @@ integrated, tested, and independently reviewed. D2a's modal quantifier
 metadata and D2b's contextual arrows/modal type constructors are also
 integrated, tested, and independently reviewed. D3a preserves modal
 kinds on declaration parameters. D3b adds modal type and binder syntax,
-implicit arrows, and temporary legacy normalisation. Declaration syntax,
-Fresco inference, and migration remain incomplete.
+implicit arrows, and temporary legacy normalisation. D3c adds effect
+declarations, qualified operations, handler annotations, and freezing
+syntax. Effect resolution, Fresco inference, and migration remain incomplete.
 
 A read-only declaration investigation identified the module
 name-resolution changes and affected pattern-matching handlers. A
@@ -198,6 +199,7 @@ implementation defects. Record completed behaviour and deferred work.
 - [x] D2b: add contextual arrows/modal types and shared type operations.
 - [x] D3a: preserve modal kinds on declaration parameters.
 - [x] D3b: add modal type/binder syntax and temporary legacy normalisation.
+- [x] D3c: add declaration, qualified operation, handler, and freezing syntax.
 - [ ] Implement and test modal syntax and scoped effect rows.
 - [ ] Refactor type inference to follow Fresco.
 - [ ] Implement modal inference and run the first working example.
@@ -210,7 +212,7 @@ implementation defects. Record completed behaviour and deferred work.
   the design document, and the relevant source files. The main agent
   owns design, integration, verification, progress records, and commits.
 - Use fresh Astra High subagents for bounded investigations, changes,
-  and reviews; use extra-high effort for difficult tasks. Give each
+  and reviews; reserve extra-high effort for very difficult tasks. Give each
   agent its allowed files, sources, completion conditions, and checks.
   Use `.worktrees/<name>` for separate work. Run independent
   investigations and reviews in parallel, with one agent editing
@@ -428,9 +430,9 @@ Main, implementation, and review source snapshots match.
 | Manual changed-file tab/trailing-whitespace check | Passed |
 | `git diff --check` | Passed |
 
-## Latest task and verification
+## D3b verification
 
-6 November 2026, D3b: added modal type syntax, positioned named effect
+6 November 2026, D3b, commit `4b8900dd`: added modal type syntax, positioned named effect
 applications and masks, implicit arrow nodes, and modal binder kinds.
 Sugar traversals and type-variable resolution preserve the new
 structure and metadata. Legacy normalisation runs after import loading
@@ -472,9 +474,49 @@ Reference probes also confirmed incorrect modal-kind classification of
 nested and recursive datatype applications. The design records D4's
 required correction and tests.
 
+## Latest task and verification
+
+6 November 2026, D3c: added named effect declarations with positioned
+operation signatures, effect-qualified operations and patterns, handler
+annotations, and `freeze(e)`. Generic traversals and free-variable
+collection handle their children. Legacy entry points reject the new
+constructs before processing the program; standalone type-variable
+resolution preserves declarations for the later declaration resolver.
+Added 21 unit test groups and seven datatype regression tests.
+
+Tests and independent review found a qualified pattern position that
+included its opening `<`, and a direct typed-transformation path that
+reported an internal error for a qualified invocation. Both are fixed
+and covered by tests. A missing legacy pattern-match case was also
+completed. Imported-expression test fixtures were changed to value
+bindings because the module loader imports declarations. Independent
+review passed the final build, all 195 unit tests, and 37 datatype
+tests, with no remaining findings. All three source snapshots match.
+
+| Integrated check | Result |
+|---|---|
+| `make no-db` | Passed |
+| `tests/handlers.tests` | 95 passed |
+| `tests/effect_sugar.tests` | 44 passed |
+| `tests/polymorphism.tests` | 55 passed |
+| `tests/typecheck_examples.tests` | 167 passed, 15 ignored by existing settings |
+| `tests/type_print.tests` | 10 passed |
+| `tests/desugar_datatypes.tests` | 37 passed, including seven new tests |
+| `tests/modules.tests` | 41 passed |
+| `opam exec -- ./run-tests nodb-unit-tests` | 195 passed, including 21 new groups |
+| Menhir conflicts | Zero in both baseline and changed grammar |
+| `make rule-check` | Passed; GNU-find tab check skipped, formatter check disabled |
+| Manual changed-file tab/trailing-whitespace check | Passed |
+| `git diff --check` | Passed |
+
+Read-only D4 investigations specified separate kind classification and
+well-formedness, a non-compressing variable-point reader, and monotype
+requirements propagated through flexible row/presence dependencies.
+Rigid row/presence variables remain monotype atoms subject to scope checks.
+The design also records the selected quantified-type kind rule.
+
 ## Next action
 
-Implement D3c: named effect declarations, effect-qualified operation
-syntax, handler annotations, and general freezing, with positioned
-legacy rejection. Then add effect and operation resolution. Contextual
+Implement D3d: effect and operation name resolution, declaration parameter
+scopes, and declaration/handler structural checks. Contextual
 datatype elaboration follows D4's kind checks, contexts, and constraints.

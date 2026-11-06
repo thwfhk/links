@@ -86,6 +86,7 @@ struct
     | ListLit (ps, _)
     | TupleLit ps -> List.for_all is_pure ps
     | RangeLit (e1, e2) -> is_pure e1 && is_pure e2
+    | Freeze p
     | TAbstr (_, p)
     | TAppl (p, _)
     | Projection (p, _)
@@ -141,6 +142,7 @@ struct
     | LensGetLit _
     | LensPutLit _
     | DoOperation _
+    | QualifiedOperation _
     | Operation _
     | DBDelete _
     | DBInsert _
@@ -157,6 +159,7 @@ struct
     | Fun _
     | Funs _
     | Infix _
+    | EffectDeclaration _
     | Aliases _
     | Foreign _ -> true
     | Exp p -> is_pure p
@@ -180,7 +183,8 @@ struct
     | Tuple ps -> List.for_all is_safe_pattern ps
     | HasType (p, _)
     | As (_, p) -> is_safe_pattern p
-    | Operation (_, ps, k, _) ->
+    | Operation (_, ps, k, _)
+    | QualifiedOperation (_, ps, k, _) ->
        List.for_all is_safe_pattern ps && is_safe_pattern k
   and is_pure_regex = function
       (* don't check whether it can fail; just check whether it
@@ -2053,7 +2057,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
               | As (_, p) | HasType (p, _) -> unwrap_at i p
               | Tuple ps ->
                   List.nth ps i
-              | Nil | Cons _ | List _ | Record _ | Variant _ | Negative _ | Operation _ -> assert false in
+              | Nil | Cons _ | List _ | Record _ | Variant _ | Negative _ | Operation _ | QualifiedOperation _ -> assert false in
           let fields =
             StringMap.fold(* true if the row variable is dualised *)
 
@@ -2082,7 +2086,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
                         | None -> assert false
                         | Some p -> unwrap_at name p
                     end
-              | Nil | Cons _ | List _ | Tuple _ | Variant _ | Negative _ | Operation _ -> assert false in
+              | Nil | Cons _ | List _ | Tuple _ | Variant _ | Negative _ | Operation _ | QualifiedOperation _ -> assert false in
           let fields =
             StringMap.fold
               (fun name ->
@@ -2108,7 +2112,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
               | Variant _ -> []
               | Negative names when List.mem name names -> []
               | Negative _ -> [ with_pos p.pos Pattern.Any ]
-              | Nil | Cons _ | List _ | Tuple _ | Record _ | Constant _ | Operation _ -> assert false in
+              | Nil | Cons _ | List _ | Tuple _ | Record _ | Constant _ | Operation _ | QualifiedOperation _ -> assert false in
           let rec are_open : Pattern.with_pos list -> bool =
             let open Pattern in
             function
@@ -2116,7 +2120,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
               | {node = (Variable _ | Any | Negative _); _} :: _ -> true
               | {node = (As (_, p) | HasType (p, _)); _} :: ps -> are_open (p :: ps)
               | {node = (Variant _); _} :: ps -> are_open ps
-              | {node = (Nil | Cons _ | List _ | Tuple _ | Record _ | Constant _ | Operation _); _} :: _ -> assert false in
+              | {node = (Nil | Cons _ | List _ | Tuple _ | Record _ | Constant _ | Operation _ | QualifiedOperation _); _} :: _ -> assert false in
           let fields =
             StringMap.fold
               (fun name field_spec env ->
@@ -2153,6 +2157,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
             match p.node with
               | Operation (name', ps, _, _) when name=name' -> ps
               | Operation _ -> []
+              | QualifiedOperation _ -> assert false
               | Variable _ | Any | As _ | HasType _ | Negative _
               | Nil | Cons _ | List _ | Tuple _ | Record _ | Variant _ | Constant _ -> assert false in
           let fields =
@@ -2223,7 +2228,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
               | Cons (p1, p2) -> p1 :: unwrap p2
               | List ps -> ps
               | As (_, p) | HasType (p, _) -> unwrap p
-              | Variant _ | Negative _ | Record _ | Tuple _ | Operation _ -> assert false in
+              | Variant _ | Negative _ | Record _ | Tuple _ | Operation _ | QualifiedOperation _ -> assert false in
           let pats = concat_map unwrap pats in
             Application (Types.list, [cpta pats t])
       | ForAll (qs, t) -> ForAll (qs, cpt pats t)
@@ -2322,7 +2327,8 @@ let check_for_duplicate_names : Position.t -> Pattern.with_pos list -> string li
           List.fold_right (fun p binderss -> gather binderss p) ps binderss
       | Variant (_, p) ->
          opt_app (fun p -> gather binderss p) binderss p
-      | Operation (_, ps, k, _) ->
+      | Operation (_, ps, k, _)
+      | QualifiedOperation (_, ps, k, _) ->
          let binderss' =
            List.fold_right (fun p binderss -> gather binderss p) ps binderss
          in
@@ -2360,7 +2366,8 @@ let rec pattern_env : Pattern.with_pos -> Types.datatype Env.t =
     | HasType (p,_) -> pattern_env p
     | Variant (_, Some p) -> pattern_env p
     | Variant (_, None) -> Env.empty
-    | Operation (_, ps, k, _) ->
+    | Operation (_, ps, k, _)
+    | QualifiedOperation (_, ps, k, _) ->
       let env = List.fold_right (pattern_env ->- Env.extend) ps Env.empty in
       Env.extend env (pattern_env k)
     | Negative _ -> Env.empty
@@ -2451,6 +2458,8 @@ let type_pattern ?(linear_vars=true) closed
         let p = tp p in
         let vtype typ = Types.Variant (make_singleton_row (name, Present (typ p))) in
         Pattern.Variant (name, Some (erase p)), (vtype ot, vtype it)
+      | Pattern.QualifiedOperation _ ->
+         DesugarLegacyTypes.check_pattern_node pattern; assert false
       | Pattern.Operation (name, ps, k, linearity) ->
          let is_lincase = linearity = DeclaredLinearity.Lin in
          (* Auxiliary machinery for typing effect patterns *)
@@ -2672,6 +2681,7 @@ let resolve_type_annotation : Binder.with_pos -> Sugartypes.datatype' option -> 
 
 let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
   fun context {node=expr; pos} ->
+    DesugarLegacyTypes.check_phrase_node pos expr;
     let _UNKNOWN_POS_ = "<unknown>" in
     let no_pos t = (_UNKNOWN_POS_, t) in
 
@@ -2867,6 +2877,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
              Errors.UndefinedVariable _msg ->
              Gripers.die pos ("Unknown variable " ^ v ^ ".")
            end
+        | Freeze _ | QualifiedOperation _ ->
+           DesugarLegacyTypes.check_phrase_node pos expr; assert false
         | FreezeVar v ->
            begin
            try
@@ -4743,6 +4755,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
  *)
 and type_binding : context -> binding -> binding * context * Usage.t =
   fun context {node = def; pos} ->
+    DesugarLegacyTypes.check_binding_node def;
     let _UNKNOWN_POS_ = "<unknown>" in
     let no_pos t = (_UNKNOWN_POS_, t) in
     let type_check = type_check in
@@ -5208,6 +5221,8 @@ and type_binding : context -> binding -> binding * context * Usage.t =
          ( Foreign (Alien.modify ~declarations:[(binder, (dt, Some datatype))] alien)
          , bind_var empty_context (Binder.to_name binder, datatype)
          , Usage.empty )
+      | EffectDeclaration _ ->
+         DesugarLegacyTypes.check_binding_node def; assert false
       | Aliases ts ->
           let env = List.fold_left (fun env {node=(name, vars, b); _} ->
               match b with
@@ -5448,6 +5463,7 @@ let binding_purity_check bindings =
 module Check =
 struct
   let program tyenv (bindings, body) =
+    DesugarLegacyTypes.check_program (bindings, body);
     try
       Debug.if_set Basicsettings.show_stages (fun () -> "Type checking...");
       Debug.if_set show_pre_sugar_typing
@@ -5474,6 +5490,7 @@ struct
         Unify.Failure (`Msg msg) -> failwith msg
 
   let sentence tyenv sentence =
+    DesugarLegacyTypes.check_sentence sentence;
     Debug.if_set Basicsettings.show_stages (fun () -> "Type checking...");
     Debug.if_set show_pre_sugar_typing
       (fun () ->

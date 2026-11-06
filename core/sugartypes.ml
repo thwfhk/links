@@ -256,6 +256,24 @@ type type_arg' = Datatype.type_arg * Types.type_arg option
     [@@deriving show]
 
 
+type qualified_operation =
+  { qo_effect : Datatype.effect_name
+  ; qo_operation : Name.t WithPos.t
+  }
+  [@@deriving show]
+
+type effect_operation =
+  (Name.t WithPos.t * Datatype.with_pos list * Datatype.with_pos) WithPos.t
+  [@@deriving show]
+
+type effect_declaration =
+  { effect_name : Name.t WithPos.t
+  ; effect_parameters : SugarQuantifier.t list
+  ; effect_higher_order : bool
+  ; effect_operations : effect_operation list
+  }
+  [@@deriving show]
+
 module Pattern = struct
   type t =
     | Any
@@ -266,6 +284,7 @@ module Pattern = struct
     (* | Effect   of Name.t * with_pos list * with_pos *)
     (* | Effect2  of with_pos list * with_pos option *)
     | Operation of Label.t * with_pos list * with_pos * DeclaredLinearity.t
+    | QualifiedOperation of qualified_operation * with_pos list * with_pos * DeclaredLinearity.t
     | Negative of Name.t list
     | Record   of (Name.t * with_pos) list * with_pos option
     | Tuple    of with_pos list
@@ -408,6 +427,7 @@ and handler =
   }
 and handler_descriptor =
   { shd_depth   : handler_depth
+  ; shd_effect  : Datatype.effect_application option
   ; shd_types   : Types.row * Types.datatype * Types.row * Types.datatype
   ; shd_raw_row : Types.row
   ; shd_params  : handler_parameterisation option
@@ -460,6 +480,7 @@ and phrasenode =
   | Constant         of Constant.t
   | Var              of Name.t
   | FreezeVar        of Name.t
+  | Freeze           of phrase
   | QualifiedVar     of Name.t list
   | FunLit           of ((Types.datatype * Types.row) list) option *
                           DeclaredLinearity.t * funlit * Location.t
@@ -496,6 +517,7 @@ and phrasenode =
   | ConstructorLit   of Name.t * phrase option * Types.datatype option
   | DoOperation      of phrase * phrase list * Types.datatype option * DeclaredLinearity.t
   | Operation        of Name.t
+  | QualifiedOperation of qualified_operation
   | Handle           of handler
   | Unlet            of phrase
   | Linlet           of phrase
@@ -551,6 +573,7 @@ and bindingnode =
   | Import of { pollute: bool; path : Name.t list }
   | Open of Name.t list
   | Aliases of alias list
+  | EffectDeclaration of effect_declaration
   | Infix   of { assoc: Associativity.t;
                  precedence: int;
                  name: string }
@@ -662,7 +685,8 @@ struct
     | List ps               -> union_map pattern ps
     | Cons (p1, p2)         -> union (pattern p1) (pattern p2)
     | Variant (_, popt)     -> option_map pattern popt
-    | Operation (_, ps, kopt, _)  -> union (union_map pattern ps) (pattern kopt)
+    | Operation (_, ps, kopt, _)
+    | QualifiedOperation (_, ps, kopt, _) -> union (union_map pattern ps) (pattern kopt)
     | Record (fields, popt) ->
        union (option_map pattern popt)
          (union_map (snd ->- pattern) fields)
@@ -689,6 +713,7 @@ struct
     | Section (Section.Minus|Section.FloatMinus|Section.Project _) -> empty
     | FreezeSection (Section.Minus|Section.FloatMinus|Section.Project _) -> empty
 
+    | Freeze p
     | Spawn (_, _, p, _)
     | TAbstr (_, p)
     | TAppl (p, _)
@@ -815,7 +840,7 @@ struct
                      diff (union_map (snd ->- phrase) fields) pat_bound]
     | DBTemporalJoin (_, p, _) -> phrase p
     | DoOperation (_, ps, _, _) -> union_map phrase ps
-    | Operation _ -> empty
+    | Operation _ | QualifiedOperation _ -> empty
     | QualifiedVar _ -> empty
     | TryInOtherwise (p1, pat, p2, p3, _ty) ->
        union (union_map phrase [p1; p2; p3]) (pattern pat)
@@ -840,7 +865,8 @@ struct
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
     | Import _
     | Open _
-    | Aliases _ -> empty, empty
+    | Aliases _
+    | EffectDeclaration _ -> empty, empty
     (* This is technically a declaration, thus the name should
        probably be treated as bound rather than free. *)
     | Infix { name; _ } -> empty, singleton name

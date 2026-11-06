@@ -113,6 +113,8 @@ let rec desugar_pattern : Types.row -> Sugartypes.Pattern.with_pos -> Pattern.t 
     in
       let open Sugartypes.Pattern in
       match p with
+        | QualifiedOperation _ ->
+           DesugarLegacyTypes.check_pattern_node p; assert false
         | Any -> Pattern.Any, empty
         | Nil -> Pattern.Nil, empty
         | Cons (p, ps) ->

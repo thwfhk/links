@@ -389,7 +389,7 @@ let any = any_pat dp
 %token <string> SLASHFLAGS
 %token UNDERSCORE AS
 %token <Operators.Associativity.t> FIXITY
-%token TYPENAME EFFECTNAME
+%token TYPENAME EFFECTNAME EFFECT HIGHER FREEZE
 %token TRY OTHERWISE RAISE
 %token <string> OPERATOR
 %token USING
@@ -492,6 +492,7 @@ nofun_declaration:
                                                                  let node = Infix { name = WithPos.node $3; precedence; assoc = $1 } in
                                                                  with_pos $loc node }
 | signature? tlvarbinding SEMICOLON                            { val_binding' ~ppos:$loc($2) $1 $2 }
+| effect_declaration                                         { $1 }
 | typedecl SEMICOLON                                           { $1 }
 | links_module | links_open SEMICOLON                          { $1 }
 | pollute = boption(OPEN) IMPORT CONSTRUCTOR SEMICOLON         { import ~ppos:$loc($2) ~pollute [$3] }
@@ -556,6 +557,20 @@ typedecl:
 | EFFECTNAME CONSTRUCTOR typeargs_opt EQ LBRACE erow RBRACE     { alias $loc $2 $3 (Effectname ( $6     , None)) }
 | EFFECTNAME CONSTRUCTOR typeargs_opt EQ effect_app             { alias $loc $2 $3 (Effectname (([], $5), None)) }
 
+effect_declaration:
+| EFFECT boption(HIGHER) CONSTRUCTOR effect_parameters LBRACE effect_operation* RBRACE
+    { with_pos $loc (EffectDeclaration {
+        effect_name = with_pos $loc($3) $3; effect_parameters = $4;
+        effect_higher_order = $2; effect_operations = $6 }) }
+
+effect_parameters:
+| /* empty */                                                  { [] }
+| LPAREN separated_list(COMMA, typearg) RPAREN                  { $2 }
+
+effect_operation:
+| CONSTRUCTOR COLON parenthesized_datatypes FATRARROW datatype SEMICOLON
+    { with_pos $loc (with_pos $loc($1) $1, $3, $5) }
+
 (* Lists of quantifiers in square brackets denote type abstractions *)
 type_abstracion_vars:
 | LBRACKET varlist RBRACKET                                    { $2 }
@@ -608,7 +623,30 @@ qualified_name_inner:
 qualified_type_name:
 | CONSTRUCTOR DOT separated_nonempty_list(DOT, CONSTRUCTOR)    { $1 :: $3 }
 
+qualified_operation:
+| names = positioned_constructor DOT tail = separated_nonempty_list(DOT, positioned_constructor)
+    { let components = names :: tail in
+      let reversed = List.rev components in
+      let operation = List.hd reversed in
+      let effects = List.rev (List.tl reversed) in
+      let effect_pos = Position.make
+        ~start:(Position.start (WithPos.pos names))
+        ~finish:(Position.finish (WithPos.pos (List.hd (List.rev effects)))) ~code:None in
+      { qo_effect = WithPos.make ~pos:effect_pos (List.map WithPos.node effects);
+        qo_operation = operation } }
+
+positioned_constructor:
+| CONSTRUCTOR                                                  { (* The lexer queues a constructor following `<` with the same token span. *)
+                                                                 let finish = $endpos in
+                                                                 let start = { finish with Lexing.pos_cnum = finish.Lexing.pos_cnum - String.length $1 } in
+                                                                 with_pos (start, finish) $1 }
+
+operation_expression:
+| CONSTRUCTOR                                                  { with_pos $loc (Operation $1) }
+| qualified_operation                                          { with_pos $loc (QualifiedOperation $1) }
+
 atomic_expression:
+| FREEZE LPAREN exp RPAREN                                     { with_pos $loc (Freeze $3) }
 | qualified_name                                               { with_pos $loc (QualifiedVar $1) }
 | VARIABLE                                                     { with_pos $loc (Var          $1) }
 | TILDE VARIABLE                                               { with_pos $loc (FreezeVar    $2) }
@@ -724,8 +762,8 @@ unary_expression:
 | MINUSDOT unary_expression                                    { unary_appl ~ppos:$loc UnaryOp.FloatMinus $2 }
 | OPERATOR unary_expression                                    { unary_appl ~ppos:$loc (UnaryOp.Name $1)  $2 }
 | postfix_expression | constructor_expression                  { $1 }
-| DOOP CONSTRUCTOR loption(arg_spec)                           { with_pos $loc (DoOperation (with_pos $loc($2) (Operation $2), $3, None, DeclaredLinearity.Unl)) }
-| LINDOOP CONSTRUCTOR loption(arg_spec)                        { with_pos $loc (DoOperation (with_pos $loc($2) (Operation $2), $3, None,
+| DOOP operation_expression loption(arg_spec)                           { with_pos $loc (DoOperation ($2, $3, None, DeclaredLinearity.Unl)) }
+| LINDOOP operation_expression loption(arg_spec)                        { with_pos $loc (DoOperation ($2, $3, None,
   if lincont_enabled then DeclaredLinearity.Lin else DeclaredLinearity.Unl)) }
 
 infix_appl:
@@ -862,12 +900,18 @@ case:
 case_expression:
 | SWITCH LPAREN exp RPAREN LBRACE case* RBRACE                 { with_pos $loc (Switch ($3, $6, None)) }
 | RECEIVE LBRACE case* RBRACE                                  { with_pos $loc (Receive ($3, None)) }
-| SHALLOWHANDLE LPAREN exp RPAREN LBRACE handle_cases RBRACE   { with_pos $loc (Handle (untyped_handler $3 $6 Shallow)) }
-| HANDLE LPAREN exp RPAREN LBRACE handle_cases RBRACE          { with_pos $loc (Handle (untyped_handler $3 $6 Deep   )) }
-| HANDLE LPAREN exp RPAREN LPAREN handle_params RPAREN LBRACE handle_cases RBRACE
-                                                               { with_pos $loc (Handle (untyped_handler ~parameters:$6 $3 $9 Deep)) }
+| SHALLOWHANDLE handler_annotation LPAREN exp RPAREN LBRACE handle_cases RBRACE
+                                                               { with_pos $loc (Handle (untyped_handler ?handled_effect:$2 $4 $7 Shallow)) }
+| HANDLE handler_annotation LPAREN exp RPAREN LBRACE handle_cases RBRACE
+                                                               { with_pos $loc (Handle (untyped_handler ?handled_effect:$2 $4 $7 Deep)) }
+| HANDLE handler_annotation LPAREN exp RPAREN LPAREN handle_params RPAREN LBRACE handle_cases RBRACE
+                                                               { with_pos $loc (Handle (untyped_handler ?handled_effect:$2 ~parameters:$7 $4 $10 Deep)) }
 | RAISE                                                        { with_pos $loc (Raise) }
 | TRY exp AS pattern IN exp OTHERWISE exp                      { with_pos $loc (TryInOtherwise ($2, $4, $6, $8, None)) }
+
+handler_annotation:
+| /* empty */                                                  { None }
+| LBRACKET modal_effect_application RBRACKET                   { Some $2 }
 
 handle_params:
 | separated_nonempty_list(COMMA,
@@ -1031,6 +1075,7 @@ binding:
 | fun_kind VARIABLE arg_lists perhaps_location block           { fun_binding ~ppos:$loc None ($1, $2, $3, $4, $5) }
 | signatures fun_kind VARIABLE arg_lists perhaps_location switch_funlit_body    { switch_fun_binding ~ppos:$loc (fst $1) ~unsafe_sig:(snd $1) ($2, $3, $4, $5, $6) }
 | fun_kind VARIABLE arg_lists perhaps_location switch_funlit_body               { switch_fun_binding ~ppos:$loc None ($1, $2, $3, $4, $5) }
+| effect_declaration                                         { $1 }
 | typedecl SEMICOLON | links_module
 | links_open SEMICOLON                                         { $1 }
 
@@ -1456,18 +1501,22 @@ typed_effect_pattern:
 
 resumable_operation_pattern:
 | operation_pattern FATRARROW pattern
-    { with_pos $loc (Pattern.Operation (fst $1, snd $1, $3, DeclaredLinearity.Unl)) }
+    { with_pos $loc ((fst $1) (snd $1) $3 DeclaredLinearity.Unl) }
 | operation_pattern FATLOLLI pattern
-    { with_pos $loc (Pattern.Operation (fst $1, snd $1, $3,
-      if lincont_enabled then DeclaredLinearity.Lin else DeclaredLinearity.Unl)) }
+    { with_pos $loc ((fst $1) (snd $1) $3
+      (if lincont_enabled then DeclaredLinearity.Lin else DeclaredLinearity.Unl)) }
 | operation_pattern RARROW pattern
-    { with_pos $loc (Pattern.Operation (fst $1, snd $1, $3, DeclaredLinearity.Unl)) }
+    { with_pos $loc ((fst $1) (snd $1) $3 DeclaredLinearity.Unl) }
 | operation_pattern
-    { with_pos $loc (Pattern.Operation (fst $1, snd $1, any, DeclaredLinearity.Unl)) }
+    { with_pos $loc ((fst $1) (snd $1) any DeclaredLinearity.Unl) }
 
 operation_pattern:
-| CONSTRUCTOR                                                  { ($1, []) }
-| CONSTRUCTOR multi_args                                       { ($1, $2) }
+| operation_pattern_name                                      { ($1, []) }
+| operation_pattern_name multi_args                           { ($1, $2) }
+
+operation_pattern_name:
+| CONSTRUCTOR                                                  { fun ps k lin -> Pattern.Operation ($1, ps, k, lin) }
+| qualified_operation                                          { fun ps k lin -> Pattern.QualifiedOperation ($1, ps, k, lin) }
 
 typed_pattern:
 | cons_pattern                                                 { $1 }

@@ -210,7 +210,9 @@ class transform (env : Types.typing_environment) =
         (o, section, type_section var_env section)
 
     method sentence : sentence -> ('self_type * sentence * Types.datatype option) =
-      function
+      fun sentence ->
+      DesugarLegacyTypes.check_sentence sentence;
+      match sentence with
       | Definitions defs ->
          let (o, defs) =
            listu o (fun o -> o#binding) defs
@@ -245,6 +247,7 @@ class transform (env : Types.typing_environment) =
 
     method program : program -> ('self_type * program * Types.datatype option) =
       fun (bs, e) ->
+        DesugarLegacyTypes.check_program (bs, e);
         let (o, bs) = listu o (fun o -> o#binding) bs in
         let (o, e, t) = option o (fun o -> o#phrase) e
         in (o, (bs, e), opt_map Types.normalise_datatype t)
@@ -281,6 +284,12 @@ class transform (env : Types.typing_environment) =
       function
       | Constant c -> let (o, c, t) = o#constant c in (o, Constant c, t)
       | Sugartypes.Var var -> (o, Sugartypes.Var var, o#lookup_type var)
+      | Freeze p ->
+         DesugarLegacyTypes.check_phrase_node (WithPos.pos p) (Freeze p);
+         assert false
+      | QualifiedOperation name ->
+         DesugarLegacyTypes.check_phrase_node (WithPos.pos name.qo_operation) (QualifiedOperation name);
+         assert false
       | FreezeVar var -> (o, FreezeVar var, o#lookup_type var)
       | FunLit (Some argss, lin, lam, location) ->
           let inner_e = snd (last argss) in
@@ -492,9 +501,11 @@ class transform (env : Types.typing_environment) =
           let (o, t) = o#datatype t in
           (o, ConstructorLit (name, e, Some t), t)
       | DoOperation (name, ps, Some t, b) ->
+         DesugarLegacyTypes.check_phrase_node (WithPos.pos name) (WithPos.node name);
          let (o, ps, _) = list o (fun o -> o#phrase) ps in
          (o, DoOperation (name, ps, Some t, b), t)
-      | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
+      | Handle ({ sh_expr; sh_effect_cases; sh_value_cases; sh_descr } as handler) ->
+         DesugarLegacyTypes.check_phrase_node (WithPos.pos sh_expr) (Handle handler);
          let (input_row, input_t, output_row, output_t) = sh_descr.shd_types in
          let (o, expr, _) = o#phrase sh_expr in
          let envs = o#backup_envs in
@@ -534,6 +545,7 @@ class transform (env : Types.typing_environment) =
          let (o, raw_row) = o#row sh_descr.shd_raw_row in
          let descr = {
            shd_depth = sh_descr.shd_depth;
+           shd_effect = sh_descr.shd_effect;
            shd_types = (input_row, input_t, output_row, output_t);
            shd_raw_row = raw_row;
            shd_params = params}
@@ -710,6 +722,7 @@ class transform (env : Types.typing_environment) =
 
     method phrase : phrase -> ('self_type * phrase * Types.datatype) =
       fun {node; pos} ->
+        DesugarLegacyTypes.check_phrase_node pos node;
         let (o, node, t) = o#phrasenode node in
         (o, WithPos.make ~pos node, t)
 
@@ -726,6 +739,8 @@ class transform (env : Types.typing_environment) =
       | Variant (name, p) ->
           let (o, p) = optionu o (fun o -> o#pattern) p
           in (o, Variant (name, p))
+      | QualifiedOperation _ as pattern ->
+         DesugarLegacyTypes.check_pattern_node pattern; assert false
       | Operation (name, ps, k, b) ->
          let (o, ps) = listu o (fun o -> o#pattern) ps in
          let (o, k)  = o#pattern k in
@@ -888,6 +903,8 @@ class transform (env : Types.typing_environment) =
          in
          let o, language = o#foreign_language (Alien.language alien) in
          (o, Foreign (Alien.modify ~language ~declarations alien))
+      | EffectDeclaration _ as binding ->
+         DesugarLegacyTypes.check_binding_node binding; assert false
       | Aliases ts ->
           let (o, _) = listu o (fun o {node=(name, vars, b); pos} ->
               match b with
