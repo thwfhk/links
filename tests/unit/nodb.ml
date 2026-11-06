@@ -10,6 +10,7 @@ let suites =
            Binding.suite;
            Functions.suite;
            Effects.suite;
+           ModalEffects.suite;
            Quantifiers.suite;
            Closures.suite;
            Variants.suite;

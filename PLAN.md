@@ -35,7 +35,9 @@ and the scope above were agreed on 6 November 2026. An initial source
 comparison now records the selected rules, syntax, Links integration,
 reference defects, and dependency-ordered changes D1--D8 in the design
 document. Independent design review is complete and its four findings
-are resolved. Compiler implementation has not started.
+are resolved. D1's scoped row and modality modules are implemented,
+integrated, tested, and independently reviewed. Shared type integration,
+syntax, Fresco inference, and migration remain incomplete.
 
 Baseline checked on 5 November 2026 at commit `7100e289`:
 
@@ -181,6 +183,7 @@ implementation defects. Record completed behaviour and deferred work.
 - [x] Compare source rules, probe reference behaviour, and record
   language choices and implementation dependencies.
 - [x] Complete independent design review and resolve findings.
+- [x] D1: implement and review scoped row and modality operations.
 - [ ] Implement and test modal syntax and scoped effect rows.
 - [ ] Refactor type inference to follow Fresco.
 - [ ] Implement modal inference and run the first working example.
@@ -245,7 +248,7 @@ Add acceptance and rejection tests for each changed typing behaviour.
   Require complete handler groups and correct repeated-row consistency.
   Details and the source comparison are in the design document.
 
-## Latest task and verification
+## Design comparison and baseline
 
 6 November 2026: Two read-only investigations compared reference rules
 and Links integration in separate worktrees. Recorded syntax, source
@@ -270,13 +273,45 @@ Rechecked the unchanged compiler baseline:
 
 Reference probes confirmed the repeated-row consistency failure and
 incomplete-handler runtime failure recorded in the design document.
-No compiler source changes have been made. `git diff --check` passed.
+Design commit: `396fd639`. `git diff --check` passed.
 `make rule-check` passed; its tab check was skipped because GNU find
 is unavailable, and its formatter check is disabled by repository
 configuration.
 
+## Latest task and verification
+
+6 November 2026, D1: Added `core/effectRow.ml/.mli` and
+`core/modality.ml/.mli`, with 28 unit tests registered in the no-database
+unit suite. The main agent reviewed and integrated the implementation
+from `.worktrees/modal-rows`. Independent review in a separate worktree
+reported no findings and passed all 28 focused tests.
+
+The tests exposed two further reference residual defects: selecting
+the wrong repeated occurrence and changing higher-order row order.
+A separate source investigation established the prefix construction
+recorded in the design document. The initial unit run had one failing
+residual law; the corrected implementation passes it. The API states
+its sufficient-crossing contract and does not promise principality.
+
+| Integrated check | Result |
+|---|---|
+| `make no-db` | Passed |
+| `tests/handlers.tests` | 95 passed |
+| `tests/effect_sugar.tests` | 44 passed |
+| `opam exec -- ./run-tests nodb-unit-tests` | 72 passed, including 28 new tests |
+| `make rule-check` | Passed; GNU-find tab check skipped, formatter check disabled |
+| Manual changed-file tab/trailing-whitespace check | Passed |
+| `git diff --check` | Passed |
+
+Finite tests cover 7,225 row pairs, 416,500 composition inputs, and
+359,125 relative residual inputs. Source syntax and inference still
+use the old representation; D1 provides the operations for D2--D6.
+No milestone beyond the design comparison is complete yet.
+
 ## Next action
 
-Implement D1: pure scoped effect rows and modality operations, with
-unit tests, compiler build, source checks, independent review, and
-integration on `modal-effects`.
+Implement D2: integrate scoped rows and modal types into the shared
+type representation, including all type traversals, substitution,
+free-variable collection, and printers. Keep the compiler building
+and preserve record/variant row behaviour. Then proceed to D3 and D4
+using the dependencies in the design document.

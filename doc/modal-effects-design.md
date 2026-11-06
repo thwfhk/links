@@ -190,6 +190,26 @@ then `n`, following `effects.ml:compose`. Implement cancellation and
 right residuals with label multiplicities. These type-level operations
 remain required while the term-level mask operator is deferred.
 
+For relative lock `m = <L1 | D1>`, guard `n = <L2 | D2>`, and ambient
+row `F`, compute `G = remove L2 F` and `K = L1 - L2`. Take the shortest
+prefix `P` of `G` containing all occurrences requested by `K`. Let `Q`
+be that prefix after removing `K`. Return
+`<labels(D1) ++ (L2 - L1) ++ labels(Q) | D2 ++ P>`.
+When `K` is empty, both prefixes are empty. Fail if `G` lacks a
+requested occurrence. Absolute cases follow the reference.
+
+This corrects two defects in the reference residual: extraction must
+skip occurrences already removed by the guard, and restoration must
+preserve the position of higher-order entries. A successful result
+`r` satisfies `apply r (apply m F) = apply n F` in literal row order.
+The normalised removal masks of `compose m r` and `n` also agree.
+The construction supplies a sufficient crossing modality. Failure
+means this construction has no result. The reference's transformation
+relation does not in general admit a principal residual for arbitrary
+removal masks: at empty `F`, lock and guard `<A>` admit both identity
+and `<A,A | A>` as incomparable remaining modalities. Keep this
+limitation explicit when implementing variable access.
+
 Use a polymorphic row module whose argument payload can contain Links
 types or Fresco skeletons. Keep structural row operations pure. Obtain
 the matching argument pairs before solving their constraints; failed
@@ -359,8 +379,17 @@ remaining primitive's effect requirements during migration.
 | D8: backends and final review | D7 | Interpreter/JS deep-handler tests, docs, migration guide; no legacy effect inference |
 
 Each change may need several buildable commits. Independently review
-substantial changes before dependent work. D1 is the first task and
-does not change parser or inference behaviour.
+substantial changes before dependent work.
+
+D1 is implemented in `core/effectRow.ml/.mli` and
+`core/modality.ml/.mli`. `EffectRow.match_equal` and
+`EffectRow.match_subeffect` return ordered argument pairs before any
+payload comparison. `Modality.right_residual` uses the corrected
+prefix construction. The 28 tests in
+`tests/unit/ir/test_cases/modalEffects.ml` include duplicate and
+higher-order acceptance/rejection cases and finite algebraic checks.
+Independent code review reported no findings. Parser and inference
+integration begins with D2; the old path is still present.
 
 ## Examples and expected behaviour
 
@@ -426,6 +455,12 @@ pass: 57 Fresco and 25 modal/data-type tests. Additional probes found:
    runs and unsigned recursion fails. Preserve these defaults.
 6. Return-only handlers crash in the reference through `List.hd`.
    Retain Links' identity-handler rule explicitly.
+7. The residual for a lock removing two State occurrences and a guard
+   removing one restores the first occurrence, although the guard's
+   output contains the second. Restoring an ordinary A from ambient
+   `[H,A]` also incorrectly produces `[A,H]` across higher-order H.
+   Use the prefix construction above and test literal output equality
+   and normalised masks of the composed modalities.
 
 Keep tests for these corrections alongside the adapted reference tests.
 
