@@ -20,7 +20,8 @@ let q d = Quantifier.make ~modal_kind:d.C.modal_kind d.C.id d.C.kind
 let v d = S.Var (d.C.id, d.C.kind, `Flexible)
 let shared d = Types.Var (d.C.id, d.C.kind, `Flexible)
 let add ?(rigid = false) d c = get ((if rigid then C.add_rigid else C.add_flexible) d c)
-let solve c d typ = get (C.assign environment c d.C.id (Kind.primary_kind d.C.kind, typ))
+let assign c d typ = C.assign environment c d.C.id (Kind.primary_kind d.C.kind, typ)
+let solve c d typ = get (assign c d typ)
 let root ?(binders = []) ?(pk = PrimaryKind.Type) typ = { S.binders; primary_kind = pk; typ }
 let leave marker roots c = get (O.leave_scope environment marker ~roots c)
 let expand roots c = get (O.expand_solutions environment ~roots c)
@@ -98,15 +99,43 @@ let suite = "Fresco skeleton scope" >::: ([
        begin match descriptor tail with S.Row _ -> () | _ -> assert_failure "Expected solved tail" end
     | _ -> assert_failure "Expected record and presence");
 
-  "live unknowns keep whole entries and monotype requirements" >:: (fun _ ->
+  "live unknowns keep all requirements through skeleton scope exit" >:: (fun _ ->
     let a = declaration () and r = declaration ~pk:PrimaryKind.Row () and dead = declaration () in
     let marker, c = C.add_marker C.empty in
     let c = solve (c |> add a |> add r |> add dead) a (Types.Record (shared r)) in
+    let abs = TypeParameter.make ~modal_kind:ModalKind.Abs a.C.kind in
+    let unl = TypeParameter.make (Kind.as_unl a.C.kind) in
+    let c = get (C.require environment c abs (shared a)) in
+    let c = get (C.require environment c unl (shared a)) in
     let old = state r c in
-    let c', _ = leave marker [root (S.UniversalGhost (v a))] c in
+    let c', roots = leave marker [root (S.UniversalGhost (v a))] c in
     assert_equal [r.C.id] (ids c');
+    assert_equal (S.UniversalGhost (S.Record (v r))) (single roots);
     assert_bool "Whole entry retained" (old == state r c');
-    assert_bool "Monotype requirement retained" (state r c').C.requires_monotype);
+    assert_bool "Monotype requirement retained" (state r c').C.requires_monotype;
+    let field typ = Types.Row (StringMap.singleton "f" (Types.Present typ), Unionfind.fresh Types.Closed, false) in
+    let i = Types.int_type in
+    reject (C.Kind_error (FrescoKind.Modal_kind_mismatch (ModalKind.Abs, ModalKind.Any)))
+      (assign c' r (field (Types.Arrow (i, i))));
+    reject (C.Kind_error (FrescoKind.Ordinary_kind_mismatch (Kind.as_unl r.C.kind)))
+      (assign c' r (field Types.End));
+    ignore (solve c' r (field i)));
+
+  "skeleton scope exit cannot capture a refined flexible variable from a solution" >:: (fun _ ->
+    let a = declaration () and b = declaration () in
+    let marker, c = C.add_marker C.empty in
+    let c = solve (c |> add a |> add b) b (shared a) in
+    let abs = TypeParameter.make ~modal_kind:ModalKind.Abs a.C.kind in
+    let c = get (C.require environment c abs (shared a)) in
+    let roots = [root (S.ForAll ([q a], S.UniversalGhost (v b)))] in
+    let expected = context_error (C.Binder_mismatch a.C.id) in
+    unchanged c roots (fun () ->
+      reject expected (O.leave_scope environment marker ~roots c);
+      reject expected (O.expand_solutions environment ~roots c));
+    let roots = [root ~binders:[q a] (S.UniversalGhost (v a))] in
+    let c', result = leave marker roots c in
+    assert_equal [] (ids c');
+    assert_equal roots result);
 
   "free local rigid under ghost fails without mutation" >:: (fun _ ->
     let a = declaration () in

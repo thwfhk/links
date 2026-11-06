@@ -12,6 +12,7 @@ type flexible = {
   declaration : declaration;
   solution : Types.typ option;
   requires_monotype : bool;
+  requirements : FrescoKind.requirements;
 }
 
 type scoped_root = {
@@ -24,6 +25,7 @@ type exported_variable = {
   declaration : declaration;
   freedom : Freedom.t;
   requires_monotype : bool;
+  requirements : FrescoKind.requirements;
 }
 
 type marker
@@ -59,8 +61,13 @@ val lookup_term : string -> t -> Types.typ option
 val add_rigid : declaration -> t -> (t, error) result
 val add_flexible : declaration -> t -> (t, error) result
 
-(** Context variables replace the supplied variable callback. Other
-    declaration, constructor and effect callbacks are preserved. *)
+(** Restore an exported table in its original order. Flexible entries are
+    unresolved and retain all saved requirements. Duplicate IDs and invalid
+    declaration or requirement metadata cause rejection. *)
+val of_exported_variables : exported_variable list -> (t, error) result
+
+(** Context variables and their added requirements replace the supplied
+    callbacks for free variables. Other callbacks are preserved. *)
 val checking_environment : FrescoKind.checking_environment -> t ->
   FrescoKind.checking_environment
 
@@ -81,6 +88,15 @@ val add_lock : FrescoKind.checking_environment -> Types.modality ->
 val assign : FrescoKind.checking_environment -> t -> Types.tid ->
   Types.type_arg -> (t, error) result
 
+(** Check the requirement and refine only unresolved free flexible variables.
+    [binders] supplies any lexical binders enclosing the type. [added] can
+    supply the additional guarantees of an intended assignment target.
+    Solved variables keep their solutions. Refinement preserves declaration
+    order, declared kinds and existing monotype flags. Failure leaves the
+    context and type graph unchanged. *)
+val require : FrescoKind.checking_environment -> t -> ?binders:Quantifier.t list ->
+  ?added:FrescoKind.requirements -> TypeParameter.t -> Types.typ -> (t, error) result
+
 (** Leave the innermost open marker, preserving its current prefix and live
     local flexible entries. [binders] lists the actual enclosing type binders
     of an annotation; a complete type normally has an empty list and carries
@@ -92,7 +108,8 @@ val assign : FrescoKind.checking_environment -> t -> Types.tid ->
     Solved variables are expanded in the returned roots, in input order.
     The caller must replace every supplied type or annotation by its returned
     root before using the reduced context. Retained context entries and their
-    monotype requirements are unchanged. Free local rigid variables cause
+    requirements are unchanged. Expansion must not capture a free flexible
+    variable under an output binder. Free local rigid variables cause
     rejection, including those in retained solutions and raw nominal bodies.
     Quantified binders in supplied root syntax must match the ordinary and
     modal kinds of matching context rigids. A [Recursive] binder can close
@@ -113,7 +130,8 @@ exception Unsupported_recursive_unfolding
 (** Checked detached export of a batch, preserving input order. Solutions are
     expanded and all reachable points and raw nominal bodies are copied.
     The table contains free rigid and unresolved flexible variables in context
-    order, preserving their ordinary/modal kinds and monotype requirements.
+    order, preserving their declared kinds, added requirements and monotype
+    requirements.
     Context entries determine free variable freedom. Rigid entries have
     [requires_monotype = false]; their declared kinds remain authoritative.
     Free occurrences of one variable ID share one exported point; bound

@@ -14,7 +14,7 @@ implementation decisions, reasons, internal invariants and source comparisons.
 ## Current status
 
 Implementation has resumed through D4i. The D3f list-parentheses correction
-and D4f2 are complete. Continue with D4g, D4h and D4i, then pause for the user's
+and D4f2--D4g are complete. Continue with D4h and D4i, then pause for the user's
 review of the recorded design choices.
 
 - D1--D3d provide row/modality operations, shared modal types, surface syntax,
@@ -25,7 +25,7 @@ review of the recorded design choices.
   the legacy desugaring passes. Modal source programs cannot yet run through
   Fresco. New syntax is parsed and tested through separate entry points;
   the legacy frontend rejects modal constructs.
-- Kind refinement, consistency, subtyping, constraint solving and source
+- Recursive comparison, consistency, subtyping, constraint solving and source
   inference remain.
   Annotation elaboration, runtime integration and migration also remain.
 - D3e removes higher-order effect flags, syntax and row rules. Ordinary
@@ -33,7 +33,7 @@ review of the recorded design choices.
 - D3f implements `List A`, combined kind annotations and angle-bracket
   handled-effect annotations, for example `handle <Reader> (...)`.
 - D4a2 implements the thesis' quantified-type classification while retaining
-  declared binder requirements. Modal-kind refinement remains in D4g.
+  declared binder requirements. D4g adds flexible requirement refinement.
 
 Nested list element types require parentheses. The parser and both type
 printers follow this rule.
@@ -63,7 +63,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D3f | Prefix list types, combined kinds and handler delimiters | `aa9358e4` |
 | D4a2 | Thesis quantified-type classification | `41b96256` |
 | D3f correction | Require parentheses around nested list element types | `02f79356` |
-| D4f2 | Skeleton solution expansion and scope exit preserving ghosts | This commit |
+| D4f2 | Skeleton solution expansion and scope exit preserving ghosts | `609c02fe` |
+| D4g | Ordinary/modal requirement refinement and detached restoration | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -77,7 +78,6 @@ also requires the affected build/tests and review described in AGENTS.md.
 
 | Task | Depends on | Completion check |
 |---|---|---|
-| D4g: ordinary/modal requirement refinement | D4f2, D4c, D4a2 | Enforce flexible `Abs` and structural payload requirements through later assignment, scope exit and export; never narrow rigid binders |
 | D4h: contextual recursive type operations | D4g | Alias application, unfolding and comparison preserve binders and terminate on tested equal/unequal recursive applications with changing arguments |
 | D4i: monotype unification, consistency and guessing | D4f2--D4h | Adapt existing Links structural unification to checked Fresco assignment; cover ghosts, supplied polymorphic fields, kinds/scope, repeated rows and failed alternatives |
 | D4j: subtyping, constraints and `look` | D4i | Preserve supplied polymorphic/modal structure and kind/scope requirements; failed alternatives retain no assignments |
@@ -124,31 +124,31 @@ behaviour, select equality before `Abs` fallback, adopt the thesis' quantified
 classification, add implicit `modal []` to global signatures, start programs
 with ambient context `Wild`, and reserve built-in effects from user handlers.
 
-D4a2 updates the classifier. Refinement, signature elaboration and modal
-integration tests must cover the remaining choices.
+D4a2 updates the classifier and D4g supplies refinement. Signature elaboration
+and modal integration tests must cover the remaining choices.
 
 ## Latest task and verification
 
-6 November 2026, D4f2, this commit (base `02f79356`): skeleton expansion
-and scope exit preserve both ghosts, independent raw scope, recursive sharing
-and live context entries. Independent review found a declaration-snapshot scope
-escape; the fix compares snapshots before identity merging. Regression cases
-cover the escape, nested and ambient conflicts, and fresh recursive callbacks.
+6 November 2026, D4g, this commit (base `609c02fe`): flexible variables
+retain separate ordinary and absolute-payload requirements. Strict assignment,
+shared and skeleton scope exit, detached export and checked restoration preserve
+them. Consistency can pass a target's added requirements when refining a candidate.
+Tests cover rigid rejection, lexical scope, recursive dependencies, failed
+refinement, combined requirements and later positive/negative assignments.
 
-Checks ran after source edits and review. The first unit-test compile found
-`effect` used as a test variable name; renaming it to `entry` was the only later
-code change. The complete unit suite then passed. The compiler build and source
-regressions used the same compiler revision. Earlier checks below retain their
-last tested milestone: Correction is `02f79356`, D4a2 is `41b96256`, D3f is
-`aa9358e4`.
+Independent review found no issues. The subsequent metadata-restoration and
+assignment-preparation additions received a separate integration review.
+All checks below marked D4g ran on the final integrated compiler and tests after
+writers reported readiness. Earlier milestones retain their last results:
+Correction is `02f79356`, D3f is `aa9358e4`.
 
 | Check | Revision | Result |
 |---|---|---|
-| `make no-db` | D4f2 | Passed |
-| `tests/handlers.tests` | D4f2 | 95 passed |
-| `tests/effect_sugar.tests` | D4f2 | 44 passed |
-| `tests/polymorphism.tests` | D4f2 | 55 passed |
-| `tests/typecheck_examples.tests` | D4f2 | 167 passed, 15 ignored by existing settings |
+| `make no-db` | D4g | Passed |
+| `tests/handlers.tests` | D4g | 95 passed |
+| `tests/effect_sugar.tests` | D4g | 44 passed |
+| `tests/polymorphism.tests` | D4g | 55 passed |
+| `tests/typecheck_examples.tests` | D4g | 167 passed, 15 ignored by existing settings |
 | `tests/type_print.tests` | Correction | 10 passed |
 | `tests/desugar_datatypes.tests` | Correction | 44 passed |
 | `tests/modules.tests` | D3f | 41 passed |
@@ -165,12 +165,12 @@ last tested milestone: Correction is `02f79356`, D4a2 is `41b96256`, D3f is
 | `tests/xml.tests` | D3f | 74 passed |
 | `tests/bindings.tests` | D3f | 25 passed |
 | `tests/conditionals.tests` | D3f | 6 passed |
-| `opam exec -- ./run-tests nodb-unit-tests` | D4f2 | 712 passed |
+| `opam exec -- ./run-tests nodb-unit-tests` | D4g | 731 passed |
 | Menhir conflict check | Correction | Zero conflicts before and after the grammar change |
 | Parse-only source and expected-type comparison | D3f | No unexpected parse regressions; 1,374 programs and 838 type strings parse |
-| `make rule-check` | D4f2 | Passed; GNU-find tab check skipped, formatter check disabled |
-| Manual added-line tab/trailing-whitespace check | D4f2 | Passed |
-| `git diff --check` | D4f2 | Passed |
+| `make rule-check` | D4g | Passed; GNU-find tab check skipped, formatter check disabled |
+| Manual added-line tab/trailing-whitespace check | D4g | Passed |
+| `git diff --check` | D4g | Passed |
 
 D3f's parse-only audit covered excluded-feature fixtures without executing
 those suites. Existing invalid examples and deliberate rejection cases remain.
@@ -187,7 +187,7 @@ No compiler changes, build or tests.
 
 ## Next action
 
-Complete D4g's refinement integration, including detached metadata restoration.
-Continue through D4h and D4i, reviewing, testing and committing each milestone.
+Complete D4h's recursive comparison and reviewed duality checks, then D4i's
+unification, consistency and guessing. Review, test and commit each milestone.
 Pause after D4i, summarise the current status and ask the user to review the
 marked design choices and raise questions.

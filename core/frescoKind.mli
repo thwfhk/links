@@ -10,6 +10,16 @@ type variable = {
   solution : Types.typ option;
 }
 
+(** Additional guarantees on a free flexible variable. Ordinary restrictions
+    are independent of the syntactic monotype check. Absolute payloads do
+    not change the declared modal kind of a row or presence. *)
+type requirements
+val empty_requirements : requirements
+val is_empty_requirements : requirements -> bool
+
+(** Check for incompatible declared and added ordinary requirements. *)
+val valid_requirements : Kind.t -> requirements -> bool
+
 type abstract_rule =
   | Constant of ModalKind.t
   | Arguments of int list
@@ -20,6 +30,7 @@ type abstract_rule =
     these bodies are resolved through [variable]. *)
 type environment = {
   variable : Types.tid -> variable option;
+  requirements : Types.tid -> requirements;
   declaration : Types.rec_appl -> (Quantifier.t list * Types.typ) option;
   abstract : Types.Abstype.t -> abstract_rule;
 }
@@ -41,7 +52,7 @@ exception Error of error
     constructors, including the current row-parameterised Process, are Any. *)
 val builtin_abstract : Types.Abstype.t -> abstract_rule
 
-(** Uses raw [r_body] declarations and [builtin_abstract]. *)
+(** Uses no added requirements, raw [r_body] declarations and [builtin_abstract]. *)
 val environment : (Types.tid -> variable option) -> environment
 
 (** Classify a value type. Local quantifiers override the variable callback.
@@ -65,10 +76,19 @@ type checking_environment = {
   lookup_effect : string -> effect_parameters option;
 }
 
-(** Validate every child and require the supplied ordinary and modal kinds.
-    This neither solves variables nor narrows their declarations. Recursive
-    application linearity must be available when checking Unl. *)
-val check : checking_environment -> TypeParameter.t -> Types.typ -> unit
+(** Validate every child and require the declared and added guarantees.
+    Enclosing binders are checked at their declared kinds. This neither
+    solves variables nor narrows declarations. Recursive application
+    linearity must be available when checking Unl. *)
+val check : ?binders:Quantifier.t list -> ?added:requirements ->
+  checking_environment -> TypeParameter.t -> Types.typ -> unit
+
+(** Like [check], but may strengthen unresolved free variables allowed by
+    [refinable]. Return only changed guarantees, including any already
+    required of those variables. The caller must supply acyclic solutions
+    and point cycles guarded by explicit [Recursive] nodes. *)
+val require : ?added:requirements -> checking_environment -> refinable:(Types.tid -> bool) ->
+  binders:Quantifier.t list -> TypeParameter.t -> Types.typ -> requirements Utility.IntMap.t
 
 val check_effect_row : checking_environment -> Types.scoped_effect_row -> unit
 

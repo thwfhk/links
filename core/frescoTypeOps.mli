@@ -3,6 +3,12 @@
 val assign : FrescoKind.checking_environment -> FrescoContext.t -> Types.tid ->
   Types.type_arg -> (FrescoContext.t, FrescoContext.error) result
 
+(** Persistent kind checking and refinement. See [FrescoContext.require]. *)
+val require : FrescoKind.checking_environment -> FrescoContext.t ->
+  ?binders:CommonTypes.Quantifier.t list -> ?added:FrescoKind.requirements ->
+  CommonTypes.TypeParameter.t -> Types.typ ->
+  (FrescoContext.t, FrescoContext.error) result
+
 (** Scope exit with rewritten roots. See [FrescoContext.leave_scope] for
     required roots, lexical binders and the caller's replacement obligation. *)
 val leave_scope : FrescoKind.checking_environment -> FrescoContext.marker ->
@@ -15,3 +21,7 @@ val export : FrescoKind.checking_environment -> roots:FrescoContext.scoped_root 
   FrescoContext.t ->
   (FrescoContext.scoped_root list * FrescoContext.exported_variable list,
    FrescoContext.error) result
+
+(** Restore the free variables from detached export. *)
+val of_exported_variables : FrescoContext.exported_variable list ->
+  (FrescoContext.t, FrescoContext.error) result

@@ -58,6 +58,11 @@ let raw name formals body args =
     r_linear = (fun () -> Some false);
   }
 let nominal name formals body args = raw name formals (fun () -> Some (formals, body)) args
+let require ?binders c d typ = FrescoTypeOps.require environment c ?binders (parameter d) typ
+let refine ?binders c d typ = get (require ?binders c d typ)
+let classify c typ = FrescoKind.classify (Context.checking_environment environment c).classification typ
+let modal_mismatch = kind_error (FrescoKind.Modal_kind_mismatch (ModalKind.Abs, ModalKind.Any))
+let arrow = Types.Arrow (int, int)
 let bytes value = Marshal.to_string value [Marshal.Closures]
 let unchanged context typ f =
   let before = bytes (context, typ) in
@@ -103,7 +108,7 @@ let suite = "Fresco contexts and assignment" >::: [
     reject (Context.Already_solved a.id) (assign solved a int);
     unsolved c a);
 
-  "kind environment replaces only variable callback" >:: (fun _ ->
+  "kind environment replaces callbacks for free variables" >:: (fun _ ->
     let a = declaration () in
     let fallback _ = Some { FrescoKind.kind = a.kind; modal_kind = ModalKind.Abs; solution = Some int } in
     let custom = { environment with FrescoKind.classification =
@@ -318,6 +323,166 @@ let suite = "Fresco contexts and assignment" >::: [
       let c = solve c b (variable a) in
       assert_equal ModalKind.Any (state c b).declaration.modal_kind;
       assert_equal ModalKind.Abs (state c a).declaration.modal_kind) [[a; b]; [b; a]]);
+
+  "refinement follows a solution and leaves its declaration and body unchanged" >:: (fun _ ->
+    let a = declaration ~lin:Linearity.Unl () and b = declaration ()
+    and abs = declaration ~modal:ModalKind.Abs () in
+    let body = Types.Application (Types.list, [PrimaryKind.Type, point a]) in
+    let c = solve (context [b; a; abs]) b body in
+    reject modal_mismatch (assign c abs (point b));
+    let c' = refine c abs (point b) in
+    order [a; b; abs] c';
+    assert_equal a (state c' a).declaration;
+    assert_equal b (state c' b).declaration;
+    assert_bool "Stored solution retained" (Option.get (state c' b).solution == body);
+    assert_equal ModalKind.Any (classify c (point b));
+    assert_equal ModalKind.Abs (classify c' (point b));
+    assert_bool "Refinement is idempotent" (refine c' abs (point b) == c');
+    reject modal_mismatch (assign c' a arrow);
+    ignore (solve (solve c' a int) abs (point b));
+    ignore (solve c a arrow));
+
+  "absolute payloads follow fields, presences and open row solutions" >:: (fun _ ->
+    let abs = declaration ~modal:ModalKind.Abs () and a = declaration () in
+    let r = declaration ~pk:PrimaryKind.Row () and t = declaration ~pk:PrimaryKind.Row () in
+    let p = declaration ~pk:PrimaryKind.Presence () and q = declaration ~pk:PrimaryKind.Presence () in
+    let c = solve (context [r; t; p; q; a]) p (point q) in
+    let c = solve c r (row ~tail:(point t) ["a", Types.Present (point a); "p", point p]) in
+    let variant = Types.Variant (point r) in
+    let c' = refine c abs variant in
+    assert_equal ModalKind.Abs (classify c' variant);
+    List.iter (fun d -> assert_equal d (state c' d).declaration) [r; t; p; q; a];
+    List.iter (fun d -> assert_equal (flagged c d) (flagged c' d)) [r; t; p; q; a];
+    reject modal_mismatch (assign c' t (field arrow));
+    reject modal_mismatch (assign c' q (Types.Present arrow));
+    reject modal_mismatch (assign c' a arrow);
+    let c' = solve (solve (solve c' t Types.Closed) q Types.Absent) a int in
+    assert_equal ModalKind.Abs (classify c' variant));
+
+  "assignment preparation propagates the target's added requirements" >:: (fun _ ->
+    let abs = declaration ~modal:ModalKind.Abs () in
+    List.iter (fun (pk, use, candidate) ->
+        let a = declaration ~pk () and b = declaration ~pk () in
+        let c = refine (context [a; b]) abs (use (point a)) in
+        reject modal_mismatch (assign c a (point b));
+        let added = (state c a).Context.requirements in
+        let c' = get (FrescoTypeOps.require environment c ~added (parameter a) (point b)) in
+        let c' = solve c' a (point b) in
+        assert_equal ModalKind.Abs (classify c' (use (point a)));
+        reject modal_mismatch (assign c' b (candidate arrow));
+        ignore (solve c' b (candidate int));
+        ignore (solve c b (candidate arrow)))
+      [PrimaryKind.Type, Fun.id, Fun.id;
+       PrimaryKind.Row, record, field;
+       PrimaryKind.Presence, (fun p -> record (row ["p", p])), (fun t -> Types.Present t)]);
+
+  "modal refinement only follows contributing paths and checks formal arguments" >:: (fun _ ->
+    let a = declaration () and abs = declaration ~modal:ModalKind.Abs () in
+    let c = context [a] in
+    assert_bool "Absolute modality ignores payload kind" (refine c abs (absolute (point a)) == c);
+    let relative = Types.Modal (Modality.identity, point a) in
+    let c' = refine c abs relative in
+    assert_equal ModalKind.Abs (classify c' (point a));
+    let c' = refine c abs (absolute (alias abs (point a) int)) in
+    assert_equal ModalKind.Abs (classify c' (point a));
+    reject (kind_error (FrescoKind.Unknown_effect "Missing")) (require c abs
+      (Types.Modal (Modality.Absolute [{ EffectRow.name = "Missing"; arguments = [] }], int))));
+
+  "recursive applications refine only required actual arguments" >:: (fun _ ->
+    let a = declaration () and b = declaration () and abs = declaration ~modal:ModalKind.Abs () in
+    let p = declaration () and q = declaration () in
+    let formals = [quantifier p; quantifier q] and body = ref int in
+    let app a b = raw "RefineRecursive" formals (fun () -> Some (formals, !body))
+        [PrimaryKind.Type, a; PrimaryKind.Type, b] in
+    let value = app (point a) (point b) and c = context [a; b] in
+    body := record (row ["next", Types.Present (app (point p) arrow); "value", Types.Present (point p)]);
+    let c' = refine c abs value in
+    assert_equal ModalKind.Abs (classify c' (point a));
+    assert_equal ModalKind.Any (classify c' (point b));
+    body := record (row ["next", Types.Present (app arrow (point q)); "value", Types.Present (point p)]);
+    unchanged c value (fun () -> reject modal_mismatch (require c abs value));
+    assert_equal ModalKind.Any (classify c (point a)));
+
+  "queued requirements resolve solutions and raw bodies outside use-site binders" >:: (fun _ ->
+    let a = declaration () and b = declaration () and abs = declaration ~modal:ModalKind.Abs () in
+    let c = solve (context [a; b]) b (point a) in
+    let annotation payload = Types.ForAll ([quantifier a], alias abs payload int) in
+    List.iter (fun typ ->
+        let c' = refine c a (annotation typ) in
+        assert_equal ModalKind.Abs (classify c' (point a)))
+      [point b; nominal "RefineCapture" [] (point a) []];
+    reject modal_mismatch (require c a (annotation (point a)));
+    reject modal_mismatch (require ~binders:[quantifier a] c abs (point a));
+    assert_equal ModalKind.Any (classify c (point a)));
+
+  "queued recursive binders retain their captured scope" >:: (fun _ ->
+    let a = declaration () and b = declaration () and abs = declaration ~modal:ModalKind.Abs () in
+    let absolute_a = { a with modal_kind = ModalKind.Abs } in
+    let typ outer inner = Types.ForAll ([quantifier outer], Types.Recursive (b.id, b.kind,
+        record (row ["value", Types.Present (point a);
+                     "checked", Types.Present (Types.ForAll ([quantifier inner], alias abs (point b) int))]))) in
+    ignore (refine Context.empty a (typ absolute_a a));
+    reject modal_mismatch (require Context.empty a (typ a absolute_a)));
+
+  "requirements never refine rigid values, rows or presences" >:: (fun _ ->
+    let abs = declaration ~modal:ModalKind.Abs () in
+    let a = declaration () and r = declaration ~pk:PrimaryKind.Row ()
+    and p = declaration ~pk:PrimaryKind.Presence () in
+    let c = List.fold_left (fun c d -> add ~rigid:true d c) Context.empty [a; r; p] in
+    List.iter (fun t -> reject modal_mismatch (require c abs t))
+      [point a; record (point r); record (row ["p", point p])];
+    let unl = declaration ~lin:Linearity.Unl () in
+    reject (ordinary unl) (require c unl (point a)));
+
+  "failed nested requirements discard earlier refinements" >:: (fun _ ->
+    let a = declaration () and rigid = declaration () and abs = declaration ~modal:ModalKind.Abs () in
+    let p = Unionfind.fresh (variable a) and q = Unionfind.fresh (variable a) in
+    Unionfind.union p q;
+    let typ = Types.Arrow (alias abs (Types.Meta q) int, alias abs (point rigid) int) in
+    let c = add ~rigid:true rigid (context [a]) in
+    unchanged c typ (fun () -> reject modal_mismatch (require c a typ));
+    assert_equal ModalKind.Any (classify c (point a)));
+
+  "ordinary refinement combines restrictions and preserves strict assignment" >:: (fun _ ->
+    let pk = PrimaryKind.Row in
+    let r = declaration ~pk () and session = declaration ~pk ~res:Restriction.Session ()
+    and mono = declaration ~pk ~res:Restriction.Mono () in
+    let c = context [r] in
+    List.iter (fun (first, second) ->
+        let c' = refine (refine c first (point r)) second (point r) in
+        assert_equal r (state c' r).declaration;
+        assert_bool "Syntactic monotype flag unchanged" (not (flagged c' r));
+        reject (ordinary mono) (assign c' r (field (Types.Input (polymorphic (), Types.End))));
+        reject (ordinary session) (assign c' r (field int));
+        ignore (solve c' r (field Types.End))) [session, mono; mono, session]);
+
+  "refining ordinary Mono leaves the syntactic monotype check separate" >:: (fun _ ->
+    List.iter (fun (pk, wrap) ->
+        let a = declaration () and v = declaration ~pk () in
+        let base = declaration ~pk ~res:Restriction.Base ()
+        and mono = declaration ~pk ~res:Restriction.Mono () in
+        let phantom = wrap (alias a (polymorphic ()) int) in
+        let c = context [v; mono] in
+        List.iter (fun (first, second) ->
+            let c' = refine (refine c first (point v)) second (point v) in
+            assert_bool "Syntactic monotype flag unchanged" (not (flagged c' v));
+            ignore (solve c' v phantom);
+            ignore (refine (refine (solve c v phantom) first (point v)) second (point v)))
+          [base, mono; mono, base];
+        reject Context.Expected_monotype (assign c mono phantom))
+      [PrimaryKind.Row, field; PrimaryKind.Presence, (fun t -> Types.Present t)]);
+
+  "Base and Session are incompatible on values but can hold of empty rows and fields" >:: (fun _ ->
+    let a = declaration () and base = declaration ~res:Restriction.Base ()
+    and session = declaration ~res:Restriction.Session () in
+    List.iter (fun (first, second) ->
+        let c = refine (context [a]) first (point a) in
+        reject (ordinary second) (require c second (point a))) [base, session; session, base];
+    List.iter (fun (pk, empty) ->
+        let a = declaration ~pk () and base = declaration ~pk ~res:Restriction.Base ()
+        and session = declaration ~pk ~res:Restriction.Session () in
+        let c = refine (refine (context [a]) base (point a)) session (point a) in
+        ignore (solve c a empty)) [PrimaryKind.Row, Types.Closed; PrimaryKind.Presence, Types.Absent]);
 
   "kind failures leave tentative monotype flags unchanged" >:: (fun _ ->
     let a = declaration ~lin:Linearity.Unl () and r = declaration ~pk:PrimaryKind.Row () in

@@ -83,6 +83,36 @@ let rec descriptor = function Types.Meta p -> descriptor (Unionfind.peek p) | t 
 let single = function [root] -> root.Context.typ | _ -> assert_failure "Expected one root"
 
 let suite = "Fresco scope exit" >::: [
+  "live structural requirements survive solution expansion and scope exit" >:: (fun _ ->
+    let marker, c = Context.add_marker Context.empty in
+    let r = declaration ~pk:PrimaryKind.Row () and p = declaration ~pk:PrimaryKind.Presence ()
+    and dead = declaration ~pk:PrimaryKind.Presence () in
+    let abs = declaration ~modal:ModalKind.Abs () and unl = declaration ~pk:PrimaryKind.Presence ~lin:Linearity.Unl () in
+    let c = solve (c |> add r |> add p |> add dead) r (row ["p", point p]) in
+    let c = get (FrescoTypeOps.require environment c (parameter abs) (record (point r))) in
+    let c = get (FrescoTypeOps.require environment c (parameter unl) (point p)) in
+    let c', roots = leave marker [root (record (point r))] c in
+    order [p] c';
+    assert_equal p (state c' p).declaration;
+    let classification = (Context.checking_environment environment c').classification in
+    assert_equal ModalKind.Abs (FrescoKind.classify classification (single roots));
+    reject (kind_error (FrescoKind.Modal_kind_mismatch (ModalKind.Abs, ModalKind.Any)))
+      (assign c' p (Types.Present (Types.Arrow (int, int))));
+    reject (kind_error (FrescoKind.Ordinary_kind_mismatch unl.kind))
+      (assign c' p (Types.Present (Types.Modal (Modality.Absolute [], Types.LinearArrow (int, int)))));
+    ignore (solve c' p (Types.Present int)));
+
+  "scope exit cannot capture a free flexible variable from a solution" >:: (fun _ ->
+    let marker, c = Context.add_marker Context.empty in
+    let a = declaration () and b = declaration () and abs = declaration ~modal:ModalKind.Abs () in
+    let c = solve (c |> add a |> add b) b (point a) in
+    let c = get (FrescoTypeOps.require environment c (parameter abs) (point a)) in
+    let binder = quantifier a in
+    List.iter (fun root -> exit_error (Context.Binder_mismatch a.id) marker [root] c)
+      [root ~binders:[binder] (point b); root (Types.ForAll ([binder], point b))];
+    let c', _ = leave marker [root ~binders:[binder] (point a)] c in
+    order [] c');
+
   "repeated bare recursive roots retain body sharing on exit" >:: (fun _ ->
     let r = declaration () in let p = Unionfind.fresh (Types.Arrow (int, int)) in
     let recursive = Types.Recursive (r.id, r.kind, Types.Meta p) in

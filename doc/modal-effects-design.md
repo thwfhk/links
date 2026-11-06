@@ -703,15 +703,11 @@ Rows and presences retain monotype requirements through these moves and
 through later solutions. Reject assignments to rigid or already solved
 variables; consistency later compares solved targets.
 
-The later consistency layer can refine ordinary flexible requirements by
-introducing a fresh variable with a stronger ordinary kind and assigning
-the existing unknown to it. For example, introduce `rho'::Unl`, assign
-`rho := rho'`, then assign `alpha::Unl := Record(rho)`. Dependency movement
-places `rho'` and `rho` before `alpha` where needed. For an already solved
-row, refine its flexible field and tail dependencies without replacing
-its solution. Propagate monotype requirements to fresh representatives.
-Failure of strict assignment before this refinement is not by itself a
-source-program rejection. This keeps the well-formedness descriptor API unchanged.
+The consistency layer first refines required guarantees with
+`FrescoContext.require`, then uses strict assignment. Added requirements are
+stored separately from declared kinds. A solved row retains its solution while
+its flexible field and tail dependencies acquire the required guarantees.
+Failure returns no updated context.
 
 Use an abstract `FrescoContext`, with `FrescoTypeOps.assign`
 delegating to its checked assignment operation. Context entries retain
@@ -923,6 +919,44 @@ Use requirement refinement at the thesis' instantiation, guessed-monotype
 checking and modality transformation checks. For variable access, try the
 right residual before the absolute fallback, following the thesis' algorithmic
 variable lookup. Keep each failed attempt's context separate from the next.
+
+**For user review:** keep an explicit set of added guarantees on each flexible
+context entry and exported variable. Preserve `Unl`, `Base`, `Mono`, `Session`
+and absolute-payload requirements as conjunctions. `Base` entails the ordinary
+`Mono` predicate; `Session` permits polymorphic message payloads and does not
+entail `Mono`. Empty rows and absent fields can meet both `Base` and `Session`;
+a value type cannot. A fresh stronger representative was the main alternative,
+but the existing ordinary kind descriptor cannot express every conjunction.
+
+**For user review:** reuse the finite Boolean summary checks to find flexible
+dependencies. First test whether giving every eligible unknown the requested
+guarantee would suffice. Then remove each candidate guarantee in turn to find
+which unknowns need it. These summaries use conjunctions and fixed constructor
+checks. Recheck the resulting set before returning it. A symbolic dependency
+summary could avoid the extra evaluations but would add another summary domain.
+Unused actual arguments do not acquire result requirements; their declared
+parameter requirements still apply.
+
+`FrescoContext.require` accepts a target's added requirements as well as its
+declared parameter descriptor. Consistency can refine a candidate unknown before
+strict assignment, including absolute-payload requirements on rows and presences.
+`of_exported_variables` reconstructs a persistent context from the detached table.
+It preserves order, freedom and every requirement, and rejects duplicate IDs,
+invalid declarations, missing value-unknown monotype flags and invalid rigid
+metadata. Detached export uses the same validation internally.
+
+Keep semantic ordinary `Mono` separate from the syntactic monotype flag used
+for assignment. An alias with an unused polymorphic argument can satisfy the
+ordinary `Mono` predicate through its body. A variable declared `Mono`, or a
+value-type unknown, retains the existing syntactic assignment check. Inferred
+ordinary requirements must not make refinement order affect that distinction.
+
+Queued requirements carry their lexical bindings separately from the context
+callbacks. Following a stored solution or raw declaration resets the lexical
+scope; explicit recursive binders retain their captured scope. Otherwise a
+use-site binder with the same ID could supply a false guarantee. When expanding
+a solution under an output binder, reject capture of an unresolved free flexible
+variable. Preserve direct lexical shadowing and matching rigid closure.
 
 ### Parameterised-effect matching order
 

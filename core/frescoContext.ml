@@ -11,6 +11,7 @@ type flexible = {
   declaration : declaration;
   solution : Types.typ option;
   requires_monotype : bool;
+  requirements : FrescoKind.requirements;
 }
 
 type scoped_root = {
@@ -23,6 +24,7 @@ type exported_variable = {
   declaration : declaration;
   freedom : Freedom.t;
   requires_monotype : bool;
+  requirements : FrescoKind.requirements;
 }
 
 type marker = unit ref
@@ -75,18 +77,43 @@ let lookup_term name context =
       | Term (other, typ) when name = other -> Some typ
       | _ -> found) None context
 
+let check_declaration declaration =
+  if declaration.modal_kind = ModalKind.Abs &&
+     Kind.primary_kind declaration.kind <> PrimaryKind.Type then
+    fail (Invalid_declaration declaration.id)
+
 let add declaration entry context = checked (fun () ->
     if Option.is_some (lookup declaration.id context) then
       fail (Duplicate_variable declaration.id);
-    if declaration.modal_kind = ModalKind.Abs &&
-       Kind.primary_kind declaration.kind <> PrimaryKind.Type then
-      fail (Invalid_declaration declaration.id);
+    check_declaration declaration;
     context @ [entry])
 
 let add_rigid declaration = add declaration (Rigid declaration)
 let add_flexible declaration =
   add declaration (Flexible { declaration; solution = None;
+    requirements = FrescoKind.empty_requirements;
     requires_monotype = Kind.primary_kind declaration.kind = PrimaryKind.Type })
+
+let restore_variables variables =
+  let _, entries = List.fold_left (fun (seen, entries) (variable : exported_variable) ->
+      let { declaration; freedom; requires_monotype; requirements } = variable in
+      let id = declaration.id in
+      if IntSet.mem id seen then fail (Duplicate_variable id);
+      check_declaration declaration;
+      let entry = match freedom with
+        | `Rigid ->
+           if requires_monotype || not (FrescoKind.is_empty_requirements requirements) then
+             fail (Invalid_declaration id);
+           Rigid declaration
+        | `Flexible ->
+           if (Kind.primary_kind declaration.kind = PrimaryKind.Type && not requires_monotype) ||
+              not (FrescoKind.valid_requirements declaration.kind requirements) then
+             fail (Invalid_declaration id);
+           Flexible { declaration; solution = None; requires_monotype; requirements } in
+      IntSet.add id seen, entry :: entries) (IntSet.empty, []) variables in
+  List.rev entries
+
+let of_exported_variables variables = checked (fun () -> restore_variables variables)
 
 let checking_environment environment context =
   let variable id = match lookup id context with
@@ -96,8 +123,11 @@ let checking_environment environment context =
        Some { FrescoKind.kind = declaration.kind;
          modal_kind = declaration.modal_kind; solution }
     | _ -> None in
+  let requirements id = match lookup id context with
+    | Some (Flexible variable) -> variable.requirements
+    | _ -> FrescoKind.empty_requirements in
   { environment with FrescoKind.classification =
-      { environment.FrescoKind.classification with FrescoKind.variable } }
+      { environment.FrescoKind.classification with FrescoKind.variable; requirements } }
 
 let any_parameter primary =
   TypeParameter.make (primary, (Linearity.Any, Restriction.Any))
@@ -107,7 +137,7 @@ let any_parameter primary =
    are traversed with their own binders, never those at the use site. A point
    cycle must itself pass through a Recursive node: compare recursion depth
    with the depth at which the repeated point was entered. *)
-let inspect environment context ?target required typ =
+let inspect environment context ?target ?(inspect_declarations = true) required typ =
   let dependencies = ref IntSet.empty in
   let monotypes = ref IntSet.empty in
   let rec visit bound recursive recursive_nodes solutions declarations points required typ =
@@ -152,7 +182,7 @@ let inspect environment context ?target required typ =
     | Types.RecursiveApplication app ->
        arguments app.Types.r_args;
        let name = app.Types.r_unique_name in
-       if not (StringSet.mem name declarations) then begin
+       if inspect_declarations && not (StringSet.mem name declarations) then begin
          match environment.FrescoKind.classification.FrescoKind.declaration app with
          | None -> raise (FrescoKind.Error (FrescoKind.Missing_declaration name))
          | Some (formals, body) ->
@@ -204,6 +234,14 @@ let add_lock environment modality ambient context = checked (fun () ->
     FrescoKind.check_effect_row environment ambient;
     context @ [Lock (modality, ambient)])
 
+let solution_requires_monotype (variable : flexible) =
+  variable.requires_monotype || Kind.restriction variable.declaration.kind = Restriction.Mono
+
+let check_solution environment (variable : flexible) typ =
+  let declaration = variable.declaration in
+  let parameter = TypeParameter.make ~modal_kind:declaration.modal_kind declaration.kind in
+  FrescoKind.check ~added:variable.requirements environment parameter typ
+
 let assign environment context id (tag, typ) = checked (fun () ->
     let variable = match lookup id context with
       | None -> fail (Missing_variable id)
@@ -222,16 +260,13 @@ let assign environment context id (tag, typ) = checked (fun () ->
          self (point :: points) (Unionfind.peek point)
       | Types.Var (other, _, _) -> other = id
       | _ -> false in
-    let parameter = TypeParameter.make ~modal_kind:declaration.modal_kind declaration.kind in
     if self [] typ then begin
-      FrescoKind.check environment parameter typ;
+      check_solution environment variable typ;
       context
     end else begin
-      let required = variable.requires_monotype ||
-        snd (Kind.subkind declaration.kind) = Restriction.Mono in
       let dependencies, monotypes =
-        inspect environment context ~target:id required typ in
-      FrescoKind.check environment parameter typ;
+        inspect environment context ~target:id (solution_requires_monotype variable) typ in
+      check_solution environment variable typ;
       let rec split before = function
         | [] -> assert false
         | (Flexible { declaration = { id = other; _ }; _ } as target) :: after
@@ -264,6 +299,23 @@ let root_type root =
        Types.Record (Types.Row (StringMap.singleton "field" root.typ,
          Unionfind.fresh Types.Closed, false)) in
   Types.ForAll (root.binders, body)
+
+let require environment context ?(binders = []) ?added parameter typ = checked (fun () ->
+    let environment = checking_environment environment context in
+    let primary_kind = Kind.primary_kind (TypeParameter.to_kind parameter) in
+    ignore (inspect environment context false (root_type { binders; primary_kind; typ }));
+    let refinable id = match lookup id context with
+      | Some (Flexible { solution = None; _ }) -> true
+      | _ -> false in
+    let added = FrescoKind.require ?added environment ~refinable ~binders parameter typ in
+    if IntMap.is_empty added then context
+    else List.map (function
+        | Flexible variable as entry ->
+           begin match IntMap.find_opt variable.declaration.id added with
+           | Some requirements -> Flexible { variable with requirements }
+           | None -> entry
+           end
+        | entry -> entry) context)
 
 let check_root_binders context roots =
   let check_quantifier q =
@@ -316,7 +368,7 @@ let check_root_binders context roots =
       List.iter check_quantifier root.binders;
       check_closure root.typ) roots
 
-let expand_roots context roots =
+let expand_roots environment context roots =
   check_root_binders context roots;
   let points = ref [] and recursive_copies = ref [] in
   let solutions = ref IntMap.empty in
@@ -356,11 +408,17 @@ let expand_roots context roots =
        begin match lookup id context with
        | Some (Flexible { solution = Some body; _ }) ->
           if IntSet.mem id solving then fail (Cyclic_solution id);
+          if not (IntSet.is_empty bound) then begin
+            let dependencies, _ = inspect environment context ~inspect_declarations:false false body in
+            IntSet.iter (fun id -> match lookup id context with
+                | Some (Flexible { solution = None; _ }) -> fail (Binder_mismatch id)
+                | _ -> ()) (IntSet.inter bound dependencies)
+          end;
           begin match IntMap.find_opt id !solutions with
           | Some body -> body
           | None ->
-             (* Stored solutions have their own lexical scope. Their free
-                variables may become bound where the expanded type is placed. *)
+             (* Stored solutions have their own lexical scope. A matching
+                output binder may close a free rigid variable. *)
              let body = expand IntSet.empty 0 [] [] None (IntSet.add id solving) body in
              solutions := IntMap.add id body !solutions;
              body
@@ -436,7 +494,7 @@ let leave_scope environment marker ~roots context = checked (fun () ->
         let typ = root_type root in
         ignore (inspect environment context false typ);
         FrescoKind.check environment (any_parameter PrimaryKind.Type) typ) roots;
-    let roots = expand_roots context roots in
+    let roots = expand_roots environment context roots in
     let dependencies typ = fst (inspect environment context false typ) in
     let entry_dependencies = function
       | Flexible { solution = Some typ; _ } | Term (_, typ) -> dependencies typ
@@ -465,11 +523,9 @@ let leave_scope environment marker ~roots context = checked (fun () ->
         IntSet.iter (fun id ->
             if not (IntSet.mem id preceding) then fail (Dependency_order id)) dependencies;
         begin match entry with
-        | Flexible { declaration; solution = Some typ; requires_monotype } ->
-           let required = requires_monotype || snd (Kind.subkind declaration.kind) = Restriction.Mono in
-           ignore (inspect reduced_environment result required typ);
-           FrescoKind.check reduced_environment
-             (TypeParameter.make ~modal_kind:declaration.modal_kind declaration.kind) typ
+        | Flexible ({ solution = Some typ; _ } as variable) ->
+           ignore (inspect reduced_environment result (solution_requires_monotype variable) typ);
+           check_solution reduced_environment variable typ
         | Term (_, typ) -> FrescoKind.check reduced_environment (any_parameter PrimaryKind.Type) typ
         | Lock (modality, ambient) ->
            FrescoKind.check reduced_environment (any_parameter PrimaryKind.Type)
@@ -577,6 +633,7 @@ let export environment ~roots context = checked (fun () ->
          | Some (Rigid declaration) ->
             variable_point output (Types.Var (id, declaration.kind, `Rigid))
          | Some (Flexible { declaration; _ }) ->
+            if List.mem_assoc id output then fail (Binder_mismatch id);
             variable_point output (Types.Var (id, declaration.kind, `Flexible))
          | None -> fail (Missing_variable id)
          | Some (Term _ | Marker _ | Lock _) -> assert false
@@ -685,15 +742,13 @@ let export environment ~roots context = checked (fun () ->
         IntSet.empty roots in
     let table = List.filter_map (function
         | Rigid declaration when IntSet.mem declaration.id live ->
-           Some { declaration; freedom = `Rigid; requires_monotype = false }
-        | Flexible { declaration; solution = None; requires_monotype }
+           Some { declaration; freedom = `Rigid; requires_monotype = false;
+             requirements = FrescoKind.empty_requirements }
+        | Flexible { declaration; solution = None; requires_monotype; requirements }
           when IntSet.mem declaration.id live ->
-           Some { declaration; freedom = `Flexible; requires_monotype }
+           Some { declaration; freedom = `Flexible; requires_monotype; requirements }
         | _ -> None) context in
-    let detached_context = List.map (fun variable -> match variable.freedom with
-        | `Rigid -> Rigid variable.declaration
-        | `Flexible -> Flexible { declaration = variable.declaration; solution = None;
-            requires_monotype = variable.requires_monotype }) table in
+    let detached_context = restore_variables table in
     let detached_environment = checking_environment detached_environment detached_context in
     List.iter (fun root ->
         ignore (inspect detached_environment detached_context false (root_type root));

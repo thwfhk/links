@@ -66,6 +66,76 @@ let export_error ?(env = environment) error roots c =
   assert_equal before (bytes (c, roots))
 
 let suite = "Fresco detached export" >::: [
+  "detached export retains added guarantees and uses declared variable descriptors" >:: (fun _ ->
+    let r = declaration ~pk:PrimaryKind.Row () and a = declaration () in
+    let abs = declaration ~modal:ModalKind.Abs () and mono = declaration ~pk:PrimaryKind.Row ~res:Restriction.Mono () in
+    let c = context [r; a] in
+    let c = get (FrescoTypeOps.require environment c (parameter abs) (record (point r))) in
+    let c = get (FrescoTypeOps.require environment c (parameter mono) (point r)) in
+    let c = get (FrescoTypeOps.require environment c (parameter abs) (point a)) in
+    let typ = alias abs (record (point r)) (alias mono (point r) (alias abs (point a) int)) in
+    let roots, table = export [root typ; root ~pk:PrimaryKind.Row (point r); root (point a)] c in
+    assert_equal [r.id; a.id] (table_ids table);
+    List.iter2 (fun d entry ->
+        assert_equal d entry.Context.declaration;
+        assert_bool "Added requirements kept" (entry.Context.requirements <> FrescoKind.empty_requirements)) [r; a] table;
+    assert_equal (variable r) (descriptor (List.nth roots 1).typ);
+    assert_equal (variable a) (descriptor (List.nth roots 2).typ));
+
+  "restored variables enforce their saved requirements" >:: (fun _ ->
+    let rigid = declaration ~modal:ModalKind.Abs () and a = declaration () and proxy = declaration () in
+    let r = declaration ~pk:PrimaryKind.Row () and p = declaration ~pk:PrimaryKind.Presence () in
+    let abs = declaration ~modal:ModalKind.Abs ()
+    and base = declaration ~pk:PrimaryKind.Row ~res:Restriction.Base () in
+    let c = Context.empty |> add ~rigid:true rigid |> add r |> add p |> add a |> add proxy in
+    let c = solve c proxy (record (row ~tail:(point r) ["p", point p])) in
+    let c = get (FrescoTypeOps.require environment c (parameter abs) (point proxy)) in
+    let c = get (FrescoTypeOps.require environment c (parameter base) (point r)) in
+    let c = get (FrescoTypeOps.require environment c (parameter abs) (point a)) in
+    let roots, table = export [root (alias abs (point a) int); root ~pk:PrimaryKind.Presence (point p);
+        root ~pk:PrimaryKind.Row (point r); root (point rigid)] c in
+    assert_equal [rigid.id; r.id; p.id; a.id] (table_ids table);
+    let restored = get (FrescoTypeOps.of_exported_variables table) in
+    assert_equal table (snd (export roots restored));
+    let arrow = Types.Arrow (int, int) in
+    let poly = Types.ForAll ([quantifier (declaration ())], int) in
+    let modal = kind_error (FrescoKind.Modal_kind_mismatch (ModalKind.Abs, ModalKind.Any)) in
+    reject (Context.Rigid_target rigid.id) (assign restored rigid int);
+    reject (kind_error (FrescoKind.Ordinary_kind_mismatch base.kind)) (assign restored r (field Types.End));
+    reject Context.Expected_monotype (assign restored p (Types.Present poly));
+    reject Context.Expected_monotype (assign restored a poly);
+    reject modal (assign restored p (Types.Present arrow));
+    reject modal (assign restored a arrow);
+    ignore (solve (solve (solve restored r (field int)) p (Types.Present int)) a int));
+
+  "restoring a variable table rejects duplicate and invalid metadata" >:: (fun _ ->
+    let r = declaration ~pk:PrimaryKind.Row () in
+    let base = declaration ~pk:PrimaryKind.Row ~res:Restriction.Base ()
+    and session = declaration ~pk:PrimaryKind.Row ~res:Restriction.Session () in
+    let c = get (FrescoTypeOps.require environment (context [r]) (parameter base) (point r)) in
+    let c = get (FrescoTypeOps.require environment c (parameter session) (point r)) in
+    let _, table = export [root ~pk:PrimaryKind.Row (point r)] c in
+    let entry = List.hd table in
+    ignore (solve (get (Context.of_exported_variables table)) r Types.Closed);
+    reject (Context.Duplicate_variable r.id) (Context.of_exported_variables [entry; entry]);
+    let invalid entry = reject (Context.Invalid_declaration r.id) (Context.of_exported_variables [entry]) in
+    let value = { r with kind = PrimaryKind.Type, (Linearity.Any, Restriction.Any) } in
+    invalid { entry with declaration = { r with modal_kind = ModalKind.Abs } };
+    invalid { entry with declaration = value; requires_monotype = true };
+    invalid { entry with declaration = value; requires_monotype = false; requirements = FrescoKind.empty_requirements };
+    invalid { entry with freedom = `Rigid };
+    invalid { entry with freedom = `Rigid; requires_monotype = true; requirements = FrescoKind.empty_requirements });
+
+  "detached export cannot capture a free flexible variable from a solution" >:: (fun _ ->
+    let a = declaration () and b = declaration () and abs = declaration ~modal:ModalKind.Abs () in
+    let c = solve (context [a; b]) b (point a) in
+    let c = get (FrescoTypeOps.require environment c (parameter abs) (point a)) in
+    let binder = quantifier a in
+    List.iter (fun root -> export_error (Context.Binder_mismatch a.id) [root] c)
+      [root ~binders:[binder] (point b); root (Types.ForAll ([binder], point b))];
+    let _, table = export [root ~binders:[binder] (point a)] c in
+    assert_equal [] table);
+
   "repeated bare recursive roots retain body sharing on export" >:: (fun _ ->
     let r = declaration () in let p = Unionfind.fresh (Types.Arrow (int, int)) in
     let recursive = Types.Recursive (r.id, r.kind, Types.Meta p) in
@@ -154,7 +224,7 @@ let suite = "Fresco detached export" >::: [
     let a = declaration ~modal:ModalKind.Abs ~lin:Linearity.Unl ~res:Restriction.Mono () in
     let _, table = export [root (point a)] (context [a]) in
     match table with
-    | [{ Context.declaration = d; freedom = `Flexible; requires_monotype = true }] -> assert_equal a d
+    | [{ Context.declaration = d; freedom = `Flexible; requires_monotype = true; _ }] -> assert_equal a d
     | _ -> assert_failure "Expected complete type metadata");
 
   "wrong argument tags are checked before expansion" >:: (fun _ ->
