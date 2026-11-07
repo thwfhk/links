@@ -95,6 +95,37 @@ let suite = "Fresco subtyping and constraints" >::: [
          assert_equal None (C.lookup (id b) result.T.context);
          begin match head argument with S.Var (n, _, `Rigid) -> assert_equal (id b) n | _ -> assert_failure "Expected target rigid" end
       | _ -> assert_failure "Expected a scoped argument");
+    "modal target binders and witness paths agree" >:: (fun _ ->
+      let rec wrap count typ = if count = 0 then typ else absolute (wrap (count - 1) typ) in
+      List.iter (fun source_depth -> List.iter (fun target_depth ->
+        if source_depth = 0 && target_depth > 0 then
+          reject (check C.empty (poly ()) (wrap target_depth (poly ())))
+        else
+        let result = match check C.empty (wrap source_depth (poly ())) (wrap target_depth (poly ())) with
+          | Ok result -> result
+          | Error _ -> assert_failure (Printf.sprintf "Source depth %d, target depth %d" source_depth target_depth) in
+        let rec payload count typ = if count = 0 then head typ else match head typ with
+          | S.Modal (_,body) -> payload (count - 1) body
+          | _ -> assert_failure "Expected a target modality" in
+        match payload target_depth result.T.typ,result.T.instantiations with
+        | S.ForAll ([binder],_),[{ T.binders = [witness_binder]; argument; path; _ }] ->
+           assert_equal (id binder) (id witness_binder);
+           assert_equal (List.init (target_depth + 1) (fun _ -> 0)) path;
+           assert_equal None (C.lookup (id binder) result.T.context);
+           (match head argument with
+            | S.Var (variable,_,`Rigid) -> assert_equal (id binder) variable
+            | _ -> assert_failure "Expected the target's rigid variable");
+           (match S.to_types (C.checking_environment environment result.T.context)
+             [root PrimaryKind.Type result.T.typ;
+              root ~binders:[binder] PrimaryKind.Type argument] with
+            | Ok _ -> () | Error _ -> assert_failure "Expected closed output roots")
+        | _ -> assert_failure "Expected one scoped instantiation") [0;1;2]) [0;1;2]);
+    "removing a source modality preserves the plain target path" >:: (fun _ ->
+      let result = ok (check C.empty (absolute (poly ())) (arrow int int)) in
+      equal result.T.context (arrow int int) result.T.typ;
+      match result.T.instantiations with
+      | [{ T.binders = []; argument; path = []; _ }] -> equal result.T.context int argument
+      | _ -> assert_failure "Expected a root instantiation");
     "quantifier escape rejects" >:: (fun _ ->
       let a = q () and b = q () in let ctx = flex C.empty a in
       reject (check ctx (v ~freedom:`Flexible a) (S.ForAll ([b], v b)));

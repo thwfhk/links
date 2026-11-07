@@ -301,6 +301,15 @@ Presence parameters use their own primary categories, including unused
 parameters and residual row fields. Skeleton checking permits only `Ghost`
 as the expected type, as in the thesis' mode well-formedness rules.
 
+D7c1b1 preserves the checked payload when rebuilding a modal subtype result.
+Checking a quantified payload opens fresh target binders; its explicit type
+arguments refer to those binders. Returning the original target would leave
+those arguments without their binding type abstractions at source export.
+Rebuild the original target's modal wrappers around the checked payload, and
+record argument positions through that number of wrappers. A modality only
+on the source adds no position in the target. All payload, scope and modal
+transformation checks still run.
+
 On 7 November 2026, the user chose modal kind `Abs` for ordinary ghosts during
 skeleton inference. They also check at `Any` by the existing kind inclusion.
 Universal ghosts retain their body's modal kind. Check supplied skeleton

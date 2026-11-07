@@ -417,6 +417,61 @@ let source_suite = "Links source" >::: [
     |} in
     expect_type Types.int_type (expose (list_element typ)));
 
+  "annotated modal polymorphism keeps scoped argument instantiations" >:: (fun _ ->
+    List.iter (fun identity ->
+      execution (Value.box [`Int 42; `Bool true])
+        ("typename Identity = " ^ identity ^ "; " ^ {|
+          sig useId : modal [] ((Identity,Identity) -> (Int,Bool))
+          fun useId(f,g) { (f(42),g(true)) }
+          useId((fun(x) { x } : Identity),(fun(x) { x } : Identity))
+        |}) |> int_bool)
+      ["modal [] (forall a. (a) -> a)";
+        "modal [] (modal [] (forall a. (a) -> a))";
+        "forall a. modal [] ((a) -> a)";
+        "modal [] (forall a. modal [] ((a) -> a))"]);
+
+  "annotated modal polymorphism specialises to a plain caller type" >:: (fun _ ->
+    execution (`Int 42) {|
+      typename Identity = modal [] (forall a. (a) -> a);
+      sig useId : modal [] (((Int) -> Int) -> Int)
+      fun useId(f) { f(42) }
+      useId((fun(x) { x } : Identity))
+    |} |> expect_type Types.int_type);
+
+  "annotated polymorphism retains scope effects and ordinary requirements" >:: (fun _ ->
+    let check source = FrescoFrontend.check_string (FrescoFrontend.empty ()) source in
+    List.iter (fun source -> reject (fun () -> check source)) [
+      {|typename Identity = modal [] (forall a. (a) -> a);
+        sig useId : modal [] ((Identity) -> Int) fun useId(f) { f(42) }
+        useId((fun(x) { 42 } : Identity))|};
+      {|fun(x) { (fun(y) { x } : modal [] (forall a. (a) -> a)) }|};
+      {|effect Needed { Ask : () => Int; }
+        typename Identity = modal [] (forall a. (a) -> a);
+        sig useId : modal [] ((Identity) -> Int) fun useId(f) { f(42) }
+        useId((fun(x) { var n = do Ask; x } : Identity))|};
+      {|typename Identity = modal [] (forall a. (a) -> a);
+        sig useId : modal [] ((Identity) -> Int) fun useId(f) { f(42) }
+        useId((linfun(x) { x } : Identity))|}
+    ]);
+
+  "failed annotated argument checks preserve the persistent state" >:: (fun _ ->
+    with_checked_ir (fun () ->
+      let state,_,_ = FrescoFrontend.run_string (FrescoFrontend.empty ()) {|
+        typename Identity = modal [] (forall a. (a) -> a);
+        sig useId : modal [] ((Identity) -> Int)
+        fun useId(f) { f(42) }
+      |} in
+      reject (fun () -> FrescoFrontend.run_string state
+        "useId((fun(x) { true } : Identity))");
+      let state,typ,value = FrescoFrontend.run_string state
+        "useId((fun(x) { x } : Identity))" in
+      expect_type Types.int_type typ;
+      assert_equal ~printer:Value.string_of_value (`Int 42) value;
+      let _,typ,value = FrescoFrontend.run_string state
+        "useId((fun(x) { x } : Identity))" in
+      expect_type Types.int_type typ;
+      assert_equal ~printer:Value.string_of_value (`Int 42) value));
+
   "higher-rank record field is retained and executes" >:: (fun _ ->
     let typ = infer "{ sig id : forall a. (a) -> a fun id(x) { x } (identity = ~id) }" in
     (match expose typ with

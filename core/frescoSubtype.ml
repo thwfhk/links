@@ -139,8 +139,17 @@ let run env initial ~support ~mode ~ambient source = checked (fun () ->
          let shared_modality = Modality.map (shared env next PrimaryKind.Type) target_modality in
          let shared_ambient = EffectRow.map (shared env next PrimaryKind.Type) ambient in
          ctx := context (C.add_lock env shared_modality shared_ambient next);
-         ignore (go binders (path @ [0]) (Modality.apply target_modality ambient) (K.Check target_body) source_body);
-         single (leave marker [root PrimaryKind.Type target])
+         (* Retain the checked payload's opened binders, and keep witness paths
+            aligned with the target's original number of modal wrappers. *)
+         let rec target_path target = match head target with
+           | S.Modal (_,body) -> 0 :: target_path body
+           | _ -> [] in
+         let rec restore target payload = match head target with
+           | S.Modal (modality,body) -> S.Modal (modality,restore body payload)
+           | _ -> payload in
+         let result = go binders (path @ target_path target)
+           (Modality.apply target_modality ambient) (K.Check target_body) source_body in
+         single (leave marker [root PrimaryKind.Type (restore target result)])
       | (K.Fun _ | K.LinearFun _), K.Type, S.Modal _ ->
          let modality, body = guarded_run source in
          ctx := transform_impl env !ctx ~source:modality ~target:Modality.identity ~ambient ~payload:body;

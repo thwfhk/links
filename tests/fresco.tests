@@ -336,3 +336,35 @@ A supplied unary linear result executes
 sig apply : forall a::Any,b::Any. ((a)->b,a)->b fun apply(f,x) { f(x) } (apply(fun(x) { x }, linfun(y) { y+1 }) : (Int) -@ Int)(41)
 args : --fresco
 stdout : 42 : Int
+
+An annotated modal polymorphic argument retains its bound variable
+typename Identity = modal [] (forall a. (a) -> a); sig useId : modal [] ((Identity) -> Int) fun useId(f) { f(42) } useId((fun(x) { x } : Identity))
+args : --fresco
+stdout : 42 : Int
+
+Two annotated polymorphic arguments retain separate binders
+typename Identity = modal [] (forall a. (a) -> a); sig useIds : modal [] ((Identity, Identity) -> (Int, Bool)) fun useIds(f,g) { (f(42),g(true)) } useIds((fun(x) { x } : Identity),(fun(y) { y } : Identity))
+args : --fresco
+stdout : (42, true) : (Int, Bool)
+
+An annotation outside a polymorphic result still executes
+typename Identity = forall a. modal [] ((a) -> a); sig useId : modal [] ((Identity) -> Int) fun useId(f) { f(42) } useId((fun(x) { x } : Identity))
+args : --fresco
+stdout : 42 : Int
+
+An annotated polymorphic argument rejects a fixed result
+typename Identity = modal [] (forall a. (a) -> a); sig useId : modal [] ((Identity) -> Int) fun useId(f) { f(42) } useId((fun(x) { 42 } : Identity))
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+An annotated SpawnWait result retains polymorphic binders
+typename Identity = modal [] (forall a. (a) -> a); sig useId : modal [] ((Identity) -> Int) fun useId(f) { f(42) } useId((spawnWait { fun(x) { x } } : Identity))
+args : --fresco
+stdout : 42 : Int
+
+An annotated modal argument cannot conceal an unavailable effect
+effect E { Op : () => Int; } typename Action = modal [] (() -> Int); sig use : modal [] ((Action) -> Int) fun use(f) { f() } handle <E> (use((fun() { do Op } : Action))) { case x -> x case <Op => k> -> k(42) }
+args : --fresco --enable-handlers
+exit : 1
+stderr : @.*Type error:.*
