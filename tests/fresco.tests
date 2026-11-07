@@ -95,6 +95,58 @@ Repeated update labels evaluate every replacement and keep the first
 args : --fresco
 stdout : ab(x = 42) : (x:Int)
 
+Regex ranges and repetition execute
+"42" =~ /^[0-9]+$/
+args : --fresco
+stdout : true : Bool
+
+Regex interpolation quotes metacharacters
+var part = "a.b"; "a.b" =~ /^{part}$/
+args : --fresco
+stdout : true : Bool
+
+Regex groups return captured strings
+"ab" =~ /(a)(b)/l
+args : --fresco
+stdout : ["ab", "a", "b"] : List String
+
+Regex replacement executes
+"aba" =~ s/a/x/
+args : --fresco
+stdout : "xba" : String
+
+Regex splices require strings
+var part = 42; "42" =~ /{part}/
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+Regex sequence splices retain Links evaluation order
+"ab" =~ /{print("a"); "a"}{print("b"); "b"}/
+args : --fresco
+stdout : batrue : Bool
+
+Regex alternatives retain left-to-right splice evaluation
+"a" =~ /({print("a"); "a"}|{print("b"); "b"})/
+args : --fresco
+stdout : abtrue : Bool
+
+Regex pattern splices run before replacement expressions
+"a" =~ s/{print("p"); "a"}/{print("r"); "x"}/
+args : --fresco
+stdout : pr"x" : String
+
+Regex replacement retains the existing single replacement behaviour
+"aba" =~ s/a/x/g
+args : --fresco
+stdout : "xba" : String
+
+The unavailable native regex flag reports a source error
+"a" =~ /a/n
+args : --fresco
+exit : 1
+stderr : @.*native regex flag.*
+
 List cons executes
 1 :: [2]
 args : --fresco

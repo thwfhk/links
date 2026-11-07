@@ -688,6 +688,116 @@ let primitive_suite = "primitive environment" >::: [
       "dateYear(intToDate(0))"));
 ]
 
+let regex_suite = "regex syntax" >::: [
+  "empty and anchored regexes execute" >:: (fun _ ->
+    List.iter (fun source -> execution (`Bool true) source |> expect_type Types.bool_type)
+      [ {|"" =~ //|}; {|"anything" =~ //|}; {|"ab42!" =~ /^ab[0-9]+.$/|} ];
+    execution (`Bool false) {|"prefix42" =~ /42/|} |> expect_type Types.bool_type);
+
+  "nested groups alternatives and repetitions execute" >:: (fun _ ->
+    execution (`Bool true) {|"abab42" =~ /^((ab|cd)+)[0-9]?[0-9]*$/|}
+      |> expect_type Types.bool_type;
+    execution (`Bool false) {|"abX" =~ /^(ab|cd)+$/|} |> expect_type Types.bool_type);
+
+  "quoted metacharacters execute" >:: (fun _ ->
+    execution (`Bool true) {|".*+?$" =~ /^\.\*\+\?\$$/|} |> expect_type Types.bool_type);
+
+  "spliced strings quote regex metacharacters" >:: (fun _ ->
+    execution (`Bool true) {|var text = ".*"; ".*" =~ /^{text}$/|} |> expect_type Types.bool_type;
+    execution (`Bool false) {|"ab" =~ /^{".*"}$/|} |> expect_type Types.bool_type);
+
+  "nested regexes inside splices execute" >:: (fun _ ->
+    execution (`Bool true) {|"ab" =~ /{if ("x" =~ /x/) "a" else "z"}b/|}
+      |> expect_type Types.bool_type);
+
+  "captured groups and failed captures execute" >:: (fun _ ->
+    execution (`List [`String "ab42"; `String "ab"; `String "42"])
+      {|"ab42" =~ /^(ab|cd)([0-9]+)$/l|} |> list_element |> expect_type Types.string_type;
+    execution (`List []) {|"no" =~ /([0-9]+)/l|} |> ignore);
+
+  "literal empty and spliced replacements execute" >:: (fun _ ->
+    List.iter (fun source -> execution (`String "x42y") source |> expect_type Types.string_type)
+      [ {|"xaby" =~ s/ab/42/|}; {|"xaby" =~ s/ab/{intToString(42)}/|} ];
+    execution (`String "xy") {|"xaby" =~ s/ab//|} |> expect_type Types.string_type);
+
+  "replacement templates retain captured groups" >:: (fun _ ->
+    execution (`String "42ab") {|"ab42" =~ s/(ab)([0-9]+)/\2\1/|}
+      |> expect_type Types.string_type);
+
+  "global flags retain current matching and first replacement behaviour" >:: (fun _ ->
+    execution (`Bool true) {|"ab" =~ /ab/g|} |> expect_type Types.bool_type;
+    execution (`List [`String "ab"; `String "a"])
+      {|"ab" =~ /(a)b/lg|} |> ignore;
+    execution (`String "xbab") {|"abab" =~ s/a/x/g|} |> expect_type Types.string_type;
+    execution (`String "42") {|"ab" =~ s/ab/42/l|} |> expect_type Types.string_type);
+
+  "regex operands splices and replacements require strings" >:: (fun _ ->
+    List.iter (fun source -> reject (fun () -> FrescoFrontend.check_string (FrescoFrontend.empty ()) source))
+      [ {|42 =~ /42/|}; {|"42" =~ /{42}/|}; {|"42" =~ s/42/{42}/|};
+        {|"42" =~ /{Simply("42")}/|}; {|"42" =~ s/42/{true}/|} ]);
+
+  "splice errors retain their source line" >:: (fun _ ->
+    let source = "\"42\" =~ /{\n  42\n}/" in
+    match FrescoFrontend.check_string (FrescoFrontend.empty ()) source with
+    | _ -> assert_failure "Expected a source type error"
+    | exception Errors.Type_error (position,_) ->
+       assert_equal 2 (SourceCode.Position.start position).Lexing.pos_lnum);
+
+  "splices check ordinary linear usage" >:: (fun _ ->
+    execution (`Bool true) {|{ var piece = linfun() { "ab" }; "ab" =~ /{piece()}/ }|}
+      |> expect_type Types.bool_type;
+    reject (fun () -> FrescoFrontend.check_string (FrescoFrontend.empty ())
+      {|{ var piece = linfun() { "ab" }; "abab" =~ /{piece()}{piece()}/ }|}));
+
+  "matching flags determine the result type" >:: (fun _ ->
+    List.iter (fun source -> reject (fun () -> FrescoFrontend.check_string (FrescoFrontend.empty ()) source))
+      [ {|("42" =~ /42/) : Int|}; {|("42" =~ /42/l) : Bool|};
+        {|("42" =~ s/42/x/) : Bool|} ]);
+
+  "native flags have positioned errors" >:: (fun _ ->
+    List.iter (fun source -> reject ~message:"native regex flag n" (fun () ->
+      FrescoFrontend.check_string (FrescoFrontend.empty ()) source))
+      [ {|"ab" =~ /ab/n|}; {|"ab" =~ /ab/ln|}; {|"ab" =~ s/ab/x/n|} ]);
+
+  "literal matching executes in pure global functions" >:: (fun _ ->
+    execution (`Bool true) {|
+      sig matches : (String) -> Bool
+      fun matches(text) { text =~ /^ab$/ }
+      matches("ab")
+    |} |> expect_type Types.bool_type);
+
+  "list matching and replacement require Wild" >:: (fun _ ->
+    List.iter (fun source -> reject (fun () -> FrescoFrontend.check_string (FrescoFrontend.empty ()) source))
+      [ {|sig captures : (String) -> List String
+          fun captures(text) { text =~ /(ab)/l } captures("ab")|};
+        {|sig replace : (String) -> String
+          fun replace(text) { text =~ s/ab/42/ } replace("ab")|} ];
+    execution (`String "42") {|
+      sig replace : modal [Wild] ((String) -> String)
+      fun replace(text) { text =~ s/ab/42/ }
+      replace("ab")
+    |} |> expect_type Types.string_type;
+    execution (`List [`String "ab"; `String "ab"]) {|
+      sig captures : modal [Wild] ((String) -> List String)
+      fun captures(text) { text =~ /(ab)/l }
+      captures("ab")
+    |} |> ignore);
+
+  "splices check effects in the ambient context" >:: (fun _ ->
+    ignore (FrescoFrontend.check_string (FrescoFrontend.empty ()) {|
+      effect Piece { Part : () => String; }
+      sig matches : modal [Piece] ((String) -> Bool)
+      fun matches(text) { text =~ /{do Part}/ }
+      42
+    |});
+    reject (fun () -> FrescoFrontend.check_string (FrescoFrontend.empty ()) {|
+      effect Piece { Part : () => String; }
+      sig matches : (String) -> Bool
+      fun matches(text) { text =~ /{do Part}/ }
+      42
+    |}));
+]
+
 let sections_patterns_updates_suite = "sections patterns and updates" >::: [
   "projection sections instantiate at separate types" >:: (fun _ ->
     execution (Value.box [`Int 42; `Bool true]) {|
@@ -901,4 +1011,4 @@ let ir_suite =
       reject_coercion (forall (fun a -> arrow a int)) (forall (fun a -> arrow a a)));
   ]
 
-let suite = "Fresco source" >::: [reference_suite; source_suite; primitive_suite; sections_patterns_updates_suite; ir_suite]
+let suite = "Fresco source" >::: [reference_suite; source_suite; primitive_suite; regex_suite; sections_patterns_updates_suite; ir_suite]

@@ -620,6 +620,27 @@ to be unlimited. A guarded record update must check replacement access without
 allowing an immediately evaluated expression to invoke effects absent from
 the caller's ambient context.
 
+### D7 regex syntax
+
+Lower regex syntax to positioned constructors of the checked `Regex` and
+`Repeat` types. Splices and replacement expressions have type `String` and
+are evaluated once. Use the existing `tilde`, `ltilde` and `stilde` primitives.
+Ordinary matching has no effect requirement. Capture-list matching and
+replacement require `Wild`, following their primitive signatures. The legacy
+operator typing rule omitted that requirement before desugaring to those
+primitives; Fresco applies the same signature to direct and syntax-based calls.
+
+Preserve the observed legacy splice order: sequence splices run right to left,
+alternative branches run left to right, and pattern splices run before the
+replacement expression. For example,
+`"ab" =~ /{print("a"); "a"}{print("b"); "b"}/` prints `ba` before its result.
+The `g` flag retains the existing single-replacement behaviour. These are
+existing regex behaviours, separate from the effect migration.
+
+The `n` flag has no runtime primitive implementation. Legacy typing aborts
+with an assertion; Fresco reports a positioned source error. No native regex
+runtime is added.
+
 ### D5/D6 source and runtime boundary
 
 Use an opt-in `--fresco` entry point with a small primitive environment while

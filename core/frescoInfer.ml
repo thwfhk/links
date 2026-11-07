@@ -613,12 +613,22 @@ and infer_node support s mode source =
        let domains = tuple_fields s pos (List.length args) domain in
        let s,args = infer_pairs support s args domains in
        s,term pos result (Apply (fn,args))
+  | G.Regex regex -> infer_term support s mode (FrescoRegex.lower pos regex)
   | G.InfixAppl ((_,op),left,right) ->
      (match op with
       | Operators.BinaryOp.And -> infer_term support s mode (WithPos.make ~pos
           (G.Conditional (left,right,WithPos.make ~pos (G.Constant (Constant.Bool false)))))
       | Operators.BinaryOp.Or -> infer_term support s mode (WithPos.make ~pos
           (G.Conditional (left,WithPos.make ~pos (G.Constant (Constant.Bool true)),right)))
+      | Operators.BinaryOp.RegexMatch flags ->
+         if List.mem Operators.RegexNative flags then
+           error (WithPos.pos right) "The native regex flag n has no runtime implementation";
+         let name = match WithPos.node right with
+           | G.Regex (G.Replace _) -> "stilde"
+           | G.Regex _ -> if List.mem Operators.RegexList flags then "ltilde" else "tilde"
+           | _ -> error (WithPos.pos right) "The right operand of regex matching must be regex syntax" in
+         infer_term support s mode (WithPos.make ~pos
+           (G.FnAppl (WithPos.make ~pos (G.Var name),[left;right])))
       | _ -> let name = match op with
           | Operators.BinaryOp.Cons -> "Cons"
           | Operators.BinaryOp.Name "++" -> "Concat"

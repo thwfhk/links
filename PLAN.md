@@ -79,7 +79,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D5 | Pure source inference, opt-in frontend, shared IR/backend execution and persistent state | `4f12cd67` |
 | D6 | Modal source inference, complete handlers, inferred effect arguments and scoped IR/backend support | `92d48828` |
 | D7a | Contextual first-order primitives and recursive primitive aliases | `1f7ff34e` |
-| D7b1 | Sections, negative patterns and record updates | This commit |
+| D7b1 | Sections, negative patterns and record updates | `4fad3532` |
+| D7b2a | Regex syntax, splices, matching and replacement | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -145,7 +146,7 @@ implementation of the next. The main agent owns integration and these records.
 | D8a: backend execution | Actual interpreter and JavaScript deep-handler execution covers nesting, repeated identities, parameters and closures; interpreter shallow execution and JavaScript rejection remain checked |
 | D8b: removal and final review | In-scope legacy inference routes are removed; recursive consumers and exports are reviewed; migration guide and final selected suites pass |
 
-D7a (`1f7ff34e`) and D7b1 are complete. D7b2a is next. Later boundaries may be split further when a dependency needs
+D7a (`1f7ff34e`), D7b1 (`4fad3532`) and D7b2a are complete. D7b2b is next. Later boundaries may be split further when a dependency needs
 its own review and checks.
 
 ## Recorded decisions
@@ -161,44 +162,37 @@ and design:
 
 ## Latest task and verification
 
-7 November 2026, D7b1, base `1f7ff34e`: projection/minus/frozen sections,
-negative patterns and record updates are complete. Negative pattern types
-survive scope exit and nested pattern lowering. Guarded updates preserve modal
-access, immediate effects, ordinary linearity and evaluation order.
-[The design](doc/modal-effects-design.md#d7-sections-patterns-and-record-updates)
-records the implementation choices.
+7 November 2026, D7b2a, base `4fad3532`: regex syntax, splices, matching,
+captures and replacement are complete. Existing splice order and single
+replacement behaviour are preserved; the unavailable native flag produces a
+positioned source error. [The design](doc/modal-effects-design.md#d7-regex-syntax)
+records those choices and primitive effect requirements.
 
-Independent review resolved narrowed `as` bindings, nested record/list and
-record-rest refinements, inner pattern annotations, and handler pattern
-lowering. No implementation findings remain. All writers finished and the
-combined diff was inspected before integrated checks. The seven source/test
-hashes in `/tmp/links-d7b1-verification/source.sha256` still match after testing.
-Logs below are in that directory; documentation was updated afterwards.
+Independent review found no unresolved issues after correcting the generated
+String annotation. All writers finished and the combined diff was inspected
+before integrated checks. The five source/test hashes in
+`/tmp/links-d7b2a-verification/source.sha256` still match after testing. Logs below
+are in that directory; documentation was updated afterwards.
 
 | Command | Result | Log |
 |---|---|---|
 | `make no-db` | Passed | `build.log` |
-| `opam exec -- ./run-tests nodb-unit-tests` | 1,219 passed | `unit.log` |
-| `./test-harness tests/fresco.tests` | 22 passed | `fresco.log` |
+| `opam exec -- ./run-tests nodb-unit-tests` | 1,236 passed | `unit.log` |
+| `./test-harness tests/fresco.tests` | 32 passed | `fresco.log` |
 | `./test-harness tests/fresco_typecheck.tests` | 2 passed | `fresco_typecheck.log` |
 | `./test-harness tests/fresco_modal.tests` | 14 passed | `fresco_modal.log` |
 | `./test-harness tests/handlers.tests` | 95 passed | `handlers.log` |
 | `./test-harness tests/effect_sugar.tests` | 44 passed | `effect_sugar.log` |
 | `./test-harness tests/typed_ir.tests` | 26 passed | `typed_ir.log` |
-| `./test-harness tests/records.tests` | 30 passed | `records.log` |
-| `./test-harness tests/patterns.tests` | 34 passed; 2 ignored | `patterns.log` |
-| `./test-harness tests/collections.tests` | 37 passed | `collections.log` |
-| `./test-harness tests/bindings.tests` | 25 passed | `bindings.log` |
-| `./test-harness tests/polymorphism.tests` | 55 passed | `polymorphism.log` |
-| `./test-harness tests/typecheck_examples.tests` | 167 passed; 15 ignored | `typecheck_examples.log` |
+| `./test-harness tests/regex.tests` | 28 passed | `regex.log` |
 | `make rule-check` | Passed; GNU-find tab check skipped, formatter disabled | `rule-check.log` |
 | Manual source tab/trailing-whitespace check; `git diff --check` | Passed | `diff-check.log` |
 
-Focused source checking/execution passed 125 cases in
-`/tmp/links-d7b1-source-final.log`. Review probes and pre-fix IR failures are in
-`/tmp/links-d7b1-review-probes.log`: a narrowed negative-pattern binder was
-assigned the original wider scrutinee. D7a results remain in commit `1f7ff34e`
-and `/tmp/links-d7a-verification`.
+Focused source checking/execution passed 142 cases in
+`/tmp/links-d7b2a-focused-source-final.log`. Legacy behaviour probes are in
+`/tmp/links-d7b2a-legacy-sequence.log` and
+`/tmp/links-d7b2a-legacy-native.log`. Earlier milestone results remain in Git
+history and their `/tmp/links-d7*-verification` directories.
 
 ## Confirmed D6 decisions
 
@@ -209,6 +203,6 @@ Documentation-only update: text and whitespace checked.
 
 ## Next action
 
-Implement D7b2a regex syntax. Independently review, test and commit before
-D7b2b ranges and comprehensions. Continue through the remaining milestones
+Implement D7b2b ranges and comprehensions. Independently review, test and
+commit before D7b3 continuations. Continue through the remaining milestones
 without a pause. Both D6 choices are confirmed.
