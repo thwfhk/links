@@ -1043,9 +1043,8 @@ The tree deletion example's existing two-child branch duplicates the left
 subtree. Preserve the recorded `remove2` result during type migration.
 Switch-function syntax already passes through `DesugarSwitchFuns` before
 Fresco inference. Its internal unsupported-node guard does not establish a
-source-language gap. Empty-variant elimination is a separate source gap:
-`switch(x) {}` with `x:Zero` currently rejects. Check its ordinary usage and
-result rules against legacy behaviour before migrating extensible cases.
+source-language gap. Empty switches need their separate rule below before
+migrating extensible cases.
 
 Keep XML/formlet/page/DOM/routes, MVU modules, socket examples and explicit
 foreign/location dependencies with the deferred features. Keep database-facing
@@ -1064,6 +1063,25 @@ the audit and controls are in `/tmp/links-d7d3b-state-contract.md` and
 `/tmp/links-d7d3b-state-controls.log`. The monadic-reflection example defines
 its own state helpers and separately depends on general independent-effect
 interfaces.
+
+### D7 empty switches
+
+Preserve the legacy partial-match behaviour of an empty switch. Its scrutinee
+may be an empty variant, an inhabited type or an unknown type. Legacy checking
+adds no scrutinee constraint when there are no cases; actual inhabited and
+integer executions fail through `Wrong`. Ordinary partial Fresco switches
+already behave the same way without an additional `Wild` requirement.
+Restricting empty switches to empty variants would narrow ordinary Links
+behaviour. The legacy controls are in `/tmp/links-d7d3d0-legacy-*.log`.
+
+Use the supplied result mode, or retain an unknown result type when inferring.
+Preserve quantified and modal introduction rules and ensure full checked terms
+contain no ghosts. Keep conservative ordinary usage: an unrelated unused
+endpoint remains an error, while consuming it before the switch is accepted.
+The existing lowering evaluates the scrutinee through a let binding and compiles
+zero cases to `Wrong` at the result type. No backend change is required. An abort
+operation returning the empty variant provides a bounded execution check that
+handles the operation before the match failure is reached.
 
 ### D7 frontend integration plan
 

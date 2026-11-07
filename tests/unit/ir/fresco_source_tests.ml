@@ -2227,4 +2227,64 @@ let recursive_value_suite = "recursive value ordinary kinds" >::: [
        "fun(t:Tree(End)) { (t,t) }"]);
 ]
 
-let suite = "Fresco source" >::: [reference_suite; source_suite; callback_sequence_suite; primitive_suite; regex_suite; continuations_suite; comprehensions_suite; sections_patterns_updates_suite; collection_suite; foundation_suite; remaining_core_suite; split_end_suite; session_callback_suite; ir_suite; recursive_value_suite]
+let empty_switch_suite = "empty switches" >::: [
+  "inferred scrutinee and result types remain independent" >:: (fun _ ->
+    let argument,result = unary (infer "fun(x) { switch(x) {} }") in
+    assert_bool "Independent unknowns" (variable `Flexible argument <> variable `Flexible result));
+
+  "empty switches retain supplied result types and arbitrary scrutinees" >:: (fun _ ->
+    List.iter (fun source -> execution (`Int 42) source |> expect_type Types.int_type)
+      ["typename Zero=[||]; sig absurd:(Zero)->Int fun absurd(x){switch(x){}} 42";
+       "sig absurd:forall a::Any,b::Any.(a)->b fun absurd(x){switch(x){}} 42";
+       "sig absurd:forall r::Row(Any).([|r|])->Int fun absurd(x){switch(x){}} 42";
+       "sig absurd:([||])->(forall a.(a)->a) fun absurd(x){switch(x){}} 42";
+       "sig absurd:([||])->modal [] (() -> Int) fun absurd(x){switch(x){}} 42";
+       "sig absurd:([||])->(() -@ Int) fun absurd(x){switch(x){}} 42";
+       "sig absurd:([||])->End fun absurd(x){switch(x){}} 42";
+       "sig absurd:(Int)->Int fun absurd(x){switch(x){}} 42"]);
+
+  "applied empty switches materialise lambda and polymorphic skeletons" >:: (fun _ ->
+    let prefix = {|
+      typename Zero=[||];
+      sig id : forall a. (a) -> a fun id(x) { x }
+    |} in
+    List.iter (fun body -> execution (`Int 42)
+      (prefix ^ "sig impossible:(Zero)->Int fun impossible(z) {" ^ body ^
+       "} 42") |> expect_type Types.int_type)
+      ["(switch(z) {})(fun(x) { x })";
+       "(switch(z) {})(~id)";
+       "(switch(z) {})(linfun(x) { x })";
+       "(switch(z) {})(fun(x) { x })(~id)";
+       "((switch(z) {}) : (() -@ Int))()"]);
+
+  "an unreachable empty switch preserves a linear branch result" >:: (fun _ ->
+    execution (Value.box []) {|
+      var ap=(new() : AP(End));
+      var peer=spawn { close(accept(ap)) };
+      close(if (true) request(ap) else switch(42) {})
+    |} |> expect_type Types.unit_type);
+
+  "empty switches preserve scrutinee effects and ordinary usage" >:: (fun _ ->
+    execution (`Int 42) {|
+      sig consume : modal [Wild] ((End,[||]) -> Int)
+      fun consume(c,z) { switch({close(c); z}) {} }
+      sig fail : (End) -> Int fun fail(c) { switch(c) {} }
+      42
+    |} |> expect_type Types.int_type;
+    reject ~message:"usage requirement" (fun () -> infer "fun(c:End,z:[||]) { switch(z) {} }");
+    reject (fun () -> infer {|
+      effect E { Read : () => Int; }
+      sig fail : () -> modal [E] (() -> Int)
+      fun fail() { switch(do Read) {} }
+      fail
+    |}));
+
+  "reached empty switches retain ordinary match failure" >:: (fun _ ->
+    List.iter (fun source ->
+      assert_raises Evalir.Exceptions.Wrong (fun () ->
+        with_checked_ir (fun () -> ignore
+          (FrescoFrontend.run_string (FrescoFrontend.empty ()) source))))
+      ["switch(42) {}"; "switch(A) {}"]);
+]
+
+let suite = "Fresco source" >::: [reference_suite; source_suite; callback_sequence_suite; primitive_suite; regex_suite; continuations_suite; comprehensions_suite; sections_patterns_updates_suite; collection_suite; foundation_suite; remaining_core_suite; split_end_suite; session_callback_suite; ir_suite; recursive_value_suite; empty_switch_suite]

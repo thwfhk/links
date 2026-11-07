@@ -368,3 +368,114 @@ effect E { Op : () => Int; } typename Action = modal [] (() -> Int); sig use : m
 args : --fresco --enable-handlers
 exit : 1
 stderr : @.*Type error:.*
+
+Empty-variant elimination compiles without evaluating its unreachable body
+typename Zero=[||]; sig absurd:(Zero)->Int fun absurd(x) { switch(x) {} } 42
+args : --fresco
+stdout : 42 : Int
+
+Empty switches keep unknown scrutinee types and arbitrary results
+sig absurd:forall a::Any,b::Any.(a)->b fun absurd(x) { switch(x) {} } 42
+args : --fresco
+stdout : 42 : Int
+
+Empty switches accept open variant rows
+sig absurd:forall r::Row(Any).([|r|])->Int fun absurd(x) { switch(x) {} } 42
+args : --fresco
+stdout : 42 : Int
+
+Empty switches retain polymorphic results
+sig absurd:([||])->(forall a.(a)->a) fun absurd(x) { switch(x) {} } 42
+args : --fresco
+stdout : 42 : Int
+
+Empty switches retain modal results
+sig absurd:([||])->modal [] (() -> Int) fun absurd(x) { switch(x) {} } 42
+args : --fresco
+stdout : 42 : Int
+
+Empty switches retain linear function results
+sig absurd:([||])->(() -@ Int) fun absurd(x) { switch(x) {} } 42
+args : --fresco
+stdout : 42 : Int
+
+Empty switches resolve a module-qualified Zero alias
+open import FrescoPrelude; sig absurd:(FrescoPrelude.Zero)->Int fun absurd(x) { switch(x) {} } 42
+args : --fresco --path=lib/stdlib
+stdout : 42 : Int
+
+An aborting empty switch preserves scrutinee effect order
+effect Abort { Stop : () => [||]; } { print("a"); handle <Abort> (switch({print("b"); do Stop}) {}) { case x -> x case <Stop => k> -> print("c"); 42 } }
+args : --fresco --enable-handlers
+stdout : abc42 : Int
+
+An inferred empty-variant scrutinee executes through its handler
+typename Zero=[||]; effect Abort { Stop : () => Zero; } sig noValue:modal [Abort] (() -> Zero) fun noValue() { do Stop } handle <Abort> (switch(noValue()) {}) { case x -> x case <Stop => k> -> 42 }
+args : --fresco --enable-handlers
+stdout : 42 : Int
+
+Applied empty switches fill lambda argument skeletons
+effect Abort { Stop : () => [||]; } handle <Abort> ((switch(do Stop) {})(fun(x) { x })) { case x -> x case <Stop => k> -> 42 }
+args : --fresco --enable-handlers
+stdout : 42 : Int
+
+Applied empty switches retain supplied polymorphic argument types
+effect Abort { Stop : () => [||]; } sig id:forall a.(a)->a fun id(x) { x } handle <Abort> ((switch(do Stop) {})(~id)) { case x -> x case <Stop => k> -> 42 }
+args : --fresco --enable-handlers
+stdout : 42 : Int
+
+Applied empty switches fill linear lambda argument skeletons
+effect Abort { Stop : () => [||]; } handle <Abort> ((switch(do Stop) {})(linfun(x) { x })) { case x -> x case <Stop => k> -> 42 }
+args : --fresco --enable-handlers
+stdout : 42 : Int
+
+Chained empty switches fill both argument skeletons
+effect Abort { Stop : () => [||]; } sig id:forall a.(a)->a fun id(x) { x } handle <Abort> ((switch(do Stop) {})(fun(x) { x })(~id)) { case x -> x case <Stop => k> -> 42 }
+args : --fresco --enable-handlers
+stdout : 42 : Int
+
+An empty switch can provide an ascribed linear function shape
+effect Abort { Stop : () => [||]; } handle <Abort> (((switch(do Stop) {}) : (() -@ Int))()) { case x -> x case <Stop => k> -> 42 }
+args : --fresco --enable-handlers
+stdout : 42 : Int
+
+An empty switch cannot hide a scrutinee effect in its result modality
+effect E { Read : () => Int; } sig fail:()->modal [E] (() -> Int) fun fail() { switch(do Read) {} } ()
+args : --fresco --enable-handlers
+exit : 1
+stderr : @.*Type error:.*
+
+An empty switch retains conservative unused linear resource checks
+fun(c:End,z:[||]) { switch(z) {} }
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*usage requirement.*
+
+An empty switch may consume a linear scrutinee without extra effects
+sig fail:(End)->Int fun fail(c) { switch(c) {} } 42
+args : --fresco
+stdout : 42 : Int
+
+Reached empty switches on integers retain match failure
+switch(42) {}
+args : --fresco
+exit : 1
+stderr : @.*Evalir.Exceptions.Wrong.*
+
+Reached empty switches on inhabited variants retain match failure
+switch(A) {}
+args : --fresco
+exit : 1
+stderr : @.*Evalir.Exceptions.Wrong.*
+
+An empty switch evaluates its scrutinee once before failing
+switch({print("s"); 42}) {}
+args : --fresco
+stdout : s
+exit : 1
+stderr : @.*Evalir.Exceptions.Wrong.*
+
+An aborting empty switch preserves a linear endpoint result
+effect Abort { Stop : () => [||]; } var ap=(new() : AP(End)); var peer=spawn { close(accept(ap)) }; close(handle <Abort> ((switch(do Stop) {}) : End) { case c -> c case <Stop => k> -> request(ap) })
+args : --fresco --enable-handlers
+stdout : () : ()

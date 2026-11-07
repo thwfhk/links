@@ -327,6 +327,12 @@ branch result types must satisfy Fresco's consistency rules. Existing ordinary
 linearity and session restrictions remain enforced. A modal type inherits its
 payload's ordinary linearity: `Abs` does not imply `Unl`.
 
+An empty switch evaluates its scrutinee and has no successful branch. Its
+scrutinee may have any type, including an empty variant. Its result follows a
+supplied type; otherwise inference retains an unknown result type without
+implicit generalisation. Evaluating the switch reports match failure, as with
+other partial switches. Scrutinee effects and ordinary usage checks remain.
+
 Retain Links' current handler behaviour with control-flow linearity disabled.
 Resumptions remain reusable. The existing interaction that can duplicate or
 discard a continuation holding linear values is deferred; this implementation

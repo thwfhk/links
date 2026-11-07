@@ -1224,7 +1224,10 @@ and infer_switch support s mode pos scrutinee cases =
   let original = s in
   let rec branches s previous usages = function
     | [] -> (match previous with
-       | [] -> error pos "A switch requires a case"
+       | [] ->
+          let typ = C.skeleton_of_mode mode in
+          let s,typ = if support = C.Type then guess s pos typ else s,typ in
+          s,term pos typ (Switch (scrutinee,[]))
        | (_,e) :: rest ->
           let s,typ = List.fold_left (fun (s,t) (_,e) -> join_results s pos t e.typ) (s,e.typ) rest in
           let s = List.fold_left (fun s uses -> branch_usage support pos original uses s) s usages in

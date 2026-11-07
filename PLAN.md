@@ -108,7 +108,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D7c2e3b | Generic protocol examples and raw recursive runtime bindings | `8b27a80b` |
 | D7d3a | Remaining list, ASCII and date helpers | `27a0b58f` |
 | D7d3b | Ordinary helper interfaces and linear variant aliases | `23c0b7ba` |
-| D7d3c | Binary trees and parameter-dependent recursive value kinds | This commit |
+| D7d3c | Binary trees and parameter-dependent recursive value kinds | `48986cb7` |
+| D7d3d0 | Empty switches with mode-directed results and existing partial-match behaviour | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -190,7 +191,7 @@ user requested on 7 November 2026. The main agent owns integration and these rec
 | D7d3a: remaining list, character and date helpers | Existing ordering, callback effects and pure/Wild contracts pass source execution checks |
 | D7d3b: ordinary helper interfaces | Remaining list/Maybe helpers, aliases and composition interfaces have explicit contracts and source checks |
 | D7d3c: binary trees | Comparator and binary-tree modules migrate; existing operations and contextual callbacks execute |
-| D7d3d0: empty-variant elimination | Empty switches on an empty variant check/lower; inhabited scrutinees reject |
+| D7d3d0: empty switches | Empty-variant uses and legacy partial-match behaviour check/lower with preserved result and usage rules |
 | D7d3d: ordinary examples and switch functions | Polymorphic, recursive and open-variant examples execute; named/anonymous switch functions retain their checks |
 | D7d3e: remaining ordinary actor examples | Buffered channels and console helpers retain bounded behaviour and callback contracts |
 | D7e1: checked preparation | Separate checking/lowering from evaluation; contextual lowering rechecks validate annotations and result types |
@@ -203,7 +204,7 @@ user requested on 7 November 2026. The main agent owns integration and these rec
 
 D7a (`1f7ff34e`), D7b1 (`4fad3532`) and D7b2a (`db0d3a75`) are complete.
 D7b2b (`72e47dbc`) and D7b3 (`f09237bd`) are complete. D7b4a0 (`8cfe88a3`) is complete. D7b4a collection migration (`0b2c0d3f`) is complete. D7b4b (`efc1bca2`) is complete. D7b4c (`4e009da6`) is complete. D7c1a core actors (`ef94a794`) and D7c1b actor variants are complete.
-D7c1b1 polymorphic export is complete. D7c1c actor migration is complete. D7c2a session primitives are complete. D7c2b selection/offer is complete. D7c2c1 split-end helpers are complete. D7c2c2 callback helpers are complete. D7c2d CP is complete. D7c2e1 ordinary session regression migration is complete. D7c2e2 ordinary examples are complete. D7c2e3a recursive/encoded protocol examples are complete. D7c2e3b remaining generic protocols are complete. D7d3a ordinary list, character and date helpers are complete. D7d3b ordinary helper interfaces are complete. D7d3c binary trees are complete. D7d3d0 empty-variant elimination is next. Later boundaries may be split further when a dependency needs
+D7c1b1 polymorphic export is complete. D7c1c actor migration is complete. D7c2a session primitives are complete. D7c2b selection/offer is complete. D7c2c1 split-end helpers are complete. D7c2c2 callback helpers are complete. D7c2d CP is complete. D7c2e1 ordinary session regression migration is complete. D7c2e2 ordinary examples are complete. D7c2e3a recursive/encoded protocol examples are complete. D7c2e3b remaining generic protocols are complete. D7d3a ordinary list, character and date helpers are complete. D7d3b ordinary helper interfaces are complete. D7d3c binary trees are complete. D7d3d0 empty switches is complete. Later boundaries may be split further when a dependency needs
 its own review and checks.
 
 ### Future TODOs
@@ -234,48 +235,35 @@ and design:
 - [D4 ghost kinds and instantiation checks](doc/modal-effects-design.md#subtyping-and-instantiation-information).
 - [D4k signature binders and ordinary row arguments](doc/modal-effects-design.md#contextual-annotation-and-declaration-elaboration).
 
-D7d3b alias checks exposed an ordinary source gap: `switch(x) {}` rejects even
-when `x:Zero`. D7d3d0 must resolve this before the extensible-case example;
-`/tmp/links-d7d3b-focused-initial.log` retains the reproducer.
-
 ## Latest task and verification
 
-7 November 2026, D7d3c, base `23c0b7ba`: binary-tree and comparator modules
-use explicit contextual signatures. The five existing examples retain their
-results and feature settings; 23 new cases cover polymorphism, callback effects,
-ordinary usage and actual endpoint payloads. The
-[design](doc/modal-effects-design.md#d7-ordinary-library-inventory) records the
-specialised `leftmost_child` callback contract for review.
+7 November 2026, D7d3d0, base `48986cb7`: empty switches infer and check
+mode-directed results, retaining scrutinee effects and ordinary usage rules.
+Existing lowering evaluates the scrutinee once and raises match failure.
+The [design](doc/modal-effects-design.md#d7-empty-switches) records the
+legacy comparison and supplied polymorphic, modal and linear result checks.
+Six unit groups and 21 CLI cases cover typing and actual execution.
 
-Recursive application `Unl` checks now inspect declaration bodies using actual
-argument summaries. Declaration-wide metadata remains stable; the selected
-consumer audit found no required runtime changes. Direct tests cover concrete,
-phantom, mutual and changing arguments, fixed linear fields and inferred payload
-requirements. Review: `/tmp/links-d7d3c-review-summary.log`; consumer audit:
-`/tmp/links-d7d3c-linearity-consumers.md`.
-
-An initial focused selector skipped four new source tests. The corrected
-selection passed all four independently and 147 tests together. Full integration
-also found a stale unit assertion rejecting linear Maybe payload types. The
-reviewed unit-only correction separates alias acceptance from the seven helper
-rejections. Initial unit output, source hashes and results retain `-initial`
-suffixes. Regression and compiler sources were unchanged by that correction.
+Independent review passed six selected unit groups and ten CLI checks with no
+remaining findings: `/tmp/links-d7d3d0-review-summary.log`. The initial unit
+method required handlers disabled by the unit process; the corrected units
+check pure supplied modes, with actual handler execution in fresh CLI cases.
 
 All writers finished, review fixes were complete and the combined diff was
-inspected before integrated checks. The build, 1,467 unit tests and 898 selected
+inspected before integrated checks. The build, 1,473 unit tests and 919 selected
 regression cases passed; 15 existing example cases remain ignored. Final source
-hashes match. Logs below are in `/tmp/links-d7d3c-verification`;
+hashes match. Logs below are in `/tmp/links-d7d3d0-verification`;
 `revision.txt` and `source.sha256` identify the tested sources. Documentation
 was updated afterwards.
 
 | Command | Result | Log |
 |---|---|---|
 | `make no-db` | Passed | `build.log` |
-| `opam exec -- ./run-tests nodb-unit-tests` | 1,467 passed after unit-only correction | `unit.log` |
+| `opam exec -- ./run-tests nodb-unit-tests` | 1,473 passed | `unit.log` |
 | `./test-harness tests/binaryTrees.tests` | 28 passed | `binaryTrees.log` |
 | `./test-harness tests/handlers.tests` | 95 passed | `handlers.log` |
 | `./test-harness tests/effect_sugar.tests` | 44 passed | `effect_sugar.log` |
-| `./test-harness tests/fresco.tests` | 70 passed | `fresco.log` |
+| `./test-harness tests/fresco.tests` | 91 passed | `fresco.log` |
 | `./test-harness tests/fresco_typecheck.tests` | 2 passed | `fresco_typecheck.log` |
 | `./test-harness tests/fresco_modal.tests` | 20 passed | `fresco_modal.log` |
 | `./test-harness tests/fresco_prelude.tests` | 86 passed | `fresco_prelude.log` |
@@ -304,7 +292,7 @@ Documentation-only update: text and whitespace checked.
 
 ## Next action
 
-Complete D7d3d0 empty-variant elimination and the remaining library/example milestones,
+Complete D7d3d ordinary examples and switch functions, then remaining library/example milestones,
 then D7e frontend/source
 migration, prioritising ordinary functional-language use. Keep socket
 examples, XML/forms, FFI/function locations and their dependent migrations
