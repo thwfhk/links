@@ -49,7 +49,8 @@ let same_constructor = Types.Abstype.compare
 
 let builtin_abstract constructor =
   if same_constructor constructor Types.list = 0 ||
-     same_constructor constructor Types.access_point = 0 then Arguments [0]
+     same_constructor constructor Types.access_point = 0 ||
+     same_constructor constructor Types.mailbox_process = 0 then Arguments [0]
   else if same_constructor constructor Types.mapentry = 0 then Arguments [0; 1]
   else if List.exists (fun other -> same_constructor constructor other = 0)
       [Types.event; Types.dom_node; Types.socket; Types.spawn_location] then

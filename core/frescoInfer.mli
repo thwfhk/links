@@ -5,6 +5,7 @@ type 'a term = { node : 'a node; typ : 'a; position : SourceCode.Position.t }
 and 'a node =
   | Constant of Constant.t
   | Variable of string
+  | Primitive of string
   | Lambda of DeclaredLinearity.t * (string * 'a) list * 'a term * 'a EffectRow.t
   | Apply of 'a term * 'a term list
   | Escape of string * 'a * 'a term * 'a EffectRow.t

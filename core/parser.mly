@@ -713,6 +713,7 @@ parenthesized_thing:
 | LPAREN exp WITH labeled_exps RPAREN                          { with_pos $loc (With ($2, $4))           }
 
 binop:
+| BANG                                                         { Section.Name "!" }
 | MINUS                                                        { Section.Minus          }
 | MINUSDOT                                                     { Section.FloatMinus     }
 | sigop                                                        { Section.Name (WithPos.node $1) }

@@ -85,6 +85,7 @@ module Policy : sig
 end
 
 val process      : Abstype.t
+val mailbox_process : Abstype.t
 val list         : Abstype.t
 val mapentry     : Abstype.t
 val event        : Abstype.t

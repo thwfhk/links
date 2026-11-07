@@ -9,3 +9,5 @@ val internal_bindings : FrescoElaborate.t -> (string * (Var.var * Types.typ)) li
 val names : string list
 (** Runtime primitives awaiting their own integration milestones. *)
 val deferred : (string * string list) list
+
+val signature : string -> string option

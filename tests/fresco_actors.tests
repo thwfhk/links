@@ -1,0 +1,131 @@
+---
+config: tests/fresco_actors.config
+---
+
+A spawned mailbox receives the sent type
+var p = spawn { print(intToString(recv()+1)) }; p ! 41
+args : --fresco
+stdout : 42() : ()
+
+A mismatched mailbox message rejects
+var p = spawn { print(intToString(recv()+1)) }; p ! "41"
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+Receive cases execute through the existing mailbox
+var p = spawn { receive { case Value(x) -> print(intToString(x)) } }; p ! Value(42)
+args : --fresco
+stdout : 42() : ()
+
+Nested spawned mailboxes have separate types
+var p = spawn { var outer = self(); var q = spawn { outer ! intToString(recv()) }; q ! 42; print(recv()) }; ()
+args : --fresco
+stdout : 42() : ()
+
+Recv requires a mailbox context
+recv()
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+Self requires a mailbox context
+self()
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+A caller's handler is unavailable in a spawned body
+effect E { Op : () => Int; } handle <E> (spawn { do Op }) { case p -> () case <Op => k> -> k(42) }
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+A spawned body can install its own handler
+effect E { Op : () => Int; } var p = spawn { print(intToString(handle <E> (do Op) { case x -> x case <Op => k> -> k(42) })) }; ()
+args : --fresco
+stdout : 42() : ()
+
+A spawned body accepts an absolute capture
+var f = (fun() { 42 } : modal [] (() -> Int)); var p = spawn { print(intToString(f())) }; ()
+args : --fresco
+stdout : 42() : ()
+
+A spawned body rejects a contextual capture
+var f = fun() { 42 }; var p = spawn { print(intToString(f())) }; ()
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+A spawned body consumes an absolute linear capture once
+var once = (linfun() { 42 } : modal [] (() -@ Int)); var p = spawn { print(intToString(once())) }; ()
+args : --fresco
+stdout : 42() : ()
+
+A spawned body cannot discard a linear result
+spawn { linfun() { 42 } }
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+A mailbox transfers an absolute linear message
+typename Message = modal [] (() -@ Int); var p = (spawn { var f = ~recv[Message](); print(intToString(f())) } : Process(Message)); p ! (linfun() { 42 } : Message)
+args : --fresco
+stdout : 42() : ()
+
+Receive syntax uses the mailbox when recv is shadowed
+fun recv() { 0 } var p = spawn { receive { case Value(x) -> print(intToString(x)) } }; p ! Value(42)
+args : --fresco
+stdout : 42() : ()
+
+Spawn uses its own location when here is shadowed
+fun here() { error("shadowed here called") } var p = spawn { print("child") }; ()
+args : --fresco
+stdout : child() : ()
+
+The send section executes
+var p = spawn { print(intToString(recv())) }; (!)(p,42)
+args : --fresco
+stdout : 42() : ()
+
+Actor syntax retains its built-in Process type under alias shadowing
+typename Process(a) = Int; var p = spawn { print(intToString(recv())) }; p ! 42
+args : --fresco
+stdout : 42() : ()
+
+A shadowed Process alias cannot make an integer a process identifier
+typename Process(a) = Int; 0 ! 42
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+Actor syntax retains its built-in Location type under alias shadowing
+typename Location = Int; var p = spawn { print("child") }; ()
+args : --fresco
+stdout : child() : ()
+
+A process identifier can transfer two linear messages
+typename Message = modal [] (() -@ Int); var p = (spawn { var f = ~recv[Message](); var g = ~recv[Message](); print(intToString(f()+g())) } : Process(Message)); { p ! (linfun() { 20 } : Message); p ! (linfun() { 22 } : Message) }
+args : --fresco
+stdout : 42() : ()
+
+Receive syntax retains a supplied modal mailbox type
+typename Message = modal [] (() -@ Int); var p = (spawn { receive { case f -> print(intToString(f())) } } : Process(Message)); p ! (linfun() { 42 } : Message)
+args : --fresco
+stdout : 42() : ()
+
+A signed caller supplies the spawned mailbox type
+typename Message = modal [] (() -@ Int); sig deliver : modal [Wild] ((Process(Message)) -> ()) fun deliver(p) { p ! (linfun() { 42 } : Message) } deliver(spawn { receive { case f -> print(intToString(f())) } })
+args : --fresco
+stdout : 42() : ()
+
+The full spawn check rejects an incompatible inherited mailbox type
+typename Message = modal [] (() -@ Int); sig deliver : modal [Wild] ((Process(Int)) -> ()) fun deliver(p) { p ! 42 } deliver(spawn { var f = ~recv[Message](); f() })
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+A mailbox transfers a frozen polymorphic message
+typename Message = modal [] (forall a. (a) -> a); var msg = (fun(x) { x } : Message); var p = (spawn { receive { case f -> print(intToString(f(42))) } } : Process(Message)); p ! ~msg
+args : --fresco
+stdout : 42() : ()

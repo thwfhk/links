@@ -391,6 +391,12 @@ unavailable to user-written handlers. Their operations retain built-in runtime
 behaviour. `Process(a)` carries the mailbox message type.
 Actor messaging requires absolute message types. Spawned bodies run in their
 own absolute effect context; the caller's handlers are not transferred.
+An annotation `Process(A)` on a spawn expression supplies its mailbox type
+`A`. Without that annotation the mailbox type is inferred as a monotype;
+polymorphic or modal mailbox types require a supplied type.
+`receive` checks its patterns directly against that mailbox type. The
+polymorphic primitives `recv` and `self` use the usual instantiation rules;
+supply explicit type arguments for polymorphic or modal mailbox types.
 
 Messages may have linear types as well as modal kind `Abs`. A spawned body is
 a linear function, allowing it to capture linear values. Its discarded result

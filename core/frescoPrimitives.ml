@@ -132,16 +132,21 @@ let signatures =
     wild ["crypt"] "(String) -> String";
     wild ["verify"] "(String, String) -> Bool";
     wild ["getArgs"] "() -> List String";
+    named ["Send"] "forall a::Type(Any,Any,Abs). modal [Wild] ((Process(a), a) -> ())";
+    named ["self"] "forall a::Type(Any,Any,Abs). modal [Wild, Receive(a)] (() -> Process(a))";
+    named ["recv"] "forall a::Type(Any,Any,Abs). modal [Wild, Receive(a)] (() -> a)";
+    wild ["here"; "there"] "() -> Location";
+    named ["spawn"] "forall a::Type(Any,Any,Abs), b. modal [Wild] ((modal [Wild, Receive(a)] (() -@ b)) -> Process(a))";
   ]
 
 let internal_signatures = [
   "$$hd", "forall a. (List a) -> a";
   "$$tl", "forall a. (List a) -> List a";
+  "spawnAt", "forall a::Type(Any,Any,Abs), b. modal [Wild] ((Location, modal [Wild, Receive(a)] (() -@ b)) -> Process(a))";
 ]
 
 let deferred = [
-  "actors", ["Send"; "self"; "here"; "there"; "haveMail"; "recv"; "spawn";
-    "spawnAt"; "spawnClient"; "spawnAngel"; "spawnAngelAt"; "spawnWait"; "spawnWait'"];
+  "actors", ["haveMail"; "spawnAt"; "spawnClient"; "spawnAngel"; "spawnAngelAt"; "spawnWait"; "spawnWait'"];
   "sessions", ["send"; "receive"; "link"; "new"; "newAP"; "newClientAP";
     "newServerAP"; "accept"; "request"; "cancel"; "close"];
   "callbacks", ["registerEventHandlers"; "unsafePickleCont"; "jsSetInterval";
@@ -178,3 +183,5 @@ let initialise elaboration =
 let bindings elaboration = List.map (read elaboration) signatures
 let internal_bindings elaboration = List.map (read elaboration) internal_signatures
 let names = List.map fst signatures
+
+let signature name = List.assoc_opt name (signatures @ internal_signatures)

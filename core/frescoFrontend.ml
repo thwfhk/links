@@ -156,6 +156,7 @@ and value names quantifiers expression =
   let child_value = value names quantifiers in
   match expression.node with
   | Constant c -> [], Ir.Constant c
+  | Primitive name -> [], var_value (Env.String.find name Lib.nenv)
   | Variable name ->
      let ir_value =
        match StringMap.find_opt name names with

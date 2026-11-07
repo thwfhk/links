@@ -262,8 +262,9 @@ let elaborate ?(pending=false) ?(recursive=StringMap.empty) state binders syntax
                 | Ok body -> body
                 | Error _ -> error position ("Cannot apply type alias " ^ name))
         | None -> match Env.String.find_opt name DefaultAliases.alias_env with
-          | Some (`Abstract abs) -> Types.Abstype.arity abs,
-              (fun args -> S.Application (abs, args))
+          | Some (`Abstract abs) ->
+              let abs = if Types.Abstype.equal abs Types.process then Types.mailbox_process else abs in
+              Types.Abstype.arity abs, (fun args -> S.Application (abs, args))
           | Some (`Alias (PrimaryKind.Type, qs, body)) ->
              let roots = conversion position (S.of_types (checking_environment !state)
                [{ FrescoContext.binders = qs; primary_kind = PrimaryKind.Type; typ = body }]) in

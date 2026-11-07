@@ -52,6 +52,13 @@ let process  = {
   arity      = [TypeParameter.make (pk_row, (lin_any, res_effect))] ;
 }
 
+let mailbox_process = {
+  Abstype.id = "MailboxProcess";
+  name = "Process";
+  arity = [TypeParameter.make ~modal_kind:ModalKind.Abs
+    (pk_type, (lin_any, res_any))];
+}
+
 (* Lists are currently unlimited because the only deconstructors are
    hd and tl. There's nothing to stop us rolling our own potentially
    linear lists, though. *)

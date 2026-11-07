@@ -4,6 +4,7 @@ type 'a term = { node : 'a node; typ : 'a; position : SourceCode.Position.t }
 and 'a node =
   | Constant of Constant.t
   | Variable of string
+  | Primitive of string
   | Lambda of DeclaredLinearity.t * (string * 'a) list * 'a term * 'a EffectRow.t
   | Apply of 'a term * 'a term list
   | Escape of string * 'a * 'a term * 'a EffectRow.t
@@ -263,7 +264,7 @@ let rec map_term f binders e =
   let typ = f binders PrimaryKind.Type e.typ in
   let child = map_term f binders in
   let node = match e.node with
-    | Constant c -> Constant c | Variable n -> Variable n
+    | Constant c -> Constant c | Variable n -> Variable n | Primitive n -> Primitive n
     | Lambda (lin, ps, body, ambient) -> Lambda (lin,
         List.map (fun (n,t) -> n, f binders PrimaryKind.Type t) ps,
         child body, EffectRow.map (f binders PrimaryKind.Type) ambient)
@@ -546,6 +547,22 @@ let rec split_guard s pos typ = match head s pos typ with
 let guard_type guard typ = match guard with
   | Modality.Relative ([],[]) -> typ | _ -> S.Modal (guard,typ)
 
+let primitive s pos name =
+  let signature = match FrescoPrimitives.signature name with
+    | Some signature -> signature | None -> assert false in
+  let _,annotation = FrescoElaborate.read initial_elaboration signature in
+  let typ = from_type s pos annotation.FrescoElaborate.typ in
+  let expression = term pos typ (Primitive name) in
+  if name <> "recv" then s,expression else
+  let receive = List.find (fun effect_name -> effect_name <> wild) builtin_effects in
+  match EffectRow.find receive s.ambient,head s pos typ with
+  | Some { EffectRow.arguments = [mailbox]; _ },S.ForAll ([q],body) ->
+     let body = get pos "Cannot instantiate the mailbox receive type"
+       (FrescoRecursive.apply_formals ~formals:[q]
+         ~arguments:[PrimaryKind.Type,mailbox] ~primary_kind:PrimaryKind.Type body) in
+     s,term pos body (TypeApplication (expression,[PrimaryKind.Type,mailbox]))
+  | _ -> s,expression
+
 let rec infer_term support s mode source =
   let pos = WithPos.pos source in
   let intro = match WithPos.node source with
@@ -611,18 +628,12 @@ and infer_node support s mode source =
      infer_lambda support s mode pos lin groups body
   | G.FunLit (_,_,G.SwitchFunlit _,_) -> error pos "Switch function syntax is not supported by contextual inference"
   | G.FnAppl (fn,args) ->
-     let s,skargs = infer_many C.Skeleton s (C.Check S.Ghost) args in
-     let arg_type = tuple (List.map (fun e -> e.typ) skargs) in
-     let fn_mode = C.Fun (arg_type,mode) in
-     let s,fn = infer_term support s fn_mode fn in
-     let domain,result = match head s pos fn.typ with
-       | S.Arrow (a,b) | S.LinearArrow (a,b) -> a,b
-       | _ -> error pos "Application requires a function" in
-     if support = C.Skeleton then s,term pos result (Apply (fn,skargs))
-     else
-       let domains = tuple_fields s pos (List.length args) domain in
-       let s,args = infer_pairs support s args domains in
-       s,term pos result (Apply (fn,args))
+     infer_application support s mode pos (fun s mode -> infer_term support s mode fn) args
+  | G.Spawn (G.Demon,G.NoSpawnLocation,body,_) -> infer_spawn support s mode pos body
+  | G.Receive (cases,_) ->
+     let s,scrutinee = infer_application support s C.Infer pos
+       (fun s mode -> let s,fn = primitive s pos "recv" in coerce support s pos mode fn) [] in
+     infer_switch support s mode pos scrutinee cases
   | G.Regex regex -> infer_term support s mode (FrescoRegex.lower pos regex)
   | G.RangeLit (first,last) ->
      if support = C.Type && Option.is_none (EffectRow.find wild s.ambient) then
@@ -668,6 +679,9 @@ and infer_node support s mode source =
            | _ -> error (WithPos.pos right) "The right operand of regex matching must be regex syntax" in
          infer_term support s mode (WithPos.make ~pos
            (G.FnAppl (WithPos.make ~pos (G.Var name),[left;right])))
+      | Operators.BinaryOp.Name "!" ->
+         infer_application support s mode pos
+           (fun s mode -> let s,fn = primitive s pos "Send" in coerce support s pos mode fn) [left;right]
       | _ -> let name = match op with
           | Operators.BinaryOp.Cons -> "Cons"
           | Operators.BinaryOp.Name "++" -> "Concat"
@@ -678,6 +692,8 @@ and infer_node support s mode source =
      infer_term support s mode (WithPos.make ~pos (G.FnAppl (WithPos.make ~pos (G.Var name),[arg])))
   | G.FreezeSection section -> infer_term support s mode
       (WithPos.make ~pos (G.Freeze (WithPos.make ~pos (G.Section section))))
+  | G.Section (Operators.Section.Name "!") ->
+     let s,fn = primitive s pos "Send" in coerce support s pos mode fn
   | G.Section (Operators.Section.Name n) ->
      infer_term support s mode (WithPos.make ~pos (G.Var n))
   | G.Section Operators.Section.Minus ->
@@ -782,24 +798,7 @@ and infer_node support s mode source =
          finish s (S.Variant (S.Row (StringMap.singleton label (S.Present e.typ),tail,false))) (Variant (label,e)))
   | G.Switch (scrutinee,cases,_) ->
      let s,scrutinee = infer_term support s C.Infer scrutinee in
-     let original = s in
-     let rec branches s previous usages = function
-       | [] -> (match previous with
-          | [] -> error pos "A switch requires a case"
-          | (_,e) :: rest ->
-             let s,typ = List.fold_left (fun (s,t) (_,e) -> join_results s pos t e.typ) (s,e.typ) rest in
-             let s = List.fold_left (fun s uses -> branch_usage support pos original uses s) s usages in
-             s,term pos typ (Switch (scrutinee,List.rev previous)))
-       | (pattern,body) :: cases ->
-          let before = { s with uses = original.uses } in let mark,s = marker before in
-          let s,pattern = check_pattern support s pattern scrutinee.typ in
-          let s,body = infer_term support s mode body in
-          let s = check_bound_usage support pos before s in
-          (* A one-case switch keeps pattern annotations among the scope roots. *)
-          let s,wrapped = leave before mark s (term pos body.typ (Switch (scrutinee,[pattern,body]))) in
-          let pattern,body = match wrapped.node with Switch (_,[p,e]) -> p,e | _ -> assert false in
-          branches s ((pattern,body) :: previous) (s.uses :: usages) cases in
-     branches s [] [] cases
+     infer_switch support s mode pos scrutinee cases
   | G.DoOperation (operation,arguments,_,_) ->
      let name = match WithPos.node operation with G.Operation name -> name
        | _ -> error (WithPos.pos operation) "Expected a resolved operation" in
@@ -1104,6 +1103,87 @@ and infer_handler support s mode pos source =
     (s,(List.hd bodies).typ) bodies in
   let s,handler,typ = leave_handler before handler_marker s handler typ in
   s,term pos typ (Handle handler)
+and infer_application support s mode pos infer_fn args =
+  let s,skargs = infer_many C.Skeleton s (C.Check S.Ghost) args in
+  let arg_type = tuple (List.map (fun e -> e.typ) skargs) in
+  let fn_mode = C.Fun (arg_type,mode) in
+  let s,fn = infer_fn s fn_mode in
+  let domain,result = match head s pos fn.typ with
+    | S.Arrow (a,b) | S.LinearArrow (a,b) -> a,b
+    | _ -> error pos "Application requires a function" in
+  if support = C.Skeleton then s,term pos result (Apply (fn,skargs))
+  else
+    let domains = tuple_fields s pos (List.length args) domain in
+    let s,args = infer_pairs support s args domains in
+    s,term pos result (Apply (fn,args))
+and infer_switch support s mode pos scrutinee cases =
+  let original = s in
+  let rec branches s previous usages = function
+    | [] -> (match previous with
+       | [] -> error pos "A switch requires a case"
+       | (_,e) :: rest ->
+          let s,typ = List.fold_left (fun (s,t) (_,e) -> join_results s pos t e.typ) (s,e.typ) rest in
+          let s = List.fold_left (fun s uses -> branch_usage support pos original uses s) s usages in
+          s,term pos typ (Switch (scrutinee,List.rev previous)))
+    | (pattern,body) :: cases ->
+       let before = { s with uses = original.uses } in let mark,s = marker before in
+       let s,pattern = check_pattern support s pattern scrutinee.typ in
+       let s,body = infer_term support s mode body in
+       let s = check_bound_usage support pos before s in
+       (* A one-case switch keeps pattern annotations among the scope roots. *)
+       let s,wrapped = leave before mark s (term pos body.typ (Switch (scrutinee,[pattern,body]))) in
+       let pattern,body = match wrapped.node with Switch (_,[p,e]) -> p,e | _ -> assert false in
+       branches s ((pattern,body) :: previous) (s.uses :: usages) cases in
+  branches s [] [] cases
+and infer_spawn support s mode pos body =
+  if support = C.Skeleton then
+    (* The caller knows the Process constructor before the child is checked.
+       Retain a supplied mailbox type; the full pass checks the child under it. *)
+    let mailbox = match mode with
+      | C.Check expected -> (match head s pos expected with
+          | S.Application (constructor,[(PrimaryKind.Type,payload)])
+              when Types.Abstype.equal constructor Types.mailbox_process -> payload
+          | _ -> S.Ghost)
+      | _ -> S.Ghost in
+    coerce support s pos mode (term pos
+      (S.Application (Types.mailbox_process,[PrimaryKind.Type,mailbox]))
+      (Constant (Constant.Bool false)))
+  else begin
+    if Option.is_none (EffectRow.find wild s.ambient) then
+      error pos "Spawn requires Wild in the ambient context";
+    let before = s in let mark,s = marker s in
+    let receive = List.find (fun (info : FrescoElaborate.effect_info) ->
+      info.FrescoElaborate.name <> wild && List.mem info.FrescoElaborate.name builtin_effects)
+      (FrescoElaborate.effects s.elaboration) in
+    let s,mailbox = match mode with
+      | C.Check expected -> (match head s pos expected with
+          | S.Application (constructor,[(PrimaryKind.Type,payload)])
+              when Types.Abstype.equal constructor Types.mailbox_process ->
+             require s pos (Quantifier.to_parameter (List.hd receive.FrescoElaborate.parameters)) payload
+          | _ -> fresh_parameter s pos (List.hd receive.FrescoElaborate.parameters))
+      | _ -> fresh_parameter s pos (List.hd receive.FrescoElaborate.parameters) in
+    let ambient = [{ EffectRow.name = wild; arguments = [] };
+      { EffectRow.name = receive.FrescoElaborate.name; arguments = [mailbox] }] in
+    let modality = Modality.Absolute ambient in
+    let s = { s with ambient; locks = (modality,s.ambient) :: s.locks } in
+    let s,body = infer_term support s C.Infer body in
+    let s = unlimited s pos body.typ in
+    let thunk_type = S.LinearArrow (tuple [],body.typ) in
+    let thunk = term pos thunk_type (Lambda (DeclaredLinearity.Lin,[],body,ambient)) in
+    let thunk = term pos (S.Modal (modality,thunk_type)) (Coerce thunk) in
+    let result = S.Application (Types.mailbox_process,[PrimaryKind.Type,mailbox]) in
+    (* Export every child annotation together, then restore the caller's row and locks. *)
+    let s,thunk = leave before mark s (term pos result (Coerce thunk)) in
+    let result = thunk.typ in
+    let thunk = match thunk.node with Coerce thunk -> thunk | _ -> assert false in
+    let s,here = primitive s pos "here" in
+    let s,here = coerce support s pos (C.Fun (tuple [],C.Infer)) here in
+    let location_type = S.Application (Types.spawn_location,[]) in
+    let location = term pos location_type (Apply (here,[])) in
+    let s,spawn = primitive s pos "spawnAt" in
+    let s,spawn = coerce support s pos (C.Fun (tuple [location_type;thunk.typ],C.Check result)) spawn in
+    coerce support s pos mode (term pos result (Apply (spawn,[location;thunk])))
+  end
 and join_results s pos a b =
   let a,b = match canonicalise s pos [root a;root b] with
     | [a;b] -> a.S.typ,b.S.typ | _ -> assert false in

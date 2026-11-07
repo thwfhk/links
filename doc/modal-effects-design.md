@@ -641,6 +641,42 @@ The `n` flag has no runtime primitive implementation. Legacy typing aborts
 with an assertion; Fresco reports a positioned source error. No native regex
 runtime is added.
 
+### D7 actor integration
+
+**Transitional choice for review:** give the contextual mailbox constructor the
+shared name `Types.mailbox_process`, public spelling `Process` and distinct
+identity `MailboxProcess`. Its parameter is `Type(Any,Any,Abs)`. Keep the legacy
+row-parameter constructor and its type-string environment until D7e removes
+legacy inference. Using one identity with two arities would disagree with the
+compiler's identity and structural comparisons. D7e must consolidate these
+constructors after migrating their consumers.
+
+Process identifiers remain unlimited when their absolute message type is
+linear. Contextual primitive signatures supply the IR types for their existing
+runtime identifiers. Generated spawn and receive calls use canonical primitive
+references so user bindings cannot replace their implementation.
+
+Ordinary spawn introduces a fresh absolute mailbox type under a scope marker.
+Check its linear body in the absolute context `Wild, Receive(a)`, including an
+absolute lock for captured values, and require its discarded result to be
+unlimited. Export the mailbox type together with the body and its effect row.
+Nested spawns use separate mailbox variables. Restore the caller's context on
+scope exit, and retain ordinary usage checks for captured linear values.
+When checking against `Process(A)`, use the supplied mailbox type `A` before
+checking the child body. This retains polymorphic/modal payloads without
+assigning them to a fresh monotype variable. Generated primitive signatures
+are elaborated in the initial built-in environment, preserving their types
+when user aliases shadow `Process` or `Location`.
+The spawn skeleton exposes `Process` with a ghost mailbox payload when none
+is supplied. The full pass checks the child body after the surrounding call
+has supplied its expected mailbox type. This avoids placing an early monotype
+variable in the skeleton where a later modal or polymorphic payload is needed.
+Canonical `receive` instantiates `recv` with the ambient mailbox type before
+checking patterns. Ordinary calls to the public polymorphic `recv` and `self`
+retain Fresco's term-instantiation rules; modal or polymorphic mailbox types
+use explicit type arguments, for example `~recv[Message]()`. This does not
+change inference for other polymorphic functions.
+
 ### D7 prelude prerequisites
 
 Library migration exposed two frontend gaps. Skeleton inference checks a
