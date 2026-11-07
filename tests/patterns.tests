@@ -1,4 +1,5 @@
 ---
+config: tests/legacy_compatibility.config
 args : --set=typecheck_ir=true
 ---
 

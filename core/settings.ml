@@ -784,6 +784,18 @@ module CLI = struct
   let shorts : (char  , arg) Hashtbl.t = Hashtbl.create 17
   let longs  : (string, arg) Hashtbl.t = Hashtbl.create 17
   let cli_forms : (string, string) Hashtbl.t = Hashtbl.create 17
+  let flag_values : (string, bool) Hashtbl.t = Hashtbl.create 17
+
+  let flag_value value ((Settings.Pack setting) as arg) =
+    (match setting with
+     | Settings.Flag _ -> Hashtbl.replace flag_values (Settings.get_name setting) value
+     | _ -> invalid_arg "CLI.flag_value requires a flag");
+    arg
+
+  let set_flag ~privilege setting =
+    match Hashtbl.find_opt flag_values (Settings.get_name setting) with
+    | Some value -> Settings.set ~privilege setting value
+    | None -> Settings.toggle ~privilege setting
 
   let add : (arg -> arg) -> 'a Settings.setting -> 'a Settings.setting
     = fun f setting ->
@@ -873,7 +885,7 @@ let handle_all : unhandled list -> unit
                let (Settings.Pack setting) = Hashtbl.find CLI.shorts c in
                match setting with
                | Settings.Flag _ ->
-                  Settings.toggle ~privilege setting;
+                  CLI.set_flag ~privilege setting;
                   if String.length key > 1
                   then (split_unhandled unhandled) @ rest
                   else rest
@@ -902,7 +914,7 @@ let handle_all : unhandled list -> unit
                let (Settings.Pack setting) = Hashtbl.find CLI.longs key in
                match setting with
                | Settings.Flag _ ->
-                  Settings.toggle ~privilege setting; rest
+                  CLI.set_flag ~privilege setting; rest
                | Settings.Option _ when Settings.is_readonly setting ->
                   Settings.trigger privilege setting; rest
                | Settings.Option _ ->

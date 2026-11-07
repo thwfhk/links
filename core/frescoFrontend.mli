@@ -1,4 +1,4 @@
-(** Opt-in contextual source checking and evaluation through Links IR. *)
+(** Contextual source checking and evaluation through Links IR. *)
 type t
 
 val empty : unit -> t

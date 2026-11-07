@@ -10,7 +10,7 @@ import tempfile
 ROOT = pathlib.Path.cwd()
 EMPTY = "tests/empty_prelude.links"
 CUSTOM = "tests/fixtures/fresco_batch/customPrelude.links"
-BASE = ["./links", "--fresco", "--compile", "--set=optimise=false",
+BASE = ["./links", "--compile", "--set=optimise=false",
         "--set=typecheck_ir=true", "--set=fail_on_ir_type_error=true",
         "--set=recheck_frontend_transformations=true"]
 NODE = shutil.which("node")
@@ -124,7 +124,7 @@ function floatToString(x,k) {return _$K.apply(k,String(x));}
     result = subprocess.run([NODE,str(output)], capture_output=True, text=True, timeout=8)
     print("isolated arithmetic result: " + result.stdout, flush=True)
     assert result.returncode == 0 and result.stdout == "-42,-2.5,42" and result.stderr == "", result
-    no_runtime = compile_to(directory, "no-runtime", ["-e","42"], ["--set=link_js_runtime=false"])
+    no_runtime = compile_to(directory, "no-runtime", ["-e","42"], ["--Ljs-runtime"])
     assert "First-order continuation module" not in no_runtime and "CUSTOM-RUNTIME-MARKER" not in no_runtime
 
 
@@ -146,6 +146,8 @@ def errors(directory):
 def legacy(directory):
     source = file(directory, "legacy.links", "42")
     compile_to(directory, "legacy", [source], ["--set=fresco=false"])
+    compile_to(directory, "affirmative-config", ["-e", "sig id:modal [] ((Int)->Int) fun id(x){x} id(42)"],
+               ["--config=tests/legacy_compatibility.config", "--fresco"])
 
 
 if __name__ == "__main__":

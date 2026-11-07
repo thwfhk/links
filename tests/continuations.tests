@@ -1,3 +1,7 @@
+---
+config: tests/legacy_compatibility.config
+---
+
 Escape expressions
 escape e in {2+2}
 stdout : 4 : Int

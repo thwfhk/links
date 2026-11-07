@@ -1263,6 +1263,16 @@ Use the existing `--set=fresco=false` for explicit legacy selection. A separate
 `--legacy` flag would make selection depend on registration order in Settings;
 keep one frontend setting.
 
+The bare `--fresco` flag has an affirmative CLI value even though Fresco now
+defaults to true. Other flags retain their existing opposite-default behaviour.
+Explicit values and `--set=fresco=false` use the same setting. A default-switch
+review caught the initial bare-flag reversal before integration.
+
+**Choice for review:** retain the existing Settings precedence: `--set` writes
+override direct flag arguments in either argument order. Direct flag arguments
+retain their existing order. Changing the timestamps assigned to `--set` writes
+would affect other settings and is outside the prioritised default switch.
+
 The contextual REPL uses `FrescoFrontend` for sentences and `@load`, with the
 existing value printer, welcome text and setting controls. Definitions print
 only new or replaced bindings. Compare runtime variable identities for values

@@ -587,6 +587,11 @@ effect variables in an old signature alone does not establish a limitation.
 
 ## 9. Initial effect context
 
+Fresco is the default frontend for batch input, the REPL and JavaScript
+compilation. `--fresco` remains an explicit selector. Use
+`--set=fresco=false` for retained legacy compatibility, including web mode.
+A contextual type error does not select the legacy frontend automatically.
+
 Batch programs and REPL commands start with ambient effect context `Wild`.
 This permits direct calls to built-in external operations such as `print` and
 `spawn`.

@@ -1,3 +1,7 @@
+---
+config: tests/legacy_compatibility.config
+---
+
 Modules hide inner definitions
 ./tests/modules/basic-hide.links
 filemode : true

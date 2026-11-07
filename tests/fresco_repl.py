@@ -10,13 +10,14 @@ PROMPT = b"links> "
 
 
 class Repl:
-    def __init__(self):
+    def __init__(self, prelude="tests/empty_prelude.links"):
         self.process = subprocess.Popen(
-            ["_build/default/bin/links.exe", "--fresco", "--enable-handlers",
-             "--set=prelude=tests/empty_prelude.links", "--set=native_readline=false",
+            ["_build/default/bin/links.exe", "--enable-handlers",
+             "--set=native_readline=false",
              "--set=optimise=false", "--set=typecheck_ir=true",
              "--set=fail_on_ir_type_error=true", "--set=recheck_frontend_transformations=true",
-             "--path=tests/fixtures/fresco_repl"],
+             "--path=tests/fixtures/fresco_repl"] +
+            (["--set=prelude=" + prelude] if prelude is not None else []),
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         )
         self.transcript = ""
@@ -170,6 +171,13 @@ def type_search(repl):
     require(repl.command('polymorphic("still usable");'), '"still usable" : String')
 
 
+def default_prelude(repl):
+    require(repl.command("(map(fun(x){x+1},[40,41]),Just(42):Maybe(Int));"),
+            "[41, 42]", "Just(42)", "List Int")
+    require(repl.command("open import FrescoPrelude;"), "links> ")
+    require(repl.command("hd([42]);"), "42 : Int")
+
+
 def interrupt_and_eof(repl):
     repl.command("var saved=40;")
     os.kill(repl.process.pid, signal.SIGINT)
@@ -182,9 +190,9 @@ def interrupt_and_eof(repl):
 
 if __name__ == "__main__":
     cases = [definitions, polymorphism, alias_changes, environments, loading,
-             imports, settings, printing, type_search, interrupt_and_eof]
+             imports, settings, printing, type_search, default_prelude, interrupt_and_eof]
     for case in cases:
-        repl = Repl()
+        repl = Repl(prelude=None) if case is default_prelude else Repl()
         try:
             print("\nCASE " + case.__name__, flush=True)
             print(repl.welcome, end="", flush=True)

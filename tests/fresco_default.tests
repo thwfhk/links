@@ -1,0 +1,87 @@
+---
+config: tests/fresco_default.config
+---
+
+The default prelude supplies polymorphic collections
+(map(fun(x){x+1},[40,41]),Just(42):Maybe(Int))
+stdout : ([41, 42], Just(42)) : (List Int, [|Just:Int|Nothing|])
+
+Signed ordinary recursion executes through the default frontend
+sig total:(List Int)->Int fun total(xs){switch(xs){case [] -> 0 case x::rest -> x+total(rest)}} total([40,2])
+stdout : 42 : Int
+
+Records variants and updates execute through the default frontend
+var r=(answer=40,flag=true); switch(Answer((r with answer=r.answer+2))){case Answer(value) -> (value.answer,value.flag)}
+stdout : (42, true) : (Int, Bool)
+
+Modules retain supplied polymorphism and qualified aliases
+module Ordinary { typename Box(a::Any)=(value:a); sig id:forall a.(a)->a fun id(x){x} } var boxed=((value=42):Ordinary.Box(Int)); (Ordinary.id(boxed.value),Ordinary.id(true))
+stdout : (42, true) : (Int, Bool)
+
+Supplied higher rank modal arguments execute through the default frontend
+typename Identity=modal [] (forall a.(a)->a); sig id:Identity fun id(x){x} sig use:(Identity)->(Int,Bool) fun use(f){(f(42),f(true))} use(~id)
+stdout : (42, true) : (Int, Bool)
+
+Scoped effects execute through the default frontend
+effect Reader {Read:()=>Int;} sig read:modal [Reader] (() -> Int) fun read(){do Read} handle <Reader> (read()+2){case x -> x case <Read => k> -> k(40)}
+args : --enable-handlers
+stdout : 42 : Int
+
+A custom prelude overrides the default and retains its fixities
+(seed+2,10 +++ 3 +++ 1)
+args : --set=prelude=tests/fixtures/fresco_batch/customPrelude.links
+stdout : prelude:tail:(42, 8) : (Int, Int)
+
+An empty prelude leaves only primitives under the default frontend
+map(fun(x){x},[42])
+args : --set=prelude=tests/empty_prelude.links
+exit : 1
+stderr : @.*Type error: Unbound variable map.*
+
+Legacy sugar flags do not enable legacy effect arrows
+fun(x){x} : (Int) ~> Int
+args : --set=effect_sugar=true --set=effect_sugar_policy=final_arrow,show_implicit
+exit : 1
+stderr : @.*Type error: Legacy effect types are not supported by contextual elaboration.*
+
+A default contextual type error does not fall back to legacy generalisation
+var id=fun(x){x}; (id(42),id(true))
+exit : 1
+stderr : @.*Type error:.*consistency.*In expression: id.*
+
+The explicit legacy selector retains ordinary legacy checking
+var old=(fun(){42}:() ~> Int); hd(map(fun(x){x},[old()]))
+args : --set=fresco=false
+stdout : 42 : Int
+
+Default web mode gives the explicit legacy route before evaluating source
+print("must not execute")
+args : --mode=web
+exit : 1
+stdout : @^$
+stderr : @.*Fresco does not support web mode; use --set=fresco=false for the legacy web frontend.*
+
+The affirmative selector keeps contextual syntax under a true default
+sig id:modal [] (forall a.(a)->a) fun id(x){x} (id(42),id(true))
+args : --fresco
+stdout : (42, true) : (Int, Bool)
+
+An explicit set value retains precedence before affirmative flags
+var old=(fun(){42}:() ~> Int); 42
+args : --set=fresco=false --fresco --fresco
+stdout : 42 : Int
+
+An explicit set value retains precedence after the affirmative selector
+var old=(fun(){42}:() ~> Int); 42
+args : --fresco --set=fresco=false
+stdout : 42 : Int
+
+An explicit selector value retains the ordinary converter
+var old=(fun(){42}:() ~> Int); 42
+args : --fresco --fresco=false
+stdout : 42 : Int
+
+Repeated affirmative flags override an earlier direct false value
+sig id:modal [] (forall a.(a)->a) fun id(x){x} id(42)
+args : --fresco=false --fresco --fresco
+stdout : 42 : Int

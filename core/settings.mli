@@ -30,6 +30,9 @@ module CLI: sig
   val add : (arg -> arg) -> 'a setting -> 'a setting
   val (<&>) : (arg -> arg) -> (arg -> arg) -> (arg -> arg)
   val long : string -> arg -> arg
+  (** Set this value on a bare CLI flag. Other flags retain their toggle
+      behaviour; explicit values and configuration writes are unchanged. *)
+  val flag_value : bool -> arg -> arg
   val short : char -> arg -> arg
 end
 

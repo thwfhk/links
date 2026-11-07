@@ -4,10 +4,10 @@ open Utility
 module BS = Basicsettings
 
 let fresco =
-  Settings.(flag "fresco"
-            |> synopsis "Use the contextual frontend (development)"
+  Settings.(flag ~default:true "fresco"
+            |> synopsis "Use Fresco contextual inference (default; --set=fresco=false selects legacy)"
             |> convert parse_bool
-            |> CLI.(add (long "fresco"))
+            |> CLI.(add (long "fresco" <&> flag_value true))
             |> sync)
 
 let to_evaluate
@@ -128,7 +128,7 @@ let run_fresco file_list to_evaluate =
   begin match Settings.get mode with
   | None | Some (Interactive | Compile) -> ()
   | Some Web ->
-     handle_errors (lazy (raise (Errors.settings_error "The Fresco frontend does not support web mode")))
+     handle_errors (lazy (raise (Errors.settings_error "Fresco does not support web mode; use --set=fresco=false for the legacy web frontend")))
   end;
   let process check run context source =
     if Settings.get Driver.typecheck_only then begin

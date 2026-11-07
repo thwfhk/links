@@ -1,3 +1,7 @@
+---
+config: tests/legacy_compatibility.config
+---
+
 Desugaring [1]: Implicit sharing of effects on aliases
 typename T = () -> (); sig f : (T) -> () fun f(t) { t() } f
 stdout : fun : (T ({ |a})) -a-> ()
