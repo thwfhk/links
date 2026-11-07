@@ -14,8 +14,8 @@ implementation decisions, reasons, internal invariants and source comparisons.
 ## Current status
 
 D4j is complete, reviewed and verified. Work is paused at the user's requested
-boundary before D4k. Resume with contextual annotation/declaration elaboration
-when requested.
+boundary before D4k. A documentation decision on 7 November adds a pending
+ghost-kinding follow-up to D4j. Resume compiler work when requested.
 
 - D1--D3d provide row/modality operations, shared modal types, surface syntax,
   and effect/operation resolution. D4a--D4f1 provide kind checks, persistent
@@ -71,7 +71,7 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D4g | Ordinary/modal requirement refinement and detached restoration | `dac6f8fc` |
 | D4h | Contextual application, unfolding, session duality and recursive comparison | `d12f864a` |
 | D4i | Persistent monotype unification, consistency and guessing | `e425984c` |
-| D4j | Subtyping, constraint collection/solving, `look` and session compatibility checks | This commit |
+| D4j | Subtyping, constraint collection/solving, `look` and session compatibility checks | `7b4f78be` |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -85,6 +85,7 @@ also requires the affected build/tests and review described in AGENTS.md.
 
 | Task | Depends on | Completion check |
 |---|---|---|
+| D4j follow-up: give ordinary ghosts modal kind `Abs` during skeleton inference | D4j | Tests accept ghosts at `Abs` and `Any`, retain checks on supplied structure, and allow refinement to contextual arrows; full inference rejects contextual-arrow instantiations required to have kind `Abs` |
 | D4k: contextual annotation/declaration elaboration | D3e--D3f, D4 checking/refinement/recursive operations | Source annotations and closed signatures reach the contextual kind checker with positioned errors |
 | D5: pure Fresco source inference | D3, D4i--D4k, required IR/export support | Adapted Fresco examples typecheck or reject as specified; a pure example evaluates; top-level unknowns and REPL failure handling work |
 | D6: modal source inference and handlers | D3e--D3f, D4j--D4k, D5 | A handled operation evaluates to `42`; infer omitted handler arguments (including unused parameters); repeated rows, modal access/refinement, complete groups and polymorphism checks pass |
@@ -131,7 +132,7 @@ and modal integration tests must cover the remaining choices.
 
 ## Latest task and verification
 
-6 November 2026, D4j, this commit (base `13bed38c`): subtyping, constraint
+6 November 2026, D4j, `7b4f78be` (base `13bed38c`): subtyping, constraint
 collection/solving and `look` preserve supplied polymorphic/modal instantiations,
 kind requirements and binder scope. Modal transformation uses the recorded equality-first policy
 and target locks. Internal tests cover repeated effects, failed alternatives,
@@ -181,6 +182,12 @@ Handler argument inference follows in D6; D3f preserves omission in the AST.
 
 ## Decisions and deferred work at the D4j pause
 
+7 November 2026: the user chose `Abs` for ordinary ghosts during skeleton
+inference, with full inference rechecking instantiation kinds and modal access.
+The [design](doc/modal-effects-design.md#subtyping-and-instantiation-information)
+records the rule, source comparison and required tests. The compiler follow-up
+is pending; the verification results above cover the existing D4j implementation.
+
 No user decisions remain unresolved. The user approved rejecting the legacy
 row-duality bug that can change a channel's protocol without changing the
 channel. The user also approved deferring recursive row inference accepted by
@@ -192,6 +199,8 @@ error. These cases and the compatibility probes are recorded in the
 
 ## Next action
 
-Pause. When requested, begin D4k's contextual annotation/declaration elaboration.
+Pause. When compiler work resumes, give ordinary ghosts modal kind `Abs` during
+skeleton inference and test the change. Then begin D4k's contextual annotation
+and declaration elaboration.
 The production frontend still uses legacy inference; source Fresco integration
 follows in D5/D6.

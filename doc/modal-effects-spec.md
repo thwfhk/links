@@ -254,6 +254,12 @@ and scope checks. A monotype solution contains no quantifiers or modal types.
 Supplied polymorphic/modal structure is retained by Fresco's instantiation
 rules. Record and variant fields may carry supplied polymorphic types.
 
+During skeleton inference, an ordinary ghost has modal kind `Abs` and can also
+be checked at `Any`. A universal ghost inherits its body's modal kind.
+Filling an ordinary ghost may change its modal kind to `Any`. Full type inference
+checks the resulting instantiations against their required kinds and checks
+modal access again using the resulting types.
+
 Type checking respects quantifier scope. Inferred types cannot capture or
 expose type variables outside their binding scope.
 

@@ -301,12 +301,34 @@ Presence parameters use their own primary categories, including unused
 parameters and residual row fields. Skeleton checking permits only `Ghost`
 as the expected type, as in the thesis' mode well-formedness rules.
 
-Skeleton instantiation checks supplied structure and refines existing unknowns
-by guessing under a temporary marker with the quantified parameter's
-requirements. Scope exit retains the original skeleton with its ghosts and
-discards temporary unknowns used only to fill those ghosts. Requirements on
-missing information are checked again during full inference from the source
-quantifier; ghosts do not store kind metadata.
+On 7 November 2026, the user chose modal kind `Abs` for ordinary ghosts during
+skeleton inference. They also check at `Any` by the existing kind inclusion.
+Universal ghosts retain their body's modal kind. Check supplied skeleton
+structure and refine existing unknown type variables directly, using this
+ghost rule. Ghosts need no stored kind metadata. Ordinary kind requirements
+remain separate.
+
+This permits an unused `Abs`-kinded quantified variable to be instantiated with
+a ghost during skeleton inference. The thesis gives ordinary ghosts kind `Any`
+and checks instantiation kinds in both inference passes. Aghilas' implementation
+skips the instantiation kind check during skeleton inference. The selected rule
+retains checks on supplied structure while accepting missing information at
+`Abs`.
+
+Skeleton refinement may change modal kind `Abs` to `Any`, for example when a
+ghost is filled with a contextual arrow. Do not assume preservation of modal
+kinds under skeleton refinement. Full inference must check every resulting
+instantiation against the original quantified parameter's requirements and
+repeat every modal-access check using the resulting types. An `Abs` judgement
+from the skeleton pass cannot discharge these full-inference checks.
+
+The D4j implementation at `7b4f78be` still checks skeleton requirements by
+temporary guessing and then discards the guessed ghost replacements. Replacing
+that procedure with the selected ghost-kinding rule remains an implementation
+follow-up. Test acceptance for an unused `Abs` parameter and for an `Any`
+parameter whose ghost becomes a contextual arrow. Test rejection when a full
+instantiation at `Abs` is a contextual arrow, and retain modal-access rejection
+tests after skeleton inference.
 
 Modal checking first compares the source modality run and source payload with
 the target run. It then checks the payload under the target lock and transformed
