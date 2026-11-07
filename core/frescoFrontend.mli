@@ -37,3 +37,11 @@ val run_string : t -> string -> t * Types.typ * Value.t
 val run_file : t -> string -> t * Types.typ * Value.t
 val run_sentence : ?source:SourceCode.source_code -> t -> Sugartypes.sentence ->
   t * Types.typ * Value.t
+
+(** Detached snapshots use the current inference solutions. Primitive entries
+    are excluded from [bindings]. Definition changes use runtime identities. *)
+val bindings : t -> (string * Types.typ) list
+val builtins : unit -> (string * Types.typ) list
+val definitions : previous:t -> t -> (string * Types.typ * Value.t) list
+val aliases : t -> (string * Types.tycon_spec) list
+val changed_aliases : previous:t -> t -> (string * Types.tycon_spec) list

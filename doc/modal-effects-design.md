@@ -1253,6 +1253,22 @@ Use the existing `--set=fresco=false` for explicit legacy selection. A separate
 `--legacy` flag would make selection depend on registration order in Settings;
 keep one frontend setting.
 
+The contextual REPL uses `FrescoFrontend` for sentences and `@load`, with the
+existing value printer, welcome text and setting controls. Definitions print
+only new or replaced bindings. Compare runtime variable identities for values
+and private immutable alias records for aliases before exporting their types.
+Export displayed types from the current contextual solutions into detached
+graphs; displaying or inspecting an environment must not modify live inference
+state. Named functions use the existing function-table lookup when their runtime
+environment contains no value entry.
+
+`@env`, `@typeenv`, `@tyconenv` and `@builtins` use these contextual snapshots.
+Successful loads publish their state and retain module identities. Parse, type,
+load and interrupt errors retain the last successful state. The interaction loop
+restores the previous signal handler on exit. Contextual `@withtype` is the next
+integration step; it must elaborate and match queries in isolated inference
+state.
+
 ### D7 inferred linear results
 
 **Choice for review:** retain the ordinary-arrow guess for unresolved callable

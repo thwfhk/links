@@ -1,0 +1,2 @@
+var loaded=true+1;
+loaded

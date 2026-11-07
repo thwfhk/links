@@ -584,3 +584,8 @@ effect variables in an old signature alone does not establish a limitation.
 Batch programs and REPL commands start with ambient effect context `Wild`.
 This permits direct calls to built-in external operations such as `print` and
 `spawn`.
+
+The REPL retains successful definitions, aliases, module imports and operator
+fixities across commands. Definitions print their values and inferred types;
+environment directives display current contextual types. `@load` extends the
+same state. A failed command retains the preceding successful state.

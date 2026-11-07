@@ -17,6 +17,10 @@ BLACKLIST = {
   "tests/fixtures/fresco_batch/diamondLeft.links",
   "tests/fixtures/fresco_batch/diamondRight.links",
   "tests/fixtures/fresco_batch/stdlib/frescoPrelude.links",
+  # Loaded by the stdin REPL checks in tests/fresco_repl.py.
+  "tests/fixtures/fresco_repl/good.links",
+  "tests/fixtures/fresco_repl/bad.links",
+  "tests/fixtures/fresco_repl/replShared.links",
   "tests/presence_type_arg_typename.links",
   "tests/modules/alien_blocks_dependency.links",
   "tests/modules/cyclicA.links",

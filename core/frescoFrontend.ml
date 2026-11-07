@@ -488,3 +488,40 @@ let run_sentence ?source state sentence =
   | Sugartypes.Expression expression -> run_program state ([], Some expression)
   | Sugartypes.Directive _ ->
      raise (Errors.Type_error (SourceCode.Position.dummy, "Expected a definition or expression"))
+
+let export_types state names =
+  let roots = List.map (fun name ->
+    { FrescoContext.binders = []; primary_kind = PrimaryKind.Type;
+      typ = Option.get (lookup state name) }) names in
+  let environment = FrescoElaborate.checking_environment (elaboration state.inference) in
+  match FrescoContext.export environment ~roots (FrescoInfer.context state.inference) with
+  | Ok (roots, _) -> List.map2 (fun name root -> name, root.FrescoContext.typ) names roots
+  | Error _ -> raise (Errors.internal_error ~filename:"frescoFrontend.ml"
+      ~message:"Cannot export checked bindings")
+
+let bindings state =
+  StringMap.bindings state.names
+  |> List.filter (fun (_, (var, _)) -> not (Lib.is_primitive_var var))
+  |> List.map fst |> export_types state
+
+let builtins () =
+  let state = empty () in
+  List.map fst (Lazy.force primitives) |> export_types state
+
+let definitions ~previous state =
+  let names = StringMap.bindings state.names |> List.filter (fun (name, (var, _)) ->
+    match StringMap.find_opt name previous.names with
+    | Some (old, _) -> old <> var
+    | None -> true) |> List.map fst in
+  export_types state names |> List.map (fun (name, datatype) ->
+    let var, _ = StringMap.find name state.names in
+    let value = match Tables.lookup Tables.fun_defs var with
+      | Some (_, _, None, (Location.Server | Location.Unknown)) -> `FunctionPtr (var,None)
+      | Some (_, _, None, Location.Client) -> `ClientFunction (Js.var_name_var var)
+      | _ -> Value.Env.find var state.values in
+    name, datatype, value)
+
+let aliases state = FrescoElaborate.aliases (elaboration state.inference)
+let changed_aliases ~previous state =
+  FrescoElaborate.changed_aliases ~previous:(elaboration previous.inference)
+    (elaboration state.inference)

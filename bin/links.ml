@@ -155,27 +155,7 @@ let run_fresco file_list to_evaluate =
   if file_list = [] && to_evaluate = [] then begin
     if Settings.get Driver.typecheck_only then
       handle_errors (lazy (raise (Errors.settings_error "The typecheck_only setting requires a source file or -e")));
-    Settings.set interactive_mode true;
-    let prompt = "links> " in
-    let rec loop context =
-      Parse.Readline.prepare_prompt prompt;
-      let result = try
-        match Parse.Readline.parse prompt with
-        | Sugartypes.Directive ("quit", []), _ -> None
-        | sentence, source ->
-           let context, typ, value = FrescoFrontend.run_sentence ~source context sentence in
-           (match sentence with
-            | Sugartypes.Expression _ -> print_simple typ value
-            | _ -> ());
-           Some context
-      with End_of_file -> None
-      | exn ->
-        Printf.eprintf "%s\n%!" (Errors.format_exception exn);
-        Some context
-      in
-      Option.iter loop result
-    in
-    loop context
+    FrescoRepl.interact context
   end
 
 let main () =

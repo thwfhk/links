@@ -1,0 +1,2 @@
+typename SharedAlias=Int;
+var moduleValue={ print("module-once:"); 40 };

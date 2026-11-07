@@ -73,11 +73,10 @@ let print_value rtype value =
        print_close_stag = ignore;
       }
     end;
-    fprintf std_formatter "@[%a@;<1 4>: %s@]"
-            Value.p_value value
-            (if Settings.get printing_types then
-           Types.string_of_datatype rtype
-             else "");
+    fprintf std_formatter "@[%a" Value.p_value value;
+    if Settings.get printing_types then
+      fprintf std_formatter "@;<1 4>: %s" (Types.string_of_datatype rtype);
+    fprintf std_formatter "@]";
     pp_print_newline std_formatter ()
 
 

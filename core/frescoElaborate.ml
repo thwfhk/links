@@ -593,3 +593,22 @@ let read ?(global=false) state text =
   let syntax, source = Parse.parse_string Parse.datatype text in
   let syntax = (source_positions source)#datatype syntax in
   if global then signature ~global state syntax else annotation state syntax
+
+let export_aliases state aliases =
+  let roots = List.map (fun (_, alias) ->
+    { FrescoContext.binders = alias.formals; primary_kind = PrimaryKind.Type;
+      typ = to_types state alias.formals Position.dummy alias.body }) aliases in
+  match FrescoContext.export (checking_environment state) ~roots state.context with
+  | Ok (roots, _) -> List.map2 (fun (name, alias) root ->
+      name, `Alias (PrimaryKind.Type, alias.formals, root.FrescoContext.typ)) aliases roots
+  | Error _ -> error Position.dummy "Cannot export checked type aliases"
+
+let aliases state = export_aliases state (StringMap.bindings state.aliases)
+
+let changed_aliases ~previous state =
+  StringMap.bindings state.aliases
+  |> List.filter (fun (name, alias) ->
+       match StringMap.find_opt name previous.aliases with
+       | Some old -> old != alias
+       | None -> true)
+  |> export_aliases state

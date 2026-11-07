@@ -226,4 +226,46 @@ let suite = "Fresco frontend preparation" >::: [
         Fresco_source_tests.expect_type Types.int_type
           (FrescoFrontend.check_file (FrescoFrontend.empty ()) filename)))));
 
+  "binding snapshots follow current solutions and definition identities" >:: (fun _ -> controls (fun () ->
+    let initial = FrescoFrontend.empty () in
+    let state,_,_ = FrescoFrontend.run_string initial "var identity=fun(x) { x }; var amount=40; ()" in
+    let state,_,_ = FrescoFrontend.run_string state "identity(42)" in
+    let typ = List.assoc "identity" (FrescoFrontend.bindings state) in
+    Fresco_source_tests.expect_type (Types.Arrow (Types.make_tuple_type [Types.int_type],Types.int_type)) typ;
+    let definitions = FrescoFrontend.definitions ~previous:initial state in
+    assert_equal ["amount";"identity"] (List.map (fun (name,_,_) -> name) definitions);
+    let _,_,fn = List.find (fun (name,_,_) -> name="identity") definitions in
+    assert_equal "fun" (Value.string_of_value fn);
+    let changed,_,_ = FrescoFrontend.run_string state "var amount=42; ()" in
+    assert_equal ["amount"] (List.map (fun (name,_,_) -> name)
+      (FrescoFrontend.definitions ~previous:state changed))));
+
+  "alias changes use declaration identity before detached export" >:: (fun _ -> controls (fun () ->
+    let initial = FrescoFrontend.empty () in
+    let state,_,_ = FrescoFrontend.run_string initial
+      "typename Identity=modal [] (forall a.(a)->a); typename Number=Int; sig id:Identity fun id(x) { x } ()" in
+    assert_equal 2 (List.length (FrescoFrontend.changed_aliases ~previous:initial state));
+    let same,_,_ = FrescoFrontend.run_string state "var later=42; ()" in
+    assert_equal [] (FrescoFrontend.changed_aliases ~previous:state same);
+    let changed,_,_ = FrescoFrontend.run_string same "typename Number=Bool; ()" in
+    let aliases = FrescoFrontend.changed_aliases ~previous:same changed in
+    assert_equal ["Number"] (List.map fst aliases);
+    match List.assoc "Number" aliases with
+    | `Alias (_,[],typ) -> Fresco_source_tests.expect_type Types.bool_type typ
+    | _ -> assert_failure "Expected the replacement alias"));
+
+  "alias snapshots are detached and expand later solutions" >:: (fun _ -> controls (fun () ->
+    let state,_,_ = FrescoFrontend.run_string (FrescoFrontend.empty ()) "typename Shared=%a; ()" in
+    let body aliases = match List.assoc "Shared" aliases with
+      | `Alias (_,[],typ) -> typ
+      | _ -> assert_failure "Expected a shared unknown alias" in
+    let detached = body (FrescoFrontend.aliases state) in
+    (match detached with
+     | Types.Meta point -> Unionfind.change point Types.bool_type
+     | _ -> assert_failure "Expected a flexible alias body");
+    let changed,_,value = FrescoFrontend.run_string state "(42 : Shared)" in
+    assert_equal (`Int 42) value;
+    Fresco_source_tests.expect_type Types.int_type (body (FrescoFrontend.aliases changed));
+    assert_equal [] (FrescoFrontend.changed_aliases ~previous:state changed)));
+
 ]

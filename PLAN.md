@@ -117,7 +117,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D7d3e1 | Buffered channels with checked message and helper contracts | `b37fb1ce` |
 | D7e1 | Separate checked preparation and strict typed-lowering rechecks | `bec9d4f9` |
 | D7e2a | Persistent fixities and file preprocessing | `1f535e58` |
-| D7e2b | Canonical contextual prelude and custom batch bootstrap | This commit |
+| D7e2b | Canonical contextual prelude and custom batch bootstrap | `539bcd4d` |
+| D7e3a | Contextual REPL definitions, environments, loading and recovery | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -208,7 +209,8 @@ user requested on 7 November 2026. The main agent owns integration and these rec
 | D7e1: checked preparation | Separate checking/lowering from evaluation; contextual lowering rechecks validate annotations and result types |
 | D7e2a: persistent parsing state | Operator fixities survive successful inputs and file preprocessing matches string input |
 | D7e2b: prelude and batch | Canonical prelude loading and custom/empty preludes work through Fresco |
-| D7e3: REPL and directives | Definitions, loading, environments and type search use persistent contextual state with failure recovery |
+| D7e3a: REPL and ordinary directives | Definitions, loading and environments use persistent contextual state with failure recovery |
+| D7e3b: contextual type search | Type queries elaborate and match through isolated contextual inference without changing live state |
 | D7e4: JavaScript compilation | Existing compile options consume contextual IR without evaluating the source program |
 | D7e5: default frontend and source migration | Fresco is the default; ordinary selected suites and handler examples migrate; old effect syntax rejects |
 | D8a: backend execution | Actual interpreter and JavaScript deep-handler execution covers nesting, repeated identities, parameters and closures; interpreter shallow execution and JavaScript rejection remain checked |
@@ -216,7 +218,7 @@ user requested on 7 November 2026. The main agent owns integration and these rec
 
 D7a (`1f7ff34e`), D7b1 (`4fad3532`) and D7b2a (`db0d3a75`) are complete.
 D7b2b (`72e47dbc`) and D7b3 (`f09237bd`) are complete. D7b4a0 (`8cfe88a3`) is complete. D7b4a collection migration (`0b2c0d3f`) is complete. D7b4b (`efc1bca2`) is complete. D7b4c (`4e009da6`) is complete. D7c1a core actors (`ef94a794`) and D7c1b actor variants are complete.
-D7c1b1 polymorphic export is complete. D7c1c actor migration is complete. D7c2a session primitives are complete. D7c2b selection/offer is complete. D7c2c1 split-end helpers are complete. D7c2c2 callback helpers are complete. D7c2d CP is complete. D7c2e1 ordinary session regression migration is complete. D7c2e2 ordinary examples are complete. D7c2e3a recursive/encoded protocol examples are complete. D7c2e3b remaining generic protocols are complete. D7d3a ordinary list, character and date helpers are complete. D7d3b ordinary helper interfaces are complete. D7d3c binary trees are complete. D7d3d0 empty switches is complete. D7d3d1 switch functions is complete. D7d3d2 Church numerals and bit lists is complete. D7d3d3a explicit upcasts is complete; D7d3d3b extensible cases is complete. D7d3e1 buffered channels is complete. D7e1 checked preparation is complete. D7e2a persistent parsing state is complete. D7e2b contextual prelude loading is complete. Later boundaries may be split further when a dependency needs
+D7c1b1 polymorphic export is complete. D7c1c actor migration is complete. D7c2a session primitives are complete. D7c2b selection/offer is complete. D7c2c1 split-end helpers are complete. D7c2c2 callback helpers are complete. D7c2d CP is complete. D7c2e1 ordinary session regression migration is complete. D7c2e2 ordinary examples are complete. D7c2e3a recursive/encoded protocol examples are complete. D7c2e3b remaining generic protocols are complete. D7d3a ordinary list, character and date helpers are complete. D7d3b ordinary helper interfaces are complete. D7d3c binary trees are complete. D7d3d0 empty switches is complete. D7d3d1 switch functions is complete. D7d3d2 Church numerals and bit lists is complete. D7d3d3a explicit upcasts is complete; D7d3d3b extensible cases is complete. D7d3e1 buffered channels is complete. D7e1 checked preparation is complete. D7e2a persistent parsing state is complete. D7e2b contextual prelude loading is complete. D7e3a contextual REPL is complete. Later boundaries may be split further when a dependency needs
 its own review and checks.
 
 ### Future TODOs
@@ -254,33 +256,29 @@ and design:
 
 ## Latest task and verification
 
-7 November 2026, D7e2b, base `1f535e58`: contextual batch input loads the
-canonical prelude automatically and honours explicit custom/empty preludes.
-The default module shares identity with later and diamond imports. Typecheck-only
-bootstrap prepares without evaluation; interpretation initialises once. Existing
-isolation, expression-before-file ordering and first-input typecheck exit remain.
+7 November 2026, D7e3a, base `539bcd4d`: the contextual REPL prints
+new/replaced definitions and aliases, displays current contextual environments,
+loads files and retains state after failed commands and interrupts. Existing
+printing and setting controls are shared. `@withtype` remains the next milestone.
 The [design](doc/modal-effects-design.md#d7-frontend-integration-plan) records
-the unset-prelude and always-prepared-bootstrap choices for review.
+snapshot export and declaration identity checks.
 
-Independent review passed eleven batch cases, three changed Freezeml cases and
-three selector/lowering controls; no remaining findings:
-`/tmp/links-d7e2b-review-summary.log`. An optional legacy flag was removed after
-review found registration-order priority; the existing `--set=fresco=false`
-selector remains. The initial legacy-control expression was corrected before
-final focused checking. Three self-contained Fresco Freezeml cases now select
-an empty prelude explicitly while retaining their suite's display settings.
+Independent review passed three new API unit groups and six selected real REPL
+scenarios; no remaining findings: `/tmp/links-d7e3a-review-summary.log`.
+All 13 writer hashes matched. All writers finished, review was complete and the
+combined diff was inspected before integration.
 
-All writers finished, review was complete and the combined diff was inspected
-before integration. The build, 1,508 unit tests and 1,066 regression cases
+The build, 1,511 unit tests, nine real REPL scenarios and 1,066 regression cases
 passed; 14 existing examples remain ignored. Logs below are in
-`/tmp/links-d7e2b-verification`; `revision.txt` and `source.sha256` identify the
+`/tmp/links-d7e3a-verification`; `revision.txt` and `source.sha256` identify the
 tested sources. Source hashes and added/new-line whitespace pass. Documentation
 was updated afterwards.
 
 | Command | Result | Log |
 |---|---|---|
 | `make no-db` | Passed | `build.log` |
-| `opam exec -- ./run-tests nodb-unit-tests` | 1,508 passed | `unit.log` |
+| `opam exec -- ./run-tests nodb-unit-tests` | 1,511 passed | `unit.log` |
+| `python3 tests/fresco_repl.py` | 9 passed | `repl.log` |
 | `./test-harness tests/fresco_batch.tests` | 11 passed | `fresco_batch.log` |
 | `./test-harness tests/fresco_examples.tests` | 36 passed | `fresco_examples.log` |
 | `./test-harness tests/switch_functions.tests` | 14 passed | `switch_functions.log` |
@@ -318,7 +316,7 @@ Documentation-only update: text and whitespace checked.
 
 ## Next action
 
-Complete D7e frontend/source migration, starting with the contextual REPL. Prioritise ordinary functional-language use. Keep socket
+Complete D7e frontend/source migration, starting with contextual REPL type search. Prioritise ordinary functional-language use. Keep socket
 examples, XML/forms, FFI/function locations and their dependent migrations
 in [future work](#future-todos).
 Review, test and commit each milestone before the next. Pause after D7 is

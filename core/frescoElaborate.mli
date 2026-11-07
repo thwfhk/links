@@ -63,3 +63,8 @@ val alias_group : t -> Sugartypes.alias list -> t
     are published together only after every declaration succeeds. *)
 val declarations : t -> string -> t
 val read : ?global:bool -> t -> string -> t * annotation
+
+(** Detached alias snapshots with current solutions. Change detection compares
+    private declaration records before exporting fresh type graphs. *)
+val aliases : t -> (string * Types.tycon_spec) list
+val changed_aliases : previous:t -> t -> (string * Types.tycon_spec) list
