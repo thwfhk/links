@@ -212,8 +212,8 @@ records two compatibility choices and their alternatives:
 1. The user confirmed preserving Links' implicit named rigid Type/Row/Presence
    binders in written function signatures, without generalising unsigned
    definitions.
-2. For review: close the parser's synthetic tail in ordinary braced Row
-   arguments, preserving Links' behaviour with legacy effect sugar disabled.
+2. The user confirmed closing the parser's synthetic tail in ordinary braced
+   Row arguments, preserving Links' behaviour with legacy effect sugar disabled.
    With both `effect_sugar` and `open_default` enabled, Links inserts an open
    tail. The contextual implementation follows the documented replacement of
    legacy effect sugar and closes this synthetic tail.

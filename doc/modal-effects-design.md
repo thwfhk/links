@@ -617,7 +617,7 @@ structure, including either placement relative to quantifiers. An absolute
 modality in a callback type does not supply the outer function's default.
 Local and expression annotations retain their supplied modalities.
 
-**For user review: closed ordinary braced row arguments.** Treat the parser's
+**Confirmed by the user: closed ordinary braced row arguments.** Treat the parser's
 synthetic `$eff` tail as closed when it comes from an ordinary braced Row
 argument, such as `R({x:Int})`. Links accepts this as a closed row with
 `effect_sugar=false`. With both legacy `effect_sugar` and its `open_default`

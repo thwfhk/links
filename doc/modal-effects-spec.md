@@ -13,7 +13,9 @@ reasons and reference comparisons. Section 9 states the initial effect context.
    polymorphism, first-class modal types and modal-kind refinement.
 4. Replace existing effect annotations and migrate affected programs.
 
-Record and variant rows retain row variables and presence types. Higher-rank
+Record and variant rows retain row variables and presence types. Ordinary
+braced row arguments such as `R({x:Int})` are closed unless a row variable is
+explicitly supplied. Higher-rank
 polymorphism and first-class modal types are included. Higher-order effect
 declarations, explicit effect variables from Met(X), term-level masking,
 database support, control-flow linearity and session failure are outside
