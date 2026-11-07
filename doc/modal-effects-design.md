@@ -765,6 +765,27 @@ A request/acknowledgement exchange through the relay executes on both paths.
 D8 must check and resolve the close/link case; the reproducer and both results
 are in `/tmp/links-d7c2a-review-link-runtime.log`. D7c2a retains the runtime.
 
+**Choice for review:** require `Wild` for session selection and offer. Legacy
+source checking omits this requirement, while the IR checker requires it.
+The contextual rule agrees with the session primitives and the recorded
+regex migration choice. Keeping the legacy source rule would require removing
+the IR effect requirement. Contextual IR checks use scoped `Wild`, return the
+selected continuation, and check offered branch continuation and result types.
+A baseline program selecting `Go` and then receiving an integer executes with
+IR checking disabled; the legacy checker reports the original channel type
+where the input continuation is expected. The command and result are in
+`/tmp/links-d7c2b-selection-baseline.log`.
+Duplicate offer labels retain the last branch, as in the existing
+`CompilePatterns` map construction. Check every written branch's result and
+ordinary usage before lowering. Preserve checked outer variant and continuation
+annotations. The legacy duplicate/annotation execution probes are in
+`/tmp/links-d7c2b-review-legacy-patterns.log`.
+Nested selection exposed another contextual IR comparison issue: existing
+runtime dual construction can retain a dual flag on a closed row tail while
+Fresco removes it. Contextual row equality ignores that flag when both tails
+are closed, after comparing their fields. Open-row dual flags and legacy IR
+equality remain unchanged.
+
 ### D7 prelude prerequisites
 
 Library migration exposed two frontend gaps. Skeleton inference checks a

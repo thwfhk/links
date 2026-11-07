@@ -81,3 +81,80 @@ Generic link rejects two copies of the same protocol
 sig join : forall s::Type(Any,Session,Any). modal [Wild] ((s,s) -> ()) fun join(a,b) { ~link[s](a,b) } ()
 exit : 1
 stderr : @.*Type error:.*
+
+Selection returns the chosen input continuation
+typename Choice = [&|Go:!Int.End,Stop:End|&]; var ap = (new() : AP(Choice)); var p = spawn { offer(accept(ap)) { case Go(c) -> close(send(42,c)) case Stop(c) -> close(c) } }; { var c = select Go request(ap); var (x,c) = receive(c); close(c); x }
+stdout : 42 : Int
+
+Offer selects the second branch
+typename Choice = [&|Go:!Int.End,Stop:End|&]; var ap = (new() : AP(Choice)); var p = spawn { offer(accept(ap)) { case Go(c) -> close(send(42,c)) case Stop(c) -> { close(c); print("stop") } } }; close(select Stop request(ap))
+stdout : stop() : ()
+
+Selection rejects an unknown label
+fun(c:([+|Go:End|+])) { select Stop c }
+exit : 1
+stderr : @.*Type error:.*
+
+Selection requires a selecting endpoint
+fun(c:([&|Go:End|&])) { select Go c }
+exit : 1
+stderr : @.*Type error:.*
+
+Offer requires an offering endpoint
+fun(c:([+|Go:End|+])) { offer(c) { case Go(c) -> close(c) } }
+exit : 1
+stderr : @.*Type error:.*
+
+Selection requires Wild
+sig choose : ([+|Go:End|+]) -> End fun choose(c) { select Go c } ()
+exit : 1
+stderr : @.*Type error:.*
+
+Offer requires Wild
+sig choose : ([&|Go:End|&]) -> End fun choose(c) { offer(c) { case Go(c) -> c } } ()
+exit : 1
+stderr : @.*Type error:.*
+
+An offered continuation cannot be discarded
+fun(c:([&|Go:End|&])) { offer(c) { case Go(c) -> () } }
+exit : 1
+stderr : @.*Type error:.*
+
+Offer branches must agree on their result type
+fun(c:([&|Go:End,Stop:End|&])) { offer(c) { case Go(c) -> { close(c); 42 } case Stop(c) -> { close(c); true } } }
+exit : 1
+stderr : @.*Type error:.*
+
+Offer rejects a missing closed branch
+fun(c:([&|Go:End,Stop:End|&])) { offer(c) { case Go(c) -> close(c) } }
+exit : 1
+stderr : @.*Type error:.*
+
+Offer preserves a handler around its branch
+effect E { Read : () => Int; } var ap = (new() : AP([&|Go:End|&])); var p = spawn { close(select Go request(ap)) }; handle <E> ({ offer(accept(ap)) { case Go(c) -> { close(c); do Read } } }) { case x -> x case <Read => k> -> k(42) }
+stdout : 42 : Int
+
+Duplicate offer labels retain the last branch
+var ap = (new() : AP([&|Go:End|&])); var p = spawn { offer(accept(ap)) { case Go(c) -> { close(c); print("first") } case Go(c) -> { close(c); print("last") } } }; close(select Go request(ap))
+stdout : last() : ()
+
+Offer preserves an outer variant annotation
+var ap = (new() : AP([&|Go:End|&])); var p = spawn { offer(accept(ap)) { case (Go(c):[|Go:End|]) -> { close(c); print("done") } } }; close(select Go request(ap))
+stdout : done() : ()
+
+Offer checks an annotated continuation
+var ap = (new() : AP([&|Go:End|&])); var p = spawn { offer(accept(ap)) { case Go(c:End) -> { close(c); print("done") } } }; close(select Go request(ap))
+stdout : done() : ()
+
+An offer continuation annotation must match its protocol
+fun(c:([&|Go:End|&])) { offer(c) { case Go(c:(!Int.End)) -> close(send(42,c)) } }
+exit : 1
+stderr : @.*Type error:.*
+
+Nested selection returns each continuation in turn
+var ap = (new() : AP([&|More:[&|Value:!Int.End,Done:End|&],Stop:End|&])); var p = spawn { offer(accept(ap)) { case More(c) -> offer(c) { case Value(c) -> close(send(42,c)) case Done(c) -> close(c) } case Stop(c) -> close(c) } }; { var c = select More request(ap); var c = select Value c; var (x,c) = receive(c); close(c); x }
+stdout : 42 : Int
+
+Selection evaluates its endpoint once
+var ap = (new() : AP([&|Go:End|&])); var p = spawn { offer(accept(ap)) { case Go(c) -> close(c) } }; close(select Go { print("endpoint"); request(ap) })
+stdout : endpoint() : ()

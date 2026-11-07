@@ -88,6 +88,78 @@ let function_program ?(effects=Some []) body =
   [Ir.Fun definition], Ir.Return (variable fn)
 
 let suite = "Fresco scoped effect IR" >::: [
+  "contextual Select returns the selected continuation" >:: (fun _ ->
+    let wild = { reader with Ir.effect_name = "Wild"; effect_reserved = true;
+      effect_parameters = []; effect_operations = M.empty } in
+    let ambient = [{ EffectRow.name = "Wild"; arguments = [] }] in
+    let continuation = Types.Input (int,Types.End) in
+    let channel_type = Types.Select (Types.make_singleton_closed_row ("Go",Types.Present continuation)) in
+    let channel = binder channel_type in
+    let variables = Env.Int.bind (Var.var_of_binder channel) channel_type Env.Int.empty in
+    let select = [],Ir.Special (Ir.Select ("Go",variable channel)) in
+    let bound typ = let result = binder typ in
+      [Ir.letm (result,snd select)],Ir.Return (variable result) in
+    check ~registry:[wild] ~ambient ~variables continuation (bound continuation);
+    reject "type" (fun () -> check ~registry:[wild] ~ambient ~variables channel_type (bound channel_type));
+    reject "Wild" (fun () -> check ~registry:[wild] ~variables continuation select);
+    reject "label" (fun () -> check ~registry:[wild] ~ambient ~variables continuation
+      ([],Ir.Special (Ir.Select ("Missing",variable channel)))));
+
+  "contextual Choice checks binders coverage and branch results" >:: (fun _ ->
+    let wild = { reader with Ir.effect_name = "Wild"; effect_reserved = true;
+      effect_parameters = []; effect_operations = M.empty } in
+    let ambient = [{ EffectRow.name = "Wild"; arguments = [] }] in
+    let row = Types.make_closed_row (M.of_list ["Go",Types.End; "Stop",Types.End]) in
+    let channel_type = Types.Choice row in
+    let channel = binder channel_type in
+    let variables = Env.Int.bind (Var.var_of_binder channel) channel_type Env.Int.empty in
+    let branch typ value = binder typ,([],Ir.Return value) in
+    let branches = M.of_list ["Go",branch Types.End (int_value 42); "Stop",branch Types.End (int_value 7)] in
+    let choice branches = [],Ir.Special (Ir.Choice (variable channel,branches)) in
+    check ~registry:[wild] ~ambient ~variables int (choice branches);
+    reject "Wild" (fun () -> check ~registry:[wild] ~variables int (choice branches));
+    reject "cover" (fun () -> check ~registry:[wild] ~ambient ~variables int (choice (M.remove "Stop" branches)));
+    reject "branch" (fun () -> check ~registry:[wild] ~ambient ~variables int (choice M.empty));
+    reject "type" (fun () -> check ~registry:[wild] ~ambient ~variables int
+      (choice (M.add "Go" (branch int (int_value 42)) branches)));
+    reject "type" (fun () -> check ~registry:[wild] ~ambient ~variables int
+      (choice (M.add "Go" (branch Types.End (Ir.Constant (Constant.Bool true))) branches)));
+    let first = binder Types.End in
+    reject "unbound" (fun () -> check ~registry:[wild] ~ambient ~variables Types.End
+      (choice (M.of_list ["Go",(first,([],Ir.Return (variable first)));
+        "Stop",(binder Types.End,([],Ir.Return (variable first)))]))));
+
+  "contextual session branches reject non-session continuations" >:: (fun _ ->
+    let wild = { reader with Ir.effect_name = "Wild"; effect_reserved = true;
+      effect_parameters = []; effect_operations = M.empty } in
+    let ambient = [{ EffectRow.name = "Wild"; arguments = [] }] in
+    List.iter (fun selecting ->
+      let row = Types.make_singleton_closed_row ("Go",Types.Present int) in
+      let typ = if selecting then Types.Select row else Types.Choice row in
+      let channel = binder typ in
+      let variables = Env.Int.bind (Var.var_of_binder channel) typ Env.Int.empty in
+      let special = if selecting then Ir.Select ("Go",variable channel) else
+        Ir.Choice (variable channel,M.singleton "Go" (binder int,([],Ir.Return (int_value 42)))) in
+      reject "session continuation" (fun () -> check ~registry:[wild] ~ambient ~variables int ([],Ir.Special special)))
+      [true;false];
+    let row = Types.make_closed_row (M.of_list ["Go",Types.End; "Bad",int]) in
+    let typ = Types.Select row in
+    let channel = binder typ in
+    let variables = Env.Int.bind (Var.var_of_binder channel) typ Env.Int.empty in
+    reject "session continuation" (fun () -> check ~registry:[wild] ~ambient ~variables Types.End
+      ([],Ir.Special (Ir.Select ("Go",variable channel)))));
+
+  "contextual row equality retains open-row duality" >:: (fun _ ->
+    let compare row =
+      let fields,tail,_ = TypeUtils.extract_row_parts row in
+      let source = Types.Select row in
+      let target = Types.Select (Types.Row (fields,tail,true)) in
+      let input = binder source and output = binder target in
+      let variables = Env.Int.bind (Var.var_of_binder input) source Env.Int.empty in
+      check ~variables target ([Ir.letm (output,Ir.Return (variable input))],Ir.Return (variable output)) in
+    compare (Types.make_singleton_closed_row ("Go",Types.Present Types.End));
+    reject "type" (fun () -> compare (Types.make_singleton_open_row
+      ("Go",Types.Present Types.End) (Linearity.Any,Restriction.Session))));
   "operation checks declared signature and ambient occurrence" >:: (fun _ ->
     check ~ambient:[selected] int (ask ()));
   "operation requires a declaration registry" >:: (fun _ ->

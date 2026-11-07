@@ -19,6 +19,8 @@ and 'a node =
   | Variant of string * 'a term
   | If of 'a term * 'a term * 'a term
   | Switch of 'a term * ('a pattern * 'a term) list
+  | Select of string * 'a term
+  | Offer of 'a term * ('a pattern * 'a term) list
   | TypeAbstraction of Quantifier.t list * 'a term
   | TypeApplication of 'a term * (PrimaryKind.t * 'a) list
   | Coerce of 'a term
@@ -202,6 +204,10 @@ let join s pos left right =
     | [a;b] -> a.S.typ,b.S.typ | _ -> assert false in
   let context, typ = get pos "Types are inconsistent" (FrescoConsistency.consistent (env s) (context s) left right) in
   ctx s context, typ
+let join_row s pos left right =
+  let context,typ = get pos "Session choice rows do not agree"
+    (FrescoConsistency.consistent (env s) (context s) ~primary_kind:PrimaryKind.Row left right) in
+  ctx s context,typ
 let subtype support s pos mode typ =
   let rec mode_roots = function
     | C.Infer -> [] | C.Check t -> [root t]
@@ -283,6 +289,8 @@ let rec map_term f binders e =
     | Variant (n,e) -> Variant (n,child e)
     | If (c,t,e) -> If (child c,child t,child e)
     | Switch (e,cases) -> Switch (child e, List.map (fun (p,e) -> map_pattern f binders p,child e) cases)
+    | Select (label,e) -> Select (label,child e)
+    | Offer (e,cases) -> Offer (child e,List.map (fun (p,e) -> map_pattern f binders p,child e) cases)
     | TypeAbstraction (qs,e) -> TypeAbstraction (qs,map_term f (qs @ binders) e)
     | TypeApplication (e,args) -> TypeApplication (child e,List.map (fun (pk,t) -> pk,f binders pk t) args)
     | Coerce e -> Coerce (child e)
@@ -630,6 +638,14 @@ and infer_node support s mode source =
   | G.FnAppl (fn,args) ->
      infer_application support s mode pos (fun s mode -> infer_term support s mode fn) args
   | G.Spawn (kind,location,body,_) -> infer_spawn support s mode pos kind location body
+  | G.Select (label,channel) ->
+     let s,channel,row = infer_session_channel support s pos true channel in
+     let s,payload = if support = C.Skeleton && row = S.Ghost then s,S.Ghost
+       else row_field s pos row label in
+     let s,payload = if support = C.Skeleton then s,payload else
+       require s pos (TypeParameter.make (PrimaryKind.Type,(Linearity.Any,Restriction.Session))) payload in
+     finish s payload (Select (label,channel))
+  | G.Offer (channel,cases,_) -> infer_offer support s mode pos channel cases
   | G.Receive (cases,_) ->
      let s,scrutinee = infer_application support s C.Infer pos
        (fun s mode -> let s,fn = primitive s pos "recv" in coerce support s pos mode fn) [] in
@@ -1135,6 +1151,72 @@ and infer_switch support s mode pos scrutinee cases =
        let pattern,body = match wrapped.node with Switch (_,[p,e]) -> p,e | _ -> assert false in
        branches s ((pattern,body) :: previous) (s.uses :: usages) cases in
   branches s [] [] cases
+and infer_session_channel support s pos selecting source =
+  if support = C.Type && Option.is_none (EffectRow.find wild s.ambient) then
+    error pos "Session selection and offer require Wild in the ambient context";
+  let s,channel = infer_term support s C.Infer source in
+  let rec expose_channel s channel = match expose s pos channel.typ with
+    | S.Modal (_,payload) ->
+       let s,channel = coerce support s pos (C.Check payload) channel in
+       expose_channel s channel
+    | typ -> s,channel,typ in
+  let s,channel,typ = expose_channel s channel in
+  let rec protocol typ = match expose s pos typ with
+    | S.Dual body ->
+       let dual = get pos "Invalid session dual" (FrescoRecursive.dual body) in
+       (match dual with S.Dual _ -> dual | _ -> protocol dual)
+    | typ -> typ in
+  let shape = protocol typ in
+  let s,row = match selecting,shape with
+    | true,S.Select row | false,S.Choice row -> s,row
+    | _ when support = C.Skeleton -> s,S.Ghost
+    | _ ->
+       let s,row = fresh s pos PrimaryKind.Row in
+       let s,row = require s pos
+         (TypeParameter.make (PrimaryKind.Row,(Linearity.Any,Restriction.Session))) row in
+       let expected = if selecting then S.Select row else S.Choice row in
+       let s,_ = join s pos typ expected in s,row in
+  let s,row = if support = C.Skeleton && row = S.Ghost then s,row else join_row s pos row row in
+  s,channel,row
+and infer_offer support s mode pos channel cases =
+  if cases = [] then error pos "An offer requires a branch";
+  let rec choice_pattern pattern = match WithPos.node pattern with
+    | G.Pattern.HasType (inner,_) -> choice_pattern inner
+    | G.Pattern.Variant (label,payload) ->
+       let payload = Option.value ~default:(WithPos.make ~pos:(WithPos.pos pattern) G.Pattern.Any) payload in
+       let rec continuation pattern = match WithPos.node pattern with
+         | G.Pattern.HasType (inner,_) -> continuation inner
+         | G.Pattern.Variable _ | G.Pattern.Any -> ()
+         | _ -> error (WithPos.pos pattern) "An offer branch requires a continuation variable or wildcard" in
+       continuation payload;
+       label,payload
+    | _ -> error (WithPos.pos pattern) "An offer branch requires a labelled continuation" in
+  let labels = List.map (fun (pattern,_) -> fst (choice_pattern pattern)) cases in
+  let s,channel,row = infer_session_channel support s pos false channel in
+  let s,fields = List.fold_left (fun (s,fields) label ->
+    let s,payload = if support = C.Skeleton && row = S.Ghost then s,S.Ghost
+      else row_field s pos row label in
+    let s,payload = if support = C.Skeleton then s,payload else require s pos
+      (TypeParameter.make (PrimaryKind.Type,(Linearity.Any,Restriction.Session))) payload in
+    s,StringMap.add label (S.Present payload) fields) (s,StringMap.empty) labels in
+  let closed = S.Row (fields,S.Closed,false) in
+  let s,row = if support = C.Skeleton && row = S.Ghost then s,closed
+    else join_row s pos row closed in
+  (* Reuse switch branch typing and usage checks, while retaining the channel
+     as a channel in the checked term and in the generated IR. *)
+  let cases = List.map (fun (pattern,body) ->
+    let rec fill pattern = match WithPos.node pattern with
+      | G.Pattern.HasType (inner,annotation) -> WithPos.with_node pattern
+          (G.Pattern.HasType (fill inner,annotation))
+      | G.Pattern.Variant (label,None) -> WithPos.with_node pattern
+          (G.Pattern.Variant (label,Some (WithPos.make ~pos:(WithPos.pos pattern) G.Pattern.Any)))
+      | _ -> pattern in
+    fill pattern,body) cases in
+  let scrutinee = term pos (S.Variant row) (Constant (Constant.Bool false)) in
+  let s,branches = infer_switch support s mode pos scrutinee cases in
+  match branches.node with
+  | Switch (_,cases) -> s,{ branches with node = Offer (channel,cases) }
+  | _ -> assert false
 and infer_spawn support s mode pos spawn_kind location body =
   let waiting = spawn_kind = G.Wait in
   if support = C.Skeleton && waiting then

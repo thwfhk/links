@@ -164,4 +164,111 @@ let suite = "Fresco sessions" >::: [
       };
       var (f,c) = freeze(receive)[Message,End](request(ap)); close(c); (f(42),f(true))
     |});
+
+  "selection changes the continuation protocol" >:: (fun _ ->
+    accept "fun(c:([+|Go:!Int.End|+])) { select Go c }";
+    reject "fun(c:([+|Go:End|+])) { select Missing c }";
+    reject "fun(c:End) { select Go c }";
+    reject "fun(c:([+|Go:Int|+])) { select Go c }");
+
+  "selection and offer retain generic session continuations" >:: (fun _ ->
+    accept {|sig choose : forall s::Type(Any,Session,Any).
+      modal [Wild] (([+|Go:s|+]) -> s)
+      fun choose(c) { select Go c }|};
+    accept {|sig branch : forall s::Type(Any,Session,Any).
+      modal [Wild] (([&|Go:s, Stop:s|&]) -> s)
+      fun branch(c) { offer(c) { case Go(k) -> k case Stop(k) -> k } }|});
+
+  "selection and offer execute both branches with checked IR" >:: (fun _ ->
+    List.iter (fun label -> execution (`Int 42)
+      ("var ap = (new() : AP([&|Go:!Int.End, Stop:!Int.End|&])); " ^
+       "var p = spawn { offer(accept(ap)) { " ^
+       "case Go(c) -> close(send(42,c)) case Stop(c) -> close(send(42,c)) } }; " ^
+       "var (x,c) = receive(select " ^ label ^ " request(ap)); close(c); x")) ["Go"; "Stop"]);
+
+  "offer checks every duplicate branch and retains the last one" >:: (fun _ ->
+    execution (`Int 42) {|
+      var ap = (new() : AP([&|Go:?Int.End|&]));
+      var p = spawn { close(send(0,select Go request(ap))) };
+      offer(accept(ap)) {
+        case Go(c) -> var (_,c) = receive(c); close(c); 7
+        case Go(c) -> var (_,c) = receive(c); close(c); 42
+      }
+    |};
+    reject {|fun(c:([&|Go:End|&])) { offer(c) {
+      case Go(k) -> close(k); true case Go(k) -> close(k); 42
+    } }|};
+    reject {|fun(c:([&|Go:End|&])) { offer(c) {
+      case Go(k) -> 7 case Go(k) -> close(k); 42
+    } }|});
+
+  "offer checks branch coverage and protocol" >:: (fun _ ->
+    reject "fun(c:([&|Go:End, Stop:End|&])) { offer(c) { case Go(k) -> close(k) } }";
+    reject "fun(c:([&|Go:End|&])) { offer(c) { case Stop(k) -> close(k) } }";
+    reject "fun(c:End) { offer(c) { case Go(k) -> close(k) } }";
+    reject "fun(c:([&|Go:Int|&])) { offer(c) { case Go(k) -> k } }");
+
+  "offer branches consume linear continuations and captures" >:: (fun _ ->
+    reject "fun(c:([&|Go:End|&])) { offer(c) { case Go(k) -> () } }";
+    reject "fun(c:([&|Go:End|&])) { offer(c) { case Go(k) -> close(k); close(k) } }";
+    reject "fun(c:([&|Go:End|&])) { offer(c) { case Go(_) -> () } }";
+    accept {|fun(c:([&|Go:End, Stop:End|&]),d:End) {
+      offer(c) { case Go(k) -> close(k); close(d) case Stop(k) -> close(k); close(d) }
+    }|};
+    reject {|fun(c:([&|Go:End, Stop:End|&]),d:End) {
+      offer(c) { case Go(k) -> close(k); close(d) case Stop(k) -> close(k) }
+    }|});
+
+  "offer retains supported pattern annotations" >:: (fun _ ->
+    accept "fun(c:([&|Go:End|&])) { offer(c) { case (Go(k):[|Go:End|]) -> close(k) } }";
+    accept "fun(c:([&|Go:End|&])) { offer(c) { case Go(k:End) -> close(k) } }";
+    reject "fun(c:([&|Go:End|&])) { offer(c) { case Go(k:Int) -> k } }";
+    reject "fun(c:([&|Go:End|&])) { offer(c) { case other -> 42 } }";
+    List.iter (fun pattern -> accept
+      ("sig drop : forall s::Type(Unl,Session,Any). " ^
+       "modal [Wild] (([&|Go:s|&]) -> Int) fun drop(c) { offer(c) { case " ^ pattern ^ " -> 42 } }"))
+      ["Go(_)"; "Go"]);
+
+  "selection and offer require Wild" >:: (fun _ ->
+    reject {|sig choose : ([+|Go:End|+]) -> End
+      fun choose(c) { select Go c }|};
+    reject {|sig branch : ([&|Go:End|&]) -> End
+      fun branch(c) { offer(c) { case Go(k) -> k } }|});
+
+  "selection retains supplied polymorphic message protocols" >:: (fun _ ->
+    execution (`Int 42) {|
+      typename Message = modal [] (forall a. (a) -> a);
+      var ap = (new() : AP([&|Go:!Message.End|&]));
+      var p = spawn { offer(accept(ap)) {
+        case Go(c) -> close(~send[Message,End]((fun(x) { x } : Message),c))
+      } };
+      var (f,c) = freeze(receive)[Message,End](select Go request(ap)); close(c); f(42)
+    |});
+
+  "offer retains scoped user handlers" >:: (fun _ ->
+    ignore (Fresco_modal_source_tests.execute (`Int 42) {|
+      effect Offset { Ask : () => Int; }
+      var ap = (new() : AP([+|Go:!Int.End|+]));
+      var p = spawn { close(send(1,select Go accept(ap))) };
+      handle <Offset> (offer(request(ap)) {
+        case Go(c) -> var (x,c) = receive(c); close(c); x + do Ask
+      }) {
+        case x -> x
+        case <Ask => k> -> k(41)
+      }
+    |}));
+
+  "nested selection changes continuation twice" >:: (fun _ ->
+    execution (`Int 42) {|
+      var ap = (new() : AP([&|More:[&|Value:!Int.End,Done:End|&],Stop:End|&]));
+      var p = spawn { offer(accept(ap)) {
+        case More(c) -> offer(c) {
+          case Value(c) -> close(send(42,c)) case Done(c) -> close(c)
+        }
+        case Stop(c) -> close(c)
+      } };
+      var c = select More request(ap);
+      var c = select Value c;
+      var (x,c) = receive(c); close(c); x
+    |});
 ]

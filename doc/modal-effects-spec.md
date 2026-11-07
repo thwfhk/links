@@ -435,6 +435,13 @@ retain their `Session` restriction without an additional `Abs` requirement
 for local calls. A channel or access point captured by a spawned process or
 sent as a message must satisfy the existing absolute-value rule. Access
 points remain reusable; session endpoints retain ordinary linear usage.
+Selection and offer require `Wild`. Selection consumes its endpoint and
+returns the chosen branch's continuation. Offer consumes its endpoint and
+checks each branch using that branch's continuation type; branch result types
+and captured linear-value usage must agree.
+Offer patterns use a label with a continuation variable or wildcard, optionally
+with type annotations. Duplicate labels retain the last branch; every written
+branch is checked.
 
 ## 8. Compatibility and examples
 

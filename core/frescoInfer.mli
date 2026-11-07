@@ -20,6 +20,8 @@ and 'a node =
   | Variant of string * 'a term
   | If of 'a term * 'a term * 'a term
   | Switch of 'a term * ('a pattern * 'a term) list
+  | Select of string * 'a term
+  | Offer of 'a term * ('a pattern * 'a term) list
   | TypeAbstraction of Quantifier.t list * 'a term
   | TypeApplication of 'a term * (PrimaryKind.t * 'a) list
   | Coerce of 'a term

@@ -91,7 +91,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D7c1b | Actor locations/variants, mailbox polling and spawnWait | `b6902b96` |
 | D7c1b1 | Bound type variables and argument positions in modal subtyping | `1822df37` |
 | D7c1c | Full message suite and actor cases in mixed suites | `75072fad` |
-| D7c2a | Session primitives, absolute messages and generic dual consistency | This commit |
+| D7c2a | Session primitives, absolute messages and generic dual consistency | `2fc7f620` |
+| D7c2b | Selection/offer inference, execution and contextual IR checks | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -174,7 +175,7 @@ user requested on 7 November 2026. The main agent owns integration and these rec
 
 D7a (`1f7ff34e`), D7b1 (`4fad3532`) and D7b2a (`db0d3a75`) are complete.
 D7b2b (`72e47dbc`) and D7b3 (`f09237bd`) are complete. D7b4a0 (`8cfe88a3`) is complete. D7b4a collection migration (`0b2c0d3f`) is complete. D7b4b (`efc1bca2`) is complete. D7b4c (`4e009da6`) is complete. D7c1a core actors (`ef94a794`) and D7c1b actor variants are complete.
-D7c1b1 polymorphic export is complete. D7c1c actor migration is complete. D7c2a session primitives are complete. D7c2b selection/offer is next. Later boundaries may be split further when a dependency needs
+D7c1b1 polymorphic export is complete. D7c1c actor migration is complete. D7c2a session primitives are complete. D7c2b selection/offer is complete. D7c2c session helpers are next. Later boundaries may be split further when a dependency needs
 its own review and checks.
 
 ## Recorded decisions
@@ -190,39 +191,36 @@ and design:
 
 ## Latest task and verification
 
-7 November 2026, D7c2a, base `75072fad`: ten session primitives use contextual
-signatures. The [session design](doc/modal-effects-design.md#d7-session-integration)
-records absolute messages, contextual residual protocols and runtime location
-limits. The message `Abs` requirement is marked for review. Generic linking
-also exposed and fixed universal-ghost handling around rigid session duals.
+7 November 2026, D7c2b, base `2fc7f620`: selection and offer check and lower
+to existing runtime operations. The [session design](doc/modal-effects-design.md#d7-session-integration)
+records the review-worthy `Wild` requirement, checked continuation/branch types,
+duplicate last-branch behaviour and contextual closed-row dual comparison.
+Legacy IR branches and runtime implementations are unchanged.
 
-Independent review found no remaining integration issues. Focused execution
-passed 19 cases; final focused units passed 85 cases (65 consistency and 20
-session). Tests cover AP variants, repeated connections, local rigid protocols,
-linear endpoint capture/delegation, polymorphic/modal messages and rejection
-of invalid kinds, effects, duality and ordinary usage. Review record:
-`/tmp/links-d7c2a-review-summary.log`; focused unit output:
-`/tmp/links-d7c2a-core-unit-final.log`.
-
-The execution audit reproduced an existing close/link buffer failure on both
-frontends. A bidirectional relay exchange succeeds. The defect is recorded
-for D8 in the session design; runtime code is unchanged.
+Independent review resolved nested selection's closed-row dual representation
+mismatch and checked malformed IR protocols, binders, coverage, results and
+scope. All 22 focused source cases, eight pattern probes, three extra cases
+and the direct open-row duality control pass. No findings remain. Record:
+`/tmp/links-d7c2b-review-summary.log`. Final focused units passed 55 cases
+(31 session and 24 scoped IR), recorded in
+`/tmp/links-d7c2b-core-unit-second.log`; all 35 session regression cases passed
+before integrated testing.
 
 All writers finished, review fixes were applied and the combined diff was
-inspected before integrated checks. All checks passed, and the eight source/test
+inspected before integrated checks. All checks passed, and the seven source/test
 hashes still match after testing. Logs below are under
-`/tmp/links-d7c2a-verification`; documentation was updated afterwards.
+`/tmp/links-d7c2b-verification`; documentation was updated afterwards.
 
 | Command | Result | Log |
 |---|---|---|
 | `make no-db` | Passed | `build.log` |
-| `opam exec -- ./run-tests nodb-unit-tests` | 1,380 passed | `unit.log` |
+| `opam exec -- ./run-tests nodb-unit-tests` | 1,395 passed | `unit.log` |
 | `./test-harness tests/fresco.tests` | 70 passed | `fresco.log` |
 | `./test-harness tests/fresco_typecheck.tests` | 2 passed | `fresco_typecheck.log` |
 | `./test-harness tests/fresco_modal.tests` | 20 passed | `fresco_modal.log` |
 | `./test-harness tests/fresco_prelude.tests` | 27 passed | `fresco_prelude.log` |
 | `./test-harness tests/fresco_actors.tests` | 49 passed | `fresco_actors.log` |
-| `./test-harness tests/fresco_sessions.tests` | 18 passed | `fresco_sessions.log` |
+| `./test-harness tests/fresco_sessions.tests` | 35 passed | `fresco_sessions.log` |
 | `./test-harness tests/messages.tests` | 11 passed on Fresco | `messages.log` |
 | `./test-harness tests/sessions.tests` | 11 passed on legacy path | `sessions.log` |
 | `./test-harness tests/handlers.tests` | 95 passed | `handlers.log` |
@@ -244,7 +242,7 @@ Documentation-only update: text and whitespace checked.
 
 ## Next action
 
-Implement D7c2b selection/offer,
+Implement D7c2c session helpers,
 then continue through the recorded D7 milestones. Review, test and commit
 each milestone before the next. Pause after D7 is complete, before starting
 D8, as requested on 7 November 2026. Both D6 choices are confirmed.

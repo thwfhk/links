@@ -136,6 +136,20 @@ let rec computation names quantifiers expression =
      let env = Env.String.empty, types, Types.make_empty_closed_row () in
      let cases = CompilePatterns.compile_cases env (runtime_type expression.typ, var, cases) in
      Ir.with_bindings (bindings @ [Ir.letm (binder, tail)]) cases
+  | Select (label,channel) ->
+     let bindings,channel = value names quantifiers channel in
+     bindings,Ir.Special (Ir.Select (label,channel))
+  | Offer (channel,cases) ->
+     let typ = runtime_type channel.typ in
+     let bindings,tail = computation names quantifiers channel in
+     let binder,var = Var.fresh_var_of_type typ in
+     let cases = List.map (fun (pattern,body) ->
+       let names,pattern = pattern_ir names pattern in
+       [pattern],(fun _ -> computation names quantifiers body)) cases in
+     let types = Env.Int.bind var typ (Lazy.force primitive_ir_types) in
+     let env = Env.String.empty,types,Types.make_empty_closed_row () in
+     let cases = CompilePatterns.compile_choices env (runtime_type expression.typ,var,cases) in
+     Ir.with_bindings (bindings @ [Ir.letm (binder,tail)]) cases
   | Operation (selected, name, arguments) ->
      require_handlers expression;
      let bindings, arguments = values names quantifiers arguments in
@@ -202,7 +216,7 @@ and value names quantifiers expression =
   | Coerce body ->
      let bindings, body = child_value body in
      bindings, Ir.Coerce (body, runtime_type expression.typ)
-  | Apply _ | Escape _ | If _ | Let _ | Switch _ | Operation _ | Handle _
+  | Apply _ | Escape _ | If _ | Let _ | Switch _ | Select _ | Offer _ | Operation _ | Handle _
   | Range _ | ConcatMap _ | SortBy _ ->
      let bindings, tail = computation names quantifiers expression in
      let binding, value = bind Var.Scope.Local "" quantifiers expression.typ tail in

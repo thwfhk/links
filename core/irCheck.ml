@@ -605,9 +605,11 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       else
         let (lfield_env, lrow_var, ldual) = remove_absent_fields_if_closed (Types.flatten_row r1) in
         let (rfield_env, rrow_var, rdual) = remove_absent_fields_if_closed (Types.flatten_row r2) in
+        let duals_agree = ldual = rdual ||
+          (context.contextual && Types.is_closed_row r1 && Types.is_closed_row r2) in
         let r1 = eq_field_envs (context, lfield_env, rfield_env) in
         let r2 = eq_row_vars (context, lrow_var, rrow_var) in
-          r1 && r2 && ldual=rdual
+          r1 && r2 && duals_agree
     and eq_presence (context, l, r) =
       match Types.concrete_field_spec l, Types.concrete_field_spec r with
       | Absent, Absent -> true
@@ -765,6 +767,24 @@ struct
     method impose_presence_of_effect (effect_name, effect_pre) occurrence : unit =
       let effect_typ = TypeUtils.from_present effect_pre in
       ensure_effect_present_in_row (o#extract_type_equality_context ()) allowed_effects effect_name effect_typ occurrence
+
+    method impose_session_wild occurrence =
+      if contextual then begin
+        let wild = List.find_opt (fun signature -> signature.effect_reserved && signature.effect_parameters = [])
+          effect_signatures in
+        match wild with
+        | Some signature -> ensure (Option.is_some (EffectRow.find signature.effect_name scoped_ambient))
+            "Session selection and choice require Wild" occurrence
+        | None -> raise_ir_type_error "Missing scoped Wild declaration" occurrence
+      end else o#impose_presence_of_effect Types.wild_present occurrence
+
+    method check_session_type typ occurrence =
+      let valid = compare_runtime_types ~erase_modal_kinds:false (o#extract_type_equality_context ()) typ typ
+        (fun environment context typ _ ->
+          match FrescoSkeletonKind.require environment context
+            (TypeParameter.make (PrimaryKind.Type,(Linearity.Any,Restriction.Session))) typ with
+          | Ok _ -> true | Error _ -> false) in
+      ensure valid "A session branch requires a session continuation" occurrence
 
     method add_typevar_to_context id kind = {< type_var_env = Env.bind id kind type_var_env  >}
     (* dangerous, unnecessary, and ungrammatical *)
@@ -1218,11 +1238,49 @@ struct
             let o, v, t = o#value v in
             (* TODO: What is the correct argument type for v, since it expects a continuation? *)
               o, CallCC v, return_type ~overstep_quantifiers:false t
-        | Select (l, v) -> (* TODO perform checks specific to this constructor *)
-           o#impose_presence_of_effect Types.wild_present (SSpec special);
+        | Select (l, v) ->
+           o#impose_session_wild (SSpec special);
            let o, v, t = o#value v in
+           let t = if not contextual then t else
+             let () = o#check_session_type t (SSpec special) in
+             match TypeUtils.concrete_type t with
+             | Types.Select row ->
+                let fields,_,_ = TypeUtils.extract_row_parts (fst (Types.unwrap_row row)) in
+                (match StringMap.find_opt l fields with
+                 | Some (Types.Present continuation) ->
+                    o#check_session_type continuation (SSpec special); continuation
+                 | _ -> raise_ir_type_error "Unknown session selection label" (SSpec special))
+             | _ -> raise_ir_type_error "Selection requires a selection protocol" (SSpec special) in
            o, Select (l, v), t
-        | Choice (v, bs) -> (* TODO perform checks specific to this constructor *)
+        | Choice (v, bs) when contextual ->
+           o#impose_session_wild (SSpec special);
+           let o,v,typ = o#value v in
+           o#check_session_type typ (SSpec special);
+           let row = match TypeUtils.concrete_type typ with
+             | Types.Choice row -> row
+             | _ -> raise_ir_type_error "Choice requires a choice protocol" (SSpec special) in
+           let fields,_,_ = TypeUtils.extract_row_parts (fst (Types.unwrap_row row)) in
+           let present = StringMap.fold (fun label presence labels -> match presence with
+             | Types.Present continuation ->
+                o#check_session_type continuation (SSpec special); StringSet.add label labels
+             | Types.Absent -> labels
+             | _ -> raise_ir_type_error "Choice has an unknown branch presence" (SSpec special))
+             fields StringSet.empty in
+           let branches = StringMap.fold (fun label _ labels -> StringSet.add label labels) bs StringSet.empty in
+           ensure (not (StringSet.is_empty branches)) "Choice requires a branch" (SSpec special);
+           ensure (Types.is_closed_row row && StringSet.equal present branches)
+             "Choice branches must cover its protocol" (SSpec special);
+           let o,bs,types = StringMap.fold (fun label (binder,body) (o,bs,types) ->
+             let expected = TypeUtils.choice_at label typ in
+             o#check_eq_types expected (Var.type_of_binder binder) (SSpec special);
+             let o,binder = o#binder binder in
+             let o,body,typ = o#computation body in
+             let o = o#remove_binder binder in
+             o,StringMap.add label (binder,body) bs,typ :: types) bs (o,StringMap.empty,[]) in
+           let typ = List.hd types in
+           List.iter (fun other -> o#check_eq_types typ other (SSpec special)) (List.tl types);
+           o,Choice (v,bs),typ
+        | Choice (v, bs) ->
            o#impose_presence_of_effect Types.wild_present (SSpec special);
            let o, v, _ = o#value v in
            let o, bs, branch_types =
