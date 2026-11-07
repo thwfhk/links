@@ -25,8 +25,11 @@ let suites =
            FrescoCompare.suite;
            FrescoConsistency.suite;
            FrescoSubtype.suite;
+           FrescoJoin.suite;
            FrescoElaborate.suite;
            Fresco_source_tests.suite;
+           Fresco_modal_source_tests.suite;
+           Fresco_effect_ir_tests.suite;
            ModalSyntax.suite;
            ModalDeclarations.suite;
            ModalResolution.suite;

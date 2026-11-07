@@ -8,7 +8,7 @@ struct
 
   let make_eval_def : Ir.fun_def -> Ir.eval_fun_def =
     fun fdef ->
-    let {fn_binder; fn_tyvars = _; fn_params; fn_body; fn_closure; fn_location; fn_unsafe = _} = fdef in
+    let {fn_binder; fn_tyvars = _; fn_params; fn_body; fn_closure; fn_effects = _; fn_location; fn_unsafe = _} = fdef in
     let info = Var.info_of_binder fn_binder in
     info, (List.map Var.var_of_binder fn_params, fn_body), opt_map Var.var_of_binder fn_closure, fn_location
 

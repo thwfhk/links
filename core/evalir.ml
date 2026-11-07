@@ -954,6 +954,10 @@ struct
        value env f >>= fun f ->
        apply cont env (f, [`Continuation cont])
     (* Handlers *)
+    | ScopedHandle (_, _, handler) ->
+       special env cont (Handle handler)
+    | ScopedOperation (_, name, arguments, typ) ->
+       special env cont (DoOperation (name, arguments, typ))
     | Handle { ih_comp = m; ih_cases = clauses; ih_return = return; ih_depth = depth } ->
        (* Slight hack *)
        begin

@@ -34,6 +34,25 @@ type location = CommonTypes.Location.t
 
 (* INVARIANT: all IR binders have unique names *)
 
+type scoped_effect_row = Types.datatype EffectRow.t [@@deriving show]
+type effect_application = Types.datatype EffectRow.entry [@@deriving show]
+
+type operation_signature = {
+  operation_arguments : Types.datatype list;
+  operation_result : Types.datatype;
+} [@@deriving show]
+
+(** Source checking proves modal introduction, access and caller contexts.
+    Contextual IR retains full effect arguments and declaration identities.
+    Its checker validates first-occurrence lookup, instantiated signatures,
+    complete handler groups and the ambient rows of function/handler bodies. *)
+type effect_signature = {
+  effect_name : string;
+  effect_reserved : bool;
+  effect_parameters : Quantifier.t list;
+  effect_operations : operation_signature name_map;
+} [@@deriving show]
+
 type value =
   | Constant   of Constant.t                      (* constant: c *)
   | Variable   of var                             (* variable use: x *)
@@ -66,6 +85,7 @@ and fun_def =
     fn_params   : binder list;
     fn_body     : computation;
     fn_closure  : binder option;
+    fn_effects  : scoped_effect_row option; (* Contextual body scope; legacy functions use None. *)
     fn_location : location;
     fn_unsafe   : bool
   }
@@ -120,6 +140,8 @@ and special =
   | Choice     of value * (binder * computation) name_map
   | Handle     of handler
   | DoOperation of Name.t * value list * Types.t
+  | ScopedOperation of effect_application * Name.t * value list * Types.t
+  | ScopedHandle of scoped_effect_row * scoped_effect_row * handler
 and computation = binding list * tail_computation
 and effect_case = binder * binder * computation
 and handler = {

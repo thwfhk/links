@@ -5,7 +5,7 @@ type 'a term = { node : 'a node; typ : 'a; position : SourceCode.Position.t }
 and 'a node =
   | Constant of Constant.t
   | Variable of string
-  | Lambda of DeclaredLinearity.t * (string * 'a) list * 'a term
+  | Lambda of DeclaredLinearity.t * (string * 'a) list * 'a term * 'a EffectRow.t
   | Apply of 'a term * 'a term list
   | Let of 'a definition list * 'a term
   | Record of (string * 'a term) list * 'a term option
@@ -17,6 +17,23 @@ and 'a node =
   | TypeAbstraction of Quantifier.t list * 'a term
   | TypeApplication of 'a term * (PrimaryKind.t * 'a) list
   | Coerce of 'a term
+  | Operation of 'a EffectRow.entry * string * 'a term list
+  | Handle of 'a handler
+and 'a handler = {
+  depth : Sugartypes.handler_depth;
+  computation : 'a term;
+  parameters : ('a pattern * 'a term) list;
+  return_cases : ('a pattern * 'a term) list;
+  operation_cases : 'a operation_clause list;
+  handled : 'a EffectRow.t;
+  ambient : 'a EffectRow.t;
+}
+and 'a operation_clause = {
+  operation : string;
+  arguments : 'a pattern list;
+  resumption : 'a pattern;
+  body : 'a term;
+}
 and 'a pattern = { pattern : 'a pattern_node; pattern_type : 'a; pattern_position : SourceCode.Position.t }
 and 'a pattern_node =
   | PAny
@@ -39,6 +56,7 @@ val empty : t
 val elaboration : t -> FrescoElaborate.t
 val with_elaboration : FrescoElaborate.t -> t -> t
 val context : t -> FrescoContext.t
+val ambient : t -> Types.typ EffectRow.t
 val lookup : t -> string -> Types.typ option
 val add_term : t -> string -> Types.typ -> t
 val infer : t -> Sugartypes.phrase -> t * expression

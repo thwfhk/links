@@ -1,0 +1,12 @@
+effect Reader { Ask : () => Int; }
+sig map : forall a, b. ((a) -> b, List a) -> List b
+fun map(f, xs) {
+  switch (xs) {
+    case [] -> []
+    case x :: tail -> f(x) :: map(f, tail)
+  }
+}
+handle (map(fun(x) { x + do Ask }, [1,2])) {
+  case xs -> xs
+  case <Ask => k> -> k(20)
+}

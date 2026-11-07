@@ -57,6 +57,9 @@ module type IR_VISITOR = sig
 
     method program : program -> ('self_type * program * Types.datatype)
 
+    method scoped_effect_row : Types.scoped_effect_row -> ('self_type * Types.scoped_effect_row)
+    method handler : handler -> ('self_type * handler * Types.datatype)
+
     method get_type_environment : environment
   end
 end
@@ -75,6 +78,8 @@ struct
   class visitor (tyenv : environment) =
   object ((o : 'self_type))
     val tyenv = tyenv
+
+    method scoped_effect_row row = o, row
 
     method lookup_type : var -> datatype = fun var ->
       Env.find var tyenv
@@ -391,7 +396,25 @@ struct
                          o, (b, c), t) bs in
            let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
            o, Choice (v, bs), t
-    | Handle ({ ih_comp; ih_cases; ih_return; ih_depth }) ->
+    | Handle handler ->
+       let o, handler, typ = o#handler handler in
+       o, Handle handler, typ
+    | ScopedHandle (handled, outer, handler) ->
+       let o, handled = o#scoped_effect_row handled in
+       let o, outer = o#scoped_effect_row outer in
+       let o, handler, typ = o#handler handler in
+       o, ScopedHandle (handled, outer, handler), typ
+    | ScopedOperation (selected, name, arguments, typ) ->
+       let o, effects = o#scoped_effect_row [selected] in
+       let selected = List.hd effects in
+       let o, arguments, _ = o#list (fun o -> o#value) arguments in
+       o, ScopedOperation (selected, name, arguments, typ), typ
+    | DoOperation (name, vs, t) ->
+       let (o, vs, _) = o#list (fun o -> o#value) vs in
+       (o, DoOperation (name, vs, t), t)
+
+
+    method handler { ih_comp; ih_cases; ih_return; ih_depth } =
        let (o, comp, _) = o#computation ih_comp in
            (* TODO FIXME traverse parameters *)
            let (o, depth) =
@@ -422,11 +445,7 @@ struct
              let (o, comp, t) = o#computation (snd ih_return) in
              o, (b, comp), t
            in
-       o, Handle { ih_comp = comp; ih_cases = cases; ih_return = return; ih_depth = depth}, t
-    | DoOperation (name, vs, t) ->
-       let (o, vs, _) = o#list (fun o -> o#value) vs in
-       (o, DoOperation (name, vs, t), t)
-
+       o, { ih_comp = comp; ih_cases = cases; ih_return = return; ih_depth = depth}, t
    method bindings : binding list -> ('self_type * binding list) =
       fun bs ->
         let o, bs =
@@ -452,8 +471,8 @@ struct
             let o, tc, _ = o#tail_computation tc in
               o, Let (x, (tyvars, tc))
         | Fun fundef ->
-            let {fn_binder = f; fn_tyvars; fn_params = xs; fn_body; fn_closure = z; fn_location; fn_unsafe} = fundef in
-            let o, xs, body, z =
+            let {fn_binder = f; fn_tyvars; fn_params = xs; fn_body; fn_closure = z; fn_effects; fn_location; fn_unsafe} = fundef in
+            let o, xs, body, z, fn_effects =
               let (o, z) = o#optionu (fun o -> o#binder) z in
               let (o, xs) =
                 List.fold_right
@@ -462,12 +481,13 @@ struct
                        (o, x::xs))
                   xs
                   (o, []) in
+              let o, fn_effects = o#optionu (fun o -> o#scoped_effect_row) fn_effects in
               let o, body, _ = o#computation fn_body in
-                o, xs, body, z in
+                o, xs, body, z, fn_effects in
             let o, f = o#binder f in
               (* TODO: check that xs and body match up with f *)
               let fundef = {fn_binder = f; fn_tyvars; fn_params = xs; fn_body = body; fn_closure = z;
-                            fn_location; fn_unsafe}
+                            fn_effects; fn_location; fn_unsafe}
               in
               o, Fun fundef
         | Rec defs ->
@@ -486,7 +506,7 @@ struct
               List.fold_left
                 (fun ((o : 'self_type), defs) fundef ->
                    let {fn_binder = f; fn_tyvars; fn_params = xs; fn_body; fn_closure = z;
-                        fn_location; fn_unsafe} = fundef
+                        fn_effects; fn_location; fn_unsafe} = fundef
                    in
                    let (o, z) = o#optionu (fun o -> o#binder) z in
                    let o, xs =
@@ -496,9 +516,10 @@ struct
                             (o, x::xs))
                        xs
                        (o, []) in
-                  let o, body, _ = o#computation fn_body in
+                  let o, fn_effects = o#optionu (fun o -> o#scoped_effect_row) fn_effects in
+              let o, body, _ = o#computation fn_body in
                   let fundef = {fn_binder = f; fn_tyvars; fn_params = xs; fn_body = body; fn_closure = z;
-                        fn_location; fn_unsafe}
+                        fn_effects; fn_location; fn_unsafe}
                   in
                     o, fundef::defs)
                 (o, [])
@@ -730,7 +751,7 @@ module ElimDeadDefs = struct
               List.fold_left
                 (fun ((o : 'self_type), defs) fundef ->
                   let {fn_binder = f; fn_tyvars; fn_params = xs; fn_body; fn_closure = z;
-                        fn_location; fn_unsafe} = fundef
+                        fn_effects; fn_location; fn_unsafe} = fundef
                    in
                    let o, z = o#optionu (fun o -> o#binder) z in
                    let o, xs =
@@ -741,10 +762,11 @@ module ElimDeadDefs = struct
                        xs
                        (o, []) in
                    let o = o#set_rec (Var.var_of_binder f) in
-                   let o, body, _ = o#computation fn_body in
+                   let o, fn_effects = o#optionu (fun o -> o#scoped_effect_row) fn_effects in
+              let o, body, _ = o#computation fn_body in
                    let o = o#set_mutrec (Var.var_of_binder f) in
                    let fundef = {fn_binder = f; fn_tyvars; fn_params = xs; fn_body = body; fn_closure = z;
-                        fn_location; fn_unsafe}
+                        fn_effects; fn_location; fn_unsafe}
                    in
                      o, fundef::defs)
                 (o, [])
@@ -843,8 +865,10 @@ end
     Note that the "roots" of type objects found in the AST are types, quantifiers, or type arguments
 **)
 let ir_type_mod_visitor tyenv type_visitor =
-  object
+  object (o)
     inherit Transform.visitor(tyenv) as super
+          method! scoped_effect_row row =
+            let _, row = type_visitor#scoped_effect_row row in o, row
           method! value = function
             | Inject (name, value, datatype) ->
                let (_, datatype) = type_visitor#typ datatype in
@@ -875,6 +899,9 @@ let ir_type_mod_visitor tyenv type_visitor =
             | Query (opt, policy, computation, datatype) ->
                let (_, datatype) = type_visitor#typ datatype in
                super#special (Query (opt, policy, computation, datatype))
+            | ScopedOperation (selected, name, vallist, datatype) ->
+               let _, datatype = type_visitor#typ datatype in
+               super#special (ScopedOperation (selected, name, vallist, datatype))
             | DoOperation (name, vallist, datatype) ->
                let (_, datatype) = type_visitor#typ datatype in
                super#special (DoOperation (name, vallist, datatype))

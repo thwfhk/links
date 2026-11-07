@@ -1,0 +1,11 @@
+effect Tick { Next : () => Int; }
+handle ({
+  var inner = handle (do Next) {
+    case x -> x
+    case <Next => k> -> k(1)
+  };
+  inner + do Next
+}) {
+  case x -> x
+  case <Next => k> -> k(10)
+}

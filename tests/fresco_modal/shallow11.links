@@ -1,0 +1,9 @@
+effect Tick { Next : () => Int; }
+shallowhandle ({ var x = do Next; x + do Next }) {
+  case x -> x
+  case <Next => k> ->
+    handle (k(1)) {
+      case x -> x
+      case <Next => again> -> again(10)
+    }
+}

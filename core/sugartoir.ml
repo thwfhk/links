@@ -327,7 +327,7 @@ struct
     let fun_binding (f_info, (fn_tyvars, xsb, fn_body), fn_location, fn_unsafe) =
       let fb, f = Var.fresh_var f_info in
         let fundef = {fn_binder = fb; fn_tyvars; fn_params = xsb; fn_body; fn_closure = None;
-                       fn_location; fn_unsafe}
+                       fn_effects = None; fn_location; fn_unsafe}
         in
         lift_binding (Fun fundef) f
 
@@ -345,7 +345,7 @@ struct
                 (fun (fb, (fn_tyvars, xsb, body), none, fn_location, fn_unsafe) ->
                   assert (none = None);
                   let fundef = {fn_binder = fb; fn_tyvars; fn_params = xsb;
-                                fn_body = body fs; fn_closure = none; fn_location; fn_unsafe}
+                                fn_body = body fs; fn_closure = none; fn_effects = None; fn_location; fn_unsafe}
                   in
                   fundef)
                 defs))

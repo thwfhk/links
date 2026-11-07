@@ -2,6 +2,8 @@ type state = { context: Context.t;
                global_vars: Utility.IntSet.t;
                retained_vars: Utility.IntSet.t;
                contextual: bool;
+               effect_signatures: Ir.effect_signature list;
+               ambient_effects: Types.scoped_effect_row;
                datatype: Types.datatype }
 
 type result = Result of { state: state;

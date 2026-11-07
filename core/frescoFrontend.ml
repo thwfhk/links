@@ -49,44 +49,7 @@ let quantified quantifiers body =
 
 (* Source checking has already validated modal access. IR retains the arrow
    and quantified types and uses their runtime representations at each use. *)
-let runtime_type typ =
-  let declarations = Hashtbl.create 4 in
-  let runtime_types = object (self)
-    inherit Types.Transform.visitor as super
-
-    method! typ = function
-      | Types.Modal (_, payload) -> self#typ payload
-      | Types.ForAll (quantifiers, body) ->
-         let self, body = self#typ body in
-         self, quantified quantifiers body
-      | (Types.Var _ | Types.Closed) as typ ->
-         self, Types.Meta (Unionfind.fresh typ)
-      | Types.Recursive _ as typ ->
-         let self, point = self#meta_type_var (Unionfind.fresh typ) in
-         self, Types.Meta point
-      | Types.RecursiveApplication app ->
-         let name = app.Types.r_unique_name in
-         let body =
-           match Hashtbl.find_opt declarations name with
-           | Some body -> body
-           | None ->
-              let body = lazy (Option.map (fun (formals, body) -> formals, snd (self#typ body))
-                (app.Types.r_body ())) in
-              Hashtbl.add declarations name body;
-              body in
-         let r_body () = Lazy.force body in
-         let r_unwind arguments dual =
-           match r_body () with
-           | None -> raise (Errors.internal_error ~filename:"frescoFrontend.ml"
-                             ~message:("Missing checked recursive type body for " ^ name))
-           | Some (formals, body) ->
-              let body = Instantiate.substitute_type_parameters formals arguments body in
-              if dual then Types.dual_type body else body in
-         let self, r_args = self#type_args app.Types.r_args in
-         self, Types.RecursiveApplication { app with Types.r_body; r_unwind; r_args }
-      | typ -> super#typ typ
-  end in
-  snd (runtime_types#typ typ)
+let runtime_type typ = RuntimeTypes.normalise typ
 let runtime_type_arg (kind, typ) = kind, runtime_type typ
 let var_value var = Ir.Variable var
 let type_arguments quantifiers = List.map Types.quantified_type_argument quantifiers
@@ -109,6 +72,11 @@ let bind scope name quantifiers typ tail =
 
 let lowering_error expression message =
   raise (Errors.Type_error (expression.position, message))
+
+let require_handlers expression =
+  if not (Settings.get Basicsettings.Handlers.enabled) then
+    raise (Errors.disabled_extension ~pos:expression.position
+      ~setting:("enable_handlers", true) ~flag:"enable-handlers" "Effect handlers")
 
 let rec pattern_ir names pattern =
   let module P = CompilePatterns.Pattern in
@@ -173,6 +141,15 @@ let rec computation names quantifiers expression =
      let env = Env.String.empty, types, Types.make_empty_closed_row () in
      let cases = CompilePatterns.compile_cases env (runtime_type expression.typ, var, cases) in
      Ir.with_bindings (bindings @ [Ir.letm (binder, tail)]) cases
+  | Operation (selected, name, arguments) ->
+     require_handlers expression;
+     let bindings, arguments = values names quantifiers arguments in
+     let selected = { selected with EffectRow.arguments =
+       List.map (RuntimeTypes.normalise ~erase_modal:false) selected.EffectRow.arguments } in
+     bindings, Ir.Special (Ir.ScopedOperation (selected, name, arguments, runtime_type expression.typ))
+  | Handle handler ->
+     require_handlers expression;
+     handler_ir names quantifiers expression handler
   | Let (definitions, body) ->
      let names, bindings = definitions_ir names quantifiers Var.Scope.Local definitions in
      Ir.with_bindings bindings (computation names quantifiers body)
@@ -190,9 +167,9 @@ and value names quantifiers expression =
        | Some value -> value
        | None -> lowering_error expression ("Missing checked variable " ^ name) in
      [], ir_value
-  | Lambda (_, parameters, body) ->
+  | Lambda (_, parameters, body, ambient) ->
      let binder = fresh_binder Var.Scope.Local "" (with_quantifiers quantifiers expression.typ) in
-     let def = function_ir names binder quantifiers parameters body in
+     let def = function_ir names binder quantifiers parameters body ambient in
      [Ir.Fun def], Ir.tapp (var_value (Var.var_of_binder binder), type_arguments quantifiers)
   | Record (fields, base) ->
      let base_bindings, base = match base with
@@ -222,7 +199,7 @@ and value names quantifiers expression =
   | Coerce body ->
      let bindings, body = child_value body in
      bindings, Ir.Coerce (body, runtime_type expression.typ)
-  | Apply _ | If _ | Let _ | Switch _ ->
+  | Apply _ | If _ | Let _ | Switch _ | Operation _ | Handle _ ->
      let bindings, tail = computation names quantifiers expression in
      let binding, value = bind Var.Scope.Local "" quantifiers expression.typ tail in
      bindings @ [binding], value
@@ -231,13 +208,76 @@ and values names quantifiers expressions =
   let bindings, values = List.split (List.map (value names quantifiers) expressions) in
   List.concat bindings, values
 
-and function_ir names binder quantifiers parameters body =
+and handler_ir names quantifiers expression handler =
+  let result_type = runtime_type expression.typ in
+  let initials, parameters = List.split (List.map (fun (pattern, initial) ->
+    let bindings, initial = value names quantifiers initial in
+    let binder = Var.fresh_binder_of_type (runtime_type pattern.pattern_type) in
+    bindings, (pattern, binder, initial)) handler.parameters) in
+  let env = Env.String.empty, Lazy.force primitive_ir_types, Types.make_empty_closed_row () in
+  let prepare_parameters () =
+    let parameter_names, parameter_wrappers =
+    List.fold_left (fun (names, wrappers) (pattern, binder, _) ->
+      let names, pattern = pattern_ir names pattern in
+      let wrapper body = CompilePatterns.let_pattern env pattern
+        (Ir.Variable (Var.var_of_binder binder), Var.type_of_binder binder) (body, result_type) in
+      names, wrapper :: wrappers) (names, []) parameters in
+    parameter_names, (fun body ->
+      List.fold_left (fun body wrapper -> wrapper body) body parameter_wrappers) in
+  let parameter_names, with_parameters = prepare_parameters () in
+  let return_binder = Var.fresh_binder_of_type (runtime_type handler.computation.typ) in
+  let return_cases = List.map (fun (pattern, body) ->
+    let names, pattern = pattern_ir parameter_names pattern in
+    [pattern], (fun _ -> computation names quantifiers body)) handler.return_cases in
+  let return_env = Env.String.empty,
+    Env.Int.bind (Var.var_of_binder return_binder) (Var.type_of_binder return_binder)
+      (Lazy.force primitive_ir_types), Types.make_empty_closed_row () in
+  let return_body = CompilePatterns.compile_cases return_env
+    (result_type, Var.var_of_binder return_binder, return_cases) |> with_parameters in
+  let cases = List.fold_left (fun cases clause ->
+    let parameter_names, with_parameters = prepare_parameters () in
+    let names, argument_patterns = List.fold_left (fun (names, patterns) pattern ->
+      let names, pattern = pattern_ir names pattern in
+      names, pattern :: patterns) (parameter_names, []) clause.arguments in
+    let argument_patterns = List.rev argument_patterns in
+    let argument_types = List.map (fun pattern -> runtime_type pattern.pattern_type) clause.arguments in
+    let argument_type, argument_pattern = match argument_types, argument_patterns with
+      | [typ], [pattern] -> typ, pattern
+      | types, patterns -> Types.make_tuple_type types,
+         CompilePatterns.Pattern.Record (StringMap.of_list
+           (List.mapi (fun index pattern -> string_of_int (index + 1), pattern) patterns), None) in
+    let argument = Var.fresh_binder_of_type argument_type in
+    let resume = Var.fresh_binder_of_type (runtime_type clause.resumption.pattern_type) in
+    let names, resume_pattern = pattern_ir names clause.resumption in
+    let body = computation names quantifiers clause.body in
+    let body = CompilePatterns.let_pattern env resume_pattern
+      (Ir.Variable (Var.var_of_binder resume), Var.type_of_binder resume) (body, result_type) in
+    let body = CompilePatterns.let_pattern env argument_pattern
+      (Ir.Variable (Var.var_of_binder argument), argument_type) (body, result_type)
+      |> with_parameters in
+    StringMap.add clause.operation (argument, resume, body) cases
+  ) StringMap.empty handler.operation_cases in
+  let parameters = List.map (fun (_, binder, initial) -> binder, initial) parameters in
+  let depth, outer_bindings = match handler.depth with
+    | Sugartypes.Deep -> Ir.Deep parameters, []
+    | Sugartypes.Shallow -> Ir.Shallow, List.map Ir.letmv parameters in
+  let row = EffectRow.map (RuntimeTypes.normalise ~erase_modal:false) in
+  let runtime_handler = {
+    Ir.ih_comp = computation names quantifiers handler.computation;
+    ih_cases = cases;
+    ih_return = return_binder, return_body;
+    ih_depth = depth;
+  } in
+  List.concat initials @ outer_bindings,
+    Ir.Special (Ir.ScopedHandle (row handler.handled, row handler.ambient, runtime_handler))
+
+and function_ir names binder quantifiers parameters body ambient =
   let names, parameters = List.fold_left (fun (names, parameters) (name, typ) ->
     let param = fresh_binder Var.Scope.Local name (runtime_type typ) in
     StringMap.add name (var_value (Var.var_of_binder param)) names, param :: parameters
   ) (names, []) parameters in
   { Ir.fn_binder = binder; fn_tyvars = quantifiers; fn_params = List.rev parameters;
-    fn_body = computation names [] body; fn_closure = None; fn_location = Location.Unknown;
+    fn_body = computation names [] body; fn_closure = None; fn_effects = Some (EffectRow.map (RuntimeTypes.normalise ~erase_modal:false) ambient); fn_location = Location.Unknown;
     fn_unsafe = false }
 
 and definitions_ir names quantifiers scope definitions =
@@ -282,7 +322,7 @@ and definition_ir names quantifiers scope = function
        match expression.node with
        | TypeAbstraction (more, body) -> lower binder (binders @ more) body
        | Coerce body -> lower binder binders body
-       | Lambda (_, parameters, body) -> function_ir names binder binders parameters body
+       | Lambda (_, parameters, body, ambient) -> function_ir names binder binders parameters body ambient
        | _ -> lowering_error expression "A recursive definition must lower to a function"
      in
      names, [Ir.Rec (List.rev_map (fun (binder, expression) -> lower binder quantifiers expression) definitions)]
@@ -310,6 +350,22 @@ let prior_types inference names =
   | Error _ ->
      raise (Errors.internal_error ~filename:"frescoFrontend.ml" ~message:"Cannot export previously checked bindings")
 
+let effect_signatures inference =
+  let elaboration = elaboration inference in
+  let headers = DesugarModules.effect_headers (FrescoElaborate.resolution_state elaboration) in
+  List.map (fun (effect_info : FrescoElaborate.effect_info) ->
+    let effect_reserved = match EffectHeaders.find_effect effect_info.name headers with
+      | Some header -> header.EffectHeaders.source_name = "Wild" || header.EffectHeaders.source_name = "Receive"
+      | None -> false in
+    let effect_operations = List.fold_left (fun operations (operation : FrescoElaborate.operation) ->
+      StringMap.add operation.name {
+        Ir.operation_arguments = List.map (RuntimeTypes.normalise ~erase_modal:false) operation.arguments;
+        operation_result = RuntimeTypes.normalise ~erase_modal:false operation.result;
+      } operations) StringMap.empty effect_info.operations in
+    { Ir.effect_name = effect_info.name; effect_reserved;
+      effect_parameters = effect_info.parameters; effect_operations }
+  ) (FrescoElaborate.effects elaboration)
+
 let run_program state program =
   let inference, definitions, expression = FrescoInfer.program state.inference program in
   let previous = StringMap.map (fun (var, _) -> var_value var) state.names in
@@ -323,6 +379,8 @@ let run_program state program =
   let vars names = StringMap.fold (fun _ (var, _) vars -> IntSet.add var vars) names IntSet.empty in
   let context = Context.{ empty with variable_environment = prior_types inference state.names } in
   let compiled = Backend.program ~globals:(vars state.names) ~retain:(vars names) ~contextual:true
+    ~effects:(effect_signatures inference)
+    ~ambient:(EffectRow.map (RuntimeTypes.normalise ~erase_modal:false) (FrescoInfer.ambient inference))
     context (runtime_type datatype) program in
   let values, value = Eval.run_program state.values compiled.program in
   { inference; names; values }, datatype, value

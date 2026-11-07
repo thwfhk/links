@@ -78,3 +78,13 @@ let require ?(binders = []) environment context parameter typ =
 let unrestricted ?(binders = []) ?(linearity = declared_linearity) environment context typ =
   let checking = C.checking_environment environment context in
   K.unrestricted_with (syntax linearity) checking.K.classification ~binders (Skeleton (None, typ))
+
+let absolute ?(binders = []) environment context typ =
+  let checking = C.checking_environment environment context in
+  let parameter = TypeParameter.make ~modal_kind:ModalKind.Abs
+    (PrimaryKind.Type, (Linearity.Any, Restriction.Any)) in
+  try
+    ignore (K.require_with (syntax declared_linearity) checking
+      ~refinable:(fun _ -> false) ~binders parameter (Skeleton (None, typ)));
+    true
+  with K.Error _ -> false

@@ -950,7 +950,7 @@ end = functor (K : CONTINUATION) -> struct
         let module Var' = Var in
         let open Code in
         let Ir.{fn_binder = fb; fn_tyvars = _; fn_params = xsb; fn_body = _; fn_closure = zb;
-                        fn_location; fn_unsafe = _} = fundef
+                        fn_effects = _; fn_location; fn_unsafe = _} = fundef
         in
         let f_var = Var'.var_of_binder fb in
         let bs = List.map name_binder xsb in
@@ -1181,6 +1181,10 @@ end = functor (K : CONTINUATION) -> struct
            bind (generate_cancel_stub env action cont)
          else
            bind (call (Var "receive") [gv c; K.reify cont])
+      | Ir.ScopedOperation (_, name, args, typ) ->
+         generate_special env (Ir.DoOperation (name, args, typ)) kappa
+      | Ir.ScopedHandle (_, _, handler) ->
+         generate_special env (Ir.Handle handler) kappa
       | Ir.DoOperation (name, args, _) ->
          let maybe_box = function
            | [v] -> gv v
@@ -1377,7 +1381,7 @@ end = functor (K : CONTINUATION) -> struct
     (string * string list * Code.t * Ir.location) =
     fun fundef ->
       let Ir.{fn_binder = fb; fn_tyvars = _; fn_params = xsb; fn_body; fn_closure = zb;
-                        fn_location; fn_unsafe = _} = fundef
+                        fn_effects = _; fn_location; fn_unsafe = _} = fundef
       in
       let (f, f_name) = name_binder fb in
       assert (f_name <> "");

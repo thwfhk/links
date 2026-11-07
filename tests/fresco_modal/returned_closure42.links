@@ -1,0 +1,9 @@
+effect Tick { Next : () => Int; }
+var thunk = handle <Tick> (fun() { do Next }) {
+  case f -> f
+  case <Next => k> -> k(1)
+};
+handle (thunk()) {
+  case x -> x
+  case <Next => k> -> k(42)
+}

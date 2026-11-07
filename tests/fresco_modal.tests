@@ -1,0 +1,75 @@
+---
+config: tests/fresco_modal.config
+---
+
+A handler infers its effect arguments
+tests/fresco_modal/handled42.links
+filemode : true
+args : --fresco
+stdout : 42 : Int
+
+Repeated effects select the nearest handler
+tests/fresco_modal/repeated11.links
+filemode : true
+args : --fresco
+stdout : 11 : Int
+
+Handler parameters pass through resumptions
+tests/fresco_modal/parameters42.links
+filemode : true
+args : --fresco
+stdout : 42 : Int
+
+Optimisation preserves handler parameters
+tests/fresco_modal/parameters42.links
+filemode : true
+args : --fresco --set=optimise=true
+stdout : 42 : Int
+
+Shallow resumption requires another handler
+tests/fresco_modal/shallow11.links
+filemode : true
+args : --fresco
+stdout : 11 : Int
+
+A returned closure runs under a later handler
+tests/fresco_modal/returned_closure42.links
+filemode : true
+args : --fresco
+stdout : 42 : Int
+
+Optimisation preserves a returned closure
+tests/fresco_modal/returned_closure42.links
+filemode : true
+args : --fresco --set=optimise=true
+stdout : 42 : Int
+
+A global map accepts an effectful callback
+tests/fresco_modal/map.links
+filemode : true
+args : --fresco
+stdout : [21, 22] : List Int
+
+Optimisation preserves the callback effect context
+tests/fresco_modal/map.links
+filemode : true
+args : --fresco --set=optimise=true
+stdout : [21, 22] : List Int
+
+Unhandled operations reject
+effect Reader { Ask : () => Int; } do Ask
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+Incomplete effect groups reject
+effect State { Get : () => Int; Put : (Int) => (); } handle (do Get) { case x -> x case <Get => k> -> k(42) }
+args : --fresco
+exit : 1
+stderr : @.*Missing operation clauses.*
+
+Calling an effectful returned closure without a handler rejects
+effect Tick { Next : () => Int; } var thunk = handle (fun() { do Next }) { case f -> f case <Next => k> -> k(1) }; thunk()
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*

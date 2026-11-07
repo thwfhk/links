@@ -575,6 +575,8 @@ let check_coercion source target =
       contextual = true;
       global_vars = Utility.IntSet.empty;
       retained_vars = Utility.IntSet.empty;
+      effect_signatures = [];
+      ambient_effects = [];
       datatype = target;
     } in
     let program = [], Ir.Return (Ir.Coerce (Ir.Variable variable, target)) in

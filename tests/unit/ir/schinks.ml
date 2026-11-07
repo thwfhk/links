@@ -531,6 +531,7 @@ let wi_def bin ?(tparams = []) params ?closure_var
           fn_params;
           fn_body;
           fn_closure = None;
+          fn_effects = None;
           fn_location = location;
           fn_unsafe = unsafe_sig;
         }
@@ -550,6 +551,7 @@ let wi_def bin ?(tparams = []) params ?closure_var
           fn_params;
           fn_body;
           fn_closure = Some cv_binder;
+          fn_effects = None;
           fn_location = location;
           fn_unsafe = unsafe_sig;
         }

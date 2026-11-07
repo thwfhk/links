@@ -1,0 +1,5 @@
+effect Reader(a::Abs) { Ask : () => a; }
+handle (do Ask) {
+  case x -> x
+  case <Ask => k> -> k(42)
+}

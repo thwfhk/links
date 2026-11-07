@@ -140,7 +140,8 @@ struct
             let o2 = o1#typ t2 in
             o2#typ t3
           | Query (_, _, _, t)
-          | DoOperation (_, _, t) ->
+          | DoOperation (_, _, t)
+          | ScopedOperation (_, _, _, t) ->
             o#typ t
           | _ -> o in
         o#super_special s
@@ -150,6 +151,10 @@ struct
         let free_type_vars = Types.free_type_vars t in
         (*Debug.print ("free type vars:" ^ (IntSet.show free_type_vars));*)
         Types.TypeVarSet.fold (fun tvar o ->  o#register_type_var tvar) free_type_vars o
+
+      method! scoped_effect_row row =
+        let o = List.fold_left (fun o typ -> o#typ typ) o (EffectRow.arguments row) in
+        o, row
 
       method type_arg (_pk, t) =
         o#typ t
@@ -222,7 +227,7 @@ struct
         | (Fun fundef as b) when Scope.is_local (Ir.binding_scope b)
                                  && Option.is_none fundef.fn_closure ->
            let
-             {fn_binder; fn_tyvars; fn_params; fn_body; fn_closure = _; fn_location; fn_unsafe} = fundef
+             {fn_binder; fn_tyvars; fn_params; fn_body; fn_closure = _; fn_effects; fn_location; fn_unsafe} = fundef
            in
 
           (* reset free and bound variables to be empty *)
@@ -247,6 +252,7 @@ struct
 
 
           (* Debug.print("Descending into: " ^ string_of_int (Var.var_of_binder f)); *)
+          let o = Option.fold ~none:o ~some:(fun row -> fst (o#scoped_effect_row row)) fn_effects in
           let o, body, _ = o#computation fn_body in
           (* Debug.print("Ascended from: " ^ string_of_int (Var.var_of_binder f)); *)
           let o = List.fold_left (fun o q -> o#quantifier_remove q) o fn_tyvars in
@@ -263,7 +269,7 @@ struct
           let o, f = o#binder f in
           let o = o#register_fun (Var.var_of_binder f) fenv_entry in
           (*Debug.print ("fenv: " ^ show_fenv o#get_fenv);*)
-          o, Fun {fn_binder; fn_tyvars; fn_params = params; fn_body = body; fn_closure = None; fn_location; fn_unsafe}
+          o, Fun {fn_binder; fn_tyvars; fn_params = params; fn_body = body; fn_closure = None; fn_effects; fn_location; fn_unsafe}
 
         | (Fun fundef) as b (* global *) ->
           let o = List.fold_left (fun o q -> o#quantifier q) o fundef.fn_tyvars in
@@ -298,7 +304,7 @@ struct
             List.fold_left
               (fun ((o : 'self), defs) fdef ->
                  let {fn_binder; fn_tyvars; fn_params; fn_body; fn_closure;
-                      fn_location; fn_unsafe}
+                      fn_effects; fn_location; fn_unsafe}
                    = fdef
                  in
                  assert (fn_closure = None);
@@ -310,11 +316,12 @@ struct
                         (o, x::xs))
                      fn_params
                      (o, []) in
+                 let o = Option.fold ~none:o ~some:(fun row -> fst (o#scoped_effect_row row)) fn_effects in
                  let o, body, _ = o#computation fn_body in
                  let o = List.fold_left (fun o q -> o#quantifier_remove q) o fn_tyvars in
 
                  o, {fn_binder; fn_tyvars; fn_params = params; fn_body = body; fn_closure = None;
-                      fn_location; fn_unsafe}::defs)
+                      fn_effects; fn_location; fn_unsafe}::defs)
               (o, [])
               defs in
 
@@ -356,7 +363,7 @@ struct
               List.fold_left
                 (fun ((o : 'self_type), defs) fundef ->
                    let {fn_binder; fn_tyvars; fn_params; fn_body; fn_closure;
-                        fn_location; fn_unsafe} = fundef
+                        fn_effects; fn_location; fn_unsafe} = fundef
                    in
                    assert (fn_closure = None);
                    let o = List.fold_left (fun o q -> o#quantifier q) o fn_tyvars in
@@ -367,9 +374,10 @@ struct
                           (o, x::params))
                        fn_params
                        (o, []) in
+                   let o = Option.fold ~none:o ~some:(fun row -> fst (o#scoped_effect_row row)) fn_effects in
                    let o, body, _ = o#computation fn_body in
                    let o = List.fold_left (fun o q -> o#quantifier_remove q) o fn_tyvars in
-                   let fundef = {fn_binder; fn_tyvars; fn_params = params; fn_body = body; fn_closure = None; fn_location; fn_unsafe} in
+                   let fundef = {fn_binder; fn_tyvars; fn_params = params; fn_body = body; fn_closure = None; fn_effects; fn_location; fn_unsafe} in
                    o, fundef::defs)
                 (o, [])
                 defs
@@ -504,7 +512,7 @@ struct
           o, bs' @ (b :: bs)
         | Fun fdef :: bs when fdef.fn_closure = None ->
           let {fn_binder = fb; fn_tyvars; fn_params = xs; fn_body; fn_closure = _;
-               fn_location; fn_unsafe} = fdef
+               fn_effects; fn_location; fn_unsafe} = fdef
           in
           assert (Scope.is_local (Var.scope_of_binder fb));
           let f = Var.var_of_binder fb in
@@ -560,7 +568,7 @@ struct
           let o = o#set_context parents' parent_env' cvars' in
           let o, fb = o#binder (o# generalise_function_type_for_hoisting fb) in
           let fundef = {fn_binder = fb; fn_tyvars; fn_params = xs; fn_body = body; fn_closure = zb;
-                        fn_location; fn_unsafe} in
+                        fn_effects; fn_location; fn_unsafe} in
           let fundef = o#generalise_function_body_for_hoisting fundef in
           let o = o#push_binding (Fun fundef) in
           let o, bs = o#bindings bs in
@@ -583,7 +591,7 @@ struct
               List.fold_left
                 (fun ((o : 'self), defs) fdef ->
                    let {fn_binder = fb; fn_tyvars; fn_params = xs; fn_body; fn_closure;
-                        fn_location; fn_unsafe} = fdef
+                        fn_effects; fn_location; fn_unsafe} = fdef
                    in
                    assert (fn_closure = None);
                    assert (Scope.is_local (Var.scope_of_binder fb));
@@ -629,7 +637,7 @@ struct
                        o#set_context (List.map (fun fb -> Var.var_of_binder fb, fb) fbs) z cvars, Some zb in
                    let o, body, _ = o#computation fn_body in
                    let o = o#set_context parents' parent_env' cvars' in
-                   let fundef = {fn_binder = fb; fn_tyvars; fn_params = xs; fn_body = body; fn_closure = zb; fn_location; fn_unsafe} in
+                   let fundef = {fn_binder = fb; fn_tyvars; fn_params = xs; fn_body = body; fn_closure = zb; fn_effects; fn_location; fn_unsafe} in
                    let fundef = o#generalise_function_body_for_hoisting fundef in
                    o, fundef::defs)
                 (o, [])
@@ -698,7 +706,7 @@ struct
 
       method generalise_function_body_for_hoisting : Ir.fun_def ->  Ir.fun_def = fun fundef ->
         let {fn_binder = f; fn_tyvars; fn_params = xs; fn_body; fn_closure = z;
-             fn_location; fn_unsafe} = fundef
+             fn_effects; fn_location; fn_unsafe} = fundef
         in
         let f_var = Var.var_of_binder f in
         let free_type_vars = (IntMap.find f_var fenv).typevars in
@@ -723,7 +731,8 @@ struct
               ) xs [] in
             (* Debug.print ("function currently being hoisted, before instantiation:\n" ^ Ir.string_of_binding (Fun (f, (tyvars, xs, body), z, location, unsafe))); *)
             let body = IrTraversals.InstantiateTypes.computation (o#get_type_environment) inner_maps fn_body in
-            {fn_binder = f; fn_tyvars = tyvars; fn_params = xs; fn_body = body; fn_closure = z; fn_location; fn_unsafe}
+            let fn_effects = Option.map (EffectRow.map (Instantiate.datatype inner_maps)) fn_effects in
+            {fn_binder = f; fn_tyvars = tyvars; fn_params = xs; fn_body = body; fn_closure = z; fn_effects; fn_location; fn_unsafe}
           end
 
 

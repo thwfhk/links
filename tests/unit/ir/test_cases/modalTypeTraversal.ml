@@ -54,6 +54,7 @@ let check_ir_equal expected actual =
   let state = { IrTransform.context = Context.empty;
                 global_vars = IntSet.empty; retained_vars = IntSet.empty;
                 contextual = false;
+                effect_signatures = []; ambient_effects = [];
                 datatype = Types.Not_typed } in
   let previous = Settings.get IrCheck.fail_on_ir_type_error in
   Fun.protect ~finally:(fun () -> Settings.set IrCheck.fail_on_ir_type_error previous)

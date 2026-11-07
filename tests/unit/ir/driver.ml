@@ -20,6 +20,8 @@ let check_program_first_error ir_prog =
       IrTransform.global_vars = Utility.IntSet.empty;
       IrTransform.retained_vars = Utility.IntSet.empty;
       IrTransform.contextual = false;
+      IrTransform.effect_signatures = [];
+      IrTransform.ambient_effects = [];
       IrTransform.datatype = Types.Not_typed;
     }
   in

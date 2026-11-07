@@ -138,7 +138,8 @@ module Env = Env.Int
 type type_eq_context = {
   typevar_subst : Var.var IntMap.t; (* equivalences of typevars *)
   tyenv: Kind.t Env.t; (* track kinds of bound typevars *)
-  contextual: bool
+  contextual: bool;
+  effect_signatures: Ir.effect_signature list
 }
 
 
@@ -298,7 +299,10 @@ let compare_runtime_types ~erase_modal_kinds ctx source target compare =
                       typ = snd (proof_types#typ typ) } in
      let environment = FrescoContext.checking_environment {
        FrescoKind.classification = FrescoKind.environment (fun _ -> None);
-       lookup_effect = (fun _ -> None) } context in
+       lookup_effect = (fun name ->
+         Option.map (fun signature ->
+           { FrescoKind.parameters = List.map Quantifier.to_parameter signature.effect_parameters })
+           (List.find_opt (fun signature -> signature.effect_name = name) ctx.effect_signatures)) } context in
      match FrescoSkeleton.of_types environment [root source; root target] with
      | Ok [source; target] ->
         let source = source.FrescoSkeleton.typ and target = target.FrescoSkeleton.typ in
@@ -705,7 +709,7 @@ struct
 
   type environment = datatype Env.t
 
-  let checker contextual tyenv =
+  let checker contextual effect_signatures initial_ambient tyenv =
   object (o)
     inherit IrTraversals.Transform.visitor(tyenv) as super
 
@@ -715,14 +719,48 @@ struct
 
     (* initialize to the default row of allowed toplevel effects*)
     val allowed_effects = Lib.typing_env.effect_row
+    val scoped_ambient = initial_ambient
 
     (* TODO: closure handling needs to be reworked properly *)
     method lookup_closure_def_for_fun fid = Env.find_opt fid closure_def_env
 
     (* Creates a context for type equality checking *)
-    method extract_type_equality_context () = { typevar_subst = IntMap.empty; tyenv = type_var_env; contextual }
+    method extract_type_equality_context () =
+      { typevar_subst = IntMap.empty; tyenv = type_var_env; contextual; effect_signatures }
 
     method set_allowed_effects eff_row = {< allowed_effects = eff_row >}, allowed_effects
+
+    method set_scoped_ambient row = {< scoped_ambient = row >}, scoped_ambient
+
+    method effect_signature name occurrence =
+      ensure contextual "Scoped effects require the contextual IR checker" occurrence;
+      match List.find_opt (fun signature -> signature.effect_name = name) effect_signatures with
+      | Some signature -> signature
+      | None -> raise_ir_type_error ("Missing effect declaration " ^ name) occurrence
+
+    method check_scoped_rows expected actual occurrence =
+      match EffectRow.match_equal expected actual with
+      | Some arguments -> List.iter (fun (left, right) -> o#check_eq_types left right occurrence) arguments
+      | None -> raise_ir_type_error "Scoped effect rows do not match" occurrence
+
+    method validate_scoped_row row occurrence =
+      List.iter (fun entry ->
+        let signature = o#effect_signature entry.EffectRow.name occurrence in
+        ensure (List.length signature.effect_parameters = List.length entry.EffectRow.arguments)
+          "Wrong number of scoped effect arguments" occurrence) row
+
+    method instantiate_operation selected name occurrence =
+      let signature = o#effect_signature selected.EffectRow.name occurrence in
+      ensure (List.length signature.effect_parameters = List.length selected.EffectRow.arguments)
+        "Wrong number of effect arguments" occurrence;
+      let operation = match StringMap.find_opt name signature.effect_operations with
+        | Some operation -> operation
+        | None -> raise_ir_type_error ("Operation does not belong to effect " ^ selected.EffectRow.name) occurrence in
+      let arguments = List.map (fun typ -> PrimaryKind.Type, typ) selected.EffectRow.arguments in
+      let instantiate typ =
+        Instantiate.substitute_type_parameters signature.effect_parameters arguments typ
+        |> RuntimeTypes.normalise in
+      List.map instantiate operation.operation_arguments, instantiate operation.operation_result
 
     method impose_presence_of_effect (effect_name, effect_pre) occurrence : unit =
       let effect_typ = TypeUtils.from_present effect_pre in
@@ -1190,7 +1228,72 @@ struct
                          o, (b, c), t) bs in
            let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
            o, Choice (v, bs), t
+        | ScopedOperation (selected, name, arguments, result) ->
+          let parameter_types, expected_result = o#instantiate_operation selected name (SSpec special) in
+          let first = match EffectRow.find selected.EffectRow.name scoped_ambient with
+            | Some first -> first
+            | None -> raise_ir_type_error "Operation effect is absent from the ambient scoped row" (SSpec special) in
+          o#check_scoped_rows [first] [selected] (SSpec special);
+          let o, arguments, argument_types = o#list (fun o -> o#value) arguments in
+          check_eq_type_lists (o#extract_type_equality_context ()) parameter_types argument_types (SSpec special);
+          o#check_eq_types expected_result result (SSpec special);
+          o, ScopedOperation (selected, name, arguments, result), result
+
+        | ScopedHandle (handled, outer, handler) ->
+          ensure contextual "Scoped handlers require the contextual IR checker" (SSpec special);
+          ensure (effect_signatures <> []) "A scoped handler requires an effect declaration registry" (SSpec special);
+          o#check_scoped_rows scoped_ambient outer (SSpec special);
+          let expected_operations = match handled with
+            | [] -> StringMap.empty
+            | [selected] ->
+               let signature = o#effect_signature selected.EffectRow.name (SSpec special) in
+               ensure (not signature.effect_reserved) "A reserved effect cannot be handled" (SSpec special);
+               ensure (List.length signature.effect_parameters = List.length selected.EffectRow.arguments)
+                 "Wrong number of handled effect arguments" (SSpec special);
+               signature.effect_operations
+            | _ -> raise_ir_type_error "A scoped handler must select one effect group" (SSpec special) in
+          ensure (StringMap.bindings expected_operations |> List.map fst =
+                  (StringMap.bindings handler.ih_cases |> List.map fst))
+            "Handler clauses must contain the complete effect group" (SSpec special);
+          let parameters = match handler.ih_depth with Deep parameters -> parameters | Shallow -> [] in
+          let o, parameters = List.fold_left (fun (o, parameters) (binder, initial) ->
+            let o, initial, typ = o#value initial in
+            o#check_eq_types (Var.type_of_binder binder) typ (SSpec special);
+            let o, binder = o#binder binder in
+            o, (binder, initial) :: parameters) (o, []) parameters in
+          let parameters = List.rev parameters in
+          let o, _ = o#set_scoped_ambient (EffectRow.extend handled outer) in
+          let o, computation, computation_type = o#computation handler.ih_comp in
+          let o, _ = o#set_scoped_ambient outer in
+          let return_binder, return_body = handler.ih_return in
+          o#check_eq_types computation_type (Var.type_of_binder return_binder) (SSpec special);
+          let o, return_binder = o#binder return_binder in
+          let o, return_body, return_type = o#computation return_body in
+          let o = o#remove_binder return_binder in
+          let o, cases = StringMap.fold (fun name (argument, resume, body) (o, cases) ->
+            let argument_types, result_type = o#instantiate_operation (List.hd handled) name (SSpec special) in
+            let argument_type = match argument_types with
+              | [typ] -> typ | types -> Types.make_tuple_type types in
+            o#check_eq_types argument_type (Var.type_of_binder argument) (SSpec special);
+            let resume_parameters, resume_result = match handler.ih_depth with
+              | Deep _ -> result_type :: List.map (fun (binder, _) -> Var.type_of_binder binder) parameters, return_type
+              | Shallow -> [result_type], computation_type in
+            o#check_eq_types (Arrow (Types.make_tuple_type resume_parameters, resume_result))
+              (Var.type_of_binder resume) (SSpec special);
+            let o, argument = o#binder argument in
+            let o, resume = o#binder resume in
+            let o, body, body_type = o#computation body in
+            o#check_eq_types return_type body_type (SSpec special);
+            let o = (o#remove_binder argument)#remove_binder resume in
+            o, StringMap.add name (argument, resume, body) cases) handler.ih_cases (o, StringMap.empty) in
+          let depth = match handler.ih_depth with Deep _ -> Deep parameters | Shallow -> Shallow in
+          let o = List.fold_left (fun o (binder, _) -> o#remove_binder binder) o parameters in
+          o, ScopedHandle (handled, outer,
+            { ih_comp = computation; ih_cases = cases; ih_return = return_binder, return_body; ih_depth = depth }),
+            return_type
+
         | Handle ({ ih_comp; ih_cases; ih_return; ih_depth }) ->
+          ensure (not contextual) "A contextual handler must retain scoped effect evidence" (SSpec special);
           (* outer effects is R_d in the IR formalization *)
           let outer_effects = Types.flatten_row allowed_effects  in
           let outer_effects_parts = TypeUtils.extract_row_parts outer_effects in
@@ -1296,6 +1399,7 @@ struct
           o, Handle { ih_comp = comp; ih_cases = cases; ih_return = return; ih_depth = depth}, return_t
 
         | DoOperation (name, vs, t) -> (* TODO perform checks specific to this constructor *)
+          ensure (not contextual) "A contextual operation must retain scoped effect evidence" (SSpec special);
           let (o, vs, vs_t) = o#list (fun o -> o#value) vs in
           let arg_type_actual =  make_tuple_type vs_t in
 
@@ -1354,6 +1458,7 @@ struct
              (tyvars : Quantifier.t list)
              (parameter_types : datatype list)
              (body : computation)
+             (body_effects : Types.scoped_effect_row option)
              (closure_var: binder option)
              (is_recursive : bool)
              (occurrence : ir_snippet)
@@ -1429,6 +1534,19 @@ struct
                 let kind = Quantifier.to_kind quant in
                 o#add_typevar_to_context var kind) o tyvars in
 
+        let o, previous_scoped_ambient =
+          if contextual then begin
+            let row = match body_effects with
+              | Some row -> row
+              | None -> raise_ir_type_error "A contextual function has no ambient effect evidence" occurrence in
+            o#validate_scoped_row row occurrence;
+            o#set_scoped_ambient row
+          end else begin
+            ensure (Option.is_none body_effects)
+              "Scoped function evidence requires the contextual IR checker" occurrence;
+            o, scoped_ambient
+          end in
+
         (* determine body type, using translated version of expected effects in context *)
         let allowed_effects =
           Option.value ~default:(Types.make_empty_closed_row ()) exp_effects_substed in
@@ -1436,6 +1554,7 @@ struct
         let o, body, body_type = o#computation body in
 
         let o = o#set_type_var_env previous_tyenv in
+        let o, _ = o#set_scoped_ambient previous_scoped_ambient in
         let o, _ = o#set_allowed_effects previously_allowed_effects in
 
 
@@ -1489,7 +1608,7 @@ struct
               expressed in terms of the type variables from tyvars (also for rec
               functions) *)
               let {fn_binder = f; fn_tyvars = tyvars; fn_params = xs; fn_body; fn_closure = z;
-                        fn_location; fn_unsafe} = fundef
+                        fn_effects; fn_location; fn_unsafe} = fundef
               in
               let lazy_check =
               lazy(
@@ -1508,6 +1627,7 @@ struct
                                 tyvars
                                 actual_parameter_types
                                 fn_body
+                                fn_effects
                                 z
                                 false
                                 (SBind binding) in
@@ -1523,7 +1643,7 @@ struct
               let o, f = o#binder f in
               let o = o#add_function_closure_binder (Var.var_of_binder f) z in
               let fundef = {fn_binder = f; fn_tyvars = tyvars; fn_params = xs; fn_body = body; fn_closure = z;
-                            fn_location = location; fn_unsafe}
+                            fn_effects; fn_location = location; fn_unsafe}
               in
               o, Fun fundef
 
@@ -1547,7 +1667,7 @@ struct
               List.fold_left
                 (fun ((o : 'self_type), defs) fundef ->
                    let {fn_binder = f; fn_tyvars; fn_params = xs; fn_body; fn_closure = z;
-                        fn_location; fn_unsafe} = fundef
+                        fn_effects; fn_location; fn_unsafe} = fundef
                    in
                    let o, xs =
                      List.fold_right
@@ -1564,6 +1684,7 @@ struct
                                 fn_tyvars
                                 actual_parameter_types
                                 fn_body
+                                fn_effects
                                 z
                                 (not fn_unsafe) (* Treat recursive bindings with unsafe sig as nonrecursive *)
                                 (SBind binding) in
@@ -1573,7 +1694,7 @@ struct
                   let o = OptionUtils.opt_app o#remove_binder o z in
                   let o = List.fold_right (fun b o -> o#remove_binder b) xs o in
                   let fundef = {fn_binder = f; fn_tyvars; fn_params = xs; fn_body = body; fn_closure = z;
-                                fn_location; fn_unsafe}
+                                fn_effects; fn_location; fn_unsafe}
                   in
                     o, fundef::defs)
                 (o, [])
@@ -1651,7 +1772,25 @@ struct
     let open IrTransform in
     let tenv = Context.variable_environment (context state) in
     let check =
-      lazy (let _, program', _ = (checker state.contextual tenv)#program program in program')
+      lazy (
+        if state.contextual then begin
+          let environment = {
+            FrescoKind.classification = FrescoKind.environment (fun _ -> None);
+            lookup_effect = (fun name -> Option.map (fun signature ->
+              { FrescoKind.parameters = List.map Quantifier.to_parameter signature.effect_parameters })
+              (List.find_opt (fun signature -> signature.effect_name = name) state.effect_signatures)) } in
+          List.iter (fun signature ->
+            try FrescoKind.check_effect_signature environment
+              ~parameters:signature.effect_parameters
+              ~operations:(List.map (fun (_, operation) ->
+                operation.operation_arguments, operation.operation_result)
+                (StringMap.bindings signature.effect_operations))
+            with FrescoKind.Error _ -> raise_ir_type_error "Invalid scoped effect declaration" (SProg program)
+          ) state.effect_signatures
+        end;
+        let checker = checker state.contextual state.effect_signatures state.ambient_effects tenv in
+        if state.contextual then checker#validate_scoped_row state.ambient_effects (SProg program);
+        let _, program', _ = checker#program program in program')
     in
     let program'' = handle_ir_type_error check program (SProg program) in
     return state program''

@@ -48,6 +48,9 @@ sig
 
     method program : program -> ('self_type * program * Types.datatype)
 
+    method scoped_effect_row : Types.scoped_effect_row -> ('self_type * Types.scoped_effect_row)
+    method handler : handler -> ('self_type * handler * Types.datatype)
+
     method get_type_environment : environment
   end
 end

@@ -18,3 +18,8 @@ val require : ?binders:Quantifier.t list -> FrescoKind.checking_environment -> F
 val unrestricted : ?binders:Quantifier.t list ->
   ?linearity:(FrescoSkeleton.declaration -> bool option) ->
   FrescoKind.checking_environment -> FrescoContext.t -> FrescoSkeleton.t -> bool
+
+(** Query an already established absolute requirement without refining the
+    context. Ordinary ghosts have their provisional skeleton kind [Abs]. *)
+val absolute : ?binders:Quantifier.t list -> FrescoKind.checking_environment ->
+  FrescoContext.t -> FrescoSkeleton.t -> bool

@@ -153,7 +153,8 @@ let pipeline : transformer array
      ; only_if IrCheck.typecheck (collapse "typechecking" typechecking)
      ; only_if show_compiled_ir_after_backend_transformations print_program |]
 
-let program ?(globals=IntSet.empty) ?(retain=IntSet.empty) ?(contextual=false) context' datatype program =
+let program ?(globals=IntSet.empty) ?(retain=IntSet.empty) ?(contextual=false)
+    ?(effects=[]) ?(ambient=[]) context' datatype program =
   let apply : IrTransform.result -> transformer -> IrTransform.result
     = fun (IrTransform.Result { program; state }) (module T) ->
     (* TODO run verification logic? *)
@@ -162,7 +163,8 @@ let program ?(globals=IntSet.empty) ?(retain=IntSet.empty) ?(contextual=false) c
   in
   let initial_state =
     IrTransform.{ datatype; context = context';
-                  global_vars = IntSet.union globals Lib.primitive_vars; retained_vars = retain; contextual }
+                  global_vars = IntSet.union globals Lib.primitive_vars; retained_vars = retain; contextual;
+                  effect_signatures = effects; ambient_effects = ambient }
   in
   let IrTransform.(Result { program; state = { context; datatype; _ } }) =
     Array.fold_left apply (IrTransform.return initial_state program) pipeline

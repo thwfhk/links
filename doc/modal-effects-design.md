@@ -622,6 +622,93 @@ examples using polymorphic nominal constructors are tested with an equivalent
 polymorphic helper application; replacing such an application with a direct
 Links tuple can change where supplied quantifiers are retained.
 
+List literals and list patterns impose `List`'s declared parameter requirements
+on their element types before constructing or checking the application. Fresh
+element unknowns acquire those requirements; other fresh unknowns keep their
+ordinary defaults.
+
+### D6 scoped effects in IR
+
+Keep contextual operation and handler nodes separate from legacy nodes. An
+operation retains its resolved identity and selected effect application. A
+handler retains its handled singleton row (or an empty row for a return-only
+handler) and outer row. Contextual function definitions retain their ambient
+row after runtime modal wrappers are erased. These rows preserve repeated
+occurrences and their type arguments through optimisation and closure conversion.
+
+Pass the checked declaration registry to the IR checker, including formal
+parameters and every operation signature. Check an operation against the first
+matching ambient occurrence. Check complete handler groups, clause argument and
+resumption types, and the rows for the computation and clauses. Source inference
+checks modal introduction and variable access before lowering; the IR retains
+the evidence needed to recheck operation scopes and handler structure.
+
+**For user review: modal call checks stay in source inference during D6.**
+Keep the D5 runtime type erasure and add scoped operation/handler evidence.
+An erased function call has no remaining modal guard for the IR checker to
+compare with its caller's context. In particular, a manually constructed IR
+call to a shallow resumption can omit the handler required by its source type.
+Source inference rejects that call and checks effect argument kinds. The IR
+checks declaration membership, arity and equality of retained effect arguments,
+then compares instantiated operation arguments and results; it does not repeat
+their ordinary/modal kind checks. The alternative is to retain modal call and
+coercion evidence and repeat kind checks throughout IR transformations. Audit
+this boundary in D7/D8 before removing the legacy path; the D6 direct-IR tests
+cover the evidence that D6 retains.
+
+Keep the existing `enable_handlers` feature setting for execution during D6.
+The runtime selects its continuation implementation when the process starts;
+changing the setting later cannot replace that implementation. Source execution
+tests start a fresh CLI process with handlers enabled. D7 owns changes to the
+default frontend and feature settings.
+
+Reserve the source declaration names `Wild` and `Receive` in every module and
+lexical scope. Their built-in identities are shared by annotations, the initial
+ambient row and handler rejection. `Receive` has an absolute message parameter;
+actor source support remains in D7.
+
+Matching a guarded record, variant or list propagates its leading guard to the
+bound fields. Projection preserves the same guard on its selected field and
+checks that discarded fields are unlimited. This follows the thesis' pattern
+splitting rule; extracting an absolute field can then remove its guard while
+extracting a contextual function retains it.
+
+Handler parameter initialisers use the outer variable environment. Parameters
+are available in return and operation clauses; the handled computation uses the
+outer variable environment. Deep resumptions take updated parameters after the
+operation result. This follows `typeSugar.ml` and `sugartoir.ml`.
+
+Join handler and branch result types separately from strict consistency used
+for function domains and patterns. Compose each result's leading modalities,
+join the payloads by consistency, then join the modalities using the ambient
+row. Absolute rows use a union; relative extensions and removal masks use an
+intersection, followed by checks from both input modalities to the result.
+Match repeated effect occurrences from left to right throughout. This follows
+the reference's `join` and `join_mod` rules in `lib/type.ml`.
+
+An already absolute payload permits dropping the leading modalities without
+effect equations. Variable use also removes a leading modality when its payload
+is already absolute, including after crossing locks. This query does not refine
+unknowns. Otherwise try their argument equations first. If they fail,
+discard those equations and try payload `Abs` refinement from the context after
+payload consistency. Successful equations remain committed. The skeleton query
+treats ordinary ghosts as provisionally absolute; full inference repeats the
+join after filling them. These are the same kind and matching policies used
+by modal subtyping.
+
+**For user review: infer the handler result from return clauses first.** Join
+all return-clause results to choose the handler result type, then check every
+operation clause at that type. An expected handler result type supplies this
+choice. This prevents an operation clause from widening the result modality
+after resumptions have already been used with a narrower result type. The
+reference joins operation results after typing resumptions.
+
+For example, a return clause producing `modal [A] (() -> Int)` and an
+operation clause producing `modal [B] (() -> Int)` require a handler result
+annotation `modal [A,B] (() -> Int)`. Without it, D6 rejects the second clause.
+The main alternative is to infer a common result from all clause skeletons
+before checking any resumption uses, accepting more unannotated handlers.
+
 ### Contextual annotation and declaration elaboration
 
 Reuse `DesugarTypeVariables` for source variable occurrences, ordinary kind

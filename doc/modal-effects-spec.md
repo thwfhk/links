@@ -356,6 +356,11 @@ rules describe handlers without additional handler parameters:
 Every clause must produce the handler result type `B`. Existing handler
 parameters retain their type checks and resumption-passing convention.
 
+When no expected handler result type is supplied, infer `B` by joining the
+return-clause result types, then check operation clauses at `B`. An annotation
+on the whole handler supplies its expected result type. Operation clauses do
+not widen `B` after resumption types have been fixed.
+
 ## 7. Runtime and built-in effects
 
 Operations dispatch to the nearest enclosing handler for the resolved

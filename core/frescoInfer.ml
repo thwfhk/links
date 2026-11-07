@@ -4,7 +4,7 @@ type 'a term = { node : 'a node; typ : 'a; position : SourceCode.Position.t }
 and 'a node =
   | Constant of Constant.t
   | Variable of string
-  | Lambda of DeclaredLinearity.t * (string * 'a) list * 'a term
+  | Lambda of DeclaredLinearity.t * (string * 'a) list * 'a term * 'a EffectRow.t
   | Apply of 'a term * 'a term list
   | Let of 'a definition list * 'a term
   | Record of (string * 'a term) list * 'a term option
@@ -16,6 +16,23 @@ and 'a node =
   | TypeAbstraction of Quantifier.t list * 'a term
   | TypeApplication of 'a term * (PrimaryKind.t * 'a) list
   | Coerce of 'a term
+  | Operation of 'a EffectRow.entry * string * 'a term list
+  | Handle of 'a handler
+and 'a handler = {
+  depth : Sugartypes.handler_depth;
+  computation : 'a term;
+  parameters : ('a pattern * 'a term) list;
+  return_cases : ('a pattern * 'a term) list;
+  operation_cases : 'a operation_clause list;
+  handled : 'a EffectRow.t;
+  ambient : 'a EffectRow.t;
+}
+and 'a operation_clause = {
+  operation : string;
+  arguments : 'a pattern list;
+  resumption : 'a pattern;
+  body : 'a term;
+}
 and 'a pattern = { pattern : 'a pattern_node; pattern_type : 'a; pattern_position : SourceCode.Position.t }
 and 'a pattern_node =
   | PAny
@@ -50,9 +67,13 @@ type t = {
   uses : int IntMap.t;
   next : int;
 }
-let initial_elaboration = FrescoElaborate.declarations FrescoElaborate.empty "effect Wild {}"
-let wild = match FrescoElaborate.effects initial_elaboration with
+let wild_elaboration = FrescoElaborate.declarations FrescoElaborate.empty "effect Wild {}"
+let wild = match FrescoElaborate.effects wild_elaboration with
   | [info] -> info.FrescoElaborate.name | _ -> assert false
+let initial_elaboration = FrescoElaborate.declarations wild_elaboration
+  "effect Receive(a::Type(Any,Any,Abs)) {}"
+let builtin_effects = List.map (fun (info : FrescoElaborate.effect_info) -> info.FrescoElaborate.name)
+  (FrescoElaborate.effects initial_elaboration)
 let empty = { elaboration = initial_elaboration; variables = []; scope = [];
   ambient = [{ EffectRow.name = wild; arguments = [] }]; locks = [];
   uses = IntMap.empty; next = 0 }
@@ -221,6 +242,7 @@ let find s pos name = match List.find_opt (fun v -> v.name = name) s.variables w
   | Some v -> v | None -> error pos ("Unbound variable " ^ name)
 let lookup s name = Option.map (fun v -> to_type s Position.dummy (expand s Position.dummy v.value_type))
   (List.find_opt (fun v -> v.name = name) s.variables)
+let ambient s = EffectRow.map (fun typ -> to_type s Position.dummy (expand s Position.dummy typ)) s.ambient
 let add_term s name typ = fst (bind s name (from_type s Position.dummy typ))
 let annotate s syntax =
   let elaboration, a = FrescoElaborate.annotation ~scope:s.scope ~resolved:true s.elaboration syntax in
@@ -236,7 +258,9 @@ let rec map_term f binders e =
   let child = map_term f binders in
   let node = match e.node with
     | Constant c -> Constant c | Variable n -> Variable n
-    | Lambda (lin, ps, body) -> Lambda (lin, List.map (fun (n,t) -> n, f binders PrimaryKind.Type t) ps, child body)
+    | Lambda (lin, ps, body, ambient) -> Lambda (lin,
+        List.map (fun (n,t) -> n, f binders PrimaryKind.Type t) ps,
+        child body, EffectRow.map (f binders PrimaryKind.Type) ambient)
     | Apply (fn, args) -> Apply (child fn, List.map child args)
     | Let (bs, body) -> Let (List.map (map_binding f binders) bs, child body)
     | Record (fs, base) -> Record (List.map (fun (n,e) -> n, child e) fs, Option.map child base)
@@ -248,6 +272,19 @@ let rec map_term f binders e =
     | TypeAbstraction (qs,e) -> TypeAbstraction (qs,map_term f (qs @ binders) e)
     | TypeApplication (e,args) -> TypeApplication (child e,List.map (fun (pk,t) -> pk,f binders pk t) args)
     | Coerce e -> Coerce (child e)
+    | Operation (owner,name,args) -> Operation (
+        { owner with EffectRow.arguments = List.map (f binders PrimaryKind.Type) owner.EffectRow.arguments },
+        name,List.map child args)
+    | Handle h -> Handle {
+        depth = h.depth; computation = child h.computation;
+        parameters = List.map (fun (p,e) -> map_pattern f binders p,child e) h.parameters;
+        return_cases = List.map (fun (p,e) -> map_pattern f binders p,child e) h.return_cases;
+        operation_cases = List.map (fun clause -> {
+          operation = clause.operation; arguments = List.map (map_pattern f binders) clause.arguments;
+          resumption = map_pattern f binders clause.resumption; body = child clause.body }) h.operation_cases;
+        handled = EffectRow.map (f binders PrimaryKind.Type) h.handled;
+        ambient = EffectRow.map (f binders PrimaryKind.Type) h.ambient;
+      }
   in { e with typ; node }
 and map_pattern f binders p =
   let pattern_type = f binders PrimaryKind.Type p.pattern_type in
@@ -377,6 +414,11 @@ let coerce support s pos mode e =
 let access support s pos v =
   if support = C.Skeleton then s,v.value_type else
   let typ = expand s pos v.value_type in
+  let rec absolute_payload state typ = match head state pos typ with
+    | S.Modal (_,payload) when FrescoSkeletonKind.absolute (env state) (context state) payload ->
+       absolute_payload state payload
+    | _ -> typ in
+  let typ = absolute_payload s typ in
   let crossed = List.length s.locks - v.depth in
   if crossed = 0 then s,typ else
   let rec take n xs = if n = 0 then [] else match xs with
@@ -392,13 +434,95 @@ let access support s pos v =
   let guard,payload = guarded typ in
   match Modality.right_residual lock guard ambient with
   | Some (Modality.Relative ([], [])) -> s,payload
-  | Some residual -> s,S.Modal (residual,payload)
+  | Some residual -> s,absolute_payload s (S.Modal (residual,payload))
   | None ->
      match FrescoSkeletonKind.require (env s) (context s)
        (TypeParameter.make ~modal_kind:ModalKind.Abs (kind PrimaryKind.Type)) typ with
-     | Ok (context,typ) -> ctx s context,typ
+     | Ok (context,typ) -> let s = ctx s context in s,absolute_payload s typ
      | Error _ -> error pos ("Variable " ^ v.name ^ " cannot cross this modal scope")
 
+
+let effect_info s pos name =
+  match List.find_opt (fun (info : FrescoElaborate.effect_info) -> info.FrescoElaborate.name = name)
+    (FrescoElaborate.effects s.elaboration) with
+  | Some info -> info | None -> error pos ("Unknown effect " ^ name)
+let operation_info s pos name =
+  let rec find = function
+    | [] -> error pos ("Unknown operation " ^ name)
+    | info :: rest -> (match List.find_opt (fun (operation : FrescoElaborate.operation) -> operation.FrescoElaborate.name = name)
+        info.FrescoElaborate.operations with
+        | Some operation -> info,operation | None -> find rest) in
+  find (FrescoElaborate.effects s.elaboration)
+let fresh_parameter s pos q =
+  let rec choose () = let id = Types.fresh_raw_variable () in
+    if Option.is_some (FrescoContext.lookup id (context s)) then choose () else id in
+  let id = choose () in
+  let kind = Quantifier.to_kind q in
+  let context = get pos "Invalid inferred effect parameter" (FrescoContext.add_flexible
+    { FrescoContext.id; kind; modal_kind = Quantifier.to_modal_kind q } (context s)) in
+  ctx s context,S.Var (id,kind,`Flexible)
+let rec operation_pattern p = match WithPos.node p with
+  | G.Pattern.Operation (name,args,k,_) -> name,args,k
+  | G.Pattern.HasType (p,_) -> operation_pattern p
+  | _ -> error (WithPos.pos p) "Expected an operation clause"
+let instantiate_operation s pos info operation arguments =
+  let parameters = info.FrescoElaborate.parameters in
+  if List.length arguments <> List.length parameters then error pos "Wrong number of effect arguments";
+  let originals = operation.FrescoElaborate.arguments @ [operation.FrescoElaborate.result] in
+  let roots = List.map (fun typ -> { FrescoContext.binders = parameters;
+    primary_kind = PrimaryKind.Type; typ }) originals in
+  let roots = get pos "Invalid operation signature" (S.of_types (env s) roots) in
+  let types = List.map (fun r -> get pos "Cannot instantiate operation signature"
+    (FrescoRecursive.apply_formals ~formals:parameters
+      ~arguments:(List.map (fun t -> PrimaryKind.Type,t) arguments)
+      ~primary_kind:PrimaryKind.Type r.S.typ)) roots in
+  match List.rev types with result :: args -> List.rev args,result | [] -> assert false
+let rec check_operation_annotation s source arguments result =
+  match WithPos.node source with
+  | G.Pattern.HasType (inner,(annotation,_)) ->
+     let rec parts annotation = match WithPos.node annotation with
+       | G.Datatype.Operation (arguments,result,_) -> arguments,result
+       | G.Datatype.Tuple [inner] -> parts inner
+       | _ -> error (WithPos.pos annotation) "An operation clause annotation must give its arguments and result" in
+     let expected_arguments,expected_result = parts annotation in
+     if List.length expected_arguments <> List.length arguments then
+       error (WithPos.pos annotation) "Operation clause annotation has the wrong argument count";
+     let s = List.fold_left2 (fun s expected actual ->
+       let s,expected = annotate s expected in fst (join s (WithPos.pos annotation) actual expected))
+       s expected_arguments arguments in
+     let s,expected_result = annotate s expected_result in
+     let s,_ = join s (WithPos.pos annotation) result expected_result in
+     check_operation_annotation s inner arguments result
+  | _ -> s
+let handler_effect s pos handler =
+  let inferred_owner = match handler.G.sh_effect_cases with
+    | [] -> None
+    | (p,_) :: _ -> let name,_,_ = operation_pattern p in Some (fst (operation_info s pos name)) in
+  let selected,arguments = match handler.G.sh_descr.G.shd_effect with
+    | Some application ->
+       let names,args = WithPos.node application in
+       let name = match names with [name] -> name | _ -> error (WithPos.pos application) "Unresolved handled effect" in
+       Some (effect_info s (WithPos.pos application) name),args
+    | None -> inferred_owner,[] in
+  match selected with
+  | None -> s,[]
+  | Some info ->
+     if List.mem info.FrescoElaborate.name builtin_effects then error pos "Built-in effects cannot be handled";
+     let operations = List.map (fun (op : FrescoElaborate.operation) -> op.FrescoElaborate.name) info.FrescoElaborate.operations in
+     let actual = List.map (fun (p,_) -> let name,_,_ = operation_pattern p in name) handler.G.sh_effect_cases in
+     if List.sort String.compare actual <> List.sort String.compare operations then
+       error pos "A handler must contain every operation of one effect exactly once";
+     let s,arguments = if arguments = [] then
+       List.fold_left (fun (s,args) q -> let s,t = fresh_parameter s pos q in s,args @ [t])
+         (s,[]) info.FrescoElaborate.parameters
+     else begin
+       if List.length arguments <> List.length info.FrescoElaborate.parameters then
+         error pos "Wrong number of handled effect arguments";
+       List.fold_left2 (fun (s,args) source q ->
+         let s,t = annotate s source in let s,t = require s (WithPos.pos source) (Quantifier.to_parameter q) t in
+         s,args @ [t]) (s,[]) arguments info.FrescoElaborate.parameters
+     end in
+     s,[{ EffectRow.name = info.FrescoElaborate.name; arguments }]
 
 let rec infer_term support s mode source =
   let pos = WithPos.pos source in
@@ -498,17 +622,19 @@ and infer_node support s mode source =
   | G.RecordLit (fields,base) -> infer_record support s mode pos fields base
   | G.Projection (record,label) ->
      let s,record = infer_term support s C.Infer record in
-     let s,record = match head s pos record.typ with
-       | S.Modal (_,payload) when support = C.Type -> coerce support s pos (C.Check payload) record
-       | _ -> s,record in
-     let s,typ = field s pos record.typ label in
-     let s = if support = C.Skeleton then s else match head s pos record.typ with
+     let rec guarded typ = match head s pos typ with
+       | S.Modal (modality,body) -> let inner,payload = guarded body in Modality.compose modality inner,payload
+       | typ -> Modality.identity,typ in
+     let guard,payload = guarded record.typ in
+     let s,typ = field s pos payload label in
+     let s = if support = C.Skeleton then s else match expose s pos payload with
        | S.Record row -> (match head s pos row with
            | S.Row (fields,tail,dual) -> fst (require s pos
                (TypeParameter.make (PrimaryKind.Row,(Linearity.Unl,Restriction.Any)))
                (S.Row (StringMap.remove label fields,tail,dual)))
            | _ -> s)
        | _ -> s in
+     let typ = match guard with Modality.Relative ([],[]) -> typ | _ -> S.Modal (guard,typ) in
      finish s typ (Project (record,label))
   | G.ListLit (items,_) ->
      let expected = match mode with C.Check t -> (match expose s pos t with
@@ -522,6 +648,7 @@ and infer_node support s mode source =
             | [] -> if support = C.Skeleton then s,S.Ghost else fresh s pos PrimaryKind.Type
             | e :: es -> List.fold_left (fun (s,t) e -> join s pos t e.typ) (s,e.typ) es in
           s,typ,items in
+     let s,typ = require s pos (List.hd (Types.Abstype.arity Types.list)) typ in
      finish s (S.Application (Types.list,[PrimaryKind.Type,typ])) (List items)
   | G.ConstructorLit (label,payload,_) ->
      let payload = Option.value ~default:(WithPos.make ~pos (G.TupleLit [])) payload in
@@ -541,7 +668,7 @@ and infer_node support s mode source =
        | [] -> (match previous with
           | [] -> error pos "A switch requires a case"
           | (_,e) :: rest ->
-             let s,typ = List.fold_left (fun (s,t) (_,e) -> join s pos t e.typ) (s,e.typ) rest in
+             let s,typ = List.fold_left (fun (s,t) (_,e) -> join_results s pos t e.typ) (s,e.typ) rest in
              let s = List.fold_left (fun s uses -> branch_usage support pos original uses s) s usages in
              s,term pos typ (Switch (scrutinee,List.rev previous)))
        | (pattern,body) :: cases ->
@@ -554,6 +681,23 @@ and infer_node support s mode source =
           let pattern,body = match wrapped.node with Switch (_,[p,e]) -> p,e | _ -> assert false in
           branches s ((pattern,body) :: previous) (s.uses :: usages) cases in
      branches s [] [] cases
+  | G.DoOperation (operation,arguments,_,_) ->
+     let name = match WithPos.node operation with G.Operation name -> name
+       | _ -> error (WithPos.pos operation) "Expected a resolved operation" in
+     let info,signature = operation_info s (WithPos.pos operation) name in
+     if support = C.Skeleton then
+       let arguments = List.map (fun _ -> S.Ghost) info.FrescoElaborate.parameters in
+       let _,result = instantiate_operation s pos info signature arguments in
+       let owner = { EffectRow.name = info.FrescoElaborate.name; arguments } in
+       finish s result (Operation (owner,name,[]))
+     else
+       let owner = match EffectRow.find info.FrescoElaborate.name s.ambient with
+         | Some owner -> owner | None -> error pos "The operation's effect is absent from the ambient context" in
+       let types,result = instantiate_operation s pos info signature owner.EffectRow.arguments in
+       if List.length arguments <> List.length types then error pos "Wrong number of operation arguments";
+       let s,arguments = infer_pairs support s arguments types in
+       finish s result (Operation (owner,name,arguments))
+  | G.Handle handler -> infer_handler support s mode pos handler
   | G.Conditional (condition,yes,no) ->
      let condition_mode = if support = C.Skeleton then C.Check S.Ghost else C.Check (S.Primitive Primitive.Bool) in
      let s,c = infer_term support s condition_mode condition in
@@ -562,7 +706,7 @@ and infer_node support s mode source =
      let uses_yes = s.uses in
      let s,b = infer_term support { s with uses = before.uses } mode no in
      let s = branch_usage support pos before uses_yes s in
-     let s,typ = join s pos a.typ b.typ in s,term pos typ (If (c,a,b))
+     let s,typ = join_results s pos a.typ b.typ in s,term pos typ (If (c,a,b))
   | G.Block (bindings,body) ->
      let before = s in let mark,s = marker s in
      let s,bindings = infer_bindings support false s bindings in
@@ -623,6 +767,123 @@ and infer_node support s mode source =
      let s,e = coerce support s pos (C.Check t) e in coerce support s pos mode e
   | G.Generalise _ -> error pos "Implicit generalisation is unavailable; supply a polymorphic annotation"
   | _ -> error pos "Source construct is not supported by contextual inference"
+and infer_handler support s mode pos source =
+  let before = s in let handler_marker,s = marker s in
+  let s,handled = handler_effect s pos source in
+  let initial_parameters = match source.G.sh_descr.G.shd_params with
+    | None -> [] | Some params -> params.G.shp_bindings in
+  unique_patterns pos (List.map fst initial_parameters);
+  let rec initialisers s = function
+    | [] -> s,[]
+    | (p,e) :: rest -> let s,e = infer_term support s C.Infer e in
+       let s,rest = initialisers s rest in s,(p,e) :: rest in
+  let s,initial_parameters = initialisers s initial_parameters in
+  let parameter_start = s.next in
+  let s,parameters = List.fold_left (fun (s,parameters) (pattern,value) ->
+    let s,pattern = check_pattern support s pattern value.typ in
+    s,parameters @ [pattern,value]) (s,[]) initial_parameters in
+  let parameter_variables,outer_variables = List.partition
+    (fun v -> v.identity >= parameter_start) s.variables in
+  let computation_before = { s with variables = outer_variables } in
+  let computation_marker,s = marker computation_before in
+  let modality = Modality.Relative ([],handled) in
+  let s = { s with ambient = EffectRow.extend handled s.ambient;
+    locks = (modality,s.ambient) :: s.locks } in
+  let s,computation = infer_term support s C.Infer source.G.sh_expr in
+  let handler = {
+    depth = source.G.sh_descr.G.shd_depth; computation; parameters;
+    return_cases = []; operation_cases = []; handled; ambient = computation_before.ambient } in
+  (* Every pending handler annotation is a root while leaving the computation
+     and each clause. Continue with the rewritten shell after every exit. *)
+  let leave_handler before marker s handler typ =
+    let s,wrapped = leave before marker s (term pos typ (Handle handler)) in
+    match wrapped.node with Handle handler -> s,handler,wrapped.typ | _ -> assert false in
+  let s,handler,_ = leave_handler computation_before computation_marker s handler computation.typ in
+  let rec pattern_variables p = match p.pattern with
+    | PVariable name -> [name,p.pattern_type]
+    | PAs (name,payload) -> (name,p.pattern_type) :: pattern_variables payload
+    | PRecord (fields,rest) -> List.concat_map (fun (_,p) -> pattern_variables p) fields @
+        Option.fold ~none:[] ~some:pattern_variables rest
+    | PVariant (_,p) -> pattern_variables p
+    | PCons (p,q) -> pattern_variables p @ pattern_variables q
+    | PAny | PNil | PConstant _ -> [] in
+  let parameter_types = List.concat_map (fun (p,_) -> pattern_variables p) handler.parameters in
+  let parameter_variables = List.map (fun v ->
+    { v with value_type = List.assoc v.name parameter_types }) parameter_variables in
+  let s = { s with variables = parameter_variables @ s.variables } in
+  let clause_uses = s.uses in
+  let returns = match source.G.sh_value_cases with
+    | [] -> let name = "$fresco_return_" ^ string_of_int s.next in
+       let binder = WithPos.make ~pos (G.Binder.make ~name ()) in
+       [WithPos.make ~pos (G.Pattern.Variable binder),WithPos.make ~pos (G.Var name)]
+    | cases -> cases in
+  let capture s before_clause =
+    if support = C.Type && source.G.sh_descr.G.shd_depth = G.Deep then
+      List.fold_left (fun s v -> if count s v > count before_clause v
+        then unlimited s pos v.value_type else s) s before_clause.variables
+    else s in
+  let rec return_clauses s handler usages = function
+    | [] -> s,handler,List.rev usages
+    | (pattern,body) :: rest ->
+       let before_clause = { s with uses = clause_uses } in
+       let mark,s = marker before_clause in
+       let return_type = if handler.handled = [] then handler.computation.typ else
+         S.Modal (Modality.Relative ([],handler.handled),handler.computation.typ) in
+       let s,pattern = check_pattern support s pattern return_type in
+       let s,body = infer_term support s mode body in
+       let s = check_bound_usage support pos before_clause s |> fun s -> capture s before_clause in
+       let usage = s.uses in
+       let handler = { handler with return_cases = handler.return_cases @ [pattern,body] } in
+       let s,handler,_ = leave_handler before_clause mark s handler body.typ in
+       return_clauses s handler (usage :: usages) rest in
+  let s,handler,return_usages = return_clauses s handler [] returns in
+  let s,result_type = List.fold_left (fun (s,t) (_,body) -> join_results s pos t body.typ)
+    (s,(snd (List.hd handler.return_cases)).typ) handler.return_cases in
+  let rec operation_clauses s handler result_type usages = function
+    | [] -> s,handler,result_type,List.rev usages
+    | (pattern,body) :: rest ->
+       let name,arguments,resumption = operation_pattern pattern in
+       let info,signature = operation_info s (WithPos.pos pattern) name in
+       let owner = match EffectRow.find info.FrescoElaborate.name handler.handled with
+         | Some owner -> owner | None -> error (WithPos.pos pattern) "Foreign operation clause" in
+       let argument_types,operation_result = instantiate_operation s pos info signature owner.EffectRow.arguments in
+       let s = check_operation_annotation s pattern argument_types operation_result in
+       if List.length arguments <> List.length argument_types then error (WithPos.pos pattern) "Wrong number of operation patterns";
+       unique_patterns (WithPos.pos pattern) (arguments @ [resumption]);
+       let param_types = List.map (fun (p,_) -> p.pattern_type) handler.parameters in
+       let continuation = match handler.depth with
+         | G.Deep -> S.Arrow (tuple (operation_result :: param_types),result_type)
+         | G.Shallow -> S.Modal (Modality.Relative ([],handler.handled),
+             S.Arrow (tuple [operation_result],handler.computation.typ)) in
+       let before_clause = { s with uses = clause_uses } in
+       let mark,s = marker before_clause in
+       let s,arguments = List.fold_left2 (fun (s,patterns) pattern typ ->
+         let s,pattern = check_pattern support s pattern typ in s,patterns @ [pattern])
+         (s,[]) arguments argument_types in
+       let s,resumption = check_pattern support s resumption continuation in
+       let clause_mode = if support = C.Type then C.Check result_type else mode in
+       let s,body = infer_term support s clause_mode body in
+       let s = check_bound_usage support pos before_clause s |> fun s -> capture s before_clause in
+       let usage = s.uses in
+       let clause = { operation = name; arguments; resumption; body } in
+       let handler = { handler with operation_cases = handler.operation_cases @ [clause] } in
+       let s,handler,result_type = leave_handler before_clause mark s handler result_type in
+       operation_clauses s handler result_type (usage :: usages) rest in
+  let s,handler,_,operation_usages = operation_clauses s handler result_type [] source.G.sh_effect_cases in
+  let usage_before = { s with uses = clause_uses } in
+  let s = List.fold_left (fun s usage -> branch_usage support pos usage_before usage s)
+    s (return_usages @ operation_usages) in
+  let bodies = List.map snd handler.return_cases @ List.map (fun clause -> clause.body) handler.operation_cases in
+  let s,typ = List.fold_left (fun (s,t) body -> join_results s pos t body.typ)
+    (s,(List.hd bodies).typ) bodies in
+  let s,handler,typ = leave_handler before handler_marker s handler typ in
+  s,term pos typ (Handle handler)
+and join_results s pos a b =
+  let a,b = match canonicalise s pos [root a;root b] with
+    | [a;b] -> a.S.typ,b.S.typ | _ -> assert false in
+  let context,typ = get pos "Handler or branch result types do not agree"
+    (FrescoJoin.join (env s) (context s) ~ambient:s.ambient a b) in
+  ctx s context,typ
 and infer_many support s mode = function
   | [] -> s,[]
   | e :: es -> let s,e = infer_term support s mode e in
@@ -722,13 +983,32 @@ and infer_lambda support s mode pos lin groups body =
        else S.Arrow (tuple (List.map snd parameters),body.typ) in
      let typ = Option.value ~default:arrow result_expected in
      let typ = if support = C.Skeleton && mode = C.Check S.Ghost then S.UniversalGhost typ else typ in
-     leave before mark s (term pos typ (Lambda (lin,parameters,body)))
+     leave before mark s (term pos typ (Lambda (lin,parameters,body,before.ambient)))
 and fresh_domains s pos = function
   | 0 -> s,[]
   | n -> let s,t = fresh s pos PrimaryKind.Type in let s,ts = fresh_domains s pos (n - 1) in s,t :: ts
 and check_pattern support s source typ =
   let pos = WithPos.pos source in
   unique_patterns pos [source];
+  match head s pos typ with
+  | S.Modal (modality,payload) ->
+     let s,source = match WithPos.node source with
+       | G.Pattern.HasType (pattern,(annotation,_)) ->
+          let annotated_state,annotation = annotate s annotation in
+          (match head annotated_state pos annotation with
+           | S.Modal _ -> let s,_ = join annotated_state pos typ annotation in s,pattern
+           | _ -> s,source)
+       | _ -> s,source in
+     let before = s in
+     let s,pattern = check_pattern support { s with ambient = Modality.apply modality s.ambient } source payload in
+     let wrap typ = S.Modal (modality,typ) in
+     let variables = List.map (fun v -> if v.identity >= before.next
+       then { v with value_type = wrap v.value_type } else v) s.variables in
+     let pattern = map_pattern (fun _ _ typ -> wrap typ) [] pattern in
+     { s with variables; ambient = before.ambient },pattern
+  | _ -> check_pattern_node support s source typ
+and check_pattern_node support s source typ =
+  let pos = WithPos.pos source in
   let result s typ pattern = s,{ pattern; pattern_type = typ; pattern_position = pos } in
   match WithPos.node source with
   | G.Pattern.Variable b -> let name = G.Binder.to_name b in
@@ -754,8 +1034,10 @@ and check_pattern support s source typ =
      let s,p = check_pattern support s p payload in result s typ (PVariant (name,p))
   | G.Pattern.Nil | G.Pattern.Cons _ | G.Pattern.List _ ->
      let s,element = match expose s pos typ with
-       | S.Application (a,[PrimaryKind.Type,t]) when Types.Abstype.equal a Types.list -> s,t
+       | S.Application (a,[PrimaryKind.Type,t]) when Types.Abstype.equal a Types.list ->
+          require s pos (List.hd (Types.Abstype.arity Types.list)) t
        | _ -> let s,t = fresh s pos PrimaryKind.Type in
+          let s,t = require s pos (List.hd (Types.Abstype.arity Types.list)) t in
           let s,_ = join s pos typ (S.Application (Types.list,[PrimaryKind.Type,t])) in s,t in
      (match WithPos.node source with
       | G.Pattern.Nil -> result s typ PNil
@@ -857,6 +1139,15 @@ let check s source typ =
   let typ = from_type s (WithPos.pos source) typ in
   let s,e = infer_term C.Type s (C.Check typ) source in s,export s e
 let program s syntax =
+  let reserved = object
+    inherit SugarTraversals.map as super
+    method! effect_declaration declaration =
+      let name = WithPos.node declaration.G.effect_name in
+      if name = "Wild" || name = "Receive" then
+        error (WithPos.pos declaration.G.effect_name) ("Reserved built-in effect " ^ name);
+      super#effect_declaration declaration
+  end in
+  let syntax = reserved#program syntax in
   let syntax = DesugarSwitchFuns.desugar_switching#program syntax in
   let syntax,resolution = DesugarModules.resolve_program
     (FrescoElaborate.resolution_state s.elaboration) syntax in

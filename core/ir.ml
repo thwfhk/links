@@ -32,6 +32,21 @@ type language = string
 type location = CommonTypes.Location.t
   [@@deriving show]
 
+type scoped_effect_row = Types.datatype EffectRow.t [@@deriving show]
+type effect_application = Types.datatype EffectRow.entry [@@deriving show]
+
+type operation_signature = {
+  operation_arguments : Types.datatype list;
+  operation_result : Types.datatype;
+} [@@deriving show]
+
+type effect_signature = {
+  effect_name : string;
+  effect_reserved : bool;
+  effect_parameters : Quantifier.t list;
+  effect_operations : operation_signature name_map;
+} [@@deriving show]
+
 type value =
   | Constant   of Constant.t
   | Variable   of var
@@ -64,6 +79,7 @@ and fun_def =
     fn_params   : binder list;
     fn_body     : computation;
     fn_closure  : binder option;
+    fn_effects  : scoped_effect_row option;
     fn_location : location;
     fn_unsafe   : bool
   }
@@ -118,6 +134,8 @@ and special =
   | Choice     of value * (binder * computation) name_map
   | Handle     of handler
   | DoOperation of Name.t * value list * Types.t
+  | ScopedOperation of effect_application * Name.t * value list * Types.t
+  | ScopedHandle of scoped_effect_row * scoped_effect_row * handler
 and computation = binding list * tail_computation
 and effect_case = binder * binder * computation
 and handler = {

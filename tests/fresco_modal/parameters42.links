@@ -1,0 +1,9 @@
+effect State {
+  Get : () => Int;
+  Put : (Int) => ();
+}
+handle ({ do Put(42); do Get })(s <- 0) {
+  case x -> x
+  case <Get => k> -> k(s, s)
+  case <Put(n) => k> -> k((), n)
+}
