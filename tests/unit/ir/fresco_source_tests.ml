@@ -688,6 +688,164 @@ let primitive_suite = "primitive environment" >::: [
       "dateYear(intToDate(0))"));
 ]
 
+let sections_patterns_updates_suite = "sections patterns and updates" >::: [
+  "projection sections instantiate at separate types" >:: (fun _ ->
+    execution (Value.box [`Int 42; `Bool true]) {|
+      var project = (.value);
+      (project((value=42, other="text")), project((value=true)))
+    |} |> int_bool);
+
+  "projection sections retain supplied polymorphic fields" >:: (fun _ ->
+    execution (Value.box [`Int 42; `Bool true]) {|
+      typename Identity = forall a. (a) -> a;
+      sig id : Identity fun id(x) { x }
+      var id2 = (.value)((value= ~id));
+      (id2(42), id2(true))
+    |} |> int_bool);
+
+  "frozen projection sections retain their quantifiers" >:: (fun _ ->
+    let typ = infer "freeze((.value))" in
+    match expose typ with
+    | Types.ForAll ([a; row], _) ->
+       List.iter (fun q -> assert_equal Linearity.Unl (fst (snd (Quantifier.to_kind q)))) [a; row]
+    | typ -> assert_failure (Types.string_of_datatype typ));
+
+  "freezing sections prevents implicit instantiation" >:: (fun _ ->
+    ignore (infer "(.value) : ((value:Int)) -> Int");
+    reject (fun () -> infer "freeze((.value)) : ((value:Int)) -> Int"));
+
+  "projection sections retain field modalities" >:: (fun _ ->
+    ignore (infer {|
+      effect E {}
+      fun(r:(action:modal [E] (() -> Int))) { (.action)(r) : modal [E] (() -> Int) }
+    |});
+    reject (fun () -> infer {|
+      effect E {}
+      fun(r:(action:modal [E] (() -> Int))) { (.action)(r)() }
+    |}));
+
+  "minus sections and frozen minus sections execute" >:: (fun _ ->
+    execution (`Int 42) "(-)(84,42)" |> expect_type Types.int_type;
+    execution (`Float 42.0) "freeze((-.))(84.0,42.0)" |> expect_type Types.float_type);
+
+  "projection sections reject missing fields and discarded linear fields" >:: (fun _ ->
+    reject (fun () -> infer "(.value)((other=42))");
+    reject (fun () -> infer "(.value)((value=42, other=linfun() { 0 }))");
+    reject (fun () -> infer "(.value)((value=linfun() { 42 }))"));
+
+  "negative patterns narrow their as binder" >:: (fun _ ->
+    execution (`Variant ("Bar", Value.box [])) "(fun (-Foo as r) { r })(Bar)" |> ignore;
+    execution (`Int 42) {|
+      switch(Bar(42) : [|Foo:Bool | Bar:Int|]) {
+        case -Foo as r -> switch(r) { case Bar(x) -> x }
+        case _ -> 0
+      }
+    |} |> expect_type Types.int_type);
+
+  "negative refinements reach enclosing record and variant binders" >:: (fun _ ->
+    execution (`Int 42) {|
+      (fun ((value= -Foo) as r) { switch(r.value) { case Bar(x) -> x } })((value=Bar(42)))
+    |} |> expect_type Types.int_type;
+    execution (`Int 42) {|
+      (fun (Outer(-Foo) as r) {
+        switch(r) { case Outer(v) -> switch(v) { case Bar(x) -> x } }
+      })(Outer(Bar(42)))
+    |} |> expect_type Types.int_type;
+    execution (`Int 42) {|
+      (fun ((keep=_ | (value= -Foo)) as r) {
+        switch(r.value) { case Bar(x) -> x }
+      })((keep=true,value=Bar(42)))
+    |} |> expect_type Types.int_type);
+
+  "negative list refinements require consistent element types" >:: (fun _ ->
+    execution (`Int 42) {|
+      (fun ([-Foo] as r) { switch(hd(r)) { case Bar(x) -> x } })([Bar(42)])
+    |} |> expect_type Types.int_type;
+    reject (fun () -> infer "(fun (-Foo::tail as r) { r })([Bar,Foo])");
+    reject (fun () -> infer "(fun ([-Foo,x] as r) { r })([Bar,Foo])"));
+
+  "negative annotations describe the narrowed variant" >:: (fun _ ->
+    execution (`Int 42) {|
+      switch(Foo : [|Foo|Bar|]) { case (-Foo : [|Bar|]) as r -> 0 case Foo -> 42 }
+    |} |> expect_type Types.int_type);
+
+  "negative patterns preserve recursive aliases" >:: (fun _ ->
+    execution (`Int 42) {|
+      typename Chain = [|Stop | More:(Int, Chain)|];
+      switch(More(42, Stop) : Chain) {
+        case -Stop as r -> switch(r) { case More(x, _) -> x }
+        case _ -> 0
+      }
+    |} |> expect_type Types.int_type);
+
+  "negative patterns check dropped linear payloads" >:: (fun _ ->
+    reject ~message:"usage requirement" (fun () -> infer {|
+      fun(v:[|Foo | Bar:(() -@ Int)|]) { switch(v) { case -Foo -> 42 case Foo -> 0 } }
+    |});
+    ignore (infer {|
+      fun(v:[|Foo | Bar:(() -@ Int)|]) {
+        switch(v) { case -Foo as r -> switch(r) { case Bar(k) -> k() } case Foo -> 0 }
+      }
+    |}));
+
+  "negative patterns reject absent excluded constructors" >:: (fun _ ->
+    reject (fun () -> infer "switch(Bar : [|Bar|]) { case -Foo -> 42 }"));
+
+  "record updates replace fields and preserve polymorphism" >:: (fun _ ->
+    execution (Value.box [`Int 42; `Bool true]) {|
+      typename Identity = forall a. (a) -> a;
+      sig id : Identity fun id(x) { x }
+      var record = ((value=0, id= ~id) with value="answer");
+      (record.id(42), record.id(true))
+    |} |> int_bool;
+    execution (Value.box [`Int 42; `Bool true]) {|
+      typename Identity = forall a. (a) -> a;
+      sig id : Identity fun id(x) { x }
+      var record = ((id=0) with id= ~id);
+      (record.id(42), record.id(true))
+    |} |> int_bool);
+
+  "record updates retain recursive field types" >:: (fun _ ->
+    execution (`Int 42) {|
+      typename Chain = [|Stop | More:(Int, Chain)|];
+      var record = (value=0, tail=Stop : Chain);
+      var changed = (record with value=true);
+      switch(changed.tail) { case Stop -> 42 case More(_, _) -> 0 }
+    |} |> expect_type Types.int_type);
+
+  "record updates retain untouched linear fields" >:: (fun _ ->
+    execution (`Int 42) "((value=0, run=linfun() { 42 }) with value=true).run()"
+      |> expect_type Types.int_type;
+    reject ~message:"usage requirement" (fun () -> infer
+      "((value=linfun() { 0 }) with value=42)"));
+
+  "record updates keep the first duplicate field" >:: (fun _ ->
+    execution (`Int 42) "((value=0) with value=42,value=true).value" |> expect_type Types.int_type;
+    reject (fun () -> infer "((value=0) with value=42,value=linfun() { 0 })"));
+
+  "record updates retain modal guards" >:: (fun _ ->
+    ignore (infer {|
+      effect E {}
+      fun(r:modal [E] (value:Int, action:(() -> Int))) {
+        (r with value=true).value : Bool
+      }
+    |});
+    reject (fun () -> infer {|
+      effect E {}
+      fun(r:modal [E] (value:Int, action:(() -> Int))) { (r with value=true).action() }
+    |});
+    reject (fun () -> infer {|
+      effect E { Op : () => Int; }
+      fun(r:modal [E] (value:Int, action:(() -> Int))) { (r with value=do Op) }
+    |});
+    reject (fun () -> infer {|
+      effect E {}
+      fun(r:modal [E] (value:Int, action:(() -> Int)), f:(() -> Int)) {
+        (r with action=f)
+      }
+    |}));
+]
+
 let check_coercion source target =
   with_checked_ir (fun () ->
     let variable = Var.fresh_raw_var () in
@@ -743,4 +901,4 @@ let ir_suite =
       reject_coercion (forall (fun a -> arrow a int)) (forall (fun a -> arrow a a)));
   ]
 
-let suite = "Fresco source" >::: [reference_suite; source_suite; primitive_suite; ir_suite]
+let suite = "Fresco source" >::: [reference_suite; source_suite; primitive_suite; sections_patterns_updates_suite; ir_suite]

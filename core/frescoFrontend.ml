@@ -32,7 +32,12 @@ let quantified quantifiers body =
 (* Source checking has already validated modal access. IR retains the arrow
    and quantified types and uses their runtime representations at each use. *)
 let runtime_type typ = RuntimeTypes.normalise typ
-let runtime_type_arg (kind, typ) = kind, runtime_type typ
+let runtime_type_arg (kind, typ) =
+  let typ = runtime_type typ in
+  let typ = match kind,typ with
+    | PrimaryKind.Row,Types.Meta tail -> Types.Row (StringMap.empty,tail,false)
+    | _ -> typ in
+  kind,typ
 let var_value var = Ir.Variable var
 let type_arguments quantifiers = List.map Types.quantified_type_argument quantifiers
 let with_quantifiers quantifiers typ = quantified quantifiers (runtime_type typ)
@@ -59,8 +64,8 @@ let require_handlers expression =
 
 let rec pattern_ir names pattern =
   let module P = CompilePatterns.Pattern in
-  let bind names name =
-    let binder = fresh_binder Var.Scope.Local name (runtime_type pattern.pattern_type) in
+  let bind ?(typ=pattern.pattern_type) names name =
+    let binder = fresh_binder Var.Scope.Local name (runtime_type typ) in
     StringMap.add name (var_value (Var.var_of_binder binder)) names, binder in
   match pattern.pattern with
   | PAny -> names, P.Any
@@ -79,26 +84,27 @@ let rec pattern_ir names pattern =
   | PVariant (label, payload) ->
      let names, payload = pattern_ir names payload in
      names, P.Variant (label, payload)
+  | PNegative names_excluded -> names, P.Negative (StringSet.from_list names_excluded)
   | PNil -> names, P.Nil
   | PCons (head, tail) ->
      let names, head = pattern_ir names head in
      let names, tail = pattern_ir names tail in
      names, P.Cons (head, tail)
   | PAs (name, payload) ->
-     let names, binder = bind names name in
+     let names, binder = bind ~typ:pattern.pattern_inner_type names name in
      let names, payload = pattern_ir names payload in
      names, P.As (binder, payload)
 
 let rec pattern_bindings pattern =
   match pattern.pattern with
   | PVariable name -> [name, pattern.pattern_type]
-  | PAs (name, payload) -> (name, pattern.pattern_type) :: pattern_bindings payload
+  | PAs (name, payload) -> (name, pattern.pattern_inner_type) :: pattern_bindings payload
   | PRecord (fields, rest) ->
      List.concat_map (fun (_, pattern) -> pattern_bindings pattern) fields @
        Option.fold ~none:[] ~some:pattern_bindings rest
   | PVariant (_, payload) -> pattern_bindings payload
   | PCons (head, tail) -> pattern_bindings head @ pattern_bindings tail
-  | PAny | PConstant _ | PNil -> []
+  | PAny | PConstant _ | PNil | PNegative _ -> []
 
 let rec computation names quantifiers expression =
   match expression.node with
@@ -157,6 +163,13 @@ and value names quantifiers expression =
      let field_bindings, field_values = values names quantifiers (List.map snd fields) in
      let fields = StringMap.of_list (List.map2 (fun (label, _) value -> label, value) fields field_values) in
      base_bindings @ field_bindings, Ir.Extend (fields, base)
+  | Update (record, fields) ->
+     let base_bindings, record = child_value record in
+     let field_bindings, field_values = values names quantifiers (List.map snd fields) in
+     let labels = StringSet.from_list (List.map fst fields) in
+     let fields = List.fold_right (fun ((label,_),value) fields -> StringMap.add label value fields)
+       (List.combine fields field_values) StringMap.empty in
+     base_bindings @ field_bindings, Ir.Extend (fields,Some (Ir.Erase (labels,record)))
   | Project (record, label) ->
      let bindings, record = child_value record in
      bindings, Ir.Project (label, record)
@@ -193,13 +206,17 @@ and handler_ir names quantifiers expression handler =
     let bindings, initial = value names quantifiers initial in
     let binder = Var.fresh_binder_of_type (runtime_type pattern.pattern_type) in
     bindings, (pattern, binder, initial)) handler.parameters) in
-  let env = Env.String.empty, Lazy.force primitive_ir_types, Types.make_empty_closed_row () in
+  let match_pattern pattern binder body =
+    let variable = Var.var_of_binder binder in
+    let env = Env.String.empty,
+      Env.Int.bind variable (Var.type_of_binder binder) (Lazy.force primitive_ir_types),
+      Types.make_empty_closed_row () in
+    CompilePatterns.compile_cases env (result_type,variable,[[pattern],(fun _ -> body)]) in
   let prepare_parameters () =
     let parameter_names, parameter_wrappers =
     List.fold_left (fun (names, wrappers) (pattern, binder, _) ->
       let names, pattern = pattern_ir names pattern in
-      let wrapper body = CompilePatterns.let_pattern env pattern
-        (Ir.Variable (Var.var_of_binder binder), Var.type_of_binder binder) (body, result_type) in
+      let wrapper body = match_pattern pattern binder body in
       names, wrapper :: wrappers) (names, []) parameters in
     parameter_names, (fun body ->
       List.fold_left (fun body wrapper -> wrapper body) body parameter_wrappers) in
@@ -229,11 +246,8 @@ and handler_ir names quantifiers expression handler =
     let resume = Var.fresh_binder_of_type (runtime_type clause.resumption.pattern_type) in
     let names, resume_pattern = pattern_ir names clause.resumption in
     let body = computation names quantifiers clause.body in
-    let body = CompilePatterns.let_pattern env resume_pattern
-      (Ir.Variable (Var.var_of_binder resume), Var.type_of_binder resume) (body, result_type) in
-    let body = CompilePatterns.let_pattern env argument_pattern
-      (Ir.Variable (Var.var_of_binder argument), argument_type) (body, result_type)
-      |> with_parameters in
+    let body = match_pattern resume_pattern resume body in
+    let body = match_pattern argument_pattern argument body |> with_parameters in
     StringMap.add clause.operation (argument, resume, body) cases
   ) StringMap.empty handler.operation_cases in
   let parameters = List.map (fun (_, binder, initial) -> binder, initial) parameters in

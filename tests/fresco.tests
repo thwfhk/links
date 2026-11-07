@@ -43,6 +43,58 @@ stringToXml("answer")
 args : --fresco
 stdout : answer : List XmlItem
 
+Projection sections execute
+(.x)((x=42, y=true))
+args : --fresco
+stdout : 42 : Int
+
+Minus sections execute
+(-)(44, 2)
+args : --fresco
+stdout : 42 : Int
+
+Record updates preserve other fields
+((x=1, y=true) with x=42).x
+args : --fresco
+stdout : 42 : Int
+
+Record updates can change field types
+((x=1, y=true) with x="answer")
+args : --fresco
+stdout : (x = "answer", y = true) : (x:String,y:Bool)
+
+Record updates require an existing field
+((x=1) with y=42)
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+Negative patterns execute on another constructor
+(fun (-(Foo, Bar)) { 42 })(Quux)
+args : --fresco
+stdout : 42 : Int
+
+Negative patterns reject an excluded constructor
+(fun (-Foo) { 42 })(Foo)
+args : --fresco
+exit : 1
+stderr : @.*
+
+A negative switch pattern permits the fallback
+switch(Foo) { case -Foo -> 0 case _ -> 42 }
+args : --fresco
+stdout : 42 : Int
+
+Record update evaluates its base and replacements once in source order
+({ print("b"); (x=0, y=0) } with x={ print("x"); 20 }, y={ print("y"); 22 })
+args : --fresco
+stdout : bxy(x = 20, y = 22) : (x:Int,y:Int)
+
+Repeated update labels evaluate every replacement and keep the first
+((x=0) with x={ print("a"); 42 }, x={ print("b"); 99 })
+args : --fresco
+stdout : ab(x = 42) : (x:Int)
+
 List cons executes
 1 :: [2]
 args : --fresco

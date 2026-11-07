@@ -595,6 +595,31 @@ remain accepted. The alternative is to print expanded recursive types at every
 use. Nested forest/item round trips, nested regex sequences and printed-type
 readback have source execution checks.
 
+### D7 sections, patterns and record updates
+
+Projection sections retain a quantified field type and row, with unlimited
+requirements on both, following Links. Minus sections use the existing binary
+primitive; frozen sections use the ordinary freezing check.
+
+Keep both the scrutinee type and the type available after a pattern matches
+among the typed pattern's scope-exit roots. Negative patterns remove their
+labels from the latter type. `as` binders and pattern annotations use that
+refined type; container patterns propagate their components' refinements.
+List pattern refinements must agree across the head and tail.
+
+Typed execution exposed existing pattern-lowering failures when an `as` binder
+used a refined variant or container type. Bind a negative pattern's default
+variable, and rebuild a matched record or list from its checked components
+after the child patterns succeed. These operations reuse evaluated variables.
+
+Record updates evaluate the base once, then every replacement in source order.
+An updated field must exist and its old value must be unlimited. Untouched
+linear fields remain available. Preserve Links' duplicate-label behaviour:
+evaluate every replacement, retain the first, and require discarded results
+to be unlimited. A guarded record update must check replacement access without
+allowing an immediately evaluated expression to invoke effects absent from
+the caller's ambient context.
+
 ### D5/D6 source and runtime boundary
 
 Use an opt-in `--fresco` entry point with a small primitive environment while

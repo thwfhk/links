@@ -43,6 +43,7 @@ struct
   type context =
     | CNil
     | CCons
+    | CRecord
     | CVariant   of string
     | CNVariant  of StringSet.t
     | CConstant  of Constant.t
@@ -465,10 +466,34 @@ let arrange_record_clauses
 let apply_annotation : value -> annotation * bound_computation -> bound_computation =
   fun v (annotation, body) env ->
     let dummy t = Var.fresh_binder_of_type t in
-    let massage t =
-      function
-        | Inject (name, v, _) -> Inject (name, v, t)
-        | v -> v in
+    (* Pattern tests refine component variables before this delayed body runs.
+       Rebuild containers from those components when an as-binder carries the
+       refined type. No source expression is evaluated again. *)
+    let rec massage seen t = function
+      | Variable var as value when mem_context var env && not (IntSet.mem var seen) ->
+          let _, known = lookup_context var env in
+          (match known with
+           | Variable same when same = var -> value
+           | _ -> massage (IntSet.add var seen) t known)
+      | Inject (name, value, _) ->
+          Inject (name, massage seen (TypeUtils.variant_at name t) value, t)
+      | Extend (fields, base) ->
+          let names = StringMap.fold (fun name _ names -> StringSet.add name names)
+            fields StringSet.empty in
+          Extend (StringMap.mapi (fun name value ->
+            massage seen (TypeUtils.project_type name t) value) fields,
+            Option.map (massage seen (TypeUtils.erase_type names t)) base)
+      | ApplyPure (TApp (Variable fn, _), [head; tail])
+          when fn = NEnv.find "Cons" Lib.nenv ->
+          let element = TypeUtils.element_type t in
+          let nenv, tenv, effects, _ = env in
+          ApplyPure (primitive_application (nenv, tenv, effects) "Cons" element,
+            [massage seen element head; massage seen t tail])
+      | TApp (Variable fn, _) when fn = NEnv.find "Nil" Lib.nenv ->
+          let nenv, tenv, effects, _ = env in
+          nil (nenv, tenv, effects) (TypeUtils.element_type t)
+      | value -> value in
+    let massage t value = massage IntSet.empty t value in
     let env, bs =
       List.fold_right
         (fun a (env, bs) ->
@@ -574,6 +599,11 @@ and match_list
               let xb, x = Var.fresh_var_of_type t' in
               let xsb, xs = Var.fresh_var_of_type t in
               let env = bind_type x t' (bind_type xs t env) in
+              let nenv, tenv, effects, _ = env in
+              let reconstructed = ApplyPure
+                (primitive_application (nenv, tenv, effects) "Cons" t',
+                 [Variable x; Variable xs]) in
+              let env = bind_context var (Pattern.CCons, reconstructed) env in
                 with_bindings
                   [letm (xb, list_head env t' var_val); letm (xsb, list_tail env t' var_val)]
                   (match_cases (x::xs::vars) cons_clauses def env) in
@@ -705,7 +735,7 @@ and match_negative
       | _ -> assert false in
     match pattern with
     | Pattern.Negative names ->
-      let context, _cexp =
+      let context, cexp =
         if mem_context var env then
           lookup_context var env
         else
@@ -716,7 +746,7 @@ and match_negative
         | Pattern.CVariant name when StringSet.mem name names ->
           def env
         | Pattern.CVariant _name ->
-          let body = apply_annotation (Variable var) (annotation, body) in
+          let body = apply_annotation cexp (annotation, body) in
           match_cases vars [(ps, body)] def env
         | Pattern.CNVariant names' ->
           let diff = StringSet.diff names names' in
@@ -748,7 +778,7 @@ and match_negative
               var
               (Pattern.CNVariant cs, Variable default_variable)
               default_env in
-          let body = apply_annotation (Variable var) (annotation, body) in
+          let body = apply_annotation (Variable default_variable) (annotation, body) in
           ([], Case (Variable var,
                       cases,
                       Some (default_binder,
@@ -879,15 +909,16 @@ and match_record
              (annotation, (ps, body))::annotated_clauses
         ) xs [] in
 
-    let bindings, xs, env =
+    let bindings, xs, env, fields =
       StringSet.fold
-        (fun name (bindings, xs, env) ->
+        (fun name (bindings, xs, env, fields) ->
            let xt = TypeUtils.project_type name t in
            let xb, x = Var.fresh_var_of_type xt in
            let binding = letmv (xb, Project (name, Variable var)) in
-             binding::bindings, x::xs, bind_type x xt env)
+             binding::bindings, x::xs, bind_type x xt env,
+             StringMap.add name (Variable x) fields)
         names
-        ([], [], env) in
+        ([], [], env, StringMap.empty) in
 
     let bindings, xs, env =
       if all_closed then
@@ -906,6 +937,9 @@ and match_record
 
     let bindings = List.rev bindings in
     let xs = List.rev xs in
+    let reconstructed = Extend (fields,
+      if all_closed then None else Some (Variable rest)) in
+    let env = bind_context var (Pattern.CRecord, reconstructed) env in
     let clauses = apply_annotations (Variable var) annotated_clauses in
       with_bindings
         bindings

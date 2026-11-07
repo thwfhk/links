@@ -10,6 +10,7 @@ and 'a node =
   | Let of 'a definition list * 'a term
   | Record of (string * 'a term) list * 'a term option
   | Project of 'a term * string
+  | Update of 'a term * (string * 'a term) list
   | List of 'a term list
   | Variant of string * 'a term
   | If of 'a term * 'a term * 'a term
@@ -34,13 +35,14 @@ and 'a operation_clause = {
   resumption : 'a pattern;
   body : 'a term;
 }
-and 'a pattern = { pattern : 'a pattern_node; pattern_type : 'a; pattern_position : SourceCode.Position.t }
+and 'a pattern = { pattern : 'a pattern_node; pattern_type : 'a; pattern_inner_type : 'a; pattern_position : SourceCode.Position.t }
 and 'a pattern_node =
   | PAny
   | PVariable of string
   | PConstant of Constant.t
   | PRecord of (string * 'a pattern) list * 'a pattern option
   | PVariant of string * 'a pattern
+  | PNegative of string list
   | PNil
   | PCons of 'a pattern * 'a pattern
   | PAs of string * 'a pattern

@@ -62,6 +62,16 @@ args : --fresco
 exit : 1
 stderr : @.*Type error:.*
 
+A negative operation argument retains its narrowed as binding
+effect Choose { Pick : ([|Foo|Bar|]) => Int; } handle (do Pick(Bar)) { case x -> x case <Pick(-Foo as r) => k> -> k(switch(r) { case Bar -> 42 }) }
+args : --fresco
+stdout : 42 : Int
+
+A guarded record update retains the replacement callback's effect
+effect E { Op : () => Int; } var r = ((value=0, action=fun() { do Op }) : modal [E] (value:Int, action:(() -> Int))); var s = (r with action=fun() { do Op + 1 }); handle (s.action()) { case x -> x case <Op => k> -> k(41) }
+args : --fresco
+stdout : 42 : Int
+
 Incomplete effect groups reject
 effect State { Get : () => Int; Put : (Int) => (); } handle (do Get) { case x -> x case <Get => k> -> k(42) }
 args : --fresco

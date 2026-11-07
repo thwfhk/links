@@ -78,6 +78,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D4k | Contextual source annotation and declaration elaboration | `8a5b5743` |
 | D5 | Pure source inference, opt-in frontend, shared IR/backend execution and persistent state | `4f12cd67` |
 | D6 | Modal source inference, complete handlers, inferred effect arguments and scoped IR/backend support | `92d48828` |
+| D7a | Contextual first-order primitives and recursive primitive aliases | `1f7ff34e` |
+| D7b1 | Sections, negative patterns and record updates | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -130,7 +132,8 @@ implementation of the next. The main agent owns integration and these records.
 |---|---|
 | D7a: first-order primitives | Explicit contextual signatures cover pure/external primitives; source execution and modal rejection checks pass; remaining primitive categories are inventoried |
 | D7b1: sections, patterns and updates | Projection/minus sections, negative patterns and record updates check and execute |
-| D7b2: ranges, comprehensions and regex | List generators and regex operations check and execute with existing evaluation order |
+| D7b2a: regex syntax | Regex literals, splices and matching operations check and execute |
+| D7b2b: ranges and comprehensions | List generators check and execute with existing evaluation order |
 | D7b3: continuations | Escape typing, ordinary usage and execution match existing Links behaviour |
 | D7b4: prelude foundations | Signed collection helpers retain polymorphism and callback effects |
 | D7c1: actors | `Process(a)`, absolute mailbox types and isolated spawned contexts check and execute; migrated `messages.tests` passes |
@@ -142,7 +145,7 @@ implementation of the next. The main agent owns integration and these records.
 | D8a: backend execution | Actual interpreter and JavaScript deep-handler execution covers nesting, repeated identities, parameters and closures; interpreter shallow execution and JavaScript rejection remain checked |
 | D8b: removal and final review | In-scope legacy inference routes are removed; recursive consumers and exports are reviewed; migration guide and final selected suites pass |
 
-D7a is complete. D7b1 is next. Later boundaries may be split further when a dependency needs
+D7a (`1f7ff34e`) and D7b1 are complete. D7b2a is next. Later boundaries may be split further when a dependency needs
 its own review and checks.
 
 ## Recorded decisions
@@ -158,38 +161,44 @@ and design:
 
 ## Latest task and verification
 
-7 November 2026, D7a, base `45588466`: 199 contextual primitive signatures,
-checked public recursive aliases and the IR coercion ordering fix are complete.
-The inventory accounts for every runtime primitive; actor, session and callback
-categories remain in their assigned milestones. Independent review found no
-unresolved implementation issues after the canvas inventory and alias-readback
-fixes. See [primitive migration](doc/modal-effects-design.md#d7-primitive-migration).
+7 November 2026, D7b1, base `1f7ff34e`: projection/minus/frozen sections,
+negative patterns and record updates are complete. Negative pattern types
+survive scope exit and nested pattern lowering. Guarded updates preserve modal
+access, immediate effects, ordinary linearity and evaluation order.
+[The design](doc/modal-effects-design.md#d7-sections-patterns-and-record-updates)
+records the implementation choices.
 
-All writers finished and the combined diff was inspected before integrated
-checks. Logs are in `/tmp/links-d7a-verification`; `source.sha256` records the
-six tested source/test files. Only the CLI XML display expectation changed after
-initial testing, from `Xml` to `List XmlItem`; its affected suite was rerun.
-`source-before-display-fix.sha256` retains the earlier test revision.
+Independent review resolved narrowed `as` bindings, nested record/list and
+record-rest refinements, inner pattern annotations, and handler pattern
+lowering. No implementation findings remain. All writers finished and the
+combined diff was inspected before integrated checks. The seven source/test
+hashes in `/tmp/links-d7b1-verification/source.sha256` still match after testing.
+Logs below are in that directory; documentation was updated afterwards.
 
 | Command | Result | Log |
 |---|---|---|
 | `make no-db` | Passed | `build.log` |
-| `opam exec -- ./run-tests nodb-unit-tests` | 1,200 passed | `unit.log` |
-| `./test-harness tests/fresco.tests` | 12 passed | `fresco-final.log` |
+| `opam exec -- ./run-tests nodb-unit-tests` | 1,219 passed | `unit.log` |
+| `./test-harness tests/fresco.tests` | 22 passed | `fresco.log` |
 | `./test-harness tests/fresco_typecheck.tests` | 2 passed | `fresco_typecheck.log` |
-| `./test-harness tests/fresco_modal.tests` | 12 passed | `fresco_modal.log` |
+| `./test-harness tests/fresco_modal.tests` | 14 passed | `fresco_modal.log` |
 | `./test-harness tests/handlers.tests` | 95 passed | `handlers.log` |
 | `./test-harness tests/effect_sugar.tests` | 44 passed | `effect_sugar.log` |
 | `./test-harness tests/typed_ir.tests` | 26 passed | `typed_ir.log` |
+| `./test-harness tests/records.tests` | 30 passed | `records.log` |
+| `./test-harness tests/patterns.tests` | 34 passed; 2 ignored | `patterns.log` |
+| `./test-harness tests/collections.tests` | 37 passed | `collections.log` |
+| `./test-harness tests/bindings.tests` | 25 passed | `bindings.log` |
+| `./test-harness tests/polymorphism.tests` | 55 passed | `polymorphism.log` |
+| `./test-harness tests/typecheck_examples.tests` | 167 passed; 15 ignored | `typecheck_examples.log` |
 | `make rule-check` | Passed; GNU-find tab check skipped, formatter disabled | `rule-check.log` |
 | Manual source tab/trailing-whitespace check; `git diff --check` | Passed | `diff-check.log` |
 
-Focused checks passed 106 source/IR cases in `/tmp/links-d7a-source.log`.
-The pre-fix nested-regex IR failure is preserved in
-`/tmp/links-d7a-primitives-before-ir-fix.log`: “Cannot establish recursive type
-equality in IR” during `Ir.Coerce`. The integrated initial display mismatch is
-in `fresco.log`. Earlier D6 results remain in Git history and
-`/tmp/links-d6-verification.WRWrKy`.
+Focused source checking/execution passed 125 cases in
+`/tmp/links-d7b1-source-final.log`. Review probes and pre-fix IR failures are in
+`/tmp/links-d7b1-review-probes.log`: a narrowed negative-pattern binder was
+assigned the original wider scrutinee. D7a results remain in commit `1f7ff34e`
+and `/tmp/links-d7a-verification`.
 
 ## Confirmed D6 decisions
 
@@ -200,6 +209,6 @@ Documentation-only update: text and whitespace checked.
 
 ## Next action
 
-Implement D7b1 sections, negative patterns and record updates. Independently
-review, test and commit before D7b2. Continue through the remaining milestones
+Implement D7b2a regex syntax. Independently review, test and commit before
+D7b2b ranges and comprehensions. Continue through the remaining milestones
 without a pause. Both D6 choices are confirmed.

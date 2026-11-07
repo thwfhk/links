@@ -9,6 +9,7 @@ and 'a node =
   | Let of 'a definition list * 'a term
   | Record of (string * 'a term) list * 'a term option
   | Project of 'a term * string
+  | Update of 'a term * (string * 'a term) list
   | List of 'a term list
   | Variant of string * 'a term
   | If of 'a term * 'a term * 'a term
@@ -33,13 +34,14 @@ and 'a operation_clause = {
   resumption : 'a pattern;
   body : 'a term;
 }
-and 'a pattern = { pattern : 'a pattern_node; pattern_type : 'a; pattern_position : SourceCode.Position.t }
+and 'a pattern = { pattern : 'a pattern_node; pattern_type : 'a; pattern_inner_type : 'a; pattern_position : SourceCode.Position.t }
 and 'a pattern_node =
   | PAny
   | PVariable of string
   | PConstant of Constant.t
   | PRecord of (string * 'a pattern) list * 'a pattern option
   | PVariant of string * 'a pattern
+  | PNegative of string list
   | PNil
   | PCons of 'a pattern * 'a pattern
   | PAs of string * 'a pattern
@@ -265,6 +267,7 @@ let rec map_term f binders e =
     | Let (bs, body) -> Let (List.map (map_binding f binders) bs, child body)
     | Record (fs, base) -> Record (List.map (fun (n,e) -> n, child e) fs, Option.map child base)
     | Project (e,n) -> Project (child e,n)
+    | Update (e,fs) -> Update (child e,List.map (fun (n,e) -> n,child e) fs)
     | List es -> List (List.map child es)
     | Variant (n,e) -> Variant (n,child e)
     | If (c,t,e) -> If (child c,child t,child e)
@@ -288,14 +291,16 @@ let rec map_term f binders e =
   in { e with typ; node }
 and map_pattern f binders p =
   let pattern_type = f binders PrimaryKind.Type p.pattern_type in
+  let pattern_inner_type = f binders PrimaryKind.Type p.pattern_inner_type in
   let child = map_pattern f binders in
   let pattern = match p.pattern with
     | PAny -> PAny | PVariable n -> PVariable n | PConstant c -> PConstant c
     | PRecord (fs,r) -> PRecord (List.map (fun (n,p) -> n,child p) fs,Option.map child r)
     | PVariant (n,p) -> PVariant (n,child p)
+    | PNegative ns -> PNegative ns
     | PNil -> PNil | PCons (a,b) -> PCons (child a,child b)
     | PAs (n,p) -> PAs (n,child p) in
-  { p with pattern; pattern_type }
+  { p with pattern; pattern_type; pattern_inner_type }
 and map_binding f binders = function
   | Pattern (p,e) -> Pattern (map_pattern f binders p,map_term f binders e)
   | Value (n,e) -> Value (n,map_term f binders e)
@@ -524,11 +529,19 @@ let handler_effect s pos handler =
      end in
      s,[{ EffectRow.name = info.FrescoElaborate.name; arguments }]
 
+let rec split_guard s pos typ = match head s pos typ with
+  | S.Modal (modality,body) -> let inner,payload = split_guard s pos body in
+     Modality.compose modality inner,payload
+  | typ -> Modality.identity,typ
+let guard_type guard typ = match guard with
+  | Modality.Relative ([],[]) -> typ | _ -> S.Modal (guard,typ)
+
 let rec infer_term support s mode source =
   let pos = WithPos.pos source in
   let intro = match WithPos.node source with
     | G.TupleLit [_] -> false
-    | G.FunLit _ | G.RecordLit _ | G.TupleLit _ | G.ListLit _ | G.ConstructorLit _ -> true
+    | G.FunLit _ | G.RecordLit _ | G.TupleLit _ | G.ListLit _ | G.ConstructorLit _
+    | G.Section (Operators.Section.Project _) -> true
     | _ -> false in
   match mode with
   | C.Check expected when support = C.Type && intro && value source ->
@@ -614,8 +627,27 @@ and infer_node support s mode source =
   | G.UnaryAppl ((_,op),arg) ->
      let name = match op with Operators.UnaryOp.Minus -> "negate" | Operators.UnaryOp.FloatMinus -> "negatef" | Operators.UnaryOp.Name n -> n in
      infer_term support s mode (WithPos.make ~pos (G.FnAppl (WithPos.make ~pos (G.Var name),[arg])))
-  | G.Section (Operators.Section.Name n) | G.FreezeSection (Operators.Section.Name n) ->
+  | G.FreezeSection section -> infer_term support s mode
+      (WithPos.make ~pos (G.Freeze (WithPos.make ~pos (G.Section section))))
+  | G.Section (Operators.Section.Name n) ->
      infer_term support s mode (WithPos.make ~pos (G.Var n))
+  | G.Section Operators.Section.Minus ->
+     infer_term support s mode (WithPos.make ~pos (G.Var "-"))
+  | G.Section Operators.Section.FloatMinus ->
+     infer_term support s mode (WithPos.make ~pos (G.Var "-."))
+  | G.Section (Operators.Section.Project label) ->
+     let make pk =
+       let id = Types.fresh_raw_variable () in
+       let kind = pk,(Linearity.Unl,Restriction.Any) in
+       Quantifier.make id kind,S.Var (id,kind,`Rigid) in
+     let a,payload = make PrimaryKind.Type in
+     let r,tail = make PrimaryKind.Row in
+     let record = S.Record (S.Row (StringMap.singleton label (S.Present payload),tail,false)) in
+     let name = "$fresco_projection" in
+     let body = term pos payload (Project (term pos record (Variable name),label)) in
+     let typ = S.Arrow (tuple [record],payload) in
+     let body = term pos typ (Lambda (DeclaredLinearity.Unl,[name,record],body,s.ambient)) in
+     finish s (S.ForAll ([a;r],typ)) (TypeAbstraction ([a;r],body))
   | G.TupleLit [expression] -> infer_term support s mode expression
   | G.TupleLit args -> infer_record support s mode pos
       (List.mapi (fun i e -> string_of_int (i + 1),e) args) None
@@ -636,6 +668,44 @@ and infer_node support s mode source =
        | _ -> s in
      let typ = match guard with Modality.Relative ([],[]) -> typ | _ -> S.Modal (guard,typ) in
      finish s typ (Project (record,label))
+  | G.With (source,fields) ->
+     let names = List.map fst fields in
+     let s,record = infer_term support s C.Infer source in
+     let guard,payload = split_guard s pos record.typ in
+     let s = List.fold_left (fun s label ->
+       let s,old = field s pos payload label in
+       if support = C.Type then unlimited s pos old else s) s names in
+     let rec replacements s = function
+       | [] -> s,[]
+       | (label,source) :: rest ->
+          let s,e = match guard with
+            | Modality.Relative ([],[]) -> infer_term support s C.Infer source
+            | _ when value source ->
+               (* Values can be checked under the result guard without moving
+                  an immediate computation into that effect context. *)
+               let before = s in let mark,s = marker s in
+               let s = { s with ambient = Modality.apply guard s.ambient;
+                 locks = (guard,s.ambient) :: s.locks } in
+               let s,e = infer_term support s C.Infer source in
+               leave before mark s e
+            | _ ->
+               let s,e = infer_term support s C.Infer source in
+               let typ = e.typ in
+               let s,e = coerce support s pos (C.Check (guard_type guard typ)) e in
+               s,term e.position typ (Coerce e) in
+          let s,rest = replacements s rest in s,(label,e) :: rest in
+     let s,fields = replacements s fields in
+     let _,s = List.fold_left (fun (seen,s) (label,e) ->
+       let s = if support = C.Type && StringSet.mem label seen then unlimited s pos e.typ else s in
+       StringSet.add label seen,s) (StringSet.empty,s) fields in
+     let row = match expose s pos payload with
+       | S.Record row -> (match expose s pos row with
+           | S.Row (fs,tail,dual) -> S.Row (List.fold_right (fun (label,e) fs ->
+                StringMap.add label (S.Present e.typ) fs) fields fs,tail,dual)
+           | _ -> error pos "Record update requires a record row")
+       | S.Ghost when support = C.Skeleton -> S.Ghost
+       | _ -> error pos "Record update requires a record" in
+     finish s (guard_type guard (S.Record row)) (Update (record,fields))
   | G.ListLit (items,_) ->
      let expected = match mode with C.Check t -> (match expose s pos t with
        | S.Application (a,[(PrimaryKind.Type,t)]) when Types.Abstype.equal a Types.list -> Some t
@@ -801,12 +871,12 @@ and infer_handler support s mode pos source =
   let s,handler,_ = leave_handler computation_before computation_marker s handler computation.typ in
   let rec pattern_variables p = match p.pattern with
     | PVariable name -> [name,p.pattern_type]
-    | PAs (name,payload) -> (name,p.pattern_type) :: pattern_variables payload
+    | PAs (name,payload) -> (name,p.pattern_inner_type) :: pattern_variables payload
     | PRecord (fields,rest) -> List.concat_map (fun (_,p) -> pattern_variables p) fields @
         Option.fold ~none:[] ~some:pattern_variables rest
     | PVariant (_,p) -> pattern_variables p
     | PCons (p,q) -> pattern_variables p @ pattern_variables q
-    | PAny | PNil | PConstant _ -> [] in
+    | PAny | PNil | PConstant _ | PNegative _ -> [] in
   let parameter_types = List.concat_map (fun (p,_) -> pattern_variables p) handler.parameters in
   let parameter_variables = List.map (fun v ->
     { v with value_type = List.assoc v.name parameter_types }) parameter_variables in
@@ -987,7 +1057,7 @@ and infer_lambda support s mode pos lin groups body =
 and fresh_domains s pos = function
   | 0 -> s,[]
   | n -> let s,t = fresh s pos PrimaryKind.Type in let s,ts = fresh_domains s pos (n - 1) in s,t :: ts
-and check_pattern support s source typ =
+and check_pattern ?(discard=true) support s source typ =
   let pos = WithPos.pos source in
   unique_patterns pos [source];
   match head s pos typ with
@@ -1000,28 +1070,39 @@ and check_pattern support s source typ =
            | _ -> s,source)
        | _ -> s,source in
      let before = s in
-     let s,pattern = check_pattern support { s with ambient = Modality.apply modality s.ambient } source payload in
+     let s,pattern = check_pattern ~discard support { s with ambient = Modality.apply modality s.ambient } source payload in
      let wrap typ = S.Modal (modality,typ) in
      let variables = List.map (fun v -> if v.identity >= before.next
        then { v with value_type = wrap v.value_type } else v) s.variables in
      let pattern = map_pattern (fun _ _ typ -> wrap typ) [] pattern in
      { s with variables; ambient = before.ambient },pattern
-  | _ -> check_pattern_node support s source typ
-and check_pattern_node support s source typ =
+  | _ -> check_pattern_node ~discard support s source typ
+and check_pattern_node ~discard support s source typ =
   let pos = WithPos.pos source in
-  let result s typ pattern = s,{ pattern; pattern_type = typ; pattern_position = pos } in
+  let result ?inner s typ pattern = s,{ pattern; pattern_type = typ;
+    pattern_inner_type = Option.value ~default:typ inner; pattern_position = pos } in
   match WithPos.node source with
   | G.Pattern.Variable b -> let name = G.Binder.to_name b in
      let s,_ = bind s name typ in result s typ (PVariable name)
   | G.Pattern.Any -> let s = if support = C.Type then unlimited s pos typ else s in result s typ PAny
   | G.Pattern.HasType (p,(annotation,_)) ->
-     let s,t = annotate s annotation in let s,typ = join s pos typ t in check_pattern support s p typ
+     let s,t = annotate s annotation in
+     let s,p = check_pattern ~discard support s p typ in
+     let s,inner = join s pos p.pattern_inner_type t in
+     s,{ p with pattern_inner_type = inner }
   | G.Pattern.Constant c ->
      let s,typ = join s pos typ (S.Primitive (Constant.type_of c)) in result s typ (PConstant c)
   | G.Pattern.As (b,p) ->
-     let s = if support = C.Type then unlimited s pos typ else s in
-     let s,p = check_pattern support s p typ in let name = G.Binder.to_name b in
-     let s,_ = bind s name typ in result s typ (PAs (name,p))
+     let rec negative p = match WithPos.node p with
+       | G.Pattern.Negative _ -> true
+       | G.Pattern.HasType (p,_) -> negative p
+       | _ -> false in
+     let direct_negative = negative p in
+     let s,p = check_pattern ~discard:(not direct_negative) support s p typ in
+     let s = if support = C.Type && not direct_negative then unlimited s pos p.pattern_inner_type else s in
+     let name = G.Binder.to_name b in
+     let s,_ = bind s name p.pattern_inner_type in
+     result ~inner:p.pattern_inner_type s typ (PAs (name,p))
   | G.Pattern.Tuple ps -> check_record_pattern support s pos
       (List.mapi (fun i p -> string_of_int (i + 1),p) ps) None typ
   | G.Pattern.Record (fs,rest) -> check_record_pattern support s pos fs rest typ
@@ -1031,7 +1112,23 @@ and check_pattern_node support s source typ =
        | _ -> let s,tail = fresh s pos PrimaryKind.Row in let s,_ = join s pos typ (S.Variant tail) in s,tail in
      let s,payload = row_field s pos row name in
      let p = Option.value ~default:(WithPos.make ~pos (G.Pattern.Tuple [])) p in
-     let s,p = check_pattern support s p payload in result s typ (PVariant (name,p))
+     let s,p = check_pattern support s p payload in let inner = match expose s pos row with
+       | S.Row (fs,tail,dual) -> S.Variant (S.Row (StringMap.add name
+           (S.Present p.pattern_inner_type) fs,tail,dual))
+       | _ -> typ in
+     result ~inner s typ (PVariant (name,p))
+  | G.Pattern.Negative names ->
+     let s,row = match expose s pos typ with
+       | S.Variant row -> s,row
+       | _ -> let s,tail = fresh s pos PrimaryKind.Row in
+          let s,_ = join s pos typ (S.Variant tail) in s,tail in
+     let s = List.fold_left (fun s label -> fst (row_field s pos row label)) s names in
+     let inner = match expose s pos row with
+       | S.Row (fs,tail,dual) -> S.Variant (S.Row
+           (List.fold_left (fun fs label -> StringMap.add label S.Absent fs) fs names,tail,dual))
+       | _ -> error pos "Expected a variant row" in
+     let s = if support = C.Type && discard then unlimited s pos inner else s in
+     result ~inner s typ (PNegative names)
   | G.Pattern.Nil | G.Pattern.Cons _ | G.Pattern.List _ ->
      let s,element = match expose s pos typ with
        | S.Application (a,[PrimaryKind.Type,t]) when Types.Abstype.equal a Types.list ->
@@ -1040,9 +1137,14 @@ and check_pattern_node support s source typ =
           let s,t = require s pos (List.hd (Types.Abstype.arity Types.list)) t in
           let s,_ = join s pos typ (S.Application (Types.list,[PrimaryKind.Type,t])) in s,t in
      (match WithPos.node source with
-      | G.Pattern.Nil -> result s typ PNil
+      | G.Pattern.Nil ->
+         let s,inner = fresh s pos PrimaryKind.Type in
+         let s,inner = require s pos (List.hd (Types.Abstype.arity Types.list)) inner in
+         result ~inner:(S.Application (Types.list,[PrimaryKind.Type,inner])) s typ PNil
       | G.Pattern.Cons (a,b) -> let s,a = check_pattern support s a element in
-         let s,b = check_pattern support s b typ in result s typ (PCons (a,b))
+         let s,b = check_pattern support s b typ in
+         let s,inner = join s pos (S.Application (Types.list,[PrimaryKind.Type,a.pattern_inner_type])) b.pattern_inner_type in
+         result ~inner s typ (PCons (a,b))
       | G.Pattern.List ps ->
          let source = List.fold_right (fun a b -> WithPos.make ~pos (G.Pattern.Cons (a,b))) ps
            (WithPos.make ~pos G.Pattern.Nil) in check_pattern support s source typ
@@ -1065,7 +1167,14 @@ and check_record_pattern support s pos fields rest typ =
          (List.fold_left (fun fs (n,_) -> StringMap.remove n fs) fs fields,tail,dual))
          | _ -> error pos "Expected a record row" in
        let s,p = check_pattern support s p rest_type in s,Some p in
-  s,{ pattern = PRecord (fields,rest); pattern_type = typ; pattern_position = pos }
+  let base = match rest with None -> typ | Some p -> p.pattern_inner_type in
+  let inner = match expose s pos base with
+    | S.Record row -> (match expose s pos row with
+        | S.Row (fs,tail,dual) -> S.Record (S.Row (List.fold_left (fun fs (name,p) ->
+            StringMap.add name (S.Present p.pattern_inner_type) fs) fs fields,tail,dual))
+        | _ -> typ)
+    | _ -> typ in
+  s,{ pattern = PRecord (fields,rest); pattern_type = typ; pattern_inner_type = inner; pattern_position = pos }
 and check_bound_usage support pos before s =
   if support = C.Skeleton then s else
   List.fold_left (fun s v -> if v.identity >= before.next && count s v <> 1
