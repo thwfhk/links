@@ -7,6 +7,7 @@ and 'a node =
   | Variable of string
   | Lambda of DeclaredLinearity.t * (string * 'a) list * 'a term * 'a EffectRow.t
   | Apply of 'a term * 'a term list
+  | Escape of string * 'a * 'a term * 'a EffectRow.t
   | Let of 'a definition list * 'a term
   | Record of (string * 'a term) list * 'a term option
   | Project of 'a term * string

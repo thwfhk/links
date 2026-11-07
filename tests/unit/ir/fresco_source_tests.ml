@@ -798,6 +798,172 @@ let regex_suite = "regex syntax" >::: [
     |}));
 ]
 
+let continuations_suite = "continuations" >::: [
+  "unused and invoked escapes execute" >:: (fun _ ->
+    List.iter (fun source -> execution (`Int 42) source |> expect_type Types.int_type)
+      ["escape k in 40+2";"escape k in k(42)";
+       "escape k in 1+(escape inner in k(42))";
+       "escape k in { var _ = k(42); 0 }"]);
+
+  "continuation calls leave their surrounding computation" >:: (fun _ ->
+    execution (`Int 42) "1+(escape k in 100+k(41))" |> expect_type Types.int_type);
+
+  "continuation aliases and closures execute" >:: (fun _ ->
+    execution (`Int 42) {|
+      escape k in { var saved = k; var call = fun() { saved(42) }; call() }
+    |} |> expect_type Types.int_type);
+
+  "stored continuations can be invoked repeatedly" >:: (fun _ ->
+    execution (`Variant ("Done",`Int 2)) {|
+      typename Bounce = [|Again:(Int,(Bounce) -> Bounce) | Done:Int|];
+      switch (escape k in (Again(0,k) : Bounce)) {
+        case Again(n,k) -> if (n < 2) k(Again(n+1,k)) else Done(n)
+        case Done(n) -> Done(n)
+      }
+    |} |> ignore);
+
+  "escape signatures retain outer quantifiers and type applications" >:: (fun _ ->
+    execution (Value.box [`Int 42;`Bool true]) {|
+      sig early : forall a. modal [Wild] ((a) -> a)
+      fun early(x) { escape k in { var _ = k(x); x } }
+      (~early[Int](42),~early[Bool](true))
+    |} |> int_bool);
+
+  "escape bodies retain supplied polymorphism" >:: (fun _ ->
+    execution (Value.box [`Int 42;`Bool true]) {|
+      sig id : forall a. (a) -> a fun id(x) { x }
+      var saved = escape k in ~id;
+      (~saved[Int](42),~saved[Bool](true))
+    |} |> int_bool;
+    execution (Value.box [`Int 42;`Bool true]) {|
+      typename Identity = forall a. (a) -> a;
+      var saved = (escape k in (fun(x) { x } : Identity)) : Identity;
+      (saved(42),saved(true))
+    |} |> int_bool);
+
+  "continuations accept supplied polymorphic and modal arguments" >:: (fun _ ->
+    execution (Value.box [`Int 42;`Bool true]) {|
+      sig id : forall a. (a) -> a fun id(x) { x }
+      var saved = escape k in { var _ = k(~id); ~id };
+      (~saved[Int](42),~saved[Bool](true))
+    |} |> int_bool;
+    execution (`Int 42) {|
+      sig guarded : modal [Wild] (() -> Int) fun guarded() { 42 }
+      var saved = escape k in { var _ = k(~guarded); ~guarded };
+      saved()
+    |} |> expect_type Types.int_type);
+
+  "escape bodies retain supplied modal types" >:: (fun _ ->
+    let source = {|
+      effect Needed {}
+      sig guarded : modal [Needed] (() -> Int) fun guarded() { 42 }
+      var saved = escape k in ~guarded;
+    |} in
+    let typ = infer (source ^ "~saved") in
+    (match expose typ with
+     | Types.Modal (Modality.Absolute [_],_) -> ()
+     | typ -> assert_failure (Types.string_of_datatype typ));
+    reject (fun () -> FrescoFrontend.check_string (FrescoFrontend.empty ()) (source ^ "saved()")));
+
+  "continuation results share one inferred type" >:: (fun _ ->
+    execution (`Int 42) {|
+      escape k in { var _ = ("" == k(42), "again" == k(42)); 0 }
+    |} |> expect_type Types.int_type;
+    reject (fun () -> FrescoFrontend.check_string (FrescoFrontend.empty ()) {|
+      escape k in { var _ = ("" == k(42), true == k(42)); 0 }
+    |}));
+
+  "escape arguments and body results agree" >:: (fun _ ->
+    List.iter (fun source -> reject (fun () -> FrescoFrontend.check_string (FrescoFrontend.empty ()) source))
+      ["(escape k in k(true)) : Int";
+       "escape k in { var _ = k(true); 42 }";
+       "escape k in k(1,2)";
+       "escape k in { var _ = k(42); true }"]);
+
+  "escape and continuation invocation require Wild" >:: (fun _ ->
+    reject ~message:"Wild" (fun () -> FrescoFrontend.check_string (FrescoFrontend.empty ())
+      "sig f : () -> Int fun f() { escape k in 42 } f()");
+    List.iter (fun modal -> reject (fun () -> FrescoFrontend.check_string (FrescoFrontend.empty ())
+      ("escape k in { var f = (fun() { k(42) } : modal [" ^ modal ^ "] (() -> Int)); 0 }")))
+      ["";"Wild"];
+    execution (`Int 42) {|
+      sig f : modal [Wild] (() -> Int) fun f() { escape k in k(42) } f()
+    |} |> expect_type Types.int_type);
+
+  "continuations retain the captured ambient context" >:: (fun _ ->
+    List.iter (fun source -> reject
+      (fun () -> FrescoFrontend.check_string (FrescoFrontend.empty ()) source)) [
+      {|
+        effect F { Op : () => Int; }
+        escape k in handle <F> (k(42)) { case x -> x case <Op => r> -> r(0) }
+      |};
+      {|
+        effect F { Op : () => Int; }
+        var action = escape k in {
+          var _ = handle <F> (k(fun() { do Op })) {
+            case x -> x case <Op => r> -> r(42)
+          };
+          fun() { 0 }
+        };
+        action()
+      |};
+      {|
+        effect E {}
+        sig f : modal [Wild,E] (() -> Int)
+        fun f() {
+          escape k in { var moved = (fun() { k(42) } : modal [Wild] (() -> Int)); 0 }
+        }
+        42
+      |};
+      {|
+        effect E {}
+        typename Bounce = [|Again:(Int,(Bounce) -> Bounce) | Done:Int|];
+        sig capture : modal [Wild,E] (() -> Bounce)
+        fun capture() { escape k in (Again(0,k) : Bounce) }
+        sig use : modal [Wild,E] (() -> Int)
+        fun use() {
+          switch (capture()) {
+            case Again(n,k) -> {
+              var moved = (fun() { k(Done(42)) } : modal [Wild] (() -> Bounce));
+              n
+            }
+            case Done(n) -> n
+          }
+        }
+        42
+      |}
+    ]);
+
+  "escape exports contextual function results" >:: (fun _ ->
+    execution (`Int 42) "(escape k in fun(x) { x })(42)" |> expect_type Types.int_type;
+    execution (`Int 42) {|
+      var action = escape k in { var _ = k(fun() { 42 }); fun() { 0 } };
+      action()
+    |} |> expect_type Types.int_type;
+    reject (fun () -> FrescoFrontend.check_string (FrescoFrontend.empty ()) {|
+      effect E { Op : () => Int; }
+      sig make : modal [Wild,E] (() -> (() -> Int))
+      fun make() { escape k in { var _ = k(fun() { do Op }); fun() { 0 } } }
+      sig use : modal [Wild,E] (() -> Int)
+      fun use() { var action = make(); var f = (fun() { action() } : modal [] (() -> Int)); 0 }
+      42
+    |}));
+
+  "escape bodies retain modal access checks" >:: (fun _ ->
+    reject (fun () -> FrescoFrontend.check_string (FrescoFrontend.empty ()) {|
+      effect Needed {}
+      sig guarded : modal [Needed] (() -> Int) fun guarded() { 42 }
+      escape k in k(guarded())
+    |}));
+
+  "escape bodies retain ordinary usage checks" >:: (fun _ ->
+    execution (`Int 42) "escape k in { var once = linfun() { 42 }; once() }"
+      |> expect_type Types.int_type;
+    List.iter (fun source -> reject (fun () -> FrescoFrontend.check_string (FrescoFrontend.empty ()) source))
+      ["escape k in { var once = linfun() { 42 }; 0 }";
+       "escape k in { var once = linfun() { 42 }; once()+once() }"]);
+]
+
 let comprehensions_suite = "ranges and comprehensions" >::: [
   "ranges include both endpoints and retain descending emptiness" >:: (fun _ ->
     execution (Value.box [`List [`Int 1;`Int 2;`Int 3];`List [];`List [`Int 42]])
@@ -1147,4 +1313,4 @@ let ir_suite =
       reject_coercion (forall (fun a -> arrow a int)) (forall (fun a -> arrow a a)));
   ]
 
-let suite = "Fresco source" >::: [reference_suite; source_suite; primitive_suite; regex_suite; comprehensions_suite; sections_patterns_updates_suite; ir_suite]
+let suite = "Fresco source" >::: [reference_suite; source_suite; primitive_suite; regex_suite; continuations_suite; comprehensions_suite; sections_patterns_updates_suite; ir_suite]

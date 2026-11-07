@@ -112,6 +112,12 @@ let rec computation names quantifiers expression =
      let callee_bindings, callee = value names quantifiers callee in
      let argument_bindings, arguments = values names quantifiers arguments in
      callee_bindings @ argument_bindings, Ir.Apply (callee, arguments)
+  | Escape (name,continuation,body,ambient) ->
+     let typ = Types.Arrow (Types.make_tuple_type [runtime_type continuation],runtime_type expression.typ) in
+     let binder = fresh_binder Var.Scope.Local "" (with_quantifiers quantifiers typ) in
+     let definition = function_ir names binder quantifiers [name,continuation] body ambient in
+     [Ir.Fun definition], Ir.Special (Ir.CallCC
+       (Ir.tapp (var_value (Var.var_of_binder binder),type_arguments quantifiers)))
   | Range _ | ConcatMap _ | SortBy _ ->
      let aliases,lowered = FrescoComprehensions.lower expression in
      let names = List.fold_left (fun names (name,value) -> StringMap.add name value names) names aliases in
@@ -195,7 +201,7 @@ and value names quantifiers expression =
   | Coerce body ->
      let bindings, body = child_value body in
      bindings, Ir.Coerce (body, runtime_type expression.typ)
-  | Apply _ | If _ | Let _ | Switch _ | Operation _ | Handle _
+  | Apply _ | Escape _ | If _ | Let _ | Switch _ | Operation _ | Handle _
   | Range _ | ConcatMap _ | SortBy _ ->
      let bindings, tail = computation names quantifiers expression in
      let binding, value = bind Var.Scope.Local "" quantifiers expression.typ tail in

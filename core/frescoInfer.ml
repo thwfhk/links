@@ -6,6 +6,7 @@ and 'a node =
   | Variable of string
   | Lambda of DeclaredLinearity.t * (string * 'a) list * 'a term * 'a EffectRow.t
   | Apply of 'a term * 'a term list
+  | Escape of string * 'a * 'a term * 'a EffectRow.t
   | Let of 'a definition list * 'a term
   | Record of (string * 'a term) list * 'a term option
   | Project of 'a term * string
@@ -267,6 +268,9 @@ let rec map_term f binders e =
         List.map (fun (n,t) -> n, f binders PrimaryKind.Type t) ps,
         child body, EffectRow.map (f binders PrimaryKind.Type) ambient)
     | Apply (fn, args) -> Apply (child fn, List.map child args)
+    | Escape (name,continuation,body,ambient) -> Escape (name,
+        f binders PrimaryKind.Type continuation,child body,
+        EffectRow.map (f binders PrimaryKind.Type) ambient)
     | Let (bs, body) -> Let (List.map (map_binding f binders) bs, child body)
     | Record (fs, base) -> Record (List.map (fun (n,e) -> n, child e) fs, Option.map child base)
     | Project (e,n) -> Project (child e,n)
@@ -630,6 +634,25 @@ and infer_node support s mode source =
        (Range (first,last,s.ambient))
   | G.Iteration (generators,body,filter,sort) ->
      infer_iteration support s mode pos generators body filter sort
+  | G.Escape (binder,body) ->
+     if support = C.Type && Option.is_none (EffectRow.find wild s.ambient) then
+       error pos "Escape requires Wild in the ambient context";
+     let before = s in let mark,s = marker s in
+     (* Preserve supplied polymorphic/modal body types while guessing only
+        missing structure. The continuation remains relative to this scope. *)
+     let s,argument = if support = C.Skeleton then s,S.Ghost else
+       match mode with
+       | C.Check expected -> guess s pos expected
+       | _ -> let s,skeleton = infer_node C.Skeleton s mode source in
+          guess s pos skeleton.typ in
+     let s,result = if support = C.Skeleton then s,S.Ghost else fresh s pos PrimaryKind.Type in
+     let continuation = S.Arrow (tuple [argument],result) in
+     let name = G.Binder.to_name binder in
+     let s,_ = bind s name continuation in
+     let s,body = infer_term support s mode body in
+     let s = if support = C.Skeleton then s else fst (join s pos argument body.typ) in
+     let s = check_bound_usage support pos before s in
+     leave before mark s (term pos body.typ (Escape (name,continuation,body,before.ambient)))
   | G.InfixAppl ((_,op),left,right) ->
      (match op with
       | Operators.BinaryOp.And -> infer_term support s mode (WithPos.make ~pos

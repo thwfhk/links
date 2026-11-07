@@ -81,7 +81,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D7a | Contextual first-order primitives and recursive primitive aliases | `1f7ff34e` |
 | D7b1 | Sections, negative patterns and record updates | `4fad3532` |
 | D7b2a | Regex syntax, splices, matching and replacement | `db0d3a75` |
-| D7b2b | Ranges, list comprehensions, filters and ordering | This commit |
+| D7b2b | Ranges, list comprehensions, filters and ordering | `72e47dbc` |
+| D7b3 | Escape continuations and contextual capture checks | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -148,7 +149,7 @@ implementation of the next. The main agent owns integration and these records.
 | D8b: removal and final review | In-scope legacy inference routes are removed; recursive consumers and exports are reviewed; migration guide and final selected suites pass |
 
 D7a (`1f7ff34e`), D7b1 (`4fad3532`) and D7b2a (`db0d3a75`) are complete.
-D7b2b is complete. D7b3 is next. Later boundaries may be split further when a dependency needs
+D7b2b (`72e47dbc`) and D7b3 are complete. D7b4 is next. Later boundaries may be split further when a dependency needs
 its own review and checks.
 
 ## Recorded decisions
@@ -164,40 +165,40 @@ and design:
 
 ## Latest task and verification
 
-7 November 2026, D7b2b, base `db0d3a75`: ranges and list comprehensions are
-complete, including filters, ordering, generator scope, supplied polymorphism,
-guarded collections and ordinary usage checks.
-[The design](doc/modal-effects-design.md#d7-ranges-and-list-comprehensions)
-records the helper implementation, preserved evaluation order and boundary
-corrections, with the internal-helper choice marked for user review.
+7 November 2026, D7b3, base `72e47dbc`: escape continuations are complete,
+including repeated invocation, supplied polymorphic/modal results, ordinary
+usage and capture-context checks. [The design](doc/modal-effects-design.md#d7-continuations)
+records the contextual continuation rule and its restrictions for user review.
 
-Independent review resolved duplicate generator names, retained polymorphic
-list elements and guarded-container extraction. No implementation findings
-remain. All writers finished and the combined diff was inspected before
-integrated checks. The eight source/test hashes in
-`/tmp/links-d7b2b-verification/source.sha256` still match after testing. Logs below
+Independent review found and resolved a handler-escape error in the proposed
+absolute continuation type. The final contextual arrow retains the capture
+context. No findings remain. All writers finished and the combined diff was
+inspected before integrated checks. The six source/test hashes in
+`/tmp/links-d7b3-verification/source.sha256` still match after testing. Logs below
 are in that directory; documentation was updated afterwards.
 
 | Command | Result | Log |
 |---|---|---|
 | `make no-db` | Passed | `build.log` |
-| `opam exec -- ./run-tests nodb-unit-tests` | 1,259 passed | `unit.log` |
-| `./test-harness tests/fresco.tests` | 48 passed | `fresco.log` |
+| `opam exec -- ./run-tests nodb-unit-tests` | 1,274 passed | `unit.log` |
+| `./test-harness tests/fresco.tests` | 54 passed | `fresco.log` |
 | `./test-harness tests/fresco_typecheck.tests` | 2 passed | `fresco_typecheck.log` |
-| `./test-harness tests/fresco_modal.tests` | 18 passed | `fresco_modal.log` |
+| `./test-harness tests/fresco_modal.tests` | 20 passed | `fresco_modal.log` |
 | `./test-harness tests/handlers.tests` | 95 passed | `handlers.log` |
 | `./test-harness tests/effect_sugar.tests` | 44 passed | `effect_sugar.log` |
 | `./test-harness tests/typed_ir.tests` | 26 passed | `typed_ir.log` |
-| `./test-harness tests/collections.tests` | 37 passed | `collections.log` |
+| `./test-harness tests/continuations.tests` | 15 passed | `continuations.log` |
 | `./test-harness tests/polymorphism.tests` | 55 passed | `polymorphism.log` |
 | `./test-harness tests/typecheck_examples.tests` | 167 passed; 15 ignored | `typecheck_examples.log` |
 | `make rule-check` | Passed; GNU-find tab check skipped, formatter disabled | `rule-check.log` |
-| Manual source tab/trailing-whitespace check; `git diff --check` | Passed | `diff-check.log` |
+| Source hashes, tabs and trailing whitespace; `git diff --check` | Passed | `source-check.log`, `diff-check.log` |
 
-Focused source checking/execution passed 165 cases in
-`/tmp/links-d7b2b-agent-source.log`. Legacy scope/evaluation probes are in
-`/tmp/links-d7b2b-legacy.log`. Earlier milestone results remain in Git history
-and their `/tmp/links-d7*-verification` directories.
+Focused source checking/execution passed 180 cases in
+`/tmp/links-d7b3-agent-source.log`. Independent review passed 19 typed-IR
+execution/rejection probes in `/tmp/links-d7b3-review-final-source.log`.
+The original failure is in `/tmp/links-d7b3-review-unsound.log`.
+Earlier milestone results remain in Git history and their
+`/tmp/links-d7*-verification` directories.
 
 ## Confirmed D6 decisions
 
@@ -208,6 +209,6 @@ Documentation-only update: text and whitespace checked.
 
 ## Next action
 
-Implement D7b3 continuations. Independently review, test and commit before
-D7b4 prelude foundations. Continue through the remaining milestones
+Implement D7b4 prelude foundations. Independently review, test and commit before
+D7c1 actors. Continue through the remaining milestones
 without a pause. Both D6 choices are confirmed.

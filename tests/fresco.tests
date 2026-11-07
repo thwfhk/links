@@ -251,3 +251,35 @@ tests/fresco/polymorphic_variant.links
 args : --fresco
 filemode : true
 stdout : (42, true) : (Int, Bool)
+
+Escape returns its body result
+escape k in { 2 + 40 }
+args : --fresco
+stdout : 42 : Int
+
+Escape exits an enclosing computation
+escape return in { 1 + (escape k in { return(42) }) }
+args : --fresco
+stdout : 42 : Int
+
+Escape continuation results agree across uses
+escape k in { var _ = ("" == k(42), "again" == k(42)); 0 }
+args : --fresco
+stdout : 42 : Int
+
+Escape rejects inconsistent continuation results
+escape k in { var _ = ("" == k(42), true == k(42)); 0 }
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+Escape requires Wild
+sig f : () -> Int fun f() { escape k in { 42 } } f()
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+Escape executes in a signed Wild function
+sig f : modal [Wild] (() -> Int) fun f() { escape k in { k(42) } } f()
+args : --fresco
+stdout : 42 : Int

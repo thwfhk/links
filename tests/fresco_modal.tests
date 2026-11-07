@@ -104,3 +104,14 @@ effect Tick { Next : () => Int; } var thunk = handle (fun() { do Next }) { case 
 args : --fresco
 exit : 1
 stderr : @.*Type error:.*
+
+Escape preserves the effect requirement of a returned callback
+effect E { Op : () => Int; } var callback = handle <E> (escape k in { var f = fun() { do Op }; k(f) }) { case f -> f case <Op => r> -> r(41) }; handle <E> (callback()+1) { case x -> x case <Op => r> -> r(41) }
+args : --fresco
+stdout : 42 : Int
+
+An escaped callback requires its effect when called
+effect E { Op : () => Int; } var callback = handle <E> (escape k in { var f = fun() { do Op }; k(f) }) { case f -> f case <Op => r> -> r(41) }; callback()
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*

@@ -328,6 +328,12 @@ Resumptions remain reusable. The existing interaction that can duplicate or
 discard a continuation holding linear values is deferred; this implementation
 adds no new restrictions for that interaction.
 
+`escape k in M` requires `Wild`. The continuation `k` has contextual type
+`(A) -> B`, where `A` is the result type of `M` and all uses of `k` share
+one inferred result type `B`. Access to `k` retains its capture context.
+Invoking `k` returns its argument from the enclosing escape expression.
+Continuations remain reusable.
+
 Batch compilation and interactive definitions use the same rules.
 Successful interactive definitions retain their type requirements
 and declaration identities. Failed checking leaves the previous typing and

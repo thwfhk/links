@@ -641,6 +641,36 @@ The `n` flag has no runtime primitive implementation. Legacy typing aborts
 with an assertion; Fresco reports a positioned source error. No native regex
 runtime is added.
 
+### D7 continuations
+
+`FrescoInfer` obtains the continuation argument type from a supplied expected
+type or a skeleton pass over the escape body. This preserves supplied
+polymorphic and modal result types. The continuation call result uses one
+fresh monotype variable. The body result must agree with the continuation
+argument type. A scope marker exports the body, continuation type and ambient
+row together. Ordinary usage checks apply to the body and its free variables.
+Lower the checked expression to the existing `CallCC` IR operation with a
+local function binding. The interpreter and JavaScript backend retain their
+existing implementations.
+
+Give the continuation a contextual arrow tied to its capture context. Modal
+access checks then preserve the context of its argument and result types.
+An absolute `modal [Wild]` guard loses this relation: a continuation called
+inside an added handler could carry a callback using that handler's effect
+out of its scope. A review probe reproduced the resulting unhandled operation.
+
+**Choice for review:** use the existing contextual-arrow access rule for
+continuations. Calls across an added handler reject even when the argument is
+`Int`; capturing the continuation inside an absolute modal closure also
+rejects. This retains contextual function results without extending the
+modality rules. An alternative is to require absolute continuation arguments
+and permit more changes of context, which would exclude those function results.
+
+Preserve the single inferred continuation result type used by
+`TypeSugar.Check`: its comment discusses result polymorphism, but its rule
+does not implement it. Uses returning both `String` and `Bool` therefore
+reject. Capturing the continuation also requires ambient `Wild`.
+
 ### D7 ranges and list comprehensions
 
 Keep checked range, concatenating-map and sorting nodes with their ambient
