@@ -112,6 +112,10 @@ let rec computation names quantifiers expression =
      let callee_bindings, callee = value names quantifiers callee in
      let argument_bindings, arguments = values names quantifiers arguments in
      callee_bindings @ argument_bindings, Ir.Apply (callee, arguments)
+  | Range _ | ConcatMap _ | SortBy _ ->
+     let aliases,lowered = FrescoComprehensions.lower expression in
+     let names = List.fold_left (fun names (name,value) -> StringMap.add name value names) names aliases in
+     computation names quantifiers lowered
   | If (condition, yes, no) ->
      let bindings, condition = value names quantifiers condition in
      bindings, Ir.If (condition, computation names quantifiers yes, computation names quantifiers no)
@@ -191,7 +195,8 @@ and value names quantifiers expression =
   | Coerce body ->
      let bindings, body = child_value body in
      bindings, Ir.Coerce (body, runtime_type expression.typ)
-  | Apply _ | If _ | Let _ | Switch _ | Operation _ | Handle _ ->
+  | Apply _ | If _ | Let _ | Switch _ | Operation _ | Handle _
+  | Range _ | ConcatMap _ | SortBy _ ->
      let bindings, tail = computation names quantifiers expression in
      let binding, value = bind Var.Scope.Local "" quantifiers expression.typ tail in
      bindings @ [binding], value

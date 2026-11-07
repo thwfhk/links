@@ -11,6 +11,9 @@ and 'a node =
   | Project of 'a term * string
   | Update of 'a term * (string * 'a term) list
   | List of 'a term list
+  | Range of 'a term * 'a term * 'a EffectRow.t
+  | ConcatMap of 'a term * 'a term * 'a EffectRow.t
+  | SortBy of 'a term * 'a term * 'a EffectRow.t
   | Variant of string * 'a term
   | If of 'a term * 'a term * 'a term
   | Switch of 'a term * ('a pattern * 'a term) list
@@ -269,6 +272,9 @@ let rec map_term f binders e =
     | Project (e,n) -> Project (child e,n)
     | Update (e,fs) -> Update (child e,List.map (fun (n,e) -> n,child e) fs)
     | List es -> List (List.map child es)
+    | Range (a,b,ambient) -> Range (child a,child b,EffectRow.map (f binders PrimaryKind.Type) ambient)
+    | ConcatMap (fn,xs,ambient) -> ConcatMap (child fn,child xs,EffectRow.map (f binders PrimaryKind.Type) ambient)
+    | SortBy (fn,xs,ambient) -> SortBy (child fn,child xs,EffectRow.map (f binders PrimaryKind.Type) ambient)
     | Variant (n,e) -> Variant (n,child e)
     | If (c,t,e) -> If (child c,child t,child e)
     | Switch (e,cases) -> Switch (child e, List.map (fun (p,e) -> map_pattern f binders p,child e) cases)
@@ -614,6 +620,16 @@ and infer_node support s mode source =
        let s,args = infer_pairs support s args domains in
        s,term pos result (Apply (fn,args))
   | G.Regex regex -> infer_term support s mode (FrescoRegex.lower pos regex)
+  | G.RangeLit (first,last) ->
+     if support = C.Type && Option.is_none (EffectRow.find wild s.ambient) then
+       error pos "An integer range requires Wild in the ambient context";
+     let bound_mode = if support = C.Skeleton then C.Check S.Ghost else C.Check (S.Primitive Primitive.Int) in
+     let s,first = infer_term support s bound_mode first in
+     let s,last = infer_term support s bound_mode last in
+     finish s (S.Application (Types.list,[PrimaryKind.Type,S.Primitive Primitive.Int]))
+       (Range (first,last,s.ambient))
+  | G.Iteration (generators,body,filter,sort) ->
+     infer_iteration support s mode pos generators body filter sort
   | G.InfixAppl ((_,op),left,right) ->
      (match op with
       | Operators.BinaryOp.And -> infer_term support s mode (WithPos.make ~pos
@@ -847,6 +863,113 @@ and infer_node support s mode source =
      let s,e = coerce support s pos (C.Check t) e in coerce support s pos mode e
   | G.Generalise _ -> error pos "Implicit generalisation is unavailable; supply a polymorphic annotation"
   | _ -> error pos "Source construct is not supported by contextual inference"
+and infer_iteration support s mode pos generators body filter sort =
+  let list typ = S.Application (Types.list,[PrimaryKind.Type,typ]) in
+  let list_expression s mode source =
+    let source_pos = WithPos.pos source in
+    let s,expression = infer_term support s mode source in
+    let guard,payload = split_guard s source_pos expression.typ in
+    match expose s source_pos payload with
+    | S.Application (constructor,[PrimaryKind.Type,element]) when Types.Abstype.equal constructor Types.list ->
+       (* Decomposing a guarded list gives guarded elements, as in list
+          patterns. Keep the container's checked type on its expression. *)
+       let element = guard_type guard element in
+       let s,element = require s source_pos (List.hd (Types.Abstype.arity Types.list)) element in
+       s,expression,element
+    | _ ->
+       let s,element = if support = C.Skeleton then s,S.Ghost else fresh s source_pos PrimaryKind.Type in
+       let s,element = require s source_pos (List.hd (Types.Abstype.arity Types.list)) element in
+       let s,expression = coerce support s source_pos (C.Check (list element)) expression in
+       s,expression,element in
+  let capture before s =
+    if support = C.Skeleton then s else
+    List.fold_left (fun s v -> if count s v > count before v
+      then unlimited s pos v.value_type else s) s before.variables in
+  (* Comma-separated source expressions share the outer scope. Later source
+     expressions run once per earlier element when the product is built. *)
+  let rec sources s first = function
+    | [] -> s,[]
+    | G.Table _ :: _ -> error pos "Table generators are outside contextual list comprehensions"
+    | G.List (pattern,source) :: rest ->
+       let before = s in
+       let s,source,element = list_expression s C.Infer source in
+       let s = if first then s else capture before s in
+       let s,rest = sources s false rest in
+       s,(pattern,source,element) :: rest in
+  let s,generators = sources s true generators in
+  let before = s in let mark,s = marker s in
+  let s,_,patterns = List.fold_left (fun (s,seen,patterns) (pattern,_,typ) ->
+    unique_patterns pos [pattern];
+    (* Existing comprehensions keep the first occurrence of a binder shared
+       by two generators. Rename later occurrences before checking/lowering. *)
+    let renamer = object
+      inherit SugarTraversals.map
+      method! binder binder =
+        if StringSet.mem (G.Binder.to_name binder) seen then
+          G.Binder.set_name binder (Utility.gensym ~prefix:"$fresco_hidden_" ())
+        else binder
+    end in
+    let names = pattern_names pattern in
+    let s,pattern = check_pattern support s (renamer#pattern pattern) typ in
+    s,List.fold_left (fun seen name -> StringSet.add name seen) seen names,pattern :: patterns)
+    (s,StringSet.empty,[]) generators in
+  let patterns = List.rev patterns in
+  let body_mode = match mode with C.Check typ -> C.Check typ | _ -> C.Infer in
+  let s,body,_ = list_expression s body_mode body in
+  let s,filter = match filter with
+    | None -> s,None
+    | Some source ->
+       let mode = if support = C.Skeleton then C.Check S.Ghost else C.Check (S.Primitive Primitive.Bool) in
+       let s,e = infer_term support s mode source in s,Some e in
+  let s,sort = match sort with
+    | None -> s,None
+    | Some source ->
+       let s,e = infer_term support s C.Infer source in
+       let s = if support = C.Skeleton then s else match expose s (WithPos.pos source) e.typ with
+         | S.Record row -> fst (require s (WithPos.pos source)
+             (TypeParameter.make (PrimaryKind.Row,(Linearity.Unl,Restriction.Base))) row)
+         | _ -> error (WithPos.pos source) "Ordering requires a record of base values" in
+       s,Some e in
+  let s = check_bound_usage support pos before s |> capture before in
+  let make typ node = term pos typ node in
+  let lambda name typ body = make (S.Arrow (tuple [typ],body.typ))
+    (Lambda (DeclaredLinearity.Unl,[name,typ],body,s.ambient)) in
+  let concat_map fn xs = make (match head s pos fn.typ with S.Arrow (_,t) -> t | _ -> assert false)
+    (ConcatMap (fn,xs,s.ambient)) in
+  let pack_types = function [typ] -> typ | types -> tuple types in
+  let pack es = match es with [e] -> e | es -> make (tuple (List.map (fun e -> e.typ) es))
+    (Record (List.mapi (fun i e -> string_of_int (i+1),e) es,None)) in
+  let rec product = function
+    | [] -> make (list (tuple [])) (List [pack []])
+    | [_,source,_] -> source
+    | (_,source,typ) :: rest ->
+       let name = Utility.gensym ~prefix:"$fresco_generator_" () in
+       let tail = Utility.gensym ~prefix:"$fresco_product_" () in
+       let rest_types = List.map (fun (_,_,t) -> t) rest in
+       let rest_type = pack_types rest_types in
+       let tail_term = make rest_type (Variable tail) in
+       let tail_terms = match rest_types with
+         | [_] -> [tail_term]
+         | types -> List.mapi (fun i t -> make t (Project (tail_term,string_of_int (i+1)))) types in
+       let packed = pack (make typ (Variable name) :: tail_terms) in
+       let inner = concat_map (lambda tail rest_type (make (list packed.typ) (List [packed]))) (product rest) in
+       concat_map (lambda name typ inner) source in
+  let product = product generators in
+  let arg_type = pack_types (List.map (fun (_,_,t) -> t) generators) in
+  let pattern = match patterns with
+    | [p] -> p
+    | ps -> { pattern = PRecord (List.mapi (fun i p -> string_of_int (i+1),p) ps,None);
+        pattern_type = arg_type; pattern_inner_type = arg_type; pattern_position = pos } in
+  let callback body =
+    let name = Utility.gensym ~prefix:"$fresco_iteration_" () in
+    lambda name arg_type (make body.typ (Switch (make arg_type (Variable name),[pattern,body]))) in
+  let product = match sort with None -> product
+    | Some sort -> make product.typ (SortBy (callback sort,product,s.ambient)) in
+  let body = match filter with None -> body
+    | Some condition -> make body.typ (If (condition,body,make body.typ (List []))) in
+  let expression = concat_map (callback body) product in
+  let s,expression = leave before mark s expression in
+  coerce support s pos mode expression
 and infer_handler support s mode pos source =
   let before = s in let handler_marker,s = marker s in
   let s,handled = handler_effect s pos source in

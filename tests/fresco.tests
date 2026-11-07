@@ -147,6 +147,89 @@ args : --fresco
 exit : 1
 stderr : @.*native regex flag.*
 
+Inclusive integer ranges execute
+[3..5]
+args : --fresco
+stdout : [3, 4, 5] : List Int
+
+Descending integer ranges are empty
+[5..3]
+args : --fresco
+stdout : [] : List Int
+
+List comprehensions filter and concatenate
+for (x <- [1..3]) where (x <> 2) [x + 40]
+args : --fresco
+stdout : [41, 43] : List Int
+
+Multiple generators form a Cartesian product
+for (x <- [1,2], y <- [true,false]) [(x,y)]
+args : --fresco
+stdout : [(1, true), (1, false), (2, true), (2, false)] : List (Int, Bool)
+
+Nested comprehensions can use the outer binder
+for (x <- [1,2]) for (y <- [x]) [x+y]
+args : --fresco
+stdout : [2, 4] : List Int
+
+Comma-separated generator sources use the outer scope
+for (x <- [1,2], y <- [x]) [y]
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+Comprehensions retain orderby
+for (x <- [2,1,3]) orderby (-x) [x]
+args : --fresco
+stdout : [3, 2, 1] : List Int
+
+A nullary comprehension retains its filter
+for () where (false) [42]
+args : --fresco
+stdout : [] : List Int
+
+Comprehension bodies require lists
+for (x <- [42]) x
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+Comprehension filters require booleans
+for (x <- [42]) where (x) [x]
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+Cartesian generators finish before body execution
+for (x <- { print("a"); [1,2] }, y <- { print("b"); [3] }) { print("c"); [x+y] }
+args : --fresco
+stdout : abbcc[4, 5] : List Int
+
+Ordering retains repeated key evaluation
+for (x <- [2,1,3]) orderby ({ print(intToString(x)); x }) [x]
+args : --fresco
+stdout : 12321232[1, 2, 3] : List Int
+
+Singleton ranges include machine integer bounds
+([min_int..min_int] == [min_int], [max_int..max_int] == [max_int])
+args : --fresco
+stdout : (true, true) : (Bool, Bool)
+
+Range bounds evaluate once from left to right
+[{ print("l"); 1 }..{ print("h"); 2 }]
+args : --fresco
+stdout : lh[1, 2] : List Int
+
+Repeated comprehension binder names retain the first binder
+for (x <- [1], x <- [2]) [x]
+args : --fresco
+stdout : [1] : List Int
+
+Generator sources retain an outer variable shadowed by a pattern
+var x = [42]; for (x <- [1], y <- x) [y]
+args : --fresco
+stdout : [42] : List Int
+
 List cons executes
 1 :: [2]
 args : --fresco

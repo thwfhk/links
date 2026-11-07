@@ -8,6 +8,27 @@ filemode : true
 args : --fresco
 stdout : 42 : Int
 
+Comprehensions retain handled callback effects
+effect Reader { Read : () => Int; } handle (for (x <- [1,2]) [x + do Read]) { case xs -> xs case <Read => k> -> k(40) }
+args : --fresco
+stdout : [41, 42] : List Int
+
+Comprehensions retain the guard of functions extracted from a guarded list
+effect E { Op : () => Int; } var xs = ([fun() { do Op }] : modal [E] (List (() -> Int))); var ys = for (f <- xs) [~f]; handle ((hd(ys))()) { case x -> x case <Op => k> -> k(42) }
+args : --fresco
+stdout : 42 : Int
+
+Extracted functions cannot escape their list's required effect
+effect E { Op : () => Int; } var xs = ([fun() { do Op }] : modal [E] (List (() -> Int))); var ys = for (f <- xs) [~f]; (hd(ys))()
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+Optimisation preserves comprehension callback effects
+effect Reader { Read : () => Int; } handle (for (x <- [1,2]) [x + do Read]) { case xs -> xs case <Read => k> -> k(40) }
+args : --fresco --set=optimise=true
+stdout : [41, 42] : List Int
+
 Repeated effects select the nearest handler
 tests/fresco_modal/repeated11.links
 filemode : true

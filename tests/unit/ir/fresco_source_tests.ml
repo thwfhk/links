@@ -798,6 +798,142 @@ let regex_suite = "regex syntax" >::: [
     |}));
 ]
 
+let comprehensions_suite = "ranges and comprehensions" >::: [
+  "ranges include both endpoints and retain descending emptiness" >:: (fun _ ->
+    execution (Value.box [`List [`Int 1;`Int 2;`Int 3];`List [];`List [`Int 42]])
+      "([1..3], [3..1], [42..42])" |> ignore);
+
+  "range endpoint limits terminate" >:: (fun _ ->
+    execution (Value.box [`List [`Int min_int];`List [`Int max_int];`List []])
+      "([min_int..min_int], [max_int..max_int], [max_int..min_int])" |> ignore);
+
+  "ranges require integer endpoints" >:: (fun _ ->
+    List.iter (fun source -> reject (fun () -> infer source))
+      ["[true..3]";"[1..false]";"[1.0..3.0]"]);
+
+  "ranges require Wild" >:: (fun _ ->
+    reject (fun () -> FrescoFrontend.check_string (FrescoFrontend.empty ())
+      "sig range : () -> List Int fun range() { [1..3] } range()");
+    execution (`List [`Int 1;`Int 2])
+      "sig range : modal [Wild] (() -> List Int) fun range() { [1..2] } range()" |> ignore);
+
+  "comprehensions concatenate list bodies" >:: (fun _ ->
+    execution (`List [`Int 1;`Int 1;`Int 3;`Int 3])
+      "for (x <- [1..3]) where (x <> 2) [x,x]" |> ignore);
+
+  "empty and nullary comprehensions execute" >:: (fun _ ->
+    execution (Value.box [`List [];`List [`Int 42];`List [];`List []])
+      "(for (x <- ([] : List Int)) [x], for () [42], for () where (false) [42], for (x <- [1], y <- ([] : List Int)) [x+y])"
+      |> ignore);
+
+  "multiple generators form a source-ordered product" >:: (fun _ ->
+    execution (`List (List.map (fun (x,y,z) -> Value.box [`Int x;`Bool y;`String z])
+      [1,true,"a";1,true,"b";1,false,"a";1,false,"b";
+       2,true,"a";2,true,"b";2,false,"a";2,false,"b"]))
+      "for (x <- [1,2], y <- [true,false], z <- [\"a\",\"b\"]) [(x,y,z)]" |> ignore);
+
+  "nested generators can depend on outer binders" >:: (fun _ ->
+    execution (`List [`Int 2;`Int 3;`Int 4;`Int 5])
+      "for (x <- [1,2]) for (y <- [x,x+1]) [x+y]" |> ignore);
+
+  "comma-separated generator expressions retain the outer scope" >:: (fun _ ->
+    reject ~message:"Unbound variable x" (fun () -> infer "for (x <- [1], y <- [x]) [y]");
+    execution (`List [`Int 41;`Int 42])
+      "{ var x = 40; for (x <- [1,2], y <- [x]) [x+y] }" |> ignore);
+
+  "duplicate generator binder names retain their first binding" >:: (fun _ ->
+    execution (`List [`Int 1]) "for (x <- [1], x <- [2]) [x]" |> ignore);
+
+  "generator patterns match tuples records and lists" >:: (fun _ ->
+    execution (`List [`Int 42])
+      "for ((x,_) <- [(40,true)], (value=y) <- [(value=2)], h::t <- [[0]]) [x+y+h+length(t)]"
+      |> ignore);
+
+  "ordering precedes filtering and retains multiple keys" >:: (fun _ ->
+    execution (`List (List.map Value.box [[`Int 1;`Int 2];[`Int 2;`Int 3]]))
+      "for ((x,y) <- [(2,1),(1,2),(2,3)]) where (y <> 1) orderby (x,-y) [(x,y)]" |> ignore);
+
+  "ordering remains stable for equal keys" >:: (fun _ ->
+    execution (`List [`String "b";`String "a";`String "c"])
+      "for ((key,value) <- [(1,\"b\"),(1,\"a\"),(2,\"c\")]) orderby (key) [value]" |> ignore);
+
+  "list comprehensions work under an empty ambient row" >:: (fun _ ->
+    execution (`List [`Int 2;`Int 3]) {|
+      sig increment : (List Int) -> List Int
+      fun increment(xs) { for (x <- xs) [x+1] }
+      increment([1,2])
+    |} |> ignore);
+
+  "signed generic comprehensions preserve type binders" >:: (fun _ ->
+    execution (Value.box [`List [`Int 42];`List [`Bool true]]) {|
+      sig copy : forall a. (List a) -> List a
+      fun copy(xs) { for (x <- xs) [x] }
+      (copy([42]),copy([true]))
+    |} |> ignore);
+
+  "supplied polymorphic list elements remain polymorphic" >:: (fun _ ->
+    execution (Value.box [`Int 42;`Bool true]) {|
+      sig id : forall a. (a) -> a
+      fun id(x) { x }
+      { var functions = for (f <- [~id]) [~f];
+        switch (functions) { case f::_ -> (f(42),f(true)) } }
+    |} |> ignore);
+
+  "guarded generator collections propagate their guard to elements" >:: (fun _ ->
+    let typ = infer {|
+      effect E {}
+      fun(xs:modal [E] (List (() -> Int))) { for (f <- xs) [~f] }
+    |} in
+    let argument,result = unary typ in
+    (match expose argument,expose (list_element result) with
+     | Types.Modal (guard,_),Types.Modal (element_guard,_) -> assert_equal guard element_guard
+     | _ -> assert_failure "Expected the list guard on each result element");
+    reject (fun () -> infer {|
+      effect E {}
+      fun(xs:modal [E] (List (() -> Int))) { for (f <- xs) [f()] }
+    |}));
+
+  "comprehension helpers retain private runtime primitive bindings" >:: (fun _ ->
+    execution (`List [`Int 1;`Int 2]) {|
+      { var concatMap = false; var sortByBase = false; var intRange = false;
+        for (x <- [2..2] ++ [1]) orderby (x) [x] }
+    |} |> ignore);
+
+  "comprehension components check their required types" >:: (fun _ ->
+    List.iter (fun source -> reject (fun () -> FrescoFrontend.check_string (FrescoFrontend.empty ()) source))
+      ["for (x <- 42) [x]";"for (x <- [1]) x";
+       "for (x <- [1]) where (x) [x]";
+       "for (x <- [1]) orderby ([x]) [x]";
+       "for (x <- [linfun() { 42 }]) [x]"]);
+
+  "table generators reject before lowering" >:: (fun _ ->
+    reject ~message:"Table generators" (fun () -> infer "for (x <-- []) [x]"));
+
+  "repeated callbacks reject linear captures" >:: (fun _ ->
+    List.iter (fun source -> reject (fun () -> FrescoFrontend.check_string (FrescoFrontend.empty ()) source))
+      ["{ var k = linfun() { 42 }; for (x <- [1]) [k()+x] }";
+       "{ var k = linfun() { true }; for (x <- [1]) where (k()) [x] }";
+       "{ var k = linfun() { 42 }; for (x <- [1]) orderby (k()) [x] }";
+       "{ var k = linfun() { [42] }; for (x <- [1], y <- k()) [x+y] }"]);
+
+  "first generator expressions may consume a linear value once" >:: (fun _ ->
+    execution (`List [`Int 42]) "{ var k = linfun() { [42] }; for (x <- k()) [x] }" |> ignore);
+
+  "comprehension callback effects use the surrounding modal context" >:: (fun _ ->
+    ignore (FrescoFrontend.check_string (FrescoFrontend.empty ()) {|
+      effect Offset { Read : () => Int; }
+      sig apply : modal [Offset] ((List Int) -> List Int)
+      fun apply(xs) { for (x <- xs) where (do Read > 0) orderby (do Read) [x + do Read] }
+      42
+    |});
+    reject (fun () -> FrescoFrontend.check_string (FrescoFrontend.empty ()) {|
+      effect Offset { Read : () => Int; }
+      sig apply : (List Int) -> List Int
+      fun apply(xs) { for (x <- xs) [x + do Read] }
+      42
+    |}));
+]
+
 let sections_patterns_updates_suite = "sections patterns and updates" >::: [
   "projection sections instantiate at separate types" >:: (fun _ ->
     execution (Value.box [`Int 42; `Bool true]) {|
@@ -1011,4 +1147,4 @@ let ir_suite =
       reject_coercion (forall (fun a -> arrow a int)) (forall (fun a -> arrow a a)));
   ]
 
-let suite = "Fresco source" >::: [reference_suite; source_suite; primitive_suite; regex_suite; sections_patterns_updates_suite; ir_suite]
+let suite = "Fresco source" >::: [reference_suite; source_suite; primitive_suite; regex_suite; comprehensions_suite; sections_patterns_updates_suite; ir_suite]

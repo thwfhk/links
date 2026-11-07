@@ -12,6 +12,9 @@ and 'a node =
   | Project of 'a term * string
   | Update of 'a term * (string * 'a term) list
   | List of 'a term list
+  | Range of 'a term * 'a term * 'a EffectRow.t
+  | ConcatMap of 'a term * 'a term * 'a EffectRow.t
+  | SortBy of 'a term * 'a term * 'a EffectRow.t
   | Variant of string * 'a term
   | If of 'a term * 'a term * 'a term
   | Switch of 'a term * ('a pattern * 'a term) list

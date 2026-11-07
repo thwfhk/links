@@ -641,6 +641,40 @@ The `n` flag has no runtime primitive implementation. Legacy typing aborts
 with an assertion; Fresco reports a positioned source error. No native regex
 runtime is added.
 
+### D7 ranges and list comprehensions
+
+Keep checked range, concatenating-map and sorting nodes with their ambient
+rows among the inference roots. Lower them to local typed recursive helpers.
+Primitive references in these helpers use runtime identifiers. The contextual
+frontend can therefore execute these constructs before prelude migration.
+
+**For user review: compiler-owned comprehension helpers.** Source bindings
+named `map`, `concatMap`, `sortByBase` or `intRange` do not replace these internal
+helpers. This gives the syntax a checked implementation before the prelude is
+available. The alternative is to resolve and check helper calls through the
+source environment, retaining a dependency on those bindings.
+
+Retain supplied polymorphic and modal list element types. A guarded collection
+keeps its checked type, and each extracted element receives the collection's
+guard, following list pattern checking. Returning an extracted function keeps
+that guard; invoking it requires the corresponding ambient effects.
+
+Comma-separated generator expressions use the outer environment. Their
+patterns become available to the body, filter and ordering expression together.
+Use nested comprehensions when a later generator depends on an earlier binder.
+Repeated names across generator patterns retain the first binding, as in Links.
+Later occurrences receive private names during checking and lowering. Generator
+source expressions keep their outer bindings when a pattern shadows a name;
+this corrects a legacy mismatch between source checking and later desugaring.
+Build the full Cartesian product before sorting and then filtering/evaluating
+the body. Later generator expressions run once per preceding combination.
+Preserve `sortByBase`'s two partitions and repeated key calls: sorting
+`[2,1,3]` with a key that prints its argument prints `12321232`.
+
+Ranges are inclusive and descend from the upper bound while building the
+result. Stop when that bound equals the lower bound before subtracting one.
+This corrects the old `intRange` overflow at a singleton `min_int` range.
+
 ### D5/D6 source and runtime boundary
 
 Use an opt-in `--fresco` entry point with a small primitive environment while
