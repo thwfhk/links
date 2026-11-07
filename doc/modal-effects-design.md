@@ -666,6 +666,12 @@ linear callbacks and discarded linear callback results. Signed local recursion
 retains its surrounding type variables. The staged `intRange` uses the same
 equality-stop correction as range syntax.
 
+The remaining core prelude keeps the `Maybe` alias's ordinary parameter kind,
+explicit `Wild` signatures for search and partial/association helpers, numeric
+empty-list seeds and association-list ordering. `removeAssoc` removes the first
+matching entry; `assocAll` keeps all matches in source order. Preserve the
+existing regular expressions used by `isInt` and `isFloat`.
+
 Migrate tuple projections with open ordinary record rows so they retain their
 behaviour on larger tuples. Their selected field, and the type parameters of
 `id`, `flip`, `uncurry` and `compose`, retain ordinary kind `Any` where the

@@ -1302,10 +1302,12 @@ let reject_coercion source target =
   | exception Errors.IRTypeError message ->
       assert_bool message (String.starts_with ~prefix:"coercion error:" message)
 
-let collection_state () =
+let checked_collection_state = lazy (
   let state, _, _ = FrescoFrontend.run_file (FrescoFrontend.empty ())
     "lib/stdlib/frescoPrelude.links" in
-  state
+  state)
+
+let collection_state () = Lazy.force checked_collection_state
 
 let collection_execution expected source =
   with_checked_ir (fun () ->
@@ -1623,6 +1625,191 @@ let foundation_suite = "staged foundation prelude" >::: [
        "compose(fun(x) { do Get+x },fun(x) { x })(0)"]);
 ]
 
+let remaining_core_suite = "staged remaining core prelude" >::: [
+  "loaded prelude state survives successful and failed derived sources" >:: (fun _ ->
+    with_checked_ir (fun () ->
+      let state = collection_state () in
+      let derived, _, value = FrescoFrontend.run_string state {|
+        typename Maybe(a) = [|Present:a|];
+        sig sum : (List Int) -> Bool fun sum(xs) { true }
+        (sum([42]), Present(true) : Maybe (Bool))
+      |} in
+      assert_equal ~printer:Value.string_of_value
+        (Value.box [`Bool true; `Variant ("Present", `Bool true)]) value;
+      reject (fun () -> FrescoFrontend.check_string derived "sum([42])+1");
+      let _, typ, value = FrescoFrontend.run_string state {|
+        (sum([40,2]), fromMaybe(Just(true) : Maybe (Bool),false))
+      |} in
+      assert_equal ~printer:Value.string_of_value (Value.box [`Int 42; `Bool true]) value;
+      int_bool typ));
+
+  "Maybe helpers retain constructors defaults and separate instantiations" >:: (fun _ ->
+    collection_execution
+      (Value.box [`Bool true; `Bool false; `Int 42; `Int 7;
+                  `Bool true; `Int 42; `Bool false]) {|
+      (isJust(Just(42)), isJust(Nothing : Maybe (Bool)),
+       fromMaybe(Just(42),7), fromMaybe(Nothing,7),
+       fromMaybe(Just(true),false), fromJust(Just(42)), fromJust(Just(false)))
+    |} |> ignore);
+
+  "search and find stop at the first match" >:: (fun _ ->
+    collection_execution
+      (Value.box [`Variant ("Just", `Int 2); `Variant ("Nothing", Value.box []);
+                  `Variant ("Nothing", Value.box []); `Int 2; `Bool true]) {|
+      sig predicate : modal [Wild] ((Int) -> Bool)
+      fun predicate(x) { if (x > 2) error("predicate continued") else x == 2 }
+      (search(predicate,[1,2,3]), search(fun(x) { x == 9 },[1,2]),
+       search(fun(x) { error("empty search called predicate") },[] : List Int),
+       find(predicate,[1,2,3]), find(fun(x) { x },[false,true]))
+    |} |> ignore);
+
+  "empty retains list polymorphism" >:: (fun _ ->
+    collection_execution (Value.box [`Bool true; `Bool false; `Bool false]) {|
+      (empty([] : List Int), empty([42]), empty([true]))
+    |} |> ignore);
+
+  "numeric sums and averages retain empty seeds and element types" >:: (fun _ ->
+    collection_execution
+      (Value.box [`Int 0; `Int 6; `Float 0.; `Float 4.;
+                  `Float 0.; `Float 2.; `Float 0.; `Float 2.]) {|
+      (sum([]), sum([1,2,3]), sumF([]), sumF([1.5,2.5]),
+       avg([]), avg([1,3]), avgF([]), avgF([1.5,2.5]))
+    |} |> ignore);
+
+  "numeric extrema retain empty limits and nonempty results" >:: (fun _ ->
+    collection_execution
+      (Value.box [`Int min_int; `Int max_int; `Float Float.neg_infinity;
+                  `Float Float.infinity; `Int 4; `Int (-2);
+                  `Float 4.5; `Float (-2.5)]) {|
+      (max_list([]), min_list([]), maxF_list([]), minF_list([]),
+       max_list([-2,4,1]), min_list([-2,4,1]),
+       maxF_list([-.2.5,4.5,1.0]), minF_list([-.2.5,4.5,1.0]))
+    |} |> ignore);
+
+  "minimum and maximum retain polymorphic comparisons" >:: (fun _ ->
+    collection_execution
+      (Value.box [`Int 2; `Float 4.5; `String "a"; `Bool true]) {|
+      (minimum(2,3), maximum(1.5,4.5), minimum("b","a"), maximum(false,true))
+    |} |> ignore);
+
+  "association lookups retain first-match defaults and absence" >:: (fun _ ->
+    collection_execution
+      (Value.box [`Bool true; `Bool false; `Variant ("Just", `Bool true);
+                  `Variant ("Nothing", Value.box []); `Int 1; `Int 1; `Int 9]) {|
+      (memassoc(1,[(1,true),(2,false)]), memassoc(9,[(1,true)]),
+       lookup(1,[(1,true),(1,false)]), lookup(9,[(1,true)]),
+       assoc("a",[("a",1),("a",2)]), assocDefault("a",[("a",1),("a",2)],9),
+       assocDefault("missing",[("a",1)],9))
+    |} |> ignore);
+
+  "association removal deletes one match and all lookup retains order" >:: (fun _ ->
+    collection_execution
+      (Value.box [
+        `List [Value.box [`Int 2; `String "b"]; Value.box [`Int 1; `String "c"]];
+        `List [Value.box [`Int 1; `String "a"]]; `List [];
+        `List [`Int 1; `Int 3]; `List []; `List []]) {|
+      (removeAssoc(1,[(1,"a"),(2,"b"),(1,"c")]),
+       removeAssoc(9,[(1,"a")]), removeAssoc(1,[] : List (Int,String)),
+       assocAll("a",[("a",1),("b",2),("a",3)]),
+       assocAll("missing",[("a",1)]), assocAll("a",[] : List (String,Int)))
+    |} |> ignore);
+
+  "string checks retain optional signs decimals and whole-string matching" >:: (fun _ ->
+    collection_execution
+      (Value.box [Value.box [`Bool true; `Bool true; `Bool false; `Bool false; `Bool false];
+                  Value.box [`Bool true; `Bool true; `Bool false; `Bool false; `Bool false]]) {|
+      ((isInt("42"), isInt("-42"), isInt("prefix42"), isInt("42suffix"), isInt("")),
+       (isFloat("-42.5"), isFloat("42"), isFloat("prefix42.5"),
+        isFloat("42.5suffix"), isFloat("")))
+    |} |> ignore);
+
+  "pure numeric Maybe and string checks execute under a pure signature" >:: (fun _ ->
+    collection_execution (`Int 42) {|
+      sig pure : () -> Int
+      fun pure() {
+        if (isJust(Just(true)) && empty([] : List Bool) &&
+            isInt("42") && isFloat("42.0") &&
+            avg([1,3]) == 2.0 && avgF([1.0,3.0]) == 2.0 &&
+            max_list([41,42]) == 42 && minF_list([42.0,43.0]) == 42.0)
+          fromMaybe(Just(sum([40,minimum(2,3)])),0)
+        else 0
+      }
+      pure()
+    |} |> expect_type Types.int_type);
+
+  "Maybe and association helpers retain supplied higher-rank payloads" >:: (fun _ ->
+    collection_execution (Value.box [`Int 42; `Bool true; `Int 43; `Bool false]) {|
+      typename Identity = forall a::Any. modal [] ((a) -> a);
+      var value = Just(~id) : Maybe (Identity);
+      var f = ~fromJust[Identity](value) : Identity;
+      var entries = [("id",~id)] : List (String,Identity);
+      var g = ~fromMaybe[Identity](~lookup[String,Identity]("id",entries),~id) : Identity;
+      (f(42),f(true),g(43),g(false))
+    |} |> ignore);
+
+  "Maybe and association payload modalities remain required" >:: (fun _ ->
+    let declarations = {|
+      effect Needed {}
+      typename Action = modal [Needed] (() -> Int);
+      sig action : Action fun action() { 42 }
+    |} in
+    ignore (collection_check (declarations ^ {|
+      sig use : modal [Wild,Needed] (() -> Int)
+      fun use() {
+        var f = ~fromJust[Action](Just(~action)) : Action;
+        var g = ~assoc[Action]("a",[("a",~action)]) : Action;
+        f()+g()
+      }
+      42
+    |}));
+    reject (fun () -> collection_check (declarations ^ {|
+      var f = ~fromJust[Action](Just(~action)) : Action;
+      f()
+    |})));
+
+  "remaining explicit Wild contracts reject pure calls" >:: (fun _ ->
+    List.iter (fun body -> reject (fun () -> collection_check
+      ("sig pure : () -> () fun pure() { ignore(" ^ body ^ ") } pure()")))
+      ["search(fun(x) { x },[true])"; "find(fun(x) { x },[true])";
+       "fromJust(Just(42))"; "memassoc(1,[(1,true)])"; "lookup(1,[(1,true)])";
+       "assoc(\"a\",[(\"a\",42)])"; "assocDefault(\"a\",[(\"a\",42)],0)";
+       "removeAssoc(1,[(1,true)])"; "assocAll(\"a\",[(\"a\",42)])"]);
+
+  "remaining helper arguments and callback results are checked" >:: (fun _ ->
+    List.iter (fun source -> reject (fun () -> collection_check source))
+      ["search(fun(x) { x+1 },[1])"; "find(fun(x) { x+1 },[1])";
+       "fromMaybe(Just(42),true)"; "fromJust(42)";
+       "sum([1.0])"; "sumF([1])"; "avg([1.0])"; "avgF([1])";
+       "minimum(1,true)"; "lookup(true,[(1,42)])";
+       "assocDefault(\"a\",[(\"a\",42)],true)"; "isInt(42)"; "isFloat(42.0)"]);
+
+  "remaining helpers retain ordinary unlimited requirements" >:: (fun _ ->
+    List.iter (fun source -> reject (fun () -> collection_check source))
+      ["Nothing : Maybe (() -@ Int)";
+       "isJust(Just(linfun() { 42 }))";
+       "fromMaybe(Nothing,linfun() { 42 })";
+       "search(linfun(x) { x },[true])"; "find(linfun(x) { x },[true])";
+       "{ var once = linfun() { true }; search(fun(x) { once() },[0]) }";
+       "lookup(1,[(1,linfun() { 42 })])";
+       "minimum(linfun() { 42 },linfun() { 43 })"]);
+
+  "search and find callbacks retain their surrounding effects" >:: (fun _ ->
+    ignore (collection_check {|
+      effect Limit { Get : () => Int; }
+      sig use : modal [Wild,Limit] (() -> Int)
+      fun use() {
+        fromMaybe(search(fun(x) { x > do Get },[1,2]),0) +
+        find(fun(x) { x > do Get },[1,2])
+      }
+      42
+    |});
+    List.iter (fun body -> reject (fun () -> collection_check
+      ("effect Limit { Get : () => Int; } sig use : modal [Wild] (() -> ()) fun use() { ignore(" ^
+       body ^ ") } 42")))
+      ["search(fun(x) { x > do Get },[1,2])";
+       "find(fun(x) { x > do Get },[1,2])"]);
+]
+
 let ir_suite =
   let arrow argument result = Types.Arrow (Types.make_tuple_type [argument], result) in
   let int, bool = Types.int_type, Types.bool_type in
@@ -1655,4 +1842,4 @@ let ir_suite =
       reject_coercion (forall (fun a -> arrow a int)) (forall (fun a -> arrow a a)));
   ]
 
-let suite = "Fresco source" >::: [reference_suite; source_suite; callback_sequence_suite; primitive_suite; regex_suite; continuations_suite; comprehensions_suite; sections_patterns_updates_suite; collection_suite; foundation_suite; ir_suite]
+let suite = "Fresco source" >::: [reference_suite; source_suite; callback_sequence_suite; primitive_suite; regex_suite; continuations_suite; comprehensions_suite; sections_patterns_updates_suite; collection_suite; foundation_suite; remaining_core_suite; ir_suite]

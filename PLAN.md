@@ -85,7 +85,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D7b3 | Escape continuations and contextual capture checks | `f09237bd` |
 | D7b4a0 | Callback statement skeletons and frozen module names | `8cfe88a3` |
 | D7b4a | Signed collection prelude with contextual callbacks | `0b2c0d3f` |
-| D7b4b | Function, tuple, list and string helpers; inferred linear-call requirement | This commit |
+| D7b4b | Function, tuple, list and string helpers; inferred linear-call requirement | `efc1bca2` |
+| D7b4c | Maybe, numeric, association and string-check helpers | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -155,7 +156,7 @@ implementation of the next. The main agent owns integration and these records.
 | D8b: removal and final review | In-scope legacy inference routes are removed; recursive consumers and exports are reviewed; migration guide and final selected suites pass |
 
 D7a (`1f7ff34e`), D7b1 (`4fad3532`) and D7b2a (`db0d3a75`) are complete.
-D7b2b (`72e47dbc`) and D7b3 (`f09237bd`) are complete. D7b4a0 (`8cfe88a3`) is complete. D7b4a collection migration (`0b2c0d3f`) is complete. D7b4b is complete. D7b4c is next. Later boundaries may be split further when a dependency needs
+D7b2b (`72e47dbc`) and D7b3 (`f09237bd`) are complete. D7b4a0 (`8cfe88a3`) is complete. D7b4a collection migration (`0b2c0d3f`) is complete. D7b4b (`efc1bca2`) is complete. D7b4c is complete. D7c1 actors is next. Later boundaries may be split further when a dependency needs
 its own review and checks.
 
 ## Recorded decisions
@@ -171,39 +172,35 @@ and design:
 
 ## Latest task and verification
 
-7 November 2026, D7b4b, base `0b2c0d3f`: function, tuple, list and string
-helpers through `unwords` are complete. [The design](doc/modal-effects-design.md#d7-prelude-migration)
-records preserved ordinary kinds, explicit `Wild` contracts and specialised
-shared-context function helpers. [The linear-result decision](doc/modal-effects-design.md#d7-inferred-linear-results)
-records the annotation/intermediate-binding requirement for review.
+7 November 2026, D7b4c, base `efc1bca2`: the remaining core prelude helpers
+through `isFloat` are complete. [The design](doc/modal-effects-design.md#d7-prelude-migration)
+records retained kinds, effect contracts and library behaviour.
 
-Independent review corrected ordinary `Any` parameters and retained explicit
-`Wild` contracts. It checked 38 source behaviours and the supported annotated
-forms of the three affected linear calls. A separate design review checked
-those application rules against the thesis. No findings remain. All writers
-finished and the combined diff was inspected before integrated checks. The
-four source/test hashes in `/tmp/links-d7b4b-verification/source.sha256` still
-match after testing. Logs below are in that directory; documentation was
-updated afterwards.
+Independent review checked all 22 migrated bodies and 29 typed-IR source
+behaviours. Test-only float syntax and regex expectations were corrected.
+The unit fixture now reuses a checked prelude state; a regression verifies that
+successful and failed derived sources leave its names, aliases and runtime
+values intact. No findings remain. All writers finished and the combined diff
+was inspected before integrated checks. The three source/test hashes in
+`/tmp/links-d7b4c-verification/source.sha256` still match after testing. Logs
+below are in that directory; documentation was updated afterwards.
 
 | Command | Result | Log |
 |---|---|---|
 | Existing `make no-db` build | Compiler unchanged; reused D7b4a binary | `/tmp/links-d7b4a-verification/build.log` |
-| `opam exec -- ./run-tests nodb-unit-tests` | 1,304 passed | `unit.log` |
+| `opam exec -- ./run-tests nodb-unit-tests` | 1,321 passed | `unit.log` |
 | `./test-harness tests/fresco.tests` | 64 passed | `fresco.log` |
 | `./test-harness tests/fresco_typecheck.tests` | 2 passed | `fresco_typecheck.log` |
 | `./test-harness tests/fresco_modal.tests` | 20 passed | `fresco_modal.log` |
-| `./test-harness tests/fresco_prelude.tests` | 20 passed | `fresco_prelude.log` |
+| `./test-harness tests/fresco_prelude.tests` | 27 passed | `fresco_prelude.log` |
 | `make rule-check` | Passed; GNU-find tab check skipped, formatter disabled | `rule-check.log` |
 | Source hashes, tabs and trailing whitespace; `git diff --check` | Passed | `source-check.log`, `diff-check.log` |
 
-The focused helper suite passed 15 cases in
-`/tmp/links-d7b4b-unit-focused-final.log`. Review execution logs are
-`/tmp/links-d7b4b-review-source.log`,
-`/tmp/links-d7b4b-review-annotated.log` and
-`/tmp/links-d7b4b-review-strings.log`. Standalone linear-result checks are in
-`/tmp/links-d7b4b-linear-minimal.log` and
-`/tmp/links-d7b4b-linear-annotations.log`.
+The focused source suite passed 227 cases in
+`/tmp/links-d7b4c-unit-source-final.log`. Review summary and source hashes are
+in `/tmp/links-d7b4c-review-summary.log`; execution logs are
+`/tmp/links-d7b4c-review-source.log` and
+`/tmp/links-d7b4c-review-source-corrected.log`.
 Earlier milestone results remain in Git history and their verification logs.
 
 ## Confirmed D6 decisions
@@ -215,6 +212,6 @@ Documentation-only update: text and whitespace checked.
 
 ## Next action
 
-Implement D7b4c remaining core prelude helpers, then continue to D7c1 actors.
-Review, test and commit each milestone. Continue through the remaining milestones
+Implement D7c1 actors. Review, test and commit each bounded milestone before
+continuing to D7c2 sessions. Continue through the remaining milestones
 without a pause. Both D6 choices are confirmed.

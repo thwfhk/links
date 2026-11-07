@@ -368,3 +368,197 @@ sig unwords : modal [Wild] ((List String) -> String)
 fun unwords(ws) {
   implode(intercalate(explode(" "), map(explode, ws)))
 }
+
+typename Maybe (a) = [|Nothing | Just:a|];
+
+sig isJust : forall a. (Maybe(a)) -> Bool
+fun isJust(x) {
+  switch (x) {
+    case Just (x) -> true
+    case Nothing -> false
+  }
+}
+
+sig search : forall a. modal [Wild] (((a) -> Bool, List a) -> Maybe(a))
+fun search(p,l) {
+  switch (l) {
+    case [] -> Nothing
+    case x::xs -> if (p(x)) Just(x)
+                  else search(p,xs)
+  }
+}
+
+sig find : forall a. modal [Wild] (((a) -> Bool, List a) -> a)
+fun find(p,l) {
+  switch (l) {
+    case [] -> error("Not_found")
+    case x::xs -> if (p(x)) x
+                  else find(p,xs)
+  }
+}
+
+sig fromJust : forall a. modal [Wild] ((Maybe(a)) -> a)
+fun fromJust(x) {
+  switch (x) {
+    case Just (x) -> x
+    case Nothing -> error ("fromJust failed")
+  }
+}
+
+sig fromMaybe : forall a. (Maybe(a), a) -> a
+fun fromMaybe(x, y) {
+  switch (x) {
+    case Just (x) -> x
+    case Nothing -> y
+  }
+}
+
+
+sig empty : forall a. (List a) -> Bool
+fun empty(l) {
+  switch (l) {
+    case [] -> true
+    case _ -> false
+  }
+}
+
+sig sum : (List Int) -> Int
+fun sum(ns) {
+  switch (ns) {
+    case [] -> 0
+    case n::ns -> n + sum(ns)
+  }
+}
+
+sig sumF : (List Float) -> Float
+fun sumF(ns) {
+  switch (ns) {
+    case [] -> 0.0
+    case n::ns -> n +. sumF(ns)
+  }
+}
+
+sig avg : (List Int) -> Float
+fun avg(l) {
+  switch (l) {
+    case [] -> 0.0
+    case n::ns -> intToFloat(sum(l)) /. intToFloat(length(l))
+  }
+}
+
+sig avgF : (List Float) -> Float
+fun avgF(l) {
+  switch (l) {
+    case [] -> 0.0
+    case n::ns -> sumF(l) /. intToFloat(length(l))
+  }
+}
+
+# Returns the minimum of a and b.
+sig minimum : forall a. (a, a) -> a
+fun minimum(a,b) {
+  if (a < b) { a }
+  else { b }
+}
+
+# Returns the maximum of a and b.
+sig maximum : forall a. (a, a) -> a
+fun maximum(a,b) {
+  if (a > b) { a }
+  else { b }
+}
+
+sig max_list : (List Int) -> Int
+fun max_list(ns) {
+  switch (ns) {
+    case [] -> min_int
+    case n::ns -> maximum(n, max_list(ns))
+ }
+}
+
+sig maxF_list : (List Float) -> Float
+fun maxF_list(ns) {
+  switch (ns) {
+    case [] -> neg_infinity
+    case n::ns -> maximum(n, maxF_list(ns))
+  }
+}
+
+sig min_list : (List Int) -> Int
+fun min_list(ns) {
+  switch (ns) {
+    case [] -> max_int
+    case n::ns -> minimum(n, min_list(ns))
+  }
+}
+
+sig minF_list : (List Float) -> Float
+fun minF_list(ns) {
+  switch (ns) {
+    case [] -> infinity
+    case n::ns -> minimum(n, minF_list(ns))
+  }
+}
+
+# association lists
+# TBD: memassoc is an old LISP word. Perhaps a more modern name would fit better?
+sig memassoc : forall a, b. modal [Wild] ((a, List (a,b)) -> Bool)
+fun memassoc(x,l) {
+  switch (l) {
+    case []    -> false
+    case (k,v)::xs -> k == x || memassoc(x, xs)
+  }
+}
+
+sig lookup : forall a, b. modal [Wild] ((a, List (a,b)) -> Maybe(b))
+fun lookup(x,l) {
+  switch (l) {
+    case [] -> Nothing
+    case (a,b)::xs -> if (a == x) Just(b)
+                      else lookup(x,xs)
+  }
+}
+
+sig assoc : forall b. modal [Wild] ((String, List (String,b)) -> b)
+fun assoc(x,l) {
+  switch (l) {
+    case []    -> error("Not found " ^^ x)
+    case (k,v)::xs -> if (k == x) v
+                      else assoc(x, xs)
+  }
+}
+
+sig assocDefault : forall b. modal [Wild] ((String, List (String,b), b) -> b)
+fun assocDefault(x,l,d) {
+  switch (l) {
+    case []    -> d
+    case (k,v)::xs -> if (k == x) v
+                      else assocDefault(x, xs, d)
+  }
+}
+
+sig removeAssoc : forall a, b. modal [Wild] ((a, List (a,b)) -> List (a,b))
+fun removeAssoc(x,l) {
+  switch (l) {
+    case [] -> []
+    case (k,v)::xs -> if(k == x) xs
+                      else (k,v)::removeAssoc(x, xs)
+  }
+}
+
+sig assocAll : forall b. modal [Wild] ((String, List (String,b)) -> List b)
+fun assocAll(x,l) {
+  switch (l) {
+    case []    -> []
+    case (k,v)::xs -> if (k == x)
+                        (v::assocAll(x,xs))
+                      else
+                        assocAll(x,xs)
+  }
+}
+
+sig isInt : (String) -> Bool
+fun isInt (x) { x =~ /-?[0-9]+$/ }
+
+sig isFloat : (String) -> Bool
+fun isFloat (x) { x =~ /-?[0-9]+(\.[0-9]+)?$/ }

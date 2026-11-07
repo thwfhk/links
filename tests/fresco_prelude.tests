@@ -107,3 +107,39 @@ open import FrescoPrelude; sig f : () -> List Int fun f() { takeWhile(fun(x) { x
 args : --fresco --path=lib/stdlib
 exit : 1
 stderr : @.*Type error:.*
+
+Search callbacks use handled effects
+open import FrescoPrelude; effect Limit { Get : () => Int; } handle <Limit> (fromMaybe(search(fun(x) { x >= do Get }, [1,2,3]), 0)) { case x -> x case <Get => k> -> k(2) }
+args : --fresco --path=lib/stdlib
+stdout : 2 : Int
+
+Find stops at its first match
+open import FrescoPrelude; find(fun(x) { print(intToString(x)); x == 2 }, [1,2,3])
+args : --fresco --path=lib/stdlib
+stdout : 122 : Int
+
+Numeric helpers retain their empty seeds
+open import FrescoPrelude; (max_list([])==min_int, min_list([])==max_int, maxF_list([])==neg_infinity, minF_list([])==infinity)
+args : --fresco --path=lib/stdlib
+stdout : (true, true, true, true) : (Bool, Bool, Bool, Bool)
+
+Averages retain empty and nonempty results
+open import FrescoPrelude; (avg([])==0.0, avg([1,2,3])==2.0, avgF([])==0.0, avgF([1.0,3.0])==2.0)
+args : --fresco --path=lib/stdlib
+stdout : (true, true, true, true) : (Bool, Bool, Bool, Bool)
+
+Association helpers retain first and all matches
+open import FrescoPrelude; var xs = [("x",1),("x",2),("y",3)]; (assoc("x",xs)==1, assocAll("x",xs)==[1,2], removeAssoc("x",xs)==[("x",2),("y",3)], isJust(lookup("y",xs)))
+args : --fresco --path=lib/stdlib
+stdout : (true, true, true, true) : (Bool, Bool, Bool, Bool)
+
+FromJust retains its Wild requirement
+open import FrescoPrelude; sig f : () -> Int fun f() { fromJust(Just(42)) } f()
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*
+
+Maybe helpers retain their supplied element type
+open import FrescoPrelude; (fromMaybe(Just(42),0), fromMaybe(Nothing,true), isJust(Nothing : Maybe (Int)))
+args : --fresco --path=lib/stdlib
+stdout : (42, true, false) : (Int, Bool, Bool)
