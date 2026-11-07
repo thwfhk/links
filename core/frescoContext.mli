@@ -97,6 +97,11 @@ val assign : FrescoKind.checking_environment -> t -> Types.tid ->
 val require : FrescoKind.checking_environment -> t -> ?binders:Quantifier.t list ->
   ?added:FrescoKind.requirements -> TypeParameter.t -> Types.typ -> (t, error) result
 
+(** Refine the same guarantees using a read-only syntax view. The caller
+    checks scope and guards cycles before calling this operation. *)
+val require_with : 'typ FrescoKind.syntax -> FrescoKind.checking_environment -> t ->
+  binders:Quantifier.t list -> TypeParameter.t -> 'typ -> (t, error) result
+
 (** Leave the innermost open marker, preserving its current prefix and live
     local flexible entries. [binders] lists the actual enclosing type binders
     of an annotation; a complete type normally has an empty list and carries

@@ -154,6 +154,16 @@ let suite = "Fresco subtyping and constraints" >::: [
       let result = ok (run ~support:K.Skeleton C.empty (K.Fun (int, K.Infer)) (modal [effect_entry "A" []] (arrow int int))) in
       equal result.T.context (arrow int int) result.T.typ);
     "full function modality requires access" >:: (fun _ -> reject (run C.empty (K.Fun (int, K.Infer)) (modal [effect_entry "A" []] (arrow int int))));
+    "full pass rechecks access to repeated effects after ghost refinement" >:: (fun _ ->
+      let effects = [state int; state bool] in
+      let mode = K.Fun (int, K.Infer) in
+      let skeleton = ok (run ~support:K.Skeleton C.empty mode (modal effects S.Ghost)) in
+      assert_equal (arrow int S.Ghost) skeleton.T.typ;
+      let ctx, body = ok (J.consistent environment skeleton.T.context S.Ghost (arrow int int)) in
+      let source = modal effects body in
+      ignore (ok (run ~ambient:effects ctx mode source));
+      reject (run ~ambient:[state int] ctx mode source);
+      reject (run ~ambient:[state int; state char] ctx mode source));
     "absolute function payload can cross effects" >:: (fun _ ->
       let a = q () in let source = modal [effect_entry "A" []] (S.ForAll ([a], v a)) in
       ignore (ok (run C.empty (K.Fun (int, K.Check int)) source)));
@@ -201,19 +211,87 @@ let suite = "Fresco subtyping and constraints" >::: [
     "look forbids independently opened target escape" >:: (fun _ ->
       let a = q () and b = q () in
       reject (look C.empty a (arrow (v a) int) (K.Check (S.ForAll ([b], arrow (v b) int)))));
-    "look retains universal ghost in skeleton mode" >:: (fun _ ->
-      let a = q () in let _, result = ok (look ~support:K.Skeleton C.empty a (v a) (K.Check int)) in assert_equal (S.UniversalGhost int) result);
+    "universal ghost keeps its body's modal kind" >:: (fun _ ->
+      let abs = q ~modal:ModalKind.Abs () and any = q () in
+      let contextual = arrow int int in
+      let _, result = ok (look ~support:K.Skeleton C.empty abs (v abs) (K.Check int)) in
+      assert_equal (S.UniversalGhost int) result;
+      let _, result = ok (look ~support:K.Skeleton C.empty any (v any) (K.Check contextual)) in
+      assert_equal (S.UniversalGhost contextual) result;
+      reject (look ~support:K.Skeleton C.empty abs (v abs) (K.Check contextual)));
     "skeleton look rejects known non-absolute instantiation" >:: (fun _ ->
       let a = q ~modal:ModalKind.Abs () in
       reject (look ~support:K.Skeleton C.empty a (arrow (v a) int) (K.Fun (arrow int int, K.Infer))));
-    "skeleton look refines supplied unknown requirements" >:: (fun _ ->
-      let a = q ~modal:ModalKind.Abs () and b = q () in let ctx = flex C.empty b in
-      let next, _ = ok (look ~support:K.Skeleton ctx a (arrow (v a) int) (K.Fun (v ~freedom:`Flexible b, K.Infer))) in
-      reject (J.consistent environment next (v ~freedom:`Flexible b) (arrow int int)));
-    "skeleton look leaves no guessed ghost entries" >:: (fun _ ->
+    "skeleton look checks effect arguments inside an absolute wrapper" >:: (fun _ ->
       let a = q ~modal:ModalKind.Abs () in
-      let next, result = ok (look ~support:K.Skeleton C.empty a int K.Infer) in
-      assert_equal S.Ghost result; assert_equal [] (C.entries next));
+      let supplied argument = modal [effect_entry "Absolute" [argument]] int in
+      let look argument =
+        look ~support:K.Skeleton C.empty a (arrow (v a) int) (K.Fun (supplied argument, K.Infer)) in
+      let _, result = ok (look S.Ghost) in
+      assert_equal (supplied S.Ghost) result;
+      reject (look (arrow int int)));
+    "skeleton look refines supplied unknown requirements beside a ghost" >:: (fun _ ->
+      let a = q ~modal:ModalKind.Abs () and b = q () in let ctx = flex C.empty b in
+      let unknown = v ~freedom:`Flexible b in
+      let supplied = record ["hole", S.Present S.Ghost; "value", S.Present unknown] in
+      let next, result = ok (look ~support:K.Skeleton ctx a (arrow (v a) int) (K.Fun (supplied, K.Infer))) in
+      assert_equal supplied result;
+      abs_requirement next b;
+      ignore (ok (J.consistent environment ctx unknown (arrow int int))));
+    "skeleton look checks ordinary requirements beside a ghost" >:: (fun _ ->
+      let a = q ~linearity:Linearity.Unl () in
+      let supplied value = record ["hole", S.Present S.Ghost; "value", S.Present value] in
+      let look value = look ~support:K.Skeleton C.empty a (arrow (v a) int) (K.Fun (supplied value, K.Infer)) in
+      ignore (ok (look int));
+      reject (look (S.LinearArrow (int, int))));
+    "skeleton kind checks use enclosing binder kinds" >:: (fun _ ->
+      let a = q ~modal:ModalKind.Abs ~linearity:Linearity.Unl () in
+      let supplied value = record ["hole", S.Present S.Ghost; "value", S.Present value] in
+      let required = TypeParameter.make ~modal_kind:ModalKind.Abs (kind PrimaryKind.Type) in
+      let require = FrescoSkeletonKind.require environment C.empty required in
+      reject (require (supplied (v a)));
+      ignore (ok (FrescoSkeletonKind.require ~binders:[a] environment C.empty required (supplied (v a))));
+      let unrestricted = FrescoSkeletonKind.unrestricted ~binders:[a] environment C.empty in
+      assert_bool "Unrestricted binder" (unrestricted (supplied (v a)));
+      assert_bool "Linear arrow" (not (unrestricted (supplied (S.LinearArrow (int, int))))));
+    "skeleton unrestrictedness uses provisional declaration linearity" >:: (fun _ ->
+      let declaration = raw "D4jLinearity" int in
+      let typ = nominal declaration [] in
+      let unrestricted = FrescoSkeletonKind.unrestricted in
+      assert_bool "Declared unrestricted" (unrestricted environment C.empty typ);
+      assert_bool "Provisionally linear" (not (unrestricted
+          ~linearity:(fun _ -> Some true) environment C.empty typ));
+      assert_equal (Some false) declaration.S.linear);
+    "skeleton look refines a free capture in a raw declaration" >:: (fun _ ->
+      let a = q ~modal:ModalKind.Abs () and b = q () in let ctx = flex C.empty b in
+      let declaration = raw "D4jGhostCapture" (v ~freedom:`Flexible b) in
+      let supplied = S.ForAll ([b], record ["hole", S.Present S.Ghost;
+          "capture", S.Present (nominal declaration [])]) in
+      let next, _ = ok (look ~support:K.Skeleton ctx a (arrow (v a) int) (K.Fun (supplied, K.Infer))) in
+      abs_requirement next b);
+    "unused Abs and Any parameters retain ordinary ghosts" >:: (fun _ ->
+      List.iter (fun modal ->
+          let a = q ~modal () in
+          let source = S.ForAll ([a], arrow int int) in
+          let result = ok (run ~support:K.Skeleton C.empty (K.Fun (int, K.Infer)) source) in
+          assert_equal S.Ghost (one_argument result);
+          assert_equal [] (C.entries result.T.context))
+        [ModalKind.Abs; ModalKind.Any]);
+    "full pass checks the type that fills a ghost" >:: (fun _ ->
+      let refine modal argument =
+        let a = q ~modal () in
+        let source = S.ForAll ([a], arrow (v a) (v a)) in
+        let result = ok (run ~support:K.Skeleton C.empty (K.Fun (S.Ghost, K.Infer)) source) in
+        let ghost = one_argument result in
+        assert_equal S.Ghost ghost;
+        let ctx, argument = ok (J.consistent environment result.T.context ghost argument) in
+        run ctx (K.Fun (argument, K.Infer)) source in
+      let contextual = arrow int int in
+      let result = ok (refine ModalKind.Any contextual) in
+      equal result.T.context contextual (one_argument result);
+      let result = ok (refine ModalKind.Abs int) in
+      equal result.T.context int (one_argument result);
+      reject (refine ModalKind.Abs contextual));
     "directional solve leaves flexible unassigned" >:: (fun _ ->
       let a = q () in let ctx = flex C.empty a in
       let next, result = ok (K.solve_equal environment ctx (v ~freedom:`Flexible a) int) in

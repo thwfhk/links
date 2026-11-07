@@ -322,13 +322,18 @@ instantiation against the original quantified parameter's requirements and
 repeat every modal-access check using the resulting types. An `Abs` judgement
 from the skeleton pass cannot discharge these full-inference checks.
 
-The D4j implementation at `7b4f78be` still checks skeleton requirements by
-temporary guessing and then discards the guessed ghost replacements. Replacing
-that procedure with the selected ghost-kinding rule remains an implementation
-follow-up. Test acceptance for an unused `Abs` parameter and for an `Any`
-parameter whose ghost becomes a contextual arrow. Test rejection when a full
-instantiation at `Abs` is a contextual arrow, and retain modal-access rejection
-tests after skeleton inference.
+`FrescoSkeletonKind` checks skeletons through a read-only view shared with
+`FrescoKind`. Ordinary ghosts contribute `Abs` to modal classification and
+provisionally satisfy ordinary requirements. Universal ghosts use their body's
+requirements. The checker validates every supplied child, preserves raw
+declaration scopes and refines existing flexible variables through the returned
+context. It allocates no replacements for ghosts. Shared-type checking retains
+its existing rules. The pure unrestrictedness query supports private recursive
+declaration groups during elaboration.
+
+Tests cover an unused `Abs` parameter and an `Any` parameter whose ghost becomes
+a contextual arrow. Full inference rejects a contextual-arrow instantiation at
+`Abs` and repeats modal-access checks, including repeated effect arguments.
 
 Modal checking first compares the source modality run and source payload with
 the target run. It then checks the payload under the target lock and transformed

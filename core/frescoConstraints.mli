@@ -50,9 +50,9 @@ val solve : FrescoKind.checking_environment -> FrescoContext.t ->
 (** [Type] fills residual ghosts and enforces the binder's requirements.
     Supplied quantifiers and modalities are retained in the returned type;
     they are never installed as a Type unknown's solution. [Skeleton] checks
-    known structure and refines existing unknowns through a temporary guessed
-    type, then discards the fresh ghost representatives and retains the original
-    ghosts. The full judgement checks their eventual instantiations. *)
+    supplied structure and refines existing unknowns directly. Ordinary ghosts
+    check at Abs and Any. Universal ghosts inherit their body's kind.
+    The full judgement checks the eventual instantiations. *)
 val look : FrescoKind.checking_environment -> FrescoContext.t ->
   support -> Quantifier.t -> FrescoSkeleton.t -> mode ->
   (FrescoContext.t * FrescoSkeleton.t, error) result

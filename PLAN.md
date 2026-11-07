@@ -13,9 +13,9 @@ implementation decisions, reasons, internal invariants and source comparisons.
 
 ## Current status
 
-D4j is complete, reviewed and verified. Work is paused at the user's requested
-boundary before D4k. A documentation decision on 7 November adds a pending
-ghost-kinding follow-up to D4j. Resume compiler work when requested.
+The D4j ghost-kinding follow-up is implemented and reviewed. D4k is in progress
+following the user's instruction to finish the remaining D4 work. Complete its
+integrated checks and commit, then pause before D5.
 
 - D1--D3d provide row/modality operations, shared modal types, surface syntax,
   and effect/operation resolution. D4a--D4f1 provide kind checks, persistent
@@ -72,6 +72,7 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D4h | Contextual application, unfolding, session duality and recursive comparison | `d12f864a` |
 | D4i | Persistent monotype unification, consistency and guessing | `e425984c` |
 | D4j | Subtyping, constraint collection/solving, `look` and session compatibility checks | `7b4f78be` |
+| D4j follow-up | Direct skeleton kind checking with ordinary ghosts at `Abs` | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -85,7 +86,6 @@ also requires the affected build/tests and review described in AGENTS.md.
 
 | Task | Depends on | Completion check |
 |---|---|---|
-| D4j follow-up: give ordinary ghosts modal kind `Abs` during skeleton inference | D4j | Tests accept ghosts at `Abs` and `Any`, retain checks on supplied structure, and allow refinement to contextual arrows; full inference rejects contextual-arrow instantiations required to have kind `Abs` |
 | D4k: contextual annotation/declaration elaboration | D3e--D3f, D4 checking/refinement/recursive operations | Source annotations and closed signatures reach the contextual kind checker with positioned errors |
 | D5: pure Fresco source inference | D3, D4i--D4k, required IR/export support | Adapted Fresco examples typecheck or reject as specified; a pure example evaluates; top-level unknowns and REPL failure handling work |
 | D6: modal source inference and handlers | D3e--D3f, D4j--D4k, D5 | A handled operation evaluates to `42`; infer omitted handler arguments (including unused parameters); repeated rows, modal access/refinement, complete groups and polymorphism checks pass |
@@ -131,6 +131,14 @@ D4a2 updates the classifier and D4g supplies refinement. Signature elaboration
 and modal integration tests must cover the remaining choices.
 
 ## Latest task and verification
+
+7 November 2026, D4j follow-up, this commit (base `0e567c0e`): direct skeleton
+kind checking preserves ghosts, checks supplied structure and refines existing
+unknowns. Seven added cases cover ghost kinds, scope, ordinary requirements and
+full-inference checks after refinement. Independent review found no open issues.
+Focused compilation and 548 selected unit tests passed. The combined D4k
+revision receives the final integrated checks. The table below retains the
+previous full verification results.
 
 6 November 2026, D4j, `7b4f78be` (base `13bed38c`): subtyping, constraint
 collection/solving and `look` preserve supplied polymorphic/modal instantiations,
@@ -186,7 +194,7 @@ Handler argument inference follows in D6; D3f preserves omission in the AST.
 inference, with full inference rechecking instantiation kinds and modal access.
 The [design](doc/modal-effects-design.md#subtyping-and-instantiation-information)
 records the rule, source comparison and required tests. The compiler follow-up
-is pending; the verification results above cover the existing D4j implementation.
+is complete; the focused results are recorded above.
 
 No user decisions remain unresolved. The user approved rejecting the legacy
 row-duality bug that can change a channel's protocol without changing the
@@ -199,8 +207,7 @@ error. These cases and the compatibility probes are recorded in the
 
 ## Next action
 
-Pause. When compiler work resumes, give ordinary ghosts modal kind `Abs` during
-skeleton inference and test the change. Then begin D4k's contextual annotation
-and declaration elaboration.
+Complete D4k's contextual annotation/declaration elaboration and integrated
+verification. Commit the reviewed work, then pause before D5.
 The production frontend still uses legacy inference; source Fresco integration
 follows in D5/D6.

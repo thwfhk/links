@@ -404,8 +404,9 @@ let look env ctx support binder source mode = checked (fun () ->
       else match solve env ctx S.Ghost constraints with Ok x -> x | Error e -> fail e in
     match support with
     | Skeleton ->
-       let marker, provisional = C.add_marker ctx in
-       let provisional, _ = consistency (J.guess env provisional (Quantifier.to_parameter binder) result) in
-       let ctx, roots = operations (O.leave_scope env marker ~roots:[root pk result] provisional) in
-       ctx, single roots
+       begin match FrescoSkeletonKind.require env ctx (Quantifier.to_parameter binder) result with
+       | Ok result -> result
+       | Error (FrescoSkeletonKind.Context_error error) -> fail (Context_error error)
+       | Error (FrescoSkeletonKind.Operations_error error) -> fail (Operations_error error)
+       end
     | Type -> consistency (J.guess env ctx (Quantifier.to_parameter binder) result))

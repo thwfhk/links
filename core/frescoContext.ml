@@ -300,22 +300,31 @@ let root_type root =
          Unionfind.fresh Types.Closed, false)) in
   Types.ForAll (root.binders, body)
 
+let refine context require =
+  let refinable id = match lookup id context with
+    | Some (Flexible { solution = None; _ }) -> true
+    | _ -> false in
+  let added = require ~refinable in
+  if IntMap.is_empty added then context
+  else List.map (function
+      | Flexible variable as entry ->
+         begin match IntMap.find_opt variable.declaration.id added with
+         | Some requirements -> Flexible { variable with requirements }
+         | None -> entry
+         end
+      | entry -> entry) context
+
 let require environment context ?(binders = []) ?added parameter typ = checked (fun () ->
     let environment = checking_environment environment context in
     let primary_kind = Kind.primary_kind (TypeParameter.to_kind parameter) in
     ignore (inspect environment context false (root_type { binders; primary_kind; typ }));
-    let refinable id = match lookup id context with
-      | Some (Flexible { solution = None; _ }) -> true
-      | _ -> false in
-    let added = FrescoKind.require ?added environment ~refinable ~binders parameter typ in
-    if IntMap.is_empty added then context
-    else List.map (function
-        | Flexible variable as entry ->
-           begin match IntMap.find_opt variable.declaration.id added with
-           | Some requirements -> Flexible { variable with requirements }
-           | None -> entry
-           end
-        | entry -> entry) context)
+    refine context (fun ~refinable ->
+        FrescoKind.require ?added environment ~refinable ~binders parameter typ))
+
+let require_with syntax environment context ~binders parameter typ = checked (fun () ->
+    let environment = checking_environment environment context in
+    refine context (fun ~refinable ->
+        FrescoKind.require_with syntax environment ~refinable ~binders parameter typ))
 
 let check_root_binders context roots =
   let check_quantifier q =

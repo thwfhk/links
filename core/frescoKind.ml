@@ -63,6 +63,91 @@ let environment variable = {
   abstract = builtin_abstract;
 }
 
+type 'typ view =
+  | Var of Types.tid * Kind.t
+  | Meta of 'typ
+  | Recursive of Types.tid * Kind.t * 'typ
+  | ForAll of Quantifier.t list * 'typ
+  | Alias of PrimaryKind.t * string * TypeParameter.t list * (PrimaryKind.t * 'typ) list * 'typ
+  | Application of Types.Abstype.t * (PrimaryKind.t * 'typ) list
+  | RecursiveApplication of 'typ recursive_application
+  | Primitive of Primitive.t
+  | Arrow of 'typ * 'typ
+  | LinearArrow of 'typ * 'typ
+  | Modal of 'typ Modality.t * 'typ
+  | Record of 'typ
+  | Variant of 'typ
+  | Row of 'typ Utility.StringMap.t * 'typ
+  | Present of 'typ
+  | Absent
+  | Closed
+  | Input of 'typ * 'typ
+  | Output of 'typ * 'typ
+  | Select of 'typ
+  | Choice of 'typ
+  | Dual of 'typ
+  | End
+  | Ghost
+  | UniversalGhost of 'typ
+  | Unsupported of string
+and 'typ recursive_application = {
+  identity : string;
+  parameters : TypeParameter.t list;
+  arguments : (PrimaryKind.t * 'typ) list;
+  declaration : unit -> (Quantifier.t list * 'typ) option;
+  linear : unit -> bool option;
+}
+
+type 'typ syntax = {
+  view : environment -> 'typ -> 'typ view;
+  same_node : 'typ -> 'typ -> bool;
+  of_shared : Types.typ -> 'typ;
+}
+
+let view_shared lift (environment : environment) typ =
+  let arguments = List.map (fun (pk, typ) -> pk, lift typ) in
+  match typ with
+  | Types.Var (id, kind, _) -> Var (id, kind)
+  | Types.Meta point -> Meta (lift (Unionfind.peek point))
+  | Types.Recursive (id, kind, body) -> Recursive (id, kind, lift body)
+  | Types.ForAll (qs, body) -> ForAll (qs, lift body)
+  | Types.Alias (pk, (name, parameters, args, _), body) ->
+     Alias (pk, name, parameters, arguments args, lift body)
+  | Types.Application (constructor, args) -> Application (constructor, arguments args)
+  | Types.RecursiveApplication app -> RecursiveApplication {
+       identity = app.Types.r_unique_name;
+       parameters = app.Types.r_quantifiers;
+       arguments = arguments app.Types.r_args;
+       declaration = (fun () ->
+           Option.map (fun (qs, body) -> qs, lift body) (environment.declaration app));
+       linear = app.Types.r_linear;
+     }
+  | Types.Primitive primitive -> Primitive primitive
+  | Types.Arrow (a, b) -> Arrow (lift a, lift b)
+  | Types.LinearArrow (a, b) -> LinearArrow (lift a, lift b)
+  | Types.Modal (m, body) -> Modal (Modality.map lift m, lift body)
+  | Types.Record body -> Record (lift body)
+  | Types.Variant body -> Variant (lift body)
+  | Types.Row (fields, tail, _) -> Row (Utility.StringMap.map lift fields, lift (Unionfind.peek tail))
+  | Types.Present body -> Present (lift body)
+  | Types.Absent -> Absent
+  | Types.Closed -> Closed
+  | Types.Input (a, b) -> Input (lift a, lift b)
+  | Types.Output (a, b) -> Output (lift a, lift b)
+  | Types.Select body -> Select (lift body)
+  | Types.Choice body -> Choice (lift body)
+  | Types.Dual body -> Dual (lift body)
+  | Types.End -> End
+  | Types.Not_typed -> Unsupported "Not_typed"
+  | Types.Function _ -> Unsupported "Function"
+  | Types.Lolli _ -> Unsupported "Lolli"
+  | Types.Effect _ -> Unsupported "Effect"
+  | Types.Operation _ -> Unsupported "Operation"
+  | Types.Table _ -> Unsupported "Table"
+  | Types.Lens _ -> Unsupported "Lens"
+
+let shared_syntax = { view = view_shared Fun.id; same_node = ( == ); of_shared = Fun.id }
+
 let declared requirement kind modal_kind = match requirement with
   | Ordinary Unrestricted -> Subkind.linearity (Kind.subkind kind) = Linearity.Unl
   | Ordinary (Restricted restriction) ->
@@ -85,17 +170,17 @@ let valid_requirements kind requirements =
   Kind.primary_kind kind <> PrimaryKind.Type ||
   not (restricted Restriction.Base && restricted Restriction.Session)
 
-type scope = {
-  bindings : local_binding IntMap.t;
-  recursive : recursive_binding list;
+type 'typ scope = {
+  bindings : 'typ local_binding IntMap.t;
+  recursive : 'typ recursive_binding list;
 }
-and local_binding = Quantifier of variable | Recursive of recursive_binding
-and recursive_binding = {
-  node : Types.typ;
+and 'typ local_binding = Quantifier of variable | RecursiveBinding of 'typ recursive_binding
+and 'typ recursive_binding = {
+  node : 'typ;
   id : Types.tid;
   kind : Kind.t;
-  body : Types.typ;
-  enclosing : scope;
+  body : 'typ;
+  enclosing : 'typ scope;
 }
 
 let empty_scope = { bindings = IntMap.empty; recursive = [] }
@@ -146,10 +231,10 @@ let read_state changed state =
 
 (* Identities distinguish nested binders that reuse a variable ID. Read the
    syntax by physical identity so recursive point graphs need no mutation. *)
-let node_identity () =
+let node_identity same_node =
   let nodes = ref [] in
   fun typ ->
-    match List.find_opt (fun (node, _) -> node == typ) !nodes with
+    match List.find_opt (fun (node, _) -> same_node node typ) !nodes with
     | Some (_, id) -> id
     | None ->
        let id = List.length !nodes in
@@ -169,7 +254,7 @@ let summary_scope identity request summary requirement scope =
   let rec seed scope =
     let bindings = IntMap.map (function
         | Quantifier { kind; modal_kind; _ } -> Summary (declared requirement kind modal_kind)
-        | Recursive binding -> State (seed_recursive binding)) scope.bindings in
+        | RecursiveBinding binding -> State (seed_recursive binding)) scope.bindings in
     let recursive = List.map (fun binding -> binding.node, seed_recursive binding) scope.recursive in
     bindings, recursive
   and seed_recursive binding =
@@ -186,8 +271,8 @@ let summary_scope identity request summary requirement scope =
        state in
   seed scope
 
-let classify_scoped environment scope typ =
-  let identity = node_identity () in
+let classify_scoped syntax environment scope typ =
+  let identity = node_identity syntax.same_node in
   let states = Hashtbl.create 16 in
   let changed = ref false in
   let read = read_state changed in
@@ -202,9 +287,9 @@ let classify_scoped environment scope typ =
        state
   in
   let rec summary bindings recursive typ =
-    match typ with
-    | Types.Meta point -> summary bindings recursive (Unionfind.peek point)
-    | Types.Var (id, _, _) ->
+    match syntax.view environment typ with
+    | Meta body -> summary bindings recursive body
+    | Var (id, _) ->
        begin match IntMap.find_opt id bindings with
        | Some binding -> binding_summary read binding
        | None ->
@@ -215,12 +300,12 @@ let classify_scoped environment scope typ =
              satisfies_requirement Absolute_payloads (environment.requirements id)
           | Some { solution = Some body; _ } ->
              let state = request (Solution id)
-                 (fun _ () -> summary IntMap.empty [] body) in
+                 (fun _ () -> summary IntMap.empty [] (syntax.of_shared body)) in
              read state
           end
        end
-    | Types.Recursive (id, _, body) ->
-       begin match List.find_opt (fun (node, _) -> node == typ) recursive with
+    | Recursive (id, _, body) ->
+       begin match List.find_opt (fun (node, _) -> syntax.same_node node typ) recursive with
        | Some (_, state) -> read state
        | None ->
           let state = request (binder_key identity typ bindings recursive)
@@ -228,39 +313,39 @@ let classify_scoped environment scope typ =
                   ((typ, state) :: recursive) body) in
           read state
        end
-    | Types.RecursiveApplication app ->
-       let arguments = List.map (fun (_, t) -> summary bindings recursive t) app.Types.r_args in
-       let state = request (Declaration (app.Types.r_unique_name, arguments))
+    | RecursiveApplication app ->
+       let arguments = List.map (fun (_, t) -> summary bindings recursive t) app.arguments in
+       let state = request (Declaration (app.identity, arguments))
            (fun _ ->
-             match environment.declaration app with
-             | None -> raise (Error (Missing_declaration app.Types.r_unique_name))
+             match app.declaration () with
+             | None -> raise (Error (Missing_declaration app.identity))
              | Some (formals, body) ->
                 if List.length formals <> List.length arguments then
-                  raise (Error (Argument_count app.Types.r_unique_name));
+                  raise (Error (Argument_count app.identity));
                 let bindings = List.fold_left2 (fun bindings formal argument ->
                     IntMap.add (Quantifier.to_var formal) (Summary argument) bindings)
                     IntMap.empty formals arguments in
                 fun () -> summary bindings [] body) in
        read state
-    | Types.ForAll (quantifiers, body) ->
+    | ForAll (quantifiers, body) ->
        let bindings = List.fold_left (fun bindings quantifier ->
            let absolute = Quantifier.to_primary_kind quantifier = PrimaryKind.Type in
            IntMap.add (Quantifier.to_var quantifier) (Summary absolute) bindings)
            bindings quantifiers in
        summary bindings recursive body
-    | Types.Primitive _ | Types.End | Types.Closed | Types.Absent -> true
-    | Types.Arrow _ | Types.LinearArrow _ -> false
-    | Types.Modal (Modality.Absolute _, _) -> true
-    | Types.Modal (Modality.Relative _, body)
-    | Types.Record body | Types.Variant body | Types.Present body
-    | Types.Select body | Types.Choice body | Types.Dual body
-    | Types.Alias (_, _, body) -> summary bindings recursive body
-    | Types.Input (payload, continuation) | Types.Output (payload, continuation) ->
+    | Primitive _ | End | Closed | Absent | Ghost -> true
+    | Arrow _ | LinearArrow _ -> false
+    | Modal (Modality.Absolute _, _) -> true
+    | Modal (Modality.Relative _, body)
+    | Record body | Variant body | Present body
+    | Select body | Choice body | Dual body
+    | Alias (_, _, _, _, body) | UniversalGhost body -> summary bindings recursive body
+    | Input (payload, continuation) | Output (payload, continuation) ->
        summary bindings recursive payload && summary bindings recursive continuation
-    | Types.Row (fields, tail, _) ->
+    | Row (fields, tail) ->
        Utility.StringMap.for_all (fun _ field -> summary bindings recursive field) fields &&
-       summary bindings recursive (Unionfind.peek tail)
-    | Types.Application (constructor, arguments) ->
+       summary bindings recursive tail
+    | Application (constructor, arguments) ->
        let wrong = match Types.wrong_type with
          | Types.Application (constructor, _) -> constructor
          | _ -> assert false in
@@ -274,13 +359,7 @@ let classify_scoped environment scope typ =
               | None -> raise (Error (Argument_count (Types.Abstype.name constructor)))
               | Some (_, typ) -> summary bindings recursive typ) indices
        end
-    | Types.Not_typed -> raise (Error (Unsupported_type "Not_typed"))
-    | Types.Function _ -> raise (Error (Unsupported_type "Function"))
-    | Types.Lolli _ -> raise (Error (Unsupported_type "Lolli"))
-    | Types.Effect _ -> raise (Error (Unsupported_type "Effect"))
-    | Types.Operation _ -> raise (Error (Unsupported_type "Operation"))
-    | Types.Table _ -> raise (Error (Unsupported_type "Table"))
-    | Types.Lens _ -> raise (Error (Unsupported_type "Lens"))
+    | Unsupported name -> raise (Error (Unsupported_type name))
   in
   (* Re-evaluate all demanded states after a result changes or a new argument
      vector is discovered. Each result can change only from Abs to Any.
@@ -299,7 +378,7 @@ let classify_scoped environment scope typ =
   in
   if solve () then ModalKind.Abs else ModalKind.Any
 
-let classify environment = classify_scoped environment empty_scope
+let classify environment = classify_scoped shared_syntax environment empty_scope
 
 type effect_parameters = {
   parameters : TypeParameter.t list;
@@ -321,8 +400,8 @@ let any_parameter primary =
    recursive summaries also range over Booleans, so changing arguments do
    not require substitution or unfolding. Session uses a least fixed point:
    a cycle without a session constructor does not establish Session. *)
-let ordinary_satisfies environment scope requirement typ =
-  let identity = node_identity () in
+let ordinary_satisfies syntax environment scope requirement typ =
+  let identity = node_identity syntax.same_node in
   let initial = requirement <> Restricted Restriction.Session in
   let states = Hashtbl.create 16 in
   let changed = ref false in
@@ -339,9 +418,9 @@ let ordinary_satisfies environment scope requirement typ =
   in
   let rec summary bindings recursive typ =
     let all ts = List.for_all (summary bindings recursive) ts in
-    match typ with
-    | Types.Meta point -> summary bindings recursive (Unionfind.peek point)
-    | Types.Var (id, _, _) ->
+    match syntax.view environment typ with
+    | Meta body -> summary bindings recursive body
+    | Var (id, _) ->
        begin match IntMap.find_opt id bindings with
        | Some binding -> binding_summary read binding
        | None ->
@@ -351,32 +430,32 @@ let ordinary_satisfies environment scope requirement typ =
              declared (Ordinary requirement) kind modal_kind ||
              satisfies_requirement (Ordinary requirement) (environment.requirements id)
           | Some { solution = Some body; _ } ->
-             read (request (Solution id) (fun _ () -> summary IntMap.empty [] body))
+             read (request (Solution id) (fun _ () -> summary IntMap.empty [] (syntax.of_shared body)))
           end
        end
-    | Types.Recursive (id, _, body) ->
+    | Recursive (id, _, body) ->
        if requirement = Restricted Restriction.Base then false
-       else begin match List.find_opt (fun (node, _) -> node == typ) recursive with
+       else begin match List.find_opt (fun (node, _) -> syntax.same_node node typ) recursive with
        | Some (_, state) -> read state
        | None ->
           read (request (binder_key identity typ bindings recursive) (fun state () ->
                summary (IntMap.add id (State state) bindings)
                  ((typ, state) :: recursive) body))
        end
-    | Types.RecursiveApplication app ->
+    | RecursiveApplication app ->
        begin match requirement with
        | Unrestricted ->
-          begin match app.Types.r_linear () with
+          begin match app.linear () with
           | Some linear -> not linear
-          | None -> malformed ("Missing recursive linearity: " ^ app.Types.r_unique_name)
+          | None -> malformed ("Missing recursive linearity: " ^ app.identity)
           end
        | Restricted Restriction.Base -> false
        | Restricted _ ->
-          let arguments = List.map (fun (_, t) -> summary bindings recursive t) app.Types.r_args in
-          let state = request (Declaration (app.Types.r_unique_name, arguments))
+          let arguments = List.map (fun (_, t) -> summary bindings recursive t) app.arguments in
+          let state = request (Declaration (app.identity, arguments))
               (fun _ ->
-                match environment.declaration app with
-                | None -> raise (Error (Missing_declaration app.Types.r_unique_name))
+                match app.declaration () with
+                | None -> raise (Error (Missing_declaration app.identity))
                 | Some (formals, body) ->
                    let bindings = List.fold_left2 (fun bindings formal argument ->
                        IntMap.add (Quantifier.to_var formal) (Summary argument) bindings)
@@ -384,13 +463,13 @@ let ordinary_satisfies environment scope requirement typ =
                    fun () -> summary bindings [] body) in
           read state
        end
-    | Types.Alias (_, _, body) -> summary bindings recursive body
-    | Types.Closed | Types.Absent -> true
-    | Types.Row (fields, tail, _) ->
+    | Alias (_, _, _, _, body) | UniversalGhost body -> summary bindings recursive body
+    | Closed | Absent | Ghost -> true
+    | Row (fields, tail) ->
        Utility.StringMap.for_all (fun _ field -> summary bindings recursive field) fields &&
-       summary bindings recursive (Unionfind.peek tail)
-    | Types.Present body -> summary bindings recursive body
-    | Types.ForAll (qs, body) ->
+       summary bindings recursive tail
+    | Present body -> summary bindings recursive body
+    | ForAll (qs, body) ->
        begin match requirement with
        | Unrestricted ->
           let bindings = List.fold_left (fun bindings q ->
@@ -400,7 +479,7 @@ let ordinary_satisfies environment scope requirement typ =
           summary bindings recursive body
        | Restricted _ -> false
        end
-    | Types.Primitive primitive ->
+    | Primitive primitive ->
        begin match requirement with
        | Restricted Restriction.Session -> false
        | Restricted Restriction.Base ->
@@ -411,34 +490,33 @@ let ordinary_satisfies environment scope requirement typ =
           end
        | _ -> true
        end
-    | Types.Application (_, arguments) ->
+    | Application (_, arguments) ->
        begin match requirement with
        | Unrestricted -> true
        | Restricted Restriction.Mono -> all (List.map snd arguments)
        | Restricted _ -> false
        end
-    | Types.Arrow (a, b) ->
+    | Arrow (a, b) ->
        begin match requirement with
        | Unrestricted -> true
        | Restricted Restriction.Mono -> all [a; b]
        | Restricted _ -> false
        end
-    | Types.LinearArrow (a, b) ->
+    | LinearArrow (a, b) ->
        requirement = Restricted Restriction.Mono && all [a; b]
-    | Types.Modal (_, body) -> requirement = Unrestricted && summary bindings recursive body
-    | Types.Record body | Types.Variant body ->
+    | Modal (_, body) -> requirement = Unrestricted && summary bindings recursive body
+    | Record body | Variant body ->
        (requirement = Unrestricted || requirement = Restricted Restriction.Mono) &&
        summary bindings recursive body
-    | Types.Input (a, b) | Types.Output (a, b) ->
+    | Input (a, b) | Output (a, b) ->
        requirement = Restricted Restriction.Session ||
        (requirement = Restricted Restriction.Mono && all [a; b])
-    | Types.Select body | Types.Choice body | Types.Dual body ->
+    | Select body | Choice body | Dual body ->
        requirement = Restricted Restriction.Session ||
        (requirement = Restricted Restriction.Mono && summary bindings recursive body)
-    | Types.End ->
+    | End ->
        requirement = Restricted Restriction.Session || requirement = Restricted Restriction.Mono
-    | Types.Not_typed | Types.Function _ | Types.Lolli _ | Types.Effect _
-    | Types.Operation _ | Types.Table _ | Types.Lens _ ->
+    | Unsupported _ ->
        malformed "Unsupported child in ordinary kind checking"
   in
   let bindings, recursive = summary_scope identity request summary (Ordinary requirement) scope in
@@ -458,10 +536,13 @@ let ordinary_satisfies environment scope requirement typ =
   in
   solve ()
 
+let unrestricted_with syntax environment ~binders typ =
+  ordinary_satisfies syntax environment (bind_quantifiers empty_scope binders) Unrestricted typ
+
 (* Validate structure before evaluating any kind summaries. In particular,
    classify may ignore absolute payloads and unused arguments. Raw bodies
    are queued once, but arguments are checked at every application. *)
-let checker ?refinable environment =
+let checker syntax ?refinable environment =
   let declarations = Hashtbl.create 16 in
   let solutions = Hashtbl.create 16 in
   let pending = Queue.create () in
@@ -494,11 +575,11 @@ let checker ?refinable environment =
     let child pk = check scope (any_parameter pk) in
     let session pk = check scope
         (TypeParameter.make (pk, (Linearity.Any, Restriction.Session))) in
-    match typ with
-    | Types.Meta point -> structure scope (Unionfind.peek point)
-    | Types.Var (id, stored, _) ->
+    match syntax.view environment.classification typ with
+    | Meta body -> structure scope body
+    | Var (id, stored) ->
        let kind = match IntMap.find_opt id scope.bindings with
-         | Some (Quantifier { kind; _ } | Recursive { kind; _ }) -> kind
+         | Some (Quantifier { kind; _ } | RecursiveBinding { kind; _ }) -> kind
          | None ->
             begin match environment.classification.variable id with
             | None -> raise (Error (Unbound_variable id))
@@ -508,7 +589,8 @@ let checker ?refinable environment =
                   Hashtbl.add solutions id ();
                   Queue.add (fun () -> check empty_scope
                       ~added:(environment.classification.requirements id)
-                      (TypeParameter.make ~modal_kind:descriptor.modal_kind descriptor.kind) body) pending
+                      (TypeParameter.make ~modal_kind:descriptor.modal_kind descriptor.kind)
+                      (syntax.of_shared body)) pending
                | _ -> ()
                end;
                descriptor.kind
@@ -516,27 +598,27 @@ let checker ?refinable environment =
        if not (Kind.equal stored kind) then
          malformed "Variable kind disagrees with its declaration";
        Kind.primary_kind kind
-    | Types.Recursive (id, kind, body) ->
+    | Recursive (id, kind, body) ->
        let pk = Kind.primary_kind kind in
        if pk = PrimaryKind.Presence then malformed "Recursive presence";
-       if not (List.exists (fun binding -> binding.node == typ) scope.recursive) then begin
+       if not (List.exists (fun binding -> syntax.same_node binding.node typ) scope.recursive) then begin
          let binding = { node = typ; id; kind; body; enclosing = scope } in
-         let scope = { bindings = IntMap.add id (Recursive binding) scope.bindings;
+         let scope = { bindings = IntMap.add id (RecursiveBinding binding) scope.bindings;
                        recursive = binding :: scope.recursive } in
          check scope (any_parameter pk) body
        end;
        pk
-    | Types.RecursiveApplication app ->
-       let name = app.Types.r_unique_name in
-       let formals, body = match environment.classification.declaration app with
+    | RecursiveApplication app ->
+       let name = app.identity in
+       let formals, body = match app.declaration () with
          | Some declaration -> declaration
          | None -> raise (Error (Missing_declaration name)) in
        let parameters = List.map Quantifier.to_parameter formals in
-       if List.length parameters <> List.length app.Types.r_quantifiers then
+       if List.length parameters <> List.length app.parameters then
          raise (Error (Argument_count name));
-       if not (List.for_all2 TypeParameter.equal parameters app.Types.r_quantifiers) then
+       if not (List.for_all2 TypeParameter.equal parameters app.parameters) then
          malformed ("Recursive formal kinds: " ^ name);
-       arguments scope name parameters app.Types.r_args;
+       arguments scope name parameters app.arguments;
        if not (Hashtbl.mem declarations name) then begin
          Hashtbl.add declarations name ();
          Queue.add (fun () ->
@@ -544,11 +626,11 @@ let checker ?refinable environment =
                (any_parameter PrimaryKind.Type) body) pending
        end;
        PrimaryKind.Type
-    | Types.Alias (pk, (name, parameters, args, _), body) ->
+    | Alias (pk, name, parameters, args, body) ->
        arguments scope name parameters args;
        child pk body;
        pk
-    | Types.Application (constructor, args) ->
+    | Application (constructor, args) ->
        let wrong = match Types.wrong_type with
          | Types.Application (constructor, _) -> constructor
          | _ -> assert false in
@@ -556,13 +638,14 @@ let checker ?refinable environment =
        arguments scope (Types.Abstype.name constructor)
          (Types.Abstype.arity constructor) args;
        PrimaryKind.Type
-    | Types.ForAll (quantifiers, body) ->
+    | ForAll (quantifiers, body) ->
        check (bind_quantifiers scope quantifiers) (any_parameter PrimaryKind.Type) body;
        PrimaryKind.Type
-    | Types.Primitive _ | Types.End -> PrimaryKind.Type
-    | Types.Arrow (a, b) | Types.LinearArrow (a, b) ->
+    | Primitive _ | End | Ghost -> PrimaryKind.Type
+    | UniversalGhost body -> child PrimaryKind.Type body; PrimaryKind.Type
+    | Arrow (a, b) | LinearArrow (a, b) ->
        child PrimaryKind.Type a; child PrimaryKind.Type b; PrimaryKind.Type
-    | Types.Modal (modality, body) ->
+    | Modal (modality, body) ->
        begin match modality with
        | Modality.Absolute row -> effect_row scope row
        | Modality.Relative (mask, row) ->
@@ -571,25 +654,19 @@ let checker ?refinable environment =
        end;
        child PrimaryKind.Type body;
        PrimaryKind.Type
-    | Types.Record row | Types.Variant row -> child PrimaryKind.Row row; PrimaryKind.Type
-    | Types.Row (fields, tail, _) ->
+    | Record row | Variant row -> child PrimaryKind.Row row; PrimaryKind.Type
+    | Row (fields, tail) ->
        Utility.StringMap.iter (fun _ field -> child PrimaryKind.Presence field) fields;
-       child PrimaryKind.Row (Unionfind.peek tail);
+       child PrimaryKind.Row tail;
        PrimaryKind.Row
-    | Types.Closed -> PrimaryKind.Row
-    | Types.Present body -> child PrimaryKind.Type body; PrimaryKind.Presence
-    | Types.Absent -> PrimaryKind.Presence
-    | Types.Input (payload, continuation) | Types.Output (payload, continuation) ->
+    | Closed -> PrimaryKind.Row
+    | Present body -> child PrimaryKind.Type body; PrimaryKind.Presence
+    | Absent -> PrimaryKind.Presence
+    | Input (payload, continuation) | Output (payload, continuation) ->
        child PrimaryKind.Type payload; session PrimaryKind.Type continuation; PrimaryKind.Type
-    | Types.Select row | Types.Choice row -> session PrimaryKind.Row row; PrimaryKind.Type
-    | Types.Dual body -> session PrimaryKind.Type body; PrimaryKind.Type
-    | Types.Not_typed -> raise (Error (Unsupported_type "Not_typed"))
-    | Types.Function _ -> raise (Error (Unsupported_type "Function"))
-    | Types.Lolli _ -> raise (Error (Unsupported_type "Lolli"))
-    | Types.Effect _ -> raise (Error (Unsupported_type "Effect"))
-    | Types.Operation _ -> raise (Error (Unsupported_type "Operation"))
-    | Types.Table _ -> raise (Error (Unsupported_type "Table"))
-    | Types.Lens _ -> raise (Error (Unsupported_type "Lens"))
+    | Select row | Choice row -> session PrimaryKind.Row row; PrimaryKind.Type
+    | Dual body -> session PrimaryKind.Type body; PrimaryKind.Type
+    | Unsupported name -> raise (Error (Unsupported_type name))
   in
   let finish () =
     while not (Queue.is_empty pending) do (Queue.take pending) () done;
@@ -603,8 +680,8 @@ let checker ?refinable environment =
       let holds requirements =
         let classification = { classification with requirements } in
         match requirement with
-        | Ordinary requirement -> ordinary_satisfies classification scope requirement typ
-        | Absolute_payloads -> classify_scoped classification scope typ = ModalKind.Abs in
+        | Ordinary requirement -> ordinary_satisfies syntax classification scope requirement typ
+        | Absolute_payloads -> classify_scoped syntax classification scope typ = ModalKind.Abs in
       if not (holds requirements) then match refinable with
         | None -> raise (Error error)
         | Some refinable ->
@@ -658,17 +735,19 @@ let checker ?refinable environment =
   check, effect_row, finish
 
 let check ?(binders = []) ?(added = empty_requirements) environment parameter typ =
-  let check, _, finish = checker environment in
+  let check, _, finish = checker shared_syntax environment in
   check (bind_quantifiers empty_scope binders) ~added parameter typ;
   ignore (finish ())
 
-let require ?(added = empty_requirements) environment ~refinable ~binders parameter typ =
-  let check, _, finish = checker ~refinable environment in
+let require_with syntax ?(added = empty_requirements) environment ~refinable ~binders parameter typ =
+  let check, _, finish = checker syntax ~refinable environment in
   check (bind_quantifiers empty_scope binders) ~added parameter typ;
   finish ()
 
+let require = require_with shared_syntax
+
 let check_effect_row environment row =
-  let _, check_row, finish = checker environment in
+  let _, check_row, finish = checker shared_syntax environment in
   check_row empty_scope row;
   ignore (finish ())
 
@@ -680,7 +759,7 @@ let check_effect_signature environment ~parameters ~operations =
   let parameter = TypeParameter.make
       ~modal_kind:ModalKind.Abs
       (PrimaryKind.Type, (Linearity.Any, Restriction.Any)) in
-  let check, _, finish = checker environment in
+  let check, _, finish = checker shared_syntax environment in
   List.iter (fun (arguments, result) ->
       List.iter (check scope parameter) (result :: arguments)) operations;
   ignore (finish ())

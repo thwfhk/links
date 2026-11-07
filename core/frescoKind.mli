@@ -90,6 +90,66 @@ val check : ?binders:Quantifier.t list -> ?added:requirements ->
 val require : ?added:requirements -> checking_environment -> refinable:(Types.tid -> bool) ->
   binders:Quantifier.t list -> TypeParameter.t -> Types.typ -> requirements Utility.IntMap.t
 
+(** A read-only view of a type or skeleton. Recursive application bodies
+    use their own formal scope. [same_node] preserves recursive node identity
+    across views, and [of_shared] supplies the syntax for context solutions.
+    As with [require], callers establish that solutions and point cycles are
+    well formed before checking. Ghosts are Type holes of modal kind Abs.
+    Ordinary requirements on a ghost are provisional and universal ghosts
+    inherit all requirements from their body. *)
+type 'typ view =
+  | Var of Types.tid * Kind.t
+  | Meta of 'typ
+  | Recursive of Types.tid * Kind.t * 'typ
+  | ForAll of Quantifier.t list * 'typ
+  | Alias of PrimaryKind.t * string * TypeParameter.t list * (PrimaryKind.t * 'typ) list * 'typ
+  | Application of Types.Abstype.t * (PrimaryKind.t * 'typ) list
+  | RecursiveApplication of 'typ recursive_application
+  | Primitive of Primitive.t
+  | Arrow of 'typ * 'typ
+  | LinearArrow of 'typ * 'typ
+  | Modal of 'typ Modality.t * 'typ
+  | Record of 'typ
+  | Variant of 'typ
+  | Row of 'typ Utility.StringMap.t * 'typ
+  | Present of 'typ
+  | Absent
+  | Closed
+  | Input of 'typ * 'typ
+  | Output of 'typ * 'typ
+  | Select of 'typ
+  | Choice of 'typ
+  | Dual of 'typ
+  | End
+  | Ghost
+  | UniversalGhost of 'typ
+  | Unsupported of string
+and 'typ recursive_application = {
+  identity : string;
+  parameters : TypeParameter.t list;
+  arguments : (PrimaryKind.t * 'typ) list;
+  declaration : unit -> (Quantifier.t list * 'typ) option;
+  linear : unit -> bool option;
+}
+
+type 'typ syntax = {
+  view : environment -> 'typ -> 'typ view;
+  same_node : 'typ -> 'typ -> bool;
+  of_shared : Types.typ -> 'typ;
+}
+
+val view_shared : (Types.typ -> 'typ) -> environment -> Types.typ -> 'typ view
+
+val require_with : 'typ syntax -> ?added:requirements -> checking_environment ->
+  refinable:(Types.tid -> bool) -> binders:Quantifier.t list -> TypeParameter.t -> 'typ ->
+  requirements Utility.IntMap.t
+
+(** Query ordinary unrestrictedness under the declared kinds of [binders].
+    Assumes scoped, well-formed input and available recursive linearity.
+    Does not refine variable requirements. *)
+val unrestricted_with : 'typ syntax -> environment ->
+  binders:Quantifier.t list -> 'typ -> bool
+
 val check_effect_row : checking_environment -> Types.scoped_effect_row -> unit
 
 (** Only explicit Type parameters and nested binders are in scope. Nested
