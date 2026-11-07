@@ -1302,6 +1302,149 @@ let reject_coercion source target =
   | exception Errors.IRTypeError message ->
       assert_bool message (String.starts_with ~prefix:"coercion error:" message)
 
+let collection_state () =
+  let state, _, _ = FrescoFrontend.run_file (FrescoFrontend.empty ())
+    "lib/stdlib/frescoPrelude.links" in
+  state
+
+let collection_execution expected source =
+  with_checked_ir (fun () ->
+    let _, typ, value = FrescoFrontend.run_string (collection_state ()) source in
+    assert_equal ~printer:Value.string_of_value expected value;
+    typ)
+
+let collection_check source =
+  with_checked_ir (fun () -> FrescoFrontend.check_string (collection_state ()) source)
+
+let collection_suite = "staged collection prelude" >::: [
+  "map concatMap and filter retain supplied polymorphism" >:: (fun _ ->
+    collection_execution
+      (Value.box [`List [`Int 42]; `List [`Bool false];
+                  `List [`Int 1; `Int 1; `Int 2; `Int 2]; `List [`Bool true];
+                  `List [`Int 2; `Int 4]; `List [`Bool true]]) {|
+      (map(fun(x) { x+1 }, [41]), map(not, [true]),
+       concatMap(fun(x) { [x,x] }, [1,2]), concatMap(fun(x) { [x] }, [true]),
+       filter(even, [1,2,3,4]), filter(fun(x) { x }, [false,true]))
+    |} |> ignore);
+
+  "map preserves a supplied higher-rank element type" >:: (fun _ ->
+    collection_execution (Value.box [`Int 42; `Bool true]) {|
+      typename Identity = forall a. modal [] ((a) -> a);
+      sig id : Identity
+      fun id(x) { x }
+      var xs = map(fun(x) { ~x }, [~id]) : List Identity;
+      switch (xs) {
+        case f::_ -> (f(42), f(true))
+        case [] -> (0, false)
+      }
+    |} |> int_bool);
+
+  "iter accepts result types independently at each call" >:: (fun _ ->
+    collection_execution (Value.box [Value.box []; Value.box []; Value.box []]) {|
+      (iter(fun(x) { x+1 }, [1,2]), iter(not, [true,false]), iter(fun(x) { x }, [] : List Int))
+    |} |> ignore);
+
+  "sortBy and sortByBase retain projection order and base records" >:: (fun _ ->
+    collection_execution
+      (Value.box [`List [`Int 1; `Int 2; `Int 2; `Int 3];
+                  `List [`Int 1; `Int 2; `Int 2; `Int 3]; `List []]) {|
+      (sortBy(fun(x) { x }, [3,2,1,2]),
+       sortByBase(fun(x) { (key=x) }, [3,2,1,2]),
+       sortBy(fun(x) { x }, [] : List Int))
+    |} |> ignore);
+
+  "boolean helpers short circuit and retain empty cases" >:: (fun _ ->
+    collection_execution
+      (Value.box [`Bool true; `Bool false; `Bool true; `Bool false;
+                  `Bool false; `Bool true; `Bool true; `Bool false]) {|
+      (and([]), or([]), all(fun(x) { x }, []), any(fun(x) { x }, []),
+       all(fun(x) { if (x == 0) false else error("all continued") }, [0,1]),
+       any(fun(x) { if (x == 0) true else error("any continued") }, [0,1]),
+       and([true,true]), or([false,false]))
+    |} |> ignore);
+
+  "the elem and parity helpers execute" >:: (fun _ ->
+    collection_execution
+      (Value.box [`Int 42; `Bool true; `Bool false; `Bool true;
+                  `Bool false; `Bool true; `Bool false]) {|
+      (the([42,42]), elem(true, [false,true]), elem(42, []),
+       odd(3), odd(-3), even(-2), even(3))
+    |} |> ignore);
+
+  "intRange terminates at both integer limits" >:: (fun _ ->
+    collection_execution
+      (Value.box [`List [`Int 1; `Int 2; `Int 3]; `List [];
+                  `List [`Int min_int; `Int (min_int+1)];
+                  `List [`Int (max_int-1); `Int max_int];
+                  `List [`Int min_int]; `List [`Int max_int]]) {|
+      (intRange(1,3), intRange(3,1), intRange(min_int,min_int+1),
+       intRange(max_int-1,max_int), intRange(min_int,min_int), intRange(max_int,max_int))
+    |} |> ignore);
+
+  "element selection and swap retain their order" >:: (fun _ ->
+    collection_execution
+      (Value.box [`Int 42; `Bool true; `List [`Int 2; `Int 3; `Int 1; `Int 2];
+                  `List [`Bool false; `Bool true]]) {|
+      (selectElem([0,42,1],1), [false,true] !! 1,
+       swap([1,3,2,1],1,2), swap([true,false],true,false))
+    |} |> ignore);
+
+  "folds retain argument order and the first-element seeds" >:: (fun _ ->
+    collection_execution
+      (Value.box [`Int (-6); `Int 2; `Int (-4); `Int 0;
+                  `Bool true; `String "ab"]) {|
+      (fold_left(fun(u,x) { u-x },0,[1,2,3]),
+       fold_right(fun(x,u) { x-u },0,[1,2,3]),
+       fold_left1(fun(u,x) { u-x },[1,2,3]),
+       fold_right1(fun(x,u) { x-u },[1,2,3]),
+       fold_left(fun(u,x) { u && x },true,[true]),
+       fold_right(fun(x,u) { x ^^ u },"",["a","b"]))
+    |} |> ignore);
+
+  "zip unzip and replicate retain polymorphism and length rules" >:: (fun _ ->
+    collection_execution
+      (Value.box [
+        `List [Value.box [`Int 1; `Bool true]];
+        Value.box [`List [`Int 1; `Int 2]; `List [`Bool true; `Bool false]];
+        `List [`Bool true; `Bool true]; `List []; `List []]) {|
+      (zip([1,2],[true]), unzip([(1,true),(2,false)]),
+       replicate(2,true), replicate(0,42), replicate(-1,42))
+    |} |> ignore);
+
+  "partial helpers retain their Wild requirement" >:: (fun _ ->
+    List.iter (fun body ->
+      reject (fun () -> collection_check
+        ("sig pure : () -> () fun pure() { ignore(" ^ body ^ ") } pure()")))
+      ["the([42])"; "elem(42,[42])"; "selectElem([42],0)"; "[42] !! 0";
+       "fold_left1(fun(x,y) { x+y },[42])";
+       "fold_right1(fun(x,y) { x+y },[42])";
+       "zip([42],[true])"; "sortBy(fun(x) { x },[42])"]);
+
+  "callback result types are checked" >:: (fun _ ->
+    List.iter (fun source -> reject (fun () -> collection_check source))
+      ["filter(fun(x) { x+1 },[1])"; "all(fun(x) { x+1 },[1])";
+       "any(fun(x) { x+1 },[1])"; "concatMap(fun(x) { x+1 },[1])";
+       "fold_left(fun(x,y) { true },0,[1])";
+       "sortByBase(fun(x) { (key=fun() { x }) },[1])"]);
+
+  "unlimited callbacks reject linear values and captures" >:: (fun _ ->
+    List.iter (fun source -> reject (fun () -> collection_check source))
+      ["map(linfun(x) { x+1 },[41])";
+       "iter(linfun(x) { x+1 },[41])";
+       "{ var once = linfun() { 42 }; map(fun(x) { once()+x },[0]) }";
+       "{ var once = linfun() { 42 }; iter(fun(x) { once()+x },[0]) }";
+       "map(fun(x) { linfun() { x } },[42])";
+       "replicate(2,linfun() { 42 })"]);
+
+  "callback Wild effects remain contextual" >:: (fun _ ->
+    ignore (collection_check "iter(fun(x) { debug(intToString(x)) },[42])");
+    reject (fun () -> collection_check {|
+      sig pure : () -> List Int
+      fun pure() { map(fun(x) { debug(""); x },[42]) }
+      pure()
+    |}));
+]
+
 let ir_suite =
   let arrow argument result = Types.Arrow (Types.make_tuple_type [argument], result) in
   let int, bool = Types.int_type, Types.bool_type in
@@ -1334,4 +1477,4 @@ let ir_suite =
       reject_coercion (forall (fun a -> arrow a int)) (forall (fun a -> arrow a a)));
   ]
 
-let suite = "Fresco source" >::: [reference_suite; source_suite; callback_sequence_suite; primitive_suite; regex_suite; continuations_suite; comprehensions_suite; sections_patterns_updates_suite; ir_suite]
+let suite = "Fresco source" >::: [reference_suite; source_suite; callback_sequence_suite; primitive_suite; regex_suite; continuations_suite; comprehensions_suite; sections_patterns_updates_suite; collection_suite; ir_suite]

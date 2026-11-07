@@ -1,0 +1,201 @@
+# Staged collection prelude for the Fresco frontend.
+
+sig assert : modal [Wild] ((Bool, String) -> ())
+fun assert(ok, msg) {
+  if (not(ok)) debug("assertion failed: " ^^ msg) else ()
+}
+
+sig ignore : forall a. (a) -> ()
+fun ignore (_) { () }
+
+sig println : modal [Wild] ((String) -> ())
+fun println(msg) {
+  print(msg ^^ "\n")
+}
+
+sig concatMap : forall a, b. ((a) -> List b, List a) -> List b
+fun concatMap(f, l) {
+  switch (l) {
+    case [] -> []
+    case hd::tl -> f(hd) ++ concatMap(f, tl)
+  }
+}
+
+sig map : forall a, b. ((a) -> b, List a) -> List b
+fun map(f, l) {
+  switch (l) {
+    case []     -> []
+    case hd::tl -> f(hd) :: map(f,tl)
+  }
+}
+
+sig filter : forall a. ((a) -> Bool, List a) -> List a
+fun filter(p, l) {
+  concatMap (fun (x) {if(p(x)) [x] else []}, l)
+}
+
+sig iter : forall a, b. ((a) -> b, List a) -> ()
+fun iter(f, xs) {
+  switch (xs) {
+    case [] -> ()
+    case x :: xs -> ignore(f(x)); iter(f, xs)
+  }
+}
+
+# TBD: rename this 'sortOn' to follow Haskell usage?
+sig sortBy : forall a, b. modal [Wild] (((a) -> b, List a) -> List a)
+fun sortBy (f, l) {
+  switch (l) {
+    case [] -> []
+    case x::xs -> {
+      var lt = filter (fun (y) {f(y) < f(x)}, xs);
+      var ge = filter (fun (y) {f(y) >= f(x)}, xs);
+      sortBy(f, lt) ++ [x] ++ sortBy(f, ge)
+    }
+  }
+}
+
+sig sortByBase : forall a, b::Row(Unl,Base). ((a) -> (| b), List a) -> List a
+fun sortByBase(f, l) {
+  switch (l) {
+    case [] -> []
+    case x::xs -> {
+      var lt = filter (fun (y) {f(y) < f(x)}, xs);
+      var ge = filter (fun (y) {f(y) >= f(x)}, xs);
+      sortByBase(f, lt) ++ [x] ++ sortByBase(f, ge)
+    }
+  }
+}
+
+sig all : forall a. ((a) -> Bool, List a) -> Bool
+fun all(p, l) {
+   switch (l) {
+     case []    -> true
+     case x::xs -> p(x) && all(p, xs)
+   }
+}
+
+sig and : (List Bool) -> Bool
+fun and(l) {
+  all(fun(x) { x }, l)
+}
+
+sig or : (List Bool) -> Bool
+fun or(l) {
+   switch (l) {
+     case [] -> false
+     case x::xs -> x || or(xs)
+   }
+}
+
+sig any : forall a. ((a) -> Bool, List a) -> Bool
+fun any(p, l) {
+   switch (l) {
+     case [] -> false
+     case x::xs -> p(x) || any(p, xs)
+   }
+}
+
+sig the : forall a. modal [Wild] ((List a) -> a)
+fun the(l) {
+  var x = hd(l);
+  if (all(fun (y) { x == y }, l))
+    x
+  else
+    error("list argument to 'the' had varying values.")
+}
+
+sig elem : forall a. modal [Wild] ((a, List a) -> Bool)
+fun elem(x, l) {
+  not(l==[]) && (x == hd(l) || x `elem` tl(l))
+}
+
+sig odd : (Int) -> Bool
+fun odd(i)  { i `mod` 2 == 1 }
+sig even : (Int) -> Bool
+fun even(i) { i `mod` 2 == 0 }
+
+sig intRange : (Int, Int) -> List Int
+fun intRange(m,n) {
+  sig intRangeAux : (Int, Int, List Int) -> List Int
+  fun intRangeAux(m,n,result) {
+    if (m == n) m::result
+    else intRangeAux(m, n-1, n::result)
+  }
+  if (m > n) [] else intRangeAux(m,n,[])
+}
+
+#fun null(l) { l == [] }
+
+# return element at index i of xs
+sig selectElem : forall a. modal [Wild] ((List a, Int) -> a)
+fun selectElem(xs, i) {
+  hd(drop(i, xs))
+}
+
+# infix operator for 'selectElem'
+sig !! : forall a. modal [Wild] ((List a, Int) -> a)
+op xs !! n { selectElem(xs, n) }
+
+# swap all instances of x1 and x2 in xs
+sig swap : forall a. (List a, a, a) -> List a
+fun swap(xs, x1, x2) {
+ for (x <- xs) {
+  if (x == x1) [x2]
+  else if (x == x2) [x1]
+  else [x]
+ }
+}
+
+sig fold_left : forall a, b. ((b, a) -> b, b, List a) -> b
+fun fold_left(p, u, l) {
+  switch (l) {
+    case [] -> u
+    case x::xs -> fold_left(p, p(u, x), xs)
+  }
+}
+
+sig fold_left1 : forall a. modal [Wild] (((a, a) -> a, List a) -> a)
+fun fold_left1(p, l) {
+  fold_left(p, hd(l), tl(l))
+}
+
+sig fold_right : forall a, b. ((a, b) -> b, b, List a) -> b
+fun fold_right(f, u, l) {
+  switch (l) {
+    case [] -> u
+    case x::xs -> f(x, fold_right(f,u,xs))
+  }
+}
+
+sig fold_right1 : forall a. modal [Wild] (((a, a) -> a, List a) -> a)
+fun fold_right1(f, l) {
+  fold_right(f, hd(l), tl(l))
+}
+
+sig unzip : forall a, b. (List (a, b)) -> (List a, List b)
+fun unzip(l) {
+  switch (l) {
+    case [] -> ([], [])
+    case (a,b)::xs -> {
+     var (c,d) = unzip(xs);
+     (a :: c, b :: d)
+    }
+  }
+}
+
+sig zip : forall a, b. modal [Wild] ((List a, List b) -> List (a, b))
+fun zip(l, r) {
+  switch ((l, r)) {
+    case ([], []) -> []
+    case (lh::lt, rh::rt) ->
+        (lh, rh) :: zip (lt, rt)
+    case (_, _) -> []
+  }
+}
+
+sig replicate : forall a. (Int, a) -> List a
+fun replicate(n, item) {
+  if (n <= 0) []
+  else item :: replicate(n-1, item)
+}

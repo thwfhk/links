@@ -650,6 +650,22 @@ pass rejected effectful callback statements. Resolve frozen variable names
 through the same module scope lookup as ordinary variable names, preserving
 opened-module names and shadowing.
 
+### D7 prelude migration
+
+Stage the checked prelude in `lib/stdlib/frescoPrelude.links` while the legacy
+frontend remains the default. Tests import this module through the normal
+module loader. D7e will make the migrated definitions the default prelude and
+remove the temporary duplication.
+
+Give collection helpers explicit polymorphic signatures. The implicit global
+`modal []` guard leaves their callback arrows contextual, so `map`, `iter`,
+filters and folds use the caller's effects. Keep existing `Wild` contracts on
+`sortBy` and `zip`, and require `Wild` for helpers calling partial primitives.
+Ordinary kind requirements still reject linear list elements, duplicated
+linear callbacks and discarded linear callback results. Signed local recursion
+retains its surrounding type variables. The staged `intRange` uses the same
+equality-stop correction as range syntax.
+
 ### D7 continuations
 
 `FrescoInfer` obtains the continuation argument type from a supplied expected

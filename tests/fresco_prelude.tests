@@ -1,0 +1,62 @@
+---
+config: tests/fresco_prelude.config
+---
+
+The collection prelude retains map polymorphism
+open import FrescoPrelude; (map(fun(x) { x+1 }, [1,2]), map(fun(x) { not(x) }, [true,false]))
+args : --fresco --path=lib/stdlib
+stdout : ([2, 3], [false, true]) : (List Int, List Bool)
+
+Map callbacks use the caller's handled effect
+open import FrescoPrelude; effect Offset { Get : () => Int; } handle <Offset> (map(fun(x) { x + do Get }, [1,2])) { case xs -> xs case <Get => k> -> k(40) }
+args : --fresco --path=lib/stdlib
+stdout : [41, 42] : List Int
+
+Iter callbacks retain source order and Wild
+open import FrescoPrelude; { iter(fun(x) { print(intToString(x)) }, [1,2,3]); 42 }
+args : --fresco --path=lib/stdlib
+stdout : 12342 : Int
+
+An unhandled map callback rejects
+open import FrescoPrelude; effect Offset { Get : () => Int; } map(fun(x) { x + do Get }, [1,2])
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*
+
+A pure map caller rejects a Wild callback
+open import FrescoPrelude; sig f : () -> List () fun f() { map(print, ["a"]) } f()
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*
+
+Map rejects a callback that captures a linear value
+open import FrescoPrelude; { var once = linfun() { 42 }; map(fun(x) { once()+x }, [1,2]) }
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*
+
+Folds retain callback order
+open import FrescoPrelude; (fold_left(fun(a,x) { a*10+x }, 0, [1,2,3]), fold_right(fun(x,a) { a*10+x }, 0, [1,2,3]))
+args : --fresco --path=lib/stdlib
+stdout : (123, 321) : (Int, Int)
+
+The prelude range includes machine integer bounds
+open import FrescoPrelude; (intRange(min_int,min_int)==[min_int], intRange(max_int,max_int)==[max_int])
+args : --fresco --path=lib/stdlib
+stdout : (true, true) : (Bool, Bool)
+
+SortBy callbacks retain handled effects alongside Wild
+open import FrescoPrelude; effect Offset { Get : () => Int; } handle <Offset> (sortBy(fun(x) { x + do Get }, [3,1,2])) { case xs -> xs case <Get => k> -> k(40) }
+args : --fresco --path=lib/stdlib
+stdout : [1, 2, 3] : List Int
+
+SortByBase rejects function-valued keys
+open import FrescoPrelude; sortByBase(fun(x) { (key=fun(y) { x+y }) }, [1,2])
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*
+
+Frozen map retains polymorphic elements
+open import FrescoPrelude; typename Identity = forall a. modal [] ((a) -> a); sig id : Identity fun id(x) { x } var xs = ~map[Identity,Identity](fun(x) { ~x }, [~id]); switch(xs) { case f::_ -> (f(42),f(true)) case [] -> (0,false) }
+args : --fresco --path=lib/stdlib
+stdout : (42, true) : (Int, Bool)
