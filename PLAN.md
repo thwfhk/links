@@ -119,18 +119,18 @@ D8 performs the final backend audit.
   `curry`; do not claim a specialised migration preserves the original contract.
 - Audit ghosts, exported variable requirements, recursive type consumers,
   lowering, optimisation and both backends. Keep excluded features outside scope.
+  Retain the [deferred recursive-row inference gap and compatibility decisions](doc/modal-effects-design.md#consistency-guessing-and-monotype-unification).
 
-## Decisions resolved
+## Recorded decisions
 
-6 November 2026: the user resolved all six questions. The specification now
-records the selected language rules; the design records their reasons and
-algorithm consequences. The choices preserve ordinary linearity/CFL-disabled
-behaviour, select equality before `Abs` fallback, adopt the thesis' quantified
-classification, add implicit `modal []` to global signatures, start programs
-with ambient context `Wild`, and reserve built-in effects from user handlers.
+The user decisions of 6--7 November 2026 are recorded in the specification
+and design:
 
-D4a2 updates the classifier and D4g supplies refinement. D4k tests global
-signature modalities. D5/D6 check these choices through source inference.
+- [Language rules and reference choices](doc/modal-effects-design.md#language-decisions-and-their-reasons).
+- [Effect matching order](doc/modal-effects-design.md#parameterised-effect-matching-order).
+- [Linearity, global signatures and initial effects](doc/modal-effects-design.md#value-linearity-and-legacy-effect-sugar).
+- [D4 ghost kinds and instantiation checks](doc/modal-effects-design.md#subtyping-and-instantiation-information).
+- [D4k signature binders and ordinary row arguments](doc/modal-effects-design.md#contextual-annotation-and-declaration-elaboration).
 
 ## Latest task and verification
 
@@ -166,10 +166,9 @@ Documentation was updated afterwards without source changes.
 | `make rule-check` | Passed; GNU-find tab check skipped, formatter check disabled |
 | Manual added/new-line tab/trailing-whitespace check, `git diff --check` | Passed |
 
-The 18 regression suites total 671 successes. D5's separately reviewed commit
-`4f12cd67` passed its build, 1,092 unit tests and 659 regression tests, plus
-REPL recovery and four JavaScript generation/syntax probes. Its integrated
-logs and matching source hashes remain in `/tmp/links-d5-verification.Q5tr7l`.
+The 18 regression suites total 671 successes. Earlier D5 verification is
+recorded in commit `4f12cd67`; its logs and matching source hashes remain in
+`/tmp/links-d5-verification.Q5tr7l`.
 The D6 focused review snapshot is `/tmp/links-d6-source-audit.mkwflS`.
 D8 retains the final JavaScript execution audit.
 
@@ -185,36 +184,6 @@ these choices, their reasons and alternatives:
    during D6. The IR checks retained operation/handler evidence after runtime
    type erasure. Retaining further call/coercion evidence and repeating kind
    checks is the alternative; audit this boundary in D7/D8.
-
-## Decisions and deferred work at the D4 pause
-
-7 November 2026: the user chose `Abs` for ordinary ghosts during skeleton
-inference, with full inference rechecking instantiation kinds and modal access.
-The [design](doc/modal-effects-design.md#subtyping-and-instantiation-information)
-records the rule, source comparison and required tests. The compiler follow-up
-is complete; the verification results above cover both remaining D4 tasks.
-
-The user approved rejecting the legacy row-duality bug that can change a
-channel's protocol without changing the channel. The user also approved deferring recursive row inference accepted by
-Links' `infer_recursive_types=all` and `positive` settings. Unresolved presence
-duality remains an explicit error; the legacy helper asserts in this case.
-Growing recursive equality retains the previously approved cannot-establish
-error. These cases and the compatibility probes are recorded in the
-[design](doc/modal-effects-design.md#consistency-guessing-and-monotype-unification).
-
-### D4k compatibility choices
-
-The [D4k design](doc/modal-effects-design.md#contextual-annotation-and-declaration-elaboration)
-records two compatibility choices and their alternatives:
-
-1. The user confirmed preserving Links' implicit named rigid Type/Row/Presence
-   binders in written function signatures, without generalising unsigned
-   definitions.
-2. The user confirmed closing the parser's synthetic tail in ordinary braced
-   Row arguments, preserving Links' behaviour with legacy effect sugar disabled.
-   With both `effect_sugar` and `open_default` enabled, Links inserts an open
-   tail. The contextual implementation follows the documented replacement of
-   legacy effect sugar and closes this synthetic tail.
 
 ## Next action
 

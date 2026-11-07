@@ -27,6 +27,16 @@ run their dedicated test suites unless the user requests it.
 
 - Before an implementation task, read the applicable specification and
   design sections and relevant source files as well as PLAN.md.
+  Reuse that context during the task; inspect changed ranges after edits.
+  Reread wider sections when a finding or missing context requires it.
+- Keep shared records concise and link to details in their owning document.
+  PLAN.md retains current progress, dependencies, completion checks, latest
+  verification, unresolved decisions and the next action. Replace resolved
+  decision summaries with links to the specification or design.
+- Save full build/test output in log files. Return the command, source
+  revision, result, log path and relevant failure excerpts. Agent messages
+  should summarise findings and reference source locations or logs; copy
+  only the excerpts needed to explain a finding.
 - Use Sol 6.1 High subagents by default for coding, investigation and review.
   Use Astra High for very difficult coding tasks or design tasks. Use
   Astra x-high only for an extremely challenging task after an earlier
@@ -36,6 +46,9 @@ run their dedicated test suites unless the user requests it.
   completion checks. Delegate independent work in parallel. Keep one
   writer per file; use separate worktrees when edits would overlap.
   The main agent owns integration, final verification and progress records.
+- When waiting for another agent and no useful independent work remains,
+  use the wait tool and resume when results arrive. Avoid repeated inspection
+  or analysis of possible outcomes solely to fill the waiting period.
 - Assign each audit to one agent with a stated scope and expected result.
   Other agents use that result. The independent reviewer checks the method,
   inspects selected cases and investigates gaps. Repeat the full audit only
