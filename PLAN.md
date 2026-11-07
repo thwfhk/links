@@ -247,7 +247,7 @@ assignments in the design's migration inventory.
 | D7d1: XML and forms | XML, form/page constructs and their prelude dependencies check and execute |
 | D7d2: FFI and function locations | Foreign declarations, locations and FFI dependencies survive checking and lowering |
 | D7d3e2: console example | Console helpers and finite actor games retain their callback contracts and results |
-| D7e5 migration remainder | Convert remaining legacy regression assertions and standalone examples using the recorded inventory; preserve intended rejection causes and complete type expectations |
+| D7e5 migration remainder | Convert supported legacy regression assertions and standalone examples using the recorded inventory; preserve intended rejection causes and complete type expectations; retain cases requiring unsupported independent-effect contracts as deferred |
 
 The console example is deferred following the user's concern about time spent
 on work peripheral to modal effects. Prioritise D7 frontend integration; this
@@ -260,6 +260,12 @@ asked to focus on finishing the most important work. Its inventory is
 Fresco and label the remaining suites as legacy compatibility. D8's legacy
 inference removal must resolve this compatibility dependency before deleting
 the retained route.
+
+Some general interfaces cannot be preserved by the current modal effect
+language. Assess each concrete use against the
+[independent-effect contracts](doc/modal-effects-design.md#signatures-with-independent-effect-variables).
+Uses requiring that independence remain deferred. A specialised use passing
+does not establish migration of its original general interface.
 
 The formlet State helpers retain their existing capture contract and are deferred
 with D7d1. This implementation choice is [recorded for review](doc/modal-effects-design.md#d7-ordinary-library-inventory).
@@ -290,9 +296,8 @@ block the prioritised D7 completion checks.
    numerals and extensible cases; deferred State and console examples.
    See [prelude migration](doc/modal-effects-design.md#d7-prelude-migration) and
    [ordinary libraries](doc/modal-effects-design.md#d7-ordinary-library-inventory).
-4. Ordinary-arrow guessing for unresolved callable types and continuation access.
-   See [linear results](doc/modal-effects-design.md#d7-inferred-linear-results) and
-   [continuations](doc/modal-effects-design.md#d7-continuations).
+4. Continuation access across changes of effect context.
+   See [continuations](doc/modal-effects-design.md#d7-continuations).
 5. Typed-lowering rechecks, default/custom prelude preparation, contextual type
    search, compile input/output ordering and deferred full migration.
    See [frontend integration](doc/modal-effects-design.md#d7-frontend-integration-plan).
@@ -300,6 +305,13 @@ block the prioritised D7 completion checks.
    binders. See [annotation scopes](doc/modal-effects-design.md#contextual-annotation-and-declaration-elaboration).
 
 ## Latest task and verification
+
+Documentation cleanup after the D7 discussion: clarified independent-effect
+migration limits and removed ordinary linear-function inference from the
+choices awaiting review. Retain its existing behaviour and use annotations
+where needed, as recorded in [linear results](doc/modal-effects-design.md#d7-inferred-linear-results).
+Text review and `git diff --check` passed against `8c8d1087` plus these
+documentation edits; log: `/tmp/links-d7-doc-cleanup-check.log`.
 
 7 November 2026, D7e5, base `debb83cc`: Fresco is the default for batch,
 REPL/type search and compilation. Bare `--fresco` remains affirmative; explicit

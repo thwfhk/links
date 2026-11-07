@@ -1326,8 +1326,13 @@ generation. This repair is required by the migrated prelude; the diagnostic is
 
 ### D7 inferred linear results
 
-**Choice for review:** retain the ordinary-arrow guess for unresolved callable
-types. A callback or result annotation, or an intermediate binding, is required
+Retain the existing ordinary-arrow guess for unresolved callable types.
+This concerns ordinary linear-function inference. Following the user's scope
+clarification, changes to that inference are outside the modal-effects work
+and are not a prerequisite for example migration. Use annotations or
+intermediate bindings where needed.
+
+A callback or result annotation, or an intermediate binding, is required
 when this guess would otherwise conflict with a later linear-arrow result.
 For example, with `apply : forall a::Any,b::Any. ((a)->b,a)->b`,
 `apply(fun(x){x},linfun(){42})()` rejects. Binding its inner application to
@@ -2380,6 +2385,13 @@ Track the general signature separately from each concrete use during migration.
 Absolute modalities name fixed contexts; relative modalities add or remove named
 effects from the ambient context. Neither binds a new effect variable. Ordinary
 type variables may carry whole modal types but cannot occur as effect-row tails.
+
+Some general interfaces cannot be migrated with the current language. A concrete
+use may migrate with shared or fixed contexts when those contexts meet its
+requirements. Keep an example deferred when its intended behaviour requires
+independent contexts that the current language cannot express. Record any
+specialisation explicitly and retain the original general contract as deferred;
+passing the specialised example does not establish support for that contract.
 
 ### Two independently handled thunks
 
