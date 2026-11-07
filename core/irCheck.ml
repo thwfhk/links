@@ -328,6 +328,13 @@ let runtime_subtype ctx source target =
           | Ok (FrescoCompare.Equal _) -> true
           | _ -> false))
 
+let runtime_upcast ctx source target =
+  compare_runtime_types ~erase_modal_kinds:true ctx source target
+    (fun environment context source target ->
+      match FrescoUpcast.check environment context ~source ~target with
+      | Ok () -> true
+      | Error _ -> false)
+
 let runtime_equal occurrence ctx source target =
   compare_runtime_types ~erase_modal_kinds:false ctx source target
     (fun environment context source target ->
@@ -950,7 +957,7 @@ struct
                 else is_sub_type (vt, t) in
               let admissible =
                 if contextual || contains_contextual_type vt || contains_contextual_type t then
-                  subtype () || eq_types (SVal orig) context (vt, t)
+                  subtype () || runtime_upcast context vt t || eq_types (SVal orig) context (vt, t)
                 else eq_types (SVal orig) context (vt, t) || subtype () in
               ensure admissible
                 (let vt_str = string_of_datatype vt in

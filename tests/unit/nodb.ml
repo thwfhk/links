@@ -40,6 +40,7 @@ let suites =
            Closures.suite;
            Variants.suite;
            Runtime_types_tests.suite;
+           FrescoUpcast.suite;
          ]);
        ]
 

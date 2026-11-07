@@ -632,8 +632,13 @@ and infer_node support s mode source =
   | G.Upcast (body,(target,_),(source_type,_)) ->
      let s,source_type = annotate s source_type in
      let s,target = annotate s target in
-     let s,e = infer_term support s (C.Check source_type) body in
-     let s,e = coerce support s pos (C.Check target) e in coerce support s pos mode e
+     if support = C.Skeleton then finish s target (Constant (Constant.Bool false))
+     else
+       let s,e = infer_term support s (C.Check source_type) body in
+       get pos "Explicit upcast source is not a subtype of its target"
+         (FrescoUpcast.check (env s) (context s) ~source:source_type ~target);
+       let source = term e.position source_type (Coerce e) in
+       finish s target (Coerce source)
   | G.FunLit (_,lin,G.NormalFunlit (groups,body),location) ->
      if location <> Location.Unknown then error pos "Explicit function locations are outside contextual source inference";
      infer_lambda support s mode pos lin groups body

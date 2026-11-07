@@ -2287,4 +2287,74 @@ let empty_switch_suite = "empty switches" >::: [
       ["switch(42) {}"; "switch(A) {}"]);
 ]
 
-let suite = "Fresco source" >::: [reference_suite; source_suite; callback_sequence_suite; primitive_suite; regex_suite; continuations_suite; comprehensions_suite; sections_patterns_updates_suite; collection_suite; foundation_suite; remaining_core_suite; split_end_suite; session_callback_suite; ir_suite; recursive_value_suite; empty_switch_suite]
+let upcast_suite = "explicit width upcasts" >::: [
+  "variant widening and record narrowing execute with typed IR" >:: (fun _ ->
+    execution (Value.box [`Int 42;`Int 42]) {|
+      typename Narrow=[|A- |B|]; typename Wide=[|A:Int|B|];
+      (switch(B : Wide <- Narrow) {case A(n) -> n case B -> 42},
+       ((x=42,y=true) : (x:Int) <- (x:Int,y:Bool)).x)
+    |} |> ignore);
+
+  "open masks and function variance preserve their values" >:: (fun _ ->
+    execution (`Int 42) {|
+      sig extend : forall a::Any,r::Row(Any).
+        ([|A- |r|]) -> [|A:a|r|]
+      fun extend(x) { (x : [|A:a|r|] <- [|A- |r|]) }
+      switch(~extend[Int,{B:()}](B)) {case A(n) -> n case B -> 42}
+    |} |> expect_type Types.int_type;
+    execution (`Int 42) {|
+      typename Narrow=[|B|]; typename Wide=[|A:Int|B|];
+      sig f : (Wide) -> Narrow
+      fun f(x) { switch(x) {case A(n) -> B case B -> B} }
+      var g=(f : (Narrow) -> Wide <- (Wide) -> Narrow);
+      switch(g(B)) {case A(n) -> n case B -> 42}
+    |} |> expect_type Types.int_type);
+
+  "record narrowing preserves a retained linear endpoint" >:: (fun _ ->
+    execution (Value.box []) {|
+      var ap=(new() : AP(End)); var peer=spawn {close(accept(ap))};
+      var r=((keep=request(ap),drop=42) : (keep:End) <- (keep:End,drop:Int));
+      close(r.keep)
+    |} |> expect_type Types.unit_type);
+
+  "wrong payloads directions and source annotations reject" >:: (fun _ ->
+    List.iter (fun source -> reject (fun () -> infer source))
+      ["(A(true) : [|A:Int|B|] <- [|A:Int|])";
+       "(A(42) : [|A:Bool|B|] <- [|A:Int|])";
+       "(A(42) : [|B|] <- [|A:Int|B|])";
+       "((x=42,y=1) : (x:Bool,y:Int) <- (x:Int,y:Int))";
+       "((x=42) : (x:Int,y:Bool) <- (x:Int))";
+       "fun(c:End) { ((drop=c) : () <- (drop:End)) }";
+       "sig f:(Int)->Int fun f(x){x} (f : (Int,Bool)->Int <- (Int)->Int)";
+       "sig strip:forall rho::Row.((|rho))->((x:Int|rho))->(|rho) fun strip(w)(r){(r:(|rho)<-(x:Int|rho))} strip";
+       "sig bad:forall r::Row.([|r|])->[|A:Int|r|] fun bad(x){(x:[|A:Int|r|]<-[|r|])} bad"]);
+
+  "implicit checking stays invariant and effects cannot be removed" >:: (fun _ ->
+    reject (fun () -> infer {|
+      typename Narrow=[|B|]; typename Wide=[|A:Int|B|];
+      fun(x:Narrow) { x : Wide }
+    |});
+    reject (fun () -> infer {|
+      effect E { Read : () => Int; }
+      handle <E> ({var f=fun(){do Read}; (f : modal [] (() -> Int) <- (() -> Int))})
+        {case f -> f case <Read => k> -> k(42)}
+    |}));
+
+  "contextual IR coercions use the same safe width proof" >:: (fun _ ->
+    let row fields = Types.Row (Utility.StringMap.of_list fields,Unionfind.fresh Types.Closed,false) in
+    let variant fields = Types.Variant (row fields) and record fields = Types.Record (row fields) in
+    let present t = Types.Present t in
+    let narrow = variant ["A",Types.Absent;"B",present Types.unit_type]
+    and wide = variant ["A",present Types.int_type;"B",present Types.unit_type] in
+    check_coercion narrow wide;
+    reject_coercion wide narrow;
+    check_coercion (record ["x",present Types.int_type;"y",present Types.bool_type])
+      (record ["x",present Types.int_type]);
+    reject_coercion (record ["x",present Types.int_type;"y",present Types.int_type])
+      (record ["x",present Types.bool_type;"y",present Types.int_type]);
+    reject_coercion (record ["drop",present Types.End]) Types.unit_type;
+    reject_coercion (Types.Arrow (Types.make_tuple_type [Types.int_type],Types.int_type))
+      (Types.Arrow (Types.make_tuple_type [Types.int_type;Types.bool_type],Types.int_type)));
+]
+
+let suite = "Fresco source" >::: [reference_suite; source_suite; callback_sequence_suite; primitive_suite; regex_suite; continuations_suite; comprehensions_suite; sections_patterns_updates_suite; collection_suite; foundation_suite; remaining_core_suite; split_end_suite; session_callback_suite; ir_suite; recursive_value_suite; empty_switch_suite; upcast_suite]

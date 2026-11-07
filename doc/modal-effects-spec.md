@@ -333,6 +333,14 @@ supplied type; otherwise inference retains an unknown result type without
 implicit generalisation. Evaluating the switch reports match failure, as with
 other partial switches. Scrutinee effects and ordinary usage checks remain.
 
+Explicit upcasts `M : B <- A` check `M` against `A` and check that `A`
+can be used as `B`. Record narrowing may hide only unlimited fields; variant
+widening preserves the payload types of existing cases. All fields must pass.
+Missing fields in an open row are unknown, so width changes must preserve
+explicit masks or establish the affected tail fields. Function upcasts preserve
+arity and ordinary/linear arrows; argument types are contravariant and result
+types covariant. These explicit casts do not add implicit width subtyping.
+
 Retain Links' current handler behaviour with control-flow linearity disabled.
 Resumptions remain reusable. The existing interaction that can duplicate or
 discard a continuation holding linear values is deferred; this implementation

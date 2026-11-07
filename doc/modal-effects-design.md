@@ -1113,6 +1113,37 @@ zero cases to `Wrong` at the result type. No backend change is required. An abor
 operation returning the empty variant provides a bounded execution check that
 handles the operation before the match failure is reached.
 
+### D7 explicit upcasts
+
+The extensible-case example widens an explicitly absent variant case. Ordinary
+Fresco consistency correctly keeps field presence invariant; an explicit
+upcast needs a separate structural check. Share that check between source
+upcasts and contextual IR coercions. Keep ordinary inference, consistency and
+modal subtyping unchanged. Preserve contextual equality for types outside the
+structural width rules; do not introduce a separate recursive-variance algorithm.
+`FrescoUpcast.check` expands stored solutions, validates ghost-free types and
+proves the relation without assigning variables or refining requirements.
+Aliases expose their bodies; modalities, quantifiers, abstract types, sessions
+and recursive types use checked equality. Function domains must be closed tuple
+rows with equal argument counts. Normalising a solved row tail preserves outer
+field masks. Missing fields under an unresolved tail remain unknown.
+
+The legacy comparison found four defects to avoid copying. Its row-field fold
+can overwrite an earlier mismatch, record narrowing can hide an endpoint,
+removing an explicit field can expose a conflicting field in a shared open tail,
+and function-domain record narrowing can change arity. The reduced cases are in
+`/tmp/links-d7d3d3a-review-legacy-controls.log`. Check every field, require hidden
+record resources to be unlimited, treat missing fields under an open tail as
+unknown, and compare equal-length argument lists contravariantly. Retain arrow
+linearity and check results covariantly. Upcasts erase at runtime, so they cannot
+implement argument adapters or dispose of hidden linear resources.
+
+The source expression must first satisfy its written source type. Check both
+annotations through contextual elaboration, preserve ordinary usage and modal
+capture rules, and emit a coercion with the written target type. Contextual IR
+must validate that same relation after runtime type conversion. Accepted and
+rejected tests cover both boundaries, including the four legacy defects.
+
 ### D7 frontend integration plan
 
 The frontend audit at `8b27a80b` is recorded in

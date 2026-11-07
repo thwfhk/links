@@ -479,3 +479,80 @@ An aborting empty switch preserves a linear endpoint result
 effect Abort { Stop : () => [||]; } var ap=(new() : AP(End)); var peer=spawn { close(accept(ap)) }; close(handle <Abort> ((switch(do Stop) {}) : End) { case c -> c case <Stop => k> -> request(ap) })
 args : --fresco --enable-handlers
 stdout : () : ()
+
+Explicit variant widening preserves the original constructor
+typename Narrow=[|A- |B|]; typename Wide=[|A:Int|B|]; switch(B : Wide <- Narrow) {case A(n) -> n case B -> 42}
+args : --fresco
+stdout : 42 : Int
+
+Explicit record narrowing preserves retained fields
+((x=42,y=true) : (x:Int) <- (x:Int,y:Bool)).x
+args : --fresco
+stdout : 42 : Int
+
+Explicit widths recurse through ordinary payloads
+typename Narrow=[|B|]; typename Wide=[|A:Int|B|]; var r=((value=B) : (value:Wide) <- (value:Narrow)); switch(r.value) {case A(n) -> n case B -> 42}
+args : --fresco
+stdout : 42 : Int
+
+Explicit masks shield labels in an instantiated shared tail
+sig extend:forall a::Any,r::Row(Any).([|A- |r|])->[|A:a|r|] fun extend(x) {(x:[|A:a|r|]<-[|A- |r|])} switch(~extend[Bool,{A:Int,B:()}](B)) {case A(n) -> if(n) 1 else 0 case B -> 42}
+args : --fresco
+stdout : 42 : Int
+
+Shared presence parameters remain fixed during widening
+sig extend:forall p::Presence(Any),r::Row(Any).([|A{p}|B- |r|])->[|A{p}|B|r|] fun extend(x) {(x:[|A{p}|B|r|]<-[|A{p}|B- |r|])} switch(~extend[{:Int},{}](A(42))) {case A(n) -> n case B -> 0}
+args : --fresco
+stdout : 42 : Int
+
+Explicit function widths retain variance and arity
+typename Narrow=[|B|]; typename Wide=[|A:Int|B|]; sig f:(Wide)->Narrow fun f(x){switch(x){case A(n)->B case B->B}} var g=(f:(Narrow)->Wide<-(Wide)->Narrow); switch(g(B)){case A(n)->n case B->42}
+args : --fresco
+stdout : 42 : Int
+
+Record narrowing preserves an accessible linear endpoint
+var ap=(new():AP(End)); var peer=spawn {close(accept(ap))}; var r=((keep=request(ap),drop=42):(keep:End)<-(keep:End,drop:Int)); close(r.keep)
+args : --fresco
+stdout : () : ()
+
+Every retained payload must satisfy an explicit upcast
+((x=42,y=1) : (x:Bool,y:Int) <- (x:Int,y:Int))
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*Explicit upcast.*
+
+Record narrowing cannot hide a linear field
+fun(c:End){((drop=c):()<-(drop:End))}
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*Explicit upcast.*
+
+A shared open record tail does not prove an omitted label absent
+sig strip:forall rho::Row.((|rho))->((x:Int|rho))->(|rho) fun strip(w)(r){(r:(|rho)<-(x:Int|rho))} (strip((x=true))((x=42)) : (x:Bool))
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*Explicit upcast.*
+
+A shared open variant tail cannot be overwritten without an absence mask
+sig bad:forall r::Row.([|r|])->[|A:Int|r|] fun bad(x){(x:[|A:Int|r|]<-[|r|])} bad
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*Explicit upcast.*
+
+An explicit function upcast cannot change runtime arity
+sig f:(Int)->Int fun f(x){x} (f:(Int,Bool)->Int<-(Int)->Int)
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*Explicit upcast.*
+
+An explicit upcast cannot make a contextual function absolute
+effect E {Read:()=>Int;} handle <E> ({var f=fun(){do Read};(f:modal [] (() -> Int)<-(() -> Int))}) {case f->f case <Read => k> -> k(42)}
+args : --fresco --enable-handlers
+exit : 1
+stderr : @.*Type error:.*Explicit upcast.*
+
+Ordinary annotations do not acquire implicit width subtyping
+typename Narrow=[|B|]; typename Wide=[|A:Int|B|]; fun(x:Narrow){x:Wide}
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
