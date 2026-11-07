@@ -565,6 +565,27 @@ let source_suite = "Links source" >::: [
     expect_type Types.bool_type (expose expression.Infer.typ));
 ]
 
+let callback_sequence_suite = "callback sequences" >::: [
+  "unit statements retain contextual effects in callback skeletons" >:: (fun _ ->
+    let definitions = {|
+      sig collect : forall a, b. ((a) -> List b, List a) -> List b
+      fun collect(f, xs) {
+        switch (xs) {
+          case [] -> []
+          case x::rest -> f(x) ++ collect(f, rest)
+        }
+      }
+    |} in
+    execution (`List [`Int 42])
+      (definitions ^ {|collect(fun(x) { print(""); [x+1] }, [41])|}) |> ignore;
+    List.iter (fun source -> reject (fun () ->
+      FrescoFrontend.check_string (FrescoFrontend.empty ()) (definitions ^ source)))
+      [ {|collect(fun(x) { 1; [x] }, [42])|};
+        {|sig pure : () -> List Int
+          fun pure() { collect(fun(x) { print(""); [x] }, [42]) }
+          pure()|} ]);
+]
+
 let primitive_suite = "primitive environment" >::: [
   "every runtime primitive has an inventory entry" >:: (fun _ ->
     let names = FrescoPrimitives.names @ ["$$hd"; "$$tl"] @
@@ -1313,4 +1334,4 @@ let ir_suite =
       reject_coercion (forall (fun a -> arrow a int)) (forall (fun a -> arrow a a)));
   ]
 
-let suite = "Fresco source" >::: [reference_suite; source_suite; primitive_suite; regex_suite; continuations_suite; comprehensions_suite; sections_patterns_updates_suite; ir_suite]
+let suite = "Fresco source" >::: [reference_suite; source_suite; callback_sequence_suite; primitive_suite; regex_suite; continuations_suite; comprehensions_suite; sections_patterns_updates_suite; ir_suite]

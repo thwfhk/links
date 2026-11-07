@@ -283,3 +283,24 @@ Escape executes in a signed Wild function
 sig f : modal [Wild] (() -> Int) fun f() { escape k in { k(42) } } f()
 args : --fresco
 stdout : 42 : Int
+
+Frozen opened module names retain polymorphism
+module A { sig id : forall a. (a) -> a fun id(x) { x } } open A; (~id[Int](42), ~id[Bool](true))
+args : --fresco
+stdout : (42, true) : (Int, Bool)
+
+Frozen module names use the current binding
+module A { sig f : forall a. (a) -> Int fun f(x) { 1 } } module B { sig f : forall a. (a) -> Int fun f(x) { 2 } } open A; var first = ~f; open B; (first(42), ~f[Bool](true))
+args : --fresco
+stdout : (1, 2) : (Int, Int)
+
+Callback skeletons permit sequenced effects
+sig concatMap : forall a,b. ((a)->List b,List a)->List b fun concatMap(f,l) { switch(l) { case [] -> [] case x::xs -> f(x) ++ concatMap(f,xs) } } concatMap(fun(x) { print(intToString(x)); [x] }, [1,2])
+args : --fresco
+stdout : 12[1, 2] : List Int
+
+Sequenced callback expressions must return unit
+sig apply : forall a,b. ((a)->List b,a)->List b fun apply(f,x) { f(x) } apply(fun(x) { x+1; [x] }, 41)
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*

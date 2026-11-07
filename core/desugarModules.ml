@@ -544,6 +544,8 @@ let rec desugar ?(toplevel=false) ?contextual
       | Var name ->
        (* Must be resolved. *)
         Var (Scope.Resolve.var name scope)
+      | FreezeVar name ->
+        FreezeVar (Scope.Resolve.var name scope)
       | QualifiedVar names ->
        (* Must be resolved. *)
         Var (Scope.Resolve.qualified_var names scope)

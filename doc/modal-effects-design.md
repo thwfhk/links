@@ -641,6 +641,15 @@ The `n` flag has no runtime primitive implementation. Legacy typing aborts
 with an assertion; Fresco reports a positioned source error. No native regex
 runtime is added.
 
+### D7 prelude prerequisites
+
+Library migration exposed two frontend gaps. Skeleton inference checks a
+sequenced expression against a ghost; the full pass still requires unit and
+checks its effects. Supplying a concrete unit expectation during the skeleton
+pass rejected effectful callback statements. Resolve frozen variable names
+through the same module scope lookup as ordinary variable names, preserving
+opened-module names and shadowing.
+
 ### D7 continuations
 
 `FrescoInfer` obtains the continuation argument type from a supplied expected

@@ -1394,7 +1394,8 @@ and infer_binding support global s binding =
      let elaboration,_ = FrescoElaborate.effect_declaration s.elaboration declaration in { s with elaboration },[]
   | G.Infix _ | G.Open _ | G.Import _ -> s,[]
   | G.Exp source ->
-     let s,e = infer_term support s (C.Check (tuple [])) source in
+     let expected = if support = C.Skeleton then S.Ghost else tuple [] in
+     let s,e = infer_term support s (C.Check expected) source in
      s,[Value ("$fresco_sequence_" ^ string_of_int s.next,e)]
   | _ -> error pos "This declaration is not supported by contextual inference"
 
