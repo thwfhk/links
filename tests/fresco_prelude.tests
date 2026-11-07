@@ -345,3 +345,123 @@ open import FrescoPrelude; sig f : (DateTime) -> String fun f(dt) { showLocal(dt
 args : --fresco --path=lib/stdlib
 exit : 1
 stderr : @.*Type error:.*In expression: showLocal.*
+
+Key concatenation retains order and caller effects
+open import FrescoPrelude; effect Offset { Get : () => Int; } handle <Offset> (concatMapKey(fun(k) { print(intToString(k)); [k,k+do Get] },[(1,[true]),(2,[])])) { case xs -> xs case <Get => k> -> k(40) }
+args : --fresco --path=lib/stdlib
+stdout : 12[1, 41, 2, 42] : List Int
+
+Grouped lookup retains first and absent matches without Wild
+open import FrescoPrelude; sig checks : () -> Bool fun checks() { lookupG(1,[(1,[10]),(1,[20])])==[10] && lookupG(2,[(1,[10])])==[] && lookupG("a",[("a",[true])])==[true] } checks()
+args : --fresco --path=lib/stdlib
+stdout : true : Bool
+
+Aggregation retains repeated keys and callback order
+open import FrescoPrelude; effect Offset { Get : () => Int; } handle <Offset> (aggBy([(1,[10]),(1,[20]),(2,[30])],fun(xs) { print(intToString(sum(xs))); sum(xs)+do Get })) { case xs -> xs case <Get => k> -> k(2) }
+args : --fresco --path=lib/stdlib
+stdout : 101030[(1, 12), (1, 12), (2, 32)] : List (Int, Int)
+
+Aggregation rejects an unavailable callback effect
+open import FrescoPrelude; effect Offset { Get : () => Int; } aggBy([(1,[10])],fun(xs) { sum(xs)+do Get })
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*In expression:.*Get.*
+
+Maybe helpers retain payload polymorphism
+open import FrescoPrelude; (FrescoPrelude.pureE(42)==Just(42),pureE(true)==Just(true),applyE(pureE(fun(x) { x+1 }),pureE(41))==Just(42))
+args : --fresco --path=lib/stdlib
+stdout : (true, true, true) : (Bool, Bool, Bool)
+
+Maybe application uses caller effects and skips missing arguments
+open import FrescoPrelude; effect Offset { Get : () => Int; } handle <Offset> ((applyE(Just(fun(x) { x+do Get }),Just(40))==Just(42), applyE(Just(fun(x) { error("missing payload called callback") }),Nothing : Maybe(Int))==Nothing, applyE(Nothing : Maybe((Int) -> Int),Just(40))==Nothing)) { case xs -> xs case <Get => k> -> k(2) }
+args : --fresco --path=lib/stdlib
+stdout : (true, true, true) : (Bool, Bool, Bool)
+
+Maybe application rejects an unavailable callback effect
+open import FrescoPrelude; effect Offset { Get : () => Int; } applyE(Just(fun(x) { x+do Get }),Just(40))
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*In expression:.*Get.*
+
+Ordinary aliases retain module qualification and polymorphism
+open import FrescoPrelude; sig absurd : (FrescoPrelude.Zero) -> Int fun absurd(x) { 42 } (switch(Left(42) : FrescoPrelude.Either(Int,Bool)) { case Left(x) -> x case Right(_) -> 0 },switch(Right(true) : FrescoPrelude.Either(String,Bool)) { case Left(_) -> false case Right(x) -> x })
+args : --fresco --path=lib/stdlib
+stdout : (42, true) : (Int, Bool)
+
+Application operator retains argument evaluation order and caller effects
+open import FrescoPrelude; effect Offset { Get : () => Int; } handle <Offset> (({print("f"); fun(x) { x+do Get }} $ {print("x"); 40})) { case x -> x case <Get => k> -> k(2) }
+args : --fresco --path=lib/stdlib
+stdout : fx42 : Int
+
+Linear wrapper consumes its returned function with caller effects
+open import FrescoPrelude; effect Offset { Get : () => Int; } handle <Offset> ({var once=lf(fun(x) { x+do Get }); once(40)}) { case x -> x case <Get => k> -> k(2) }
+args : --fresco --path=lib/stdlib
+stdout : 42 : Int
+
+Linear wrapper rejects reuse of its returned function
+open import FrescoPrelude; {var once=lf(fun(x) { x+1 }); (once(40),once(41))}
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*
+
+Composition operators retain direction and caller effects
+open import FrescoPrelude; effect Offset { Get : () => Int; } handle <Offset> ({var f=fun(x) { print("f"); x+do Get }; var g=fun(x) { print("g"); x*2 }; var backwards=f -<- g; var forwards=g ->- f; (backwards(20),forwards(20))}) { case xs -> xs case <Get => k> -> k(2) }
+args : --fresco --path=lib/stdlib
+stdout : gfgf(42, 42) : (Int, Int)
+
+Returned composition keeps its required effect after construction
+open import FrescoPrelude; effect Offset { Get : () => Int; } var composed=handle <Offset> (fun(x) { x+do Get } -<- fun(x) { x*2 }) { case f -> f case <Get => k> -> k(2) }; composed(20)
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*In expression: composed.*
+
+Linear wrapper retains the legacy unrestricted payload requirement
+open import FrescoPrelude; fun(c:End) { close(lf(id)(c)) }
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*
+
+Application operator retains the legacy unrestricted payload requirement
+open import FrescoPrelude; fun(c:End) { close(id $ c) }
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*
+
+Composition operators retain the legacy unrestricted payload requirement
+open import FrescoPrelude; fun(c:End) { close((id -<- id)(c)) }
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*
+
+Mailbox alias permits transfer of an absolute linear endpoint
+open import FrescoPrelude; var ap=(new() : AP(End)); var peer=spawn { close(accept(ap)) }; var receiver=(spawn { close(recv()) } : FrescoPrelude.Pid(End)); { receiver ! request(ap); 42 }
+args : --fresco --path=lib/stdlib
+stdout : 42 : Int
+
+Mailbox alias rejects a contextual function payload
+open import FrescoPrelude; fun(p:Pid((() -> Int))) { p }
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*
+
+Either permits a linear endpoint in either payload
+open import FrescoPrelude; sig consume : modal [Wild] ((FrescoPrelude.Either(End,End)) -> ()) fun consume(x) { switch(x) { case Left(c) -> close(c) case Right(c) -> close(c) } } var ap=(new() : AP(End)); var peer=spawn { close(accept(ap)) }; var bp=(new() : AP(End)); var other=spawn { close(accept(bp)) }; { consume(Left(request(ap))); consume(Right(request(bp))); 42 }
+args : --fresco --path=lib/stdlib
+stdout : 42 : Int
+
+Either retains linear payload usage
+open import FrescoPrelude; fun(c:End) { var packet=(Left(c) : Either(End,Int)); (packet,packet) }
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*
+
+Maybe permits a linear endpoint payload
+open import FrescoPrelude; sig consume : modal [Wild] ((FrescoPrelude.Maybe(End)) -> ()) fun consume(x) { switch(x) { case Just(c) -> close(c) case Nothing -> () } } var ap=(new() : AP(End)); var peer=spawn { close(accept(ap)) }; { consume(Just(request(ap))); 42 }
+args : --fresco --path=lib/stdlib
+stdout : 42 : Int
+
+PureE retains its unrestricted payload parameter
+open import FrescoPrelude; fun(c:End) { pureE(c) }
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*In expression: pureE.*

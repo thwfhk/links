@@ -948,8 +948,8 @@ linear callbacks and discarded linear callback results. Signed local recursion
 retains its surrounding type variables. The staged `intRange` uses the same
 equality-stop correction as range syntax.
 
-The remaining core prelude keeps the `Maybe` alias's ordinary parameter kind,
-explicit `Wild` signatures for search and partial/association helpers, numeric
+The remaining core prelude keeps the `Maybe` alias's ordinary `Any` parameter
+kind, explicit `Wild` signatures for search and partial/association helpers, numeric
 empty-list seeds and association-list ordering. `removeAssoc` removes the first
 matching entry; `assocAll` keeps all matches in source order. Preserve the
 existing regular expressions used by `isInt` and `isFloat`.
@@ -969,8 +969,9 @@ their switches or recursive calls. Preserve the existing `span` complete-match b
 which returns its accumulated prefix in reverse order, and the resulting
 `takeWhile` behaviour. This migration does not change those library results.
 
-**Choice for review:** the staged `curry`, `flip`, `uncurry` and `compose` use
-contextual arrows sharing the caller's ambient effects through closure
+**Choice for review:** the staged `curry`, `flip`, `uncurry`, `compose`, `lf`,
+`-<-` and `->-` use contextual arrows sharing the caller's ambient effects
+through closure
 construction and later calls. Their general legacy contracts permit an
 independent effect context for callbacks and returned calls; those contracts
 remain in the
@@ -978,6 +979,20 @@ remain in the
 Alternatives include separate helpers for fixed absolute callback contexts or
 requiring explicit wrappers at each use. Test effectful calls and returned
 closures so the specialised interface retains its stated effect requirements.
+
+`Either` and `Maybe` aliases require explicit ordinary `Any` parameters.
+Actual legacy prelude controls accept endpoint payloads in both aliases.
+Leaving their contextual alias binders unannotated narrowed them to `Unl`;
+D7d3b restores the original alias contracts. The function signatures of `pureE`,
+`applyE` and the existing Maybe helpers retain their separate unlimited payload
+requirements. `Pid` follows `Process` with an ordinary `Any`, absolute message
+parameter, including linear endpoints.
+
+Keep `lf`, application `$` and the composition operators' ordinary payload
+parameters unlimited, matching their original signatures and accepted calls.
+The existing `id`/`compose` family's ordinary `Any` parameters do not imply
+that these separate interfaces accept linear payloads. The result of `lf`
+remains a linear function and must be consumed once.
 
 ### D7 ordinary library inventory
 
@@ -1005,15 +1020,27 @@ The tree deletion example's existing two-child branch duplicates the left
 subtree. Preserve the recorded `remove2` result during type migration.
 Switch-function syntax already passes through `DesugarSwitchFuns` before
 Fresco inference. Its internal unsupported-node guard does not establish a
-source-language gap.
+source-language gap. Empty-variant elimination is a separate source gap:
+`switch(x) {}` with `x:Zero` currently rejects. Check its ordinary usage and
+result rules against legacy behaviour before migrating extensible cases.
 
 Keep XML/formlet/page/DOM/routes, MVU modules, socket examples and explicit
 foreign/location dependencies with the deferred features. Keep database-facing
 Serial helpers and session-failure monitoring outside this work. General
 `Comp`/`gen0`/`gen1`/`gen2` effect-row interfaces remain in the independent-effect
-inventory. The formlet State helpers need a separate capture-contract check:
-legacy fixed-`Wild` returned closures can capture arbitrary values, while
-absolute modal closure construction imposes `Abs` on those captures.
+inventory.
+
+**Choice for review:** defer the root prelude's `State`, `runState`, `>>=`,
+`return`, `fmap` and `sequence` with the formlet library. Their current uses
+belong to that library. A legacy control captures a contextual `Get` function
+in `return`, runs the state computation, then handles and invokes the returned
+function to produce `42`. Making `State` an absolute `modal [Wild]` type requires
+`Abs` captures and rejects that call. Making its arrow contextual changes the
+original fixed-`Wild` contract. Preserve the contract for the deferred migration;
+the audit and controls are in `/tmp/links-d7d3b-state-contract.md` and
+`/tmp/links-d7d3b-state-controls.log`. The monadic-reflection example defines
+its own state helpers and separately depends on general independent-effect
+interfaces.
 
 ### D7 frontend integration plan
 

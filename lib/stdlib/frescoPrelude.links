@@ -369,7 +369,7 @@ fun unwords(ws) {
   implode(intercalate(explode(" "), map(explode, ws)))
 }
 
-typename Maybe (a) = [|Nothing | Just:a|];
+typename Maybe (a::Any) = [|Nothing | Just:a|];
 
 sig isJust : forall a. (Maybe(a)) -> Bool
 fun isJust(x) {
@@ -562,6 +562,64 @@ fun isInt (x) { x =~ /-?[0-9]+$/ }
 
 sig isFloat : (String) -> Bool
 fun isFloat (x) { x =~ /-?[0-9]+(\.[0-9]+)?$/ }
+
+sig concatMapKey : forall a, c, d. ((a) -> List c, List (a,List d)) -> List c
+fun concatMapKey(f, l) {
+  for (x <- l) f(x.1)
+}
+
+sig lookupG : forall a, b. (a,List (a,List b)) -> List b
+fun lookupG(x,l) {
+  switch (l) {
+    case [] -> []
+    case (a,b)::xs -> if (a == x) b
+                      else lookupG(x,xs)
+  }
+}
+
+sig aggBy : forall a, b, d. (List (a,List b), (List b) -> d) -> List (a,d)
+fun aggBy(q, agg) {
+  concatMapKey(fun (k) {
+    [(k, agg(lookupG(k, q)))]
+    }, q)
+}
+
+typename Either(a::Any,b::Any) = [|Left:a | Right:b|];
+typename Zero = [||];
+typename Pid(a::Type(Any,Any,Abs)) = Process(a);
+
+sig pureE : forall a. (a) -> Maybe(a)
+fun pureE(x) { Just(x) }
+
+sig applyE : forall a, b. (Maybe((a) -> b), Maybe(a)) -> Maybe(b)
+fun applyE(f, x) {
+  switch ((f, x)) {
+    case (Just(f), Just(x)) -> Just(f(x))
+    case (_      , _      ) -> Nothing
+  }
+}
+
+sig $ : forall a, c. ((a) -> c, a) -> c
+op f $ x { f(x) }
+
+sig lf : forall a, b. ((a) -> b) -> (a) -@ b
+fun lf(f) {
+  linfun(x) {
+    f(x)
+  }
+}
+
+infixr 9 -<-;
+sig -<- : forall a, b, c. ((a) -> b, (c) -> a) -> (c) -> b
+op f -<- g {
+  fun(x) { f(g(x)) }
+}
+
+infixr 9 ->-;
+sig ->- : forall a, b, c. ((a) -> b, (b) -> c) -> (a) -> c
+op f ->- g {
+  g -<- f
+}
 
 ## Utility functions
 # Returns Just the index of x in xs if x is an element in xs, otherwise Nothing.

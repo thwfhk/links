@@ -106,7 +106,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D7c2e2 | Curried modal/quantified results and ordinary session examples | `fe1586af` |
 | D7c2e3a | Recursive/encoded protocols and staged linear-list modules | `f91695f5` |
 | D7c2e3b | Generic protocol examples and raw recursive runtime bindings | `8b27a80b` |
-| D7d3a | Remaining list, ASCII and date helpers | This commit |
+| D7d3a | Remaining list, ASCII and date helpers | `27a0b58f` |
+| D7d3b | Ordinary helper interfaces and linear variant aliases | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -188,6 +189,7 @@ user requested on 7 November 2026. The main agent owns integration and these rec
 | D7d3a: remaining list, character and date helpers | Existing ordering, callback effects and pure/Wild contracts pass source execution checks |
 | D7d3b: ordinary helper interfaces | Remaining list/Maybe helpers, aliases and composition interfaces have explicit contracts and source checks |
 | D7d3c: binary trees | Comparator and binary-tree modules migrate; existing operations and contextual callbacks execute |
+| D7d3d0: empty-variant elimination | Empty switches on an empty variant check/lower; inhabited scrutinees reject |
 | D7d3d: ordinary examples and switch functions | Polymorphic, recursive and open-variant examples execute; named/anonymous switch functions retain their checks |
 | D7d3e: remaining ordinary actor examples | Buffered channels and console helpers retain bounded behaviour and callback contracts |
 | D7e1: checked preparation | Separate checking/lowering from evaluation; contextual lowering rechecks validate annotations and result types |
@@ -200,7 +202,7 @@ user requested on 7 November 2026. The main agent owns integration and these rec
 
 D7a (`1f7ff34e`), D7b1 (`4fad3532`) and D7b2a (`db0d3a75`) are complete.
 D7b2b (`72e47dbc`) and D7b3 (`f09237bd`) are complete. D7b4a0 (`8cfe88a3`) is complete. D7b4a collection migration (`0b2c0d3f`) is complete. D7b4b (`efc1bca2`) is complete. D7b4c (`4e009da6`) is complete. D7c1a core actors (`ef94a794`) and D7c1b actor variants are complete.
-D7c1b1 polymorphic export is complete. D7c1c actor migration is complete. D7c2a session primitives are complete. D7c2b selection/offer is complete. D7c2c1 split-end helpers are complete. D7c2c2 callback helpers are complete. D7c2d CP is complete. D7c2e1 ordinary session regression migration is complete. D7c2e2 ordinary examples are complete. D7c2e3a recursive/encoded protocol examples are complete. D7c2e3b remaining generic protocols are complete. D7d3a ordinary list, character and date helpers are complete. D7d3b ordinary helper interfaces are next. Later boundaries may be split further when a dependency needs
+D7c1b1 polymorphic export is complete. D7c1c actor migration is complete. D7c2a session primitives are complete. D7c2b selection/offer is complete. D7c2c1 split-end helpers are complete. D7c2c2 callback helpers are complete. D7c2d CP is complete. D7c2e1 ordinary session regression migration is complete. D7c2e2 ordinary examples are complete. D7c2e3a recursive/encoded protocol examples are complete. D7c2e3b remaining generic protocols are complete. D7d3a ordinary list, character and date helpers are complete. D7d3b ordinary helper interfaces are complete. D7d3c binary trees are next. Later boundaries may be split further when a dependency needs
 its own review and checks.
 
 ### Future TODOs
@@ -217,6 +219,9 @@ assignments in the design's migration inventory.
 | D7d1: XML and forms | XML, form/page constructs and their prelude dependencies check and execute |
 | D7d2: FFI and function locations | Foreign declarations, locations and FFI dependencies survive checking and lowering |
 
+The formlet State helpers retain their existing capture contract and are deferred
+with D7d1. This implementation choice is [recorded for review](doc/modal-effects-design.md#d7-ordinary-library-inventory).
+
 ## Recorded decisions
 
 The user decisions of 6--7 November 2026 are recorded in the specification
@@ -228,26 +233,36 @@ and design:
 - [D4 ghost kinds and instantiation checks](doc/modal-effects-design.md#subtyping-and-instantiation-information).
 - [D4k signature binders and ordinary row arguments](doc/modal-effects-design.md#contextual-annotation-and-declaration-elaboration).
 
+D7d3b alias checks exposed an ordinary source gap: `switch(x) {}` rejects even
+when `x:Zero`. D7d3d0 must resolve this before the extensible-case example;
+`/tmp/links-d7d3b-focused-initial.log` retains the reproducer.
+
 ## Latest task and verification
 
-7 November 2026, D7d3a, base `8b27a80b`: migrated `elemIndex`, `partition`,
-`groupByFlat`, ASCII helpers and date wrappers. Original bodies, ordering and
-pure/`Wild` contracts remain. Nineteen new source cases cover duplicate keys,
-callback order/effects, byte-character boundaries and date results. One initial
-test used `chr(937)` outside Links' byte-character range; it was corrected to
-valid non-ASCII byte values. Independent review found no unresolved findings;
-thirteen selected checks passed. Review record:
-`/tmp/links-d7d3a-review-summary.log`.
+7 November 2026, D7d3b, base `27a0b58f`: migrated ordinary grouping,
+Maybe/application helpers, aliases, linear wrappers and composition operators.
+Twenty-two new source cases cover callback effects, evaluation order, delayed
+calls, ordinary usage and mailbox/variant payloads. Independent review found
+that unannotated `Either` and `Maybe` parameters narrowed their legacy kinds.
+Explicit `Any` alias parameters restore linear payloads; helper function
+parameters remain unlimited. The affected checks passed after both fixes.
+Review record: `/tmp/links-d7d3b-review-summary.log`.
 
-All writers finished, review was complete and the combined diff was inspected
-before integrated checks. All 145 affected regression cases passed. Source
-hashes still match. Logs below are in `/tmp/links-d7d3a-verification`;
+The [design](doc/modal-effects-design.md#d7-prelude-migration) records the
+specialised shared-ambient composition interfaces. The
+[formlet State deferral](doc/modal-effects-design.md#d7-ordinary-library-inventory)
+is marked for review with its legacy/Fresco controls. Empty-variant elimination
+remains a separate D7d3d0 task.
+
+All writers finished, review fixes were complete and the combined diff was
+inspected before integrated checks. All 167 affected regression cases passed.
+Source hashes still match. Logs below are in `/tmp/links-d7d3b-verification`;
 `revision.txt` and `source.sha256` identify the tested sources. Documentation
 was updated afterwards.
 
 | Command | Result | Log |
 |---|---|---|
-| `./test-harness tests/fresco_prelude.tests` | 64 passed | `fresco_prelude.log` |
+| `./test-harness tests/fresco_prelude.tests` | 86 passed | `fresco_prelude.log` |
 | `./test-harness tests/fresco_sessions.tests` | 35 passed | `fresco_sessions.log` |
 | `./test-harness tests/fresco_cp.tests` | 22 passed | `fresco_cp.log` |
 | `./test-harness tests/fresco_session_examples.tests` | 24 passed | `fresco_session_examples.log` |
@@ -271,8 +286,8 @@ Documentation-only update: text and whitespace checked.
 
 ## Next action
 
-Complete D7d3b ordinary helper interfaces and the remaining library/example
-milestones, then D7e frontend/source
+Complete D7d3c binary trees and the remaining library/example milestones,
+then D7e frontend/source
 migration, prioritising ordinary functional-language use. Keep socket
 examples, XML/forms, FFI/function locations and their dependent migrations
 in [future work](#future-todos).
