@@ -126,9 +126,9 @@ let run : string list -> string list -> unit
 let run_fresco file_list to_evaluate =
   let open Basicsettings.System in
   begin match Settings.get mode with
-  | None | Some Interactive -> ()
-  | Some (Web | Compile) ->
-     handle_errors (lazy (raise (Errors.settings_error "The Fresco frontend supports interpreter mode")))
+  | None | Some (Interactive | Compile) -> ()
+  | Some Web ->
+     handle_errors (lazy (raise (Errors.settings_error "The Fresco frontend does not support web mode")))
   end;
   let process check run context source =
     if Settings.get Driver.typecheck_only then begin
@@ -144,6 +144,33 @@ let run_fresco file_list to_evaluate =
     match Settings.get Driver.prelude_file with
     | None -> FrescoFrontend.prepare_string state "open import FrescoPrelude;"
     | Some filename -> FrescoFrontend.prepare_file state filename)) in
+  match Settings.get mode with
+  | Some Compile ->
+      let inputs = List.map (fun text -> `String text) to_evaluate @
+        List.map (fun filename -> `File filename) file_list in
+      if inputs = [] then
+        handle_errors (lazy (raise (Errors.settings_error "Compile mode requires a source file or -e")));
+      let compile previous source =
+        handle_errors (lazy (
+          if Settings.get Driver.typecheck_only then begin
+            let state = FrescoFrontend.checked_state previous in
+            ignore (match source with
+              | `String text -> FrescoFrontend.check_string state text
+              | `File filename -> FrescoFrontend.check_file state filename);
+            exit 0
+          end;
+          let prepared = match source with
+            | `String text -> FrescoFrontend.append_string previous text
+            | `File filename -> FrescoFrontend.append_file previous filename in
+          let compiled = FrescoFrontend.compile prepared in
+          let venv = Env.String.fold (fun name var env -> Env.Int.bind var name env)
+            Lib.nenv Env.Int.empty in
+          Driver.Phases.output_js venv [] compiled.Backend.program (val_of (Settings.get output_file));
+          prepared))
+      in
+      ignore (for_each prelude compile inputs)
+  | Some Web -> assert false
+  | None | Some Interactive ->
   let context =
     if Settings.get Driver.typecheck_only then FrescoFrontend.checked_state prelude
     else

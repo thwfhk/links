@@ -594,3 +594,9 @@ same state. A failed command retains the preceding successful state.
 effect context. Queries use the current type aliases and normal annotation
 syntax, including modalities, `forall` and flexible variables such as `%a`.
 Searching does not change the REPL's type state.
+
+JavaScript compilation checks the prelude and source without evaluating them.
+It processes `-e` expressions before files. With isolation enabled, each output
+contains the prelude and one input; with isolation disabled, it includes the
+preceding inputs in order. Each input writes to the configured output path, so
+the last output remains when several inputs are supplied.

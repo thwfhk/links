@@ -325,4 +325,39 @@ let suite = "Fresco frontend preparation" >::: [
     let _,_,value = FrescoFrontend.run_string state "chosen(42)" in
     assert_equal (`Int 42) value));
 
+  "prepared composition preserves ordered nonunit final computations" >:: (fun _ -> controls (fun () ->
+    let prefix = FrescoFrontend.prepare_string (FrescoFrontend.empty ())
+      "var seed={print(\"prefix-binding\");40}; {print(\"prefix-tail\");99}" in
+    let prepared = FrescoFrontend.append_string prefix "{print(\"source-body\");seed+2}" in
+    let program = FrescoFrontend.program prepared in
+    let text = Ir.string_of_program program in
+    let at marker = Str.search_forward (Str.regexp_string marker) text 0 in
+    assert_bool "Prefix binding/tail order" (at "prefix-binding" < at "prefix-tail");
+    assert_bool "Prefix tail/source order" (at "prefix-tail" < at "source-body");
+    let discard = List.find_map (function
+      | Ir.Let (binder,_) when contains (Var.name_of_binder binder) "$fresco_compiled_discard_" -> Some binder
+      | _ -> None) (fst program) |> Option.get in
+    Fresco_source_tests.expect_type Types.int_type (Var.type_of_binder discard);
+    ignore (FrescoFrontend.compile prepared)));
+
+  "composition refreshes weak types in earlier annotations" >:: (fun _ -> controls (fun () ->
+    let prefix = FrescoFrontend.prepare_string (FrescoFrontend.empty ()) "var identity=fun(x) { x }; ()" in
+    let prepared = FrescoFrontend.append_string prefix "identity(42)" in
+    let definition = List.find_map (function Ir.Fun definition -> Some definition | _ -> None)
+      (fst (FrescoFrontend.program prepared)) |> Option.get in
+    Fresco_source_tests.expect_type Types.int_type
+      (Var.type_of_binder (List.hd definition.Ir.fn_params));
+    ignore (FrescoFrontend.compile prepared);
+    let _,_,value = FrescoFrontend.run_prepared prepared in
+    assert_equal (`Int 42) value));
+
+  "successive appends retain binding scope and refreshed runtime identities" >:: (fun _ -> controls (fun () ->
+    let first = FrescoFrontend.prepare_string (FrescoFrontend.empty ()) "var x=40; ()" in
+    let second = FrescoFrontend.append_string first "sig f:()->Int fun f() { x } ()" in
+    let third = FrescoFrontend.append_string second "var x=100; f()+2" in
+    let fourth = FrescoFrontend.append_string third "f()+2" in
+    ignore (FrescoFrontend.compile fourth);
+    let _,_,value = FrescoFrontend.run_prepared fourth in
+    assert_equal (`Int 42) value));
+
 ]

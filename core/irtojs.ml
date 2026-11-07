@@ -402,6 +402,7 @@ end
 
 module Arithmetic : sig
   val is : string -> bool
+  val is_unary : string -> bool
   val gen : string -> Code.t list -> Code.t
 end = struct
   let builtin_binops =
@@ -423,7 +424,8 @@ end = struct
     [ "negate", "-" ;
       "negatef", "-" ]
 
-  let is x = StringMap.mem x builtin_binops || List.mem_assoc x builtin_unops
+  let is_unary x = List.mem_assoc x builtin_unops
+  let is x = StringMap.mem x builtin_binops || is_unary x
   let js_name op = val_of (StringMap.find op builtin_binops)
   let gen op args =
     let open Code in
@@ -844,9 +846,10 @@ end = functor (K : CONTINUATION) -> struct
        (* HACK *)
        let name = VEnv.find var env in
        if Arithmetic.is name then
-         Fn (["x"; "y"; __kappa],
+         let parameters = if Arithmetic.is_unary name then ["x"] else ["x"; "y"] in
+         Fn (parameters @ [__kappa],
              return (K.apply (K.reflect (Var __kappa))
-                       (Arithmetic.gen name [Var "x"; Var "y"])))
+                       (Arithmetic.gen name (List.map (fun name -> Var name) parameters))))
        else if StringOp.is name then
          Fn (["x"; "y"; __kappa],
              return (K.apply (K.reflect (Var __kappa))

@@ -380,6 +380,12 @@ let export s e =
   let roots, _ = get e.position "Cannot export source types" (FrescoContext.export (env s) ~roots (context s)) in
   let rest = ref roots in
   map_term (fun _ _ _ -> match !rest with r :: rs -> rest := rs; r.FrescoContext.typ | [] -> assert false) [] e
+let refresh s expression =
+  let skeleton = map_term (fun binders primary_kind typ ->
+    match get expression.position "Cannot refresh checked source types"
+      (S.of_types (env s) [{ FrescoContext.binders; primary_kind; typ }]) with
+    | [root] -> root.S.typ | _ -> assert false) [] expression in
+  export s skeleton
 let rec pattern_names p = match WithPos.node p with
   | G.Pattern.Variable b -> [G.Binder.to_name b]
   | G.Pattern.As (b,p) -> G.Binder.to_name b :: pattern_names p

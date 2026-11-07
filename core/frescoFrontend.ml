@@ -387,6 +387,8 @@ let effect_signatures inference =
 
 type prepared = {
   state : t;
+  input : t;
+  source : FrescoInfer.expression;
   datatype : Types.typ;
   program : Ir.program;
   context : Context.t;
@@ -433,6 +435,10 @@ let prepare_program state program =
   let context = Context.{ empty with variable_environment = prior_types inference state.names } in
   let prepared = {
     state = { state with inference; names };
+    input = state;
+    source = (let body = Option.value ~default:{
+      node = Record ([],None); typ = Types.unit_type; position = SourceCode.Position.dummy;
+    } expression in { body with node = Let (definitions,body) });
     datatype; program; context;
     effects = effect_signatures inference;
     ambient = EffectRow.map (RuntimeTypes.normalise ~erase_modal:false) (FrescoInfer.ambient inference);
@@ -461,6 +467,40 @@ let parse_string text =
 let parse_file filename =
   let program, source = Parse.parse_file Parse.program filename in
   (ResolvePositions.resolve_positions source)#program program
+
+let append prepare previous input =
+  let next = prepare previous.state input in
+  let definitions, body = match previous.source.node with
+    | Let (definitions,body) -> definitions,body | _ -> assert false in
+  let next_definitions, next_body = match next.source.node with
+    | Let (definitions,body) -> definitions,body | _ -> assert false in
+  let discard = "$fresco_compiled_discard_" ^ string_of_int (Types.fresh_raw_variable ()) in
+  let source = { next.source with
+    node = Let (definitions @ [Value (discard,body)] @ next_definitions,next_body) } in
+  let source = FrescoInfer.refresh next.state.inference source in
+  let definitions, body = match source.node with
+    | Let (definitions,body) -> definitions,body | _ -> assert false in
+  let initial = StringMap.map (fun (var,_) -> var_value var) previous.input.names in
+  let lowered,bindings = definitions_ir initial [] Var.Scope.Global definitions in
+  let names = publish previous.input.names lowered definitions
+    |> StringMap.filter (fun name _ -> StringMap.mem name next.state.names) in
+  let context = Context.{ empty with
+    variable_environment = prior_types next.state.inference previous.input.names } in
+  let prepared = { next with
+    input = previous.input; source;
+    state = { next.state with names };
+    program = Ir.with_bindings bindings (computation lowered [] body);
+    datatype = source.typ; context;
+    globals = previous.globals;
+    retain = StringMap.fold (fun _ (var,_) vars -> IntSet.add var vars) names IntSet.empty;
+  } in
+  verify_lowering prepared prepared.program;
+  prepared
+
+let append_string previous text = append (fun state text ->
+  prepare_program state (parse_string text)) previous text
+let append_file previous filename = append (fun state filename ->
+  prepare_program state (parse_file filename)) previous filename
 
 let infer_program state program =
   let _, _, expression = FrescoInfer.program state.inference program in

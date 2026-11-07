@@ -119,7 +119,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D7e2a | Persistent fixities and file preprocessing | `1f535e58` |
 | D7e2b | Canonical contextual prelude and custom batch bootstrap | `539bcd4d` |
 | D7e3a | Contextual REPL definitions, environments, loading and recovery | `605f0454` |
-| D7e3b | Contextual type search with isolated candidate checks | This commit |
+| D7e3b | Contextual type search with isolated candidate checks | `b6fddccc` |
+| D7e4 | Contextual JavaScript compilation without source evaluation | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -219,7 +220,7 @@ user requested on 7 November 2026. The main agent owns integration and these rec
 
 D7a (`1f7ff34e`), D7b1 (`4fad3532`) and D7b2a (`db0d3a75`) are complete.
 D7b2b (`72e47dbc`) and D7b3 (`f09237bd`) are complete. D7b4a0 (`8cfe88a3`) is complete. D7b4a collection migration (`0b2c0d3f`) is complete. D7b4b (`efc1bca2`) is complete. D7b4c (`4e009da6`) is complete. D7c1a core actors (`ef94a794`) and D7c1b actor variants are complete.
-D7c1b1 polymorphic export is complete. D7c1c actor migration is complete. D7c2a session primitives are complete. D7c2b selection/offer is complete. D7c2c1 split-end helpers are complete. D7c2c2 callback helpers are complete. D7c2d CP is complete. D7c2e1 ordinary session regression migration is complete. D7c2e2 ordinary examples are complete. D7c2e3a recursive/encoded protocol examples are complete. D7c2e3b remaining generic protocols are complete. D7d3a ordinary list, character and date helpers are complete. D7d3b ordinary helper interfaces are complete. D7d3c binary trees are complete. D7d3d0 empty switches is complete. D7d3d1 switch functions is complete. D7d3d2 Church numerals and bit lists is complete. D7d3d3a explicit upcasts is complete; D7d3d3b extensible cases is complete. D7d3e1 buffered channels is complete. D7e1 checked preparation is complete. D7e2a persistent parsing state is complete. D7e2b contextual prelude loading is complete. D7e3a contextual REPL is complete. D7e3b contextual type search is complete. Later boundaries may be split further when a dependency needs
+D7c1b1 polymorphic export is complete. D7c1c actor migration is complete. D7c2a session primitives are complete. D7c2b selection/offer is complete. D7c2c1 split-end helpers are complete. D7c2c2 callback helpers are complete. D7c2d CP is complete. D7c2e1 ordinary session regression migration is complete. D7c2e2 ordinary examples are complete. D7c2e3a recursive/encoded protocol examples are complete. D7c2e3b remaining generic protocols are complete. D7d3a ordinary list, character and date helpers are complete. D7d3b ordinary helper interfaces are complete. D7d3c binary trees are complete. D7d3d0 empty switches is complete. D7d3d1 switch functions is complete. D7d3d2 Church numerals and bit lists is complete. D7d3d3a explicit upcasts is complete; D7d3d3b extensible cases is complete. D7d3e1 buffered channels is complete. D7e1 checked preparation is complete. D7e2a persistent parsing state is complete. D7e2b contextual prelude loading is complete. D7e3a contextual REPL is complete. D7e3b contextual type search is complete. D7e4 contextual JavaScript compilation is complete. Later boundaries may be split further when a dependency needs
 its own review and checks.
 
 ### Future TODOs
@@ -257,27 +258,35 @@ and design:
 
 ## Latest task and verification
 
-7 November 2026, D7e3b, base `605f0454`: contextual `@withtype` elaborates
-queries in the current alias scope and checks whether each candidate can supply
-the query type. Each match discards its inferred solutions. The
-[design](doc/modal-effects-design.md#d7-frontend-integration-plan) records the
-matching direction and normal query-variable rules as a choice for review.
+7 November 2026, D7e4, base `b6fddccc`: contextual compile mode emits
+JavaScript from the prelude and checked inputs without source evaluation.
+Composition refreshes earlier types from final solutions and retains preceding
+final expressions. The [design](doc/modal-effects-design.md#d7-frontend-integration-plan)
+records input ordering, isolation and output choices for review.
 
-Independent review passed three new API groups, the actual REPL search scenario
-and positioned parse-error recovery; no remaining findings:
-`/tmp/links-d7e3b-review-summary.log`. All five writer hashes matched. Writers
-finished and the combined diff was reviewed before integrated checks began.
+Default-prelude compilation exposed an existing unary arithmetic wrapper arity
+bug. The small repair was checked through generated syntax and isolated Node
+execution: `-42,-2.5,42`. Deep-handler JavaScript execution remains in D8.
+The initial diagnostic is `/tmp/links-d7e4-default-diagnostic.log`.
 
-The build, 1,514 unit tests, ten real REPL scenarios and 610 regression cases
-passed; 14 existing examples remain ignored. Logs are in
-`/tmp/links-d7e3b-verification`; `revision.txt` and `source.sha256` identify the
-tested sources. Frozen source hashes and added-line whitespace passed.
+Independent review passed three composition groups and six selected compile
+groups; no remaining findings: `/tmp/links-d7e4-review-summary.log`.
+All eleven writer hashes matched. Writers finished and the combined diff was
+reviewed before integration. Initial test corrections preserved earlier output
+when a later isolated input fails and supplied the custom arithmetic runtime's
+unused receive guard.
+
+The build, 1,517 unit tests, ten REPL scenarios, ten compile scenarios and
+636 regression cases passed; 14 existing examples remain ignored. Logs are in
+`/tmp/links-d7e4-verification`; `revision.txt` and `source.sha256` identify the
+tested sources. Frozen source hashes and added/new-line whitespace passed.
 
 | Command | Result | Log |
 |---|---|---|
 | `make no-db` | Passed | `build.log` |
-| `opam exec -- ./run-tests nodb-unit-tests` | 1,514 passed | `unit.log` |
+| `opam exec -- ./run-tests nodb-unit-tests` | 1,517 passed | `unit.log` |
 | `python3 tests/fresco_repl.py` | 10 passed | `repl.log` |
+| `python3 tests/fresco_compile.py` | 10 passed | `compile.log` |
 | `./test-harness tests/handlers.tests` | 95 passed | `handlers.log` |
 | `./test-harness tests/effect_sugar.tests` | 44 passed | `effect_sugar.log` |
 | `./test-harness tests/fresco.tests` | 105 passed | `fresco.log` |
@@ -288,6 +297,7 @@ tested sources. Frozen source hashes and added-line whitespace passed.
 | `./test-harness tests/typecheck_examples.tests` | 170 passed, 14 ignored | `typecheck_examples.log` |
 | `./test-harness tests/modules.tests` | 41 passed | `modules.log` |
 | `./test-harness tests/freezeml.tests` | 60 passed | `freezeml.log` |
+| `./test-harness tests/typed_ir.tests` | 26 passed | `typed_ir.log` |
 | `make rule-check` | Passed; GNU-find tab check skipped, formatter disabled | `rule-check.log` |
 | Frozen source hashes and `git diff --check` | Passed | `source-check.log`, `diff-check.log` |
 
@@ -300,7 +310,7 @@ Documentation-only update: text and whitespace checked.
 
 ## Next action
 
-Complete D7e frontend/source migration, starting with JavaScript compilation. Prioritise ordinary functional-language use. Keep socket
+Complete D7e frontend/source migration, starting with the default frontend and selected source migration. Prioritise ordinary functional-language use. Keep socket
 examples, XML/forms, FFI/function locations and their dependent migrations
 in [future work](#future-todos).
 Review, test and commit each milestone before the next. Pause after D7 is

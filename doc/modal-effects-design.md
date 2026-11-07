@@ -1201,8 +1201,8 @@ backend checks after optimisation and closure conversion separate.
 
 Checked preparation is separate from execution in `FrescoFrontend`.
 A prepared value contains the next inference/name state, prior runtime values,
-lowered IR, source result type, prior type environment, effect declarations and
-ambient row. Preparation and compilation do not evaluate source code;
+checked source, lowered IR, source result type, prior type environment, effect
+declarations and ambient row. Preparation and compilation do not evaluate source code;
 `run_prepared` evaluates and returns the published state. Keep `empty` limited
 to primitives for unit tests. Prelude loading and REPL snapshots remain separate
 integration steps.
@@ -1279,6 +1279,30 @@ Each candidate starts from the same persistent query context and discards its
 resulting context. Search neither refines live unknowns nor shares refinements
 between candidates. Include primitives and user definitions. Display each
 match's current type without applying solutions from the search.
+
+**Choice for review:** contextual compile mode processes `-e` inputs before
+files and writes each result to the configured output path. This retains the
+existing last-output-wins behaviour for multiple files. Each isolated input
+includes only the bootstrap and that input; with isolation disabled, each
+output includes all preceding inputs. Compile-only `-e` produces JavaScript
+without evaluating the expression. Reject compile mode with no input. Keep
+the existing first-input exit and no output in typecheck-only mode.
+
+Accumulate checked typed source before one backend pass for each output.
+Refresh earlier source types with the final inference solutions, then lower
+the combined definitions and expressions. This includes types left unresolved
+by a custom prelude and later fixed by user input. Sequence each preceding
+final expression through a typed discard binding so its effects remain in the
+generated program. Keep the bootstrap's initial external environment and the
+final input's result, effect declarations and checked state. Reuse the existing
+JavaScript emitter and runtime-inclusion settings.
+
+Default-prelude compilation exposed a JavaScript arithmetic wrapper defect:
+first-class `negate` and `negatef` were passed two arguments, reaching a
+binary-only operator lookup. Select one value parameter for unary arithmetic
+wrappers and retain two for binary wrappers. Keep the existing operation
+generation. This repair is required by the migrated prelude; the diagnostic is
+`/tmp/links-d7e4-default-diagnostic.log`.
 
 ### D7 inferred linear results
 

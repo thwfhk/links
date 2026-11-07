@@ -21,6 +21,8 @@ BLACKLIST = {
   "tests/fixtures/fresco_repl/good.links",
   "tests/fixtures/fresco_repl/bad.links",
   "tests/fixtures/fresco_repl/replShared.links",
+  # Imported by tests/fresco_compile.py.
+  "tests/fixtures/fresco_compile/compileShared.links",
   "tests/presence_type_arg_typename.links",
   "tests/modules/alien_blocks_dependency.links",
   "tests/modules/cyclicA.links",

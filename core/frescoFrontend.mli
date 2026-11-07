@@ -10,6 +10,11 @@ type prepared
 val prepare_program : t -> Sugartypes.program -> prepared
 val prepare_string : t -> string -> prepared
 val prepare_file : t -> string -> prepared
+(** Append checked input without evaluation. Earlier final computations are
+    sequenced through typed discard bindings. All source annotations are
+    refreshed under the final solutions before lowering the complete program. *)
+val append_string : prepared -> string -> prepared
+val append_file : prepared -> string -> prepared
 (** The checked names and resolution state, with the input runtime values.
     New names have no runtime values yet. Use this state only for subsequent
     checking or preparation; use [run_prepared] before interpreting source. *)

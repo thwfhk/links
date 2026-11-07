@@ -72,3 +72,7 @@ val infer : t -> Sugartypes.phrase -> t * expression
 val check : t -> Sugartypes.phrase -> Types.typ -> t * expression
 val program : t -> Sugartypes.program -> t * binding list * expression option
 val read : t -> string -> t * binding list * expression option
+
+(** Re-export a checked expression under the current persistent solutions.
+    Types and declarations are copied; the expression and state are unchanged. *)
+val refresh : t -> expression -> expression

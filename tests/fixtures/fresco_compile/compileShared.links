@@ -1,0 +1,2 @@
+typename Shared=Int;
+var shared={print("MODULE-ONCE");40};
