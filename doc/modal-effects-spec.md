@@ -443,6 +443,14 @@ Offer patterns use a label with a continuation variable or wildcard, optionally
 with type annotations. Duplicate labels retain the last branch; every written
 branch is checked.
 
+CP syntax requires `Wild`. Giving, grabbing, selection and offer update the
+named channel to its continuation. An empty grab consumes `?().End`;
+give-nothing returns `!().End`. Linking consumes dual endpoints and returns a
+fresh `!().End`. Composition runs its left process in an angel child, closes
+the left process's `!().End` result and runs its right process in the caller's
+context. Child captures follow the ordinary spawn rules. Unquotes retain
+their result type unless `endbang_antiquotes` requires `!().End`.
+
 ## 8. Compatibility and examples
 
 ### 8.1 Required source changes

@@ -1,8 +1,13 @@
+open import FrescoPrelude;
+
+sig main : modal [Wild] (() -> Int)
 fun main() {
+  sig giver : modal [Wild] ((Int,Int,!Int.!Int.?Int.EndQuery) -> Int)
   fun giver(x,y,s) {
     <| s[x].s[y].s(z).s().{z} |>
   }
 
+  sig grabber : modal [Wild] ((?Int.?Int.!Int.EndBang) -> EndBang)
   fun grabber(s) {
     <| s(x).s(y).s[x+y].{s} |>
   }

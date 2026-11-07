@@ -1,0 +1,107 @@
+---
+config: tests/fresco_sessions.config
+args: --fresco --path=lib/stdlib
+---
+
+CP unquotes retain ordinary result types
+<| {42} |>
+stdout : 42 : Int
+
+CP composition exchanges values and returns the caller result
+examples/sessions/gng-cp.links
+filemode : true
+stdout : 13 : Int
+
+CP selection and offer execute the calculator
+examples/sessions/calc-cp-endbang.links
+filemode : true
+stdout : 42 : Int
+
+CP linking executes in both orientations
+examples/sessions/fuse-cp.links
+filemode : true
+stdout : (42, 42) : (Int, Int)
+
+CP composition closes the split sending endpoint
+<| nu c.(c[] | c().{42}) |>
+stdout : 42 : Int
+
+CP give checks the payload before rebinding the channel
+<| nu c.(c[40+2].c[] | c(x).c().{x}) |>
+stdout : 42 : Int
+
+CP composition requires a split sending end on the left
+<| nu c.({close(c)} | {close(c)}) |>
+exit : 1
+stderr : @.*Type error:.*
+
+CP give-nothing requires a split sending end
+fun(c:End) { <| c[] |> }
+exit : 1
+stderr : @.*Type error:.*
+
+CP channel endpoints cannot be duplicated
+fun(c:(!().End)) { (<| c[] |>,c) }
+exit : 1
+stderr : @.*Type error:.*
+
+CP spawned code cannot capture a contextual function
+{ var f = fun() { 42 }; <| nu c.(c[f()].c[] | c(x).c().{x}) |> }
+exit : 1
+stderr : @.*Type error:.*
+
+CP composition rejects the caller's handled effect in its child
+effect E { Read : () => Int; } handle <E> (<| nu c.(c[do Read].c[] | c(x).c().{x}) |>) { case x -> x case <Read => k> -> k(42) }
+exit : 1
+stderr : @.*Type error:.*
+
+CP caller code retains its handled effect
+effect E { Read : () => Int; } handle <E> (<| nu c.(c[40].c[] | c(x).c().{x+do Read}) |>) { case x -> x case <Read => k> -> k(2) }
+stdout : 42 : Int
+
+CP generated primitives resist source shadowing
+{ var send=0; var new=0; var accept=0; var request=0; var close=0; var wait=0; var closeBang=0; <| nu c.(c[42].c[] | c(x).c().{x}) |> }
+stdout : 42 : Int
+
+CP unquotes retain the Wild requirement
+sig f : () -> Int fun f() { <| {42} |> } f()
+exit : 1
+stderr : @.*Type error:.*
+
+CP payload effects run once before the channel continuation
+<| nu c.(c[{ print("first"); 40 }].c[{ print("second"); 2 }].c[] | c(x).c(y).c().{x+y}) |>
+stdout : firstsecond42 : Int
+
+CP left composition consumes an absolute linear capture once
+{ var f = (linfun() { 42 } : modal [] (() -@ Int)); <| nu c.(c[f()].c[] | c(x).c().{x}) |> }
+stdout : 42 : Int
+
+CP left composition rejects reuse of a linear capture
+{ var f = (linfun() { 21 } : modal [] (() -@ Int)); <| nu c.(c[f()+f()].c[] | c(x).c().{x}) |> }
+exit : 1
+stderr : @.*Type error:.*
+
+CP unquotes honour the split-end setting
+<| {42} |>
+args : --fresco --set=endbang_antiquotes=true
+exit : 1
+stderr : @.*Type error:.*
+
+CP unquotes accept a split end with the setting enabled
+open import FrescoPrelude; closeBang(<| {makeEndBang()} |>)
+args : --fresco --path=lib/stdlib --set=endbang_antiquotes=true
+stdout : () : ()
+
+CP nested selection preserves each continuation
+<| nu c.(offer c { case Go -> offer c { case Next -> c[42].c[] } } | Go c.Next c.c(x).c().{x}) |>
+stdout : 42 : Int
+
+CP consumed channel names cannot be reused
+fun(c:(?().End)) { <| c().{c} |> }
+exit : 1
+stderr : @.*Type error:.*
+
+CP offer rejects an empty case set
+fun(c:([&|Go:!().End|&])) { <| offer c {} |> }
+exit : 1
+stderr : @.*Type error:.*

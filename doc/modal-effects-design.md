@@ -805,6 +805,34 @@ Fresco removes it. Contextual row equality ignores that flag when both tails
 are closed, after comparing their fields. Open-row dual flags and legacy IR
 equality remain unchanged.
 
+### D7 CP integration
+
+Check CP using ordinary blocks, session operations and angel spawn. Direct
+CP inference rebinds channel continuations and removes consumed channel names;
+small source expansions supply split-end operations and composition. Private
+primitive bindings refer to the runtime's
+canonical primitives; source bindings cannot replace generated session calls.
+Expand the split-end operations locally and use structural `!().End` and
+`?().End` annotations, so CP needs no prelude or source type alias.
+
+Grab and give rebind the channel to its continuation. Give evaluates the
+payload before that rebinding. Selection and offer reuse their checked source
+constructs. Empty grab waits and closes; empty give sends unit and closes.
+Give-nothing checks and returns `!().End`. Link consumes dual endpoints and
+returns a fresh split sending end. Composition creates an access point,
+spawns an angel child for its left process, closes that process's split sending
+end and binds the dual endpoint for the right process in the caller context.
+Keep the existing `Wild` requirement and `endbang_antiquotes` setting.
+The parser produces give-nothing for `c[]`; its retained internal empty-give
+constructor is covered by a syntax-tree test. Skeleton inference supplies the
+fixed split-end result of link and give-nothing, then full inference checks
+the channels and their use.
+
+The existing typed CP pass sets the first link binder twice, and its transform
+reports a unit result for link. The contextual translation uses the two written
+channel names and the split sending result directly. It shares the ordinary
+session and actor rules, including endpoint use and absolute child captures.
+
 ### D7 prelude prerequisites
 
 Library migration exposed two frontend gaps. Skeleton inference checks a

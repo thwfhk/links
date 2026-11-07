@@ -638,6 +638,7 @@ and infer_node support s mode source =
   | G.FnAppl (fn,args) ->
      infer_application support s mode pos (fun s mode -> infer_term support s mode fn) args
   | G.Spawn (kind,location,body,_) -> infer_spawn support s mode pos kind location body
+  | G.CP process -> infer_cp support s mode process
   | G.Select (label,channel) ->
      let s,channel,row = infer_session_channel support s pos true channel in
      let s,payload = if support = C.Skeleton && row = S.Ghost then s,S.Ghost
@@ -1119,6 +1120,90 @@ and infer_handler support s mode pos source =
     (s,(List.hd bodies).typ) bodies in
   let s,handler,typ = leave_handler before handler_marker s handler typ in
   s,term pos typ (Handle handler)
+and infer_cp support s mode process =
+  let pos = WithPos.pos process in
+  if support = C.Type && Option.is_none (EffectRow.find wild s.ambient) then
+    error pos "CP requires Wild in the ambient context";
+  let var name = WithPos.make ~pos (G.Var name) in
+  let binder name = WithPos.make ~pos (G.Pattern.Variable
+    (WithPos.make ~pos (G.Binder.make ~name ()))) in
+  let unit = tuple [] in
+  let end_bang = S.Output (unit,S.End) in
+  (* Terminal CP forms expose their fixed result during the skeleton pass;
+     the full pass checks their channels and performs ordinary usage checks. *)
+  let continue s pattern value body =
+    let before = s in let mark,s = marker s in
+    unique_patterns pos [pattern];
+    let s,pattern = check_pattern support s pattern value.typ in
+    let s,body = infer_cp support s mode body in
+    let s = check_bound_usage support pos before s in
+    leave before mark s (term pos body.typ (Let ([Pattern (pattern,value)],body))) in
+  let consume s channel value body =
+    let before = s in let mark,s = marker s in
+    let s = { s with variables = List.filter (fun v -> v.name <> channel) s.variables } in
+    let s,body = infer_cp support s mode body in
+    leave before mark s (term pos body.typ
+      (Let ([Value (Utility.gensym ~prefix:"$fresco_cp_consumed_" (),value)],body))) in
+  match WithPos.node process with
+  | G.CPUnquote (bindings,body) ->
+     let expression = WithPos.make ~pos (G.Block (bindings,body)) in
+     let force_end = (Settings.Reflection.reflect "endbang_antiquotes").Settings.Reflection.current_value = Some "true" in
+     if not force_end then infer_term support s mode expression else
+     if support = C.Skeleton then
+       coerce support s pos mode (term pos end_bang (Constant (Constant.Bool false))) else
+     let s,expression = infer_term support s (C.Check end_bang) expression in
+     coerce support s pos mode expression
+  | G.CPGrab ((channel,_),Some payload,body) ->
+     let s,value = infer_cp_call support s C.Infer pos "receive" [var channel] in
+     let pattern = WithPos.make ~pos (G.Pattern.Tuple
+       [WithPos.make ~pos:(WithPos.pos payload) (G.Pattern.Variable payload);binder channel]) in
+     continue s pattern value body
+  | G.CPGrab ((channel,_),None,body) ->
+     let s,value = infer_cp_expansion support s C.Infer (FrescoCP.wait (var channel)) in
+     consume s channel value body
+  | G.CPGive ((channel,_),Some payload,body) ->
+     let s,value = infer_cp_call support s C.Infer pos "send" [payload;var channel] in
+     continue s (binder channel) value body
+  | G.CPGive ((channel,_),None,body) ->
+     let s,value = infer_cp_expansion support s C.Infer (FrescoCP.close_bang (var channel)) in
+     consume s channel value body
+  | G.CPGiveNothing channel ->
+     if support = C.Skeleton then
+       coerce support s pos mode (term pos end_bang (Constant (Constant.Bool false))) else
+     let s,value = infer_term support s (C.Check end_bang) (var (G.Binder.to_name channel)) in
+     coerce support s pos mode value
+  | G.CPSelect (channel,label,body) ->
+     let name = G.Binder.to_name channel in
+     let s,value = infer_term support s C.Infer (WithPos.make ~pos (G.Select (label,var name))) in
+     continue s (binder name) value body
+  | G.CPOffer (channel,branches) ->
+     let name = G.Binder.to_name channel in
+     let cases = List.map (fun (label,body) ->
+       WithPos.make ~pos:(WithPos.pos body) (G.Pattern.Variant (label,Some (binder name))),
+       WithPos.make ~pos:(WithPos.pos body) (G.CP body)) branches in
+     infer_offer support s mode pos (var name) cases
+  | G.CPLink (left,right) ->
+     if support = C.Skeleton then
+       coerce support s pos mode (term pos end_bang (Constant (Constant.Bool false))) else
+     let s,value = infer_cp_call support s (C.Check unit) pos "link"
+       [var (G.Binder.to_name left);var (G.Binder.to_name right)] in
+     let s,body = infer_cp_expansion support s (C.Check end_bang) (FrescoCP.make_end pos) in
+     coerce support s pos mode (term pos body.typ
+       (Let ([Value (Utility.gensym ~prefix:"$fresco_cp_link_" (),value)],body)))
+  | G.CPComp (channel,left,right) ->
+     infer_cp_expansion support s mode (FrescoCP.compose channel left right)
+and infer_cp_call support s mode pos name args =
+  infer_application support s mode pos (fun s mode ->
+    let s,fn = primitive s pos name in coerce support s pos mode fn) args
+and infer_cp_expansion support s mode expansion =
+  let pos = WithPos.pos expansion.FrescoCP.source in
+  let before = s in let mark,s = marker s in
+  let s,bindings = List.fold_left (fun (s,bindings) (name,actual) ->
+    let s,value = primitive s pos actual in
+    let s,_ = bind s name value.typ in s,bindings @ [Value (name,value)])
+    (s,[]) expansion.FrescoCP.primitives in
+  let s,body = infer_term support s mode expansion.FrescoCP.source in
+  leave before mark s (term pos body.typ (Let (bindings,body)))
 and infer_application support s mode pos infer_fn args =
   let s,skargs = infer_many C.Skeleton s (C.Check S.Ghost) args in
   let arg_type = tuple (List.map (fun e -> e.typ) skargs) in

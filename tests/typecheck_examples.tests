@@ -420,6 +420,7 @@ filemode : true
 Typecheck example file examples/sessions/calc-cp-endbang.links
 examples/sessions/calc-cp-endbang.links
 filemode : true
+args : --fresco --path=lib/stdlib
 
 Typecheck example file examples/sessions/calc-cp.links
 examples/sessions/calc-cp.links
@@ -533,6 +534,7 @@ filemode : true
 Typecheck example file examples/sessions/fuse-cp.links
 examples/sessions/fuse-cp.links
 filemode : true
+args : --fresco --path=lib/stdlib
 
 Typecheck example file examples/sessions/fuse.links
 examples/sessions/fuse.links
@@ -553,6 +555,7 @@ filemode : true
 Typecheck example file examples/sessions/gng-cp.links
 examples/sessions/gng-cp.links
 filemode : true
+args : --fresco --path=lib/stdlib
 
 Typecheck example file examples/sessions/linear_if.links
 examples/sessions/linear_if.links

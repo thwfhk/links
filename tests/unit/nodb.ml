@@ -30,6 +30,7 @@ let suites =
            Fresco_source_tests.suite;
            Fresco_actor_tests.suite;
            Fresco_session_tests.suite;
+           Fresco_cp_tests.suite;
            Fresco_modal_source_tests.suite;
            Fresco_effect_ir_tests.suite;
            ModalSyntax.suite;

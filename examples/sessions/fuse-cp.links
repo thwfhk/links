@@ -1,6 +1,8 @@
+open import FrescoPrelude;
+
 typename Calc = [&|Add:?Int.?Int.!Int.EndBang, Mul:?Int.?Int.!Int.EndBang|&];
 
-sig calc : (Calc) ~> EndBang
+sig calc : modal [Wild] ((Calc) -> EndBang)
 fun calc(s) {
   <| offer s {
        case Add -> s(x).s(y).s[x+y].s[]
@@ -8,7 +10,7 @@ fun calc(s) {
   } |>
 }
 
-sig user : (~Calc, !Int.EndBang) ~> EndBang
+sig user : modal [Wild] ((~Calc, !Int.EndBang) -> EndBang)
 fun user(c, return) {
   <| Mul c.c[7].c[6].c(result).c().return[result].return[] |>
 }
