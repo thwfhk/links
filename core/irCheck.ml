@@ -718,7 +718,7 @@ struct
 
   type environment = datatype Env.t
 
-  let checker ~strict contextual effect_signatures initial_ambient tyenv =
+  let checker ~strict contextual effect_signatures initial_ambient free_type_variables tyenv =
   let handle_ir_type_error value alternative occurrence =
     handle_ir_type_error ~strict value alternative occurrence in
   object (o)
@@ -726,7 +726,7 @@ struct
 
     (*val env = env*)
     val closure_def_env = Env.empty
-    val type_var_env = Env.empty
+    val type_var_env = free_type_variables
 
     (* initialize to the default row of allowed toplevel effects*)
     val allowed_effects = Lib.typing_env.effect_row
@@ -1857,7 +1857,10 @@ struct
         with FrescoKind.Error _ -> raise_ir_type_error "Invalid scoped effect declaration" (SProg program)
       ) state.effect_signatures
     end;
-    let checker = checker ~strict state.contextual state.effect_signatures state.ambient_effects tenv in
+    let free_type_variables = if state.contextual then state.context.Context.free_type_variables
+      else Env.empty in
+    let checker = checker ~strict state.contextual state.effect_signatures state.ambient_effects
+      free_type_variables tenv in
     if state.contextual then checker#validate_scoped_row state.ambient_effects (SProg program);
     let checker, program, datatype = checker#program program in
     if strict then checker#check_eq_types state.datatype datatype (SProg program);

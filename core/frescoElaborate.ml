@@ -117,10 +117,10 @@ let skvar var = let id, kind, freedom = variable var in S.Var (id, kind, freedom
 
 (* The maps contain only descriptors. Allocation and requirement refinement
    are confined to the state returned by this call. *)
-let register_free state scope syntax =
+let register_free ?(bound=IntSet.empty) state scope syntax =
   let collector = object
     inherit SugarTraversals.fold as super
-    val bound = IntSet.empty
+    val bound = bound
     val variables = IntMap.empty
     method bound = bound
     method variables = variables
@@ -346,6 +346,32 @@ let context_ids state = List.filter_map (function
   | FrescoContext.Rigid declaration -> Some declaration.FrescoContext.id
   | FrescoContext.Flexible flexible -> Some flexible.FrescoContext.declaration.id
   | _ -> None) (FrescoContext.entries state.context)
+
+(* Resolve variable occurrences without elaborating the annotations containing
+   them: nested annotations can mention aliases declared later in this body. *)
+let parameter_scope state scope occurrences =
+  let open Datatype in
+  let syntax = List.map (fun (position,primary,var) ->
+    let typ = match primary with
+      | PrimaryKind.Type -> TypeVar var
+      | PrimaryKind.Row -> Record ([],Open var)
+      | PrimaryKind.Presence -> Variant (["$parameter",Var var],Closed) in
+    WithPos.make ~pos:position typ) occurrences in
+  let position = match occurrences with (position,_,_) :: _ -> position | [] -> Position.dummy in
+  let syntax = WithPos.make ~pos:position (Tuple syntax)
+    |> DesugarTypeVariables.contextual_annotation ~scope ~avoid:(context_ids state) in
+  let bound = IntSet.of_list (List.map (fun (_,q,_) -> Quantifier.to_var q) scope) in
+  let state = register_free ~bound state scope syntax in
+  let resolved = match WithPos.node syntax with Tuple ts -> ts | _ -> assert false in
+  let scope = List.fold_left2 (fun scope (_,_,source) syntax ->
+    let name = SugarTypeVar.get_unresolved_name_exn source in
+    if List.exists (fun (current,_,_) -> current = name) scope then scope else
+    let var = match WithPos.node syntax with
+      | TypeVar var | Record ([],Open var) | Variant ([_,Var var],Closed) -> var
+      | _ -> assert false in
+    let id,kind,freedom = variable var in
+    (name,Quantifier.make id kind,freedom) :: scope) scope occurrences resolved in
+  state,scope
 
 let annotation ?(scope=[]) ?(resolved=false) state syntax =
   let syntax = normalise syntax in

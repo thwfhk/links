@@ -556,3 +556,51 @@ typename Narrow=[|B|]; typename Wide=[|A:Int|B|]; fun(x:Narrow){x:Wide}
 args : --fresco
 exit : 1
 stderr : @.*Type error:.*
+
+Named flexible parameter annotations execute through a higher-order call
+(fun(f){f})(fun(y:%a){y:%a})(42)
+args : --fresco
+stdout : 42 : Int
+
+Annotated curried parameters use the supplied forall scope
+sig f:forall a,b.(a)->(b)->b fun f(x:a)(y:b){y:b} (f(0)(42),f(0)(true))
+args : --fresco
+stdout : (42, true) : (Int, Bool)
+
+Nested parameter annotations can use a local alias
+(fun(){typename Local=Int; fun(x:Local){x}})()(42)
+args : --fresco
+stdout : 42 : Int
+
+Annotated callback arguments retain their surrounding forall binders
+sig use:forall a.((a)->a,a)->a fun use(f,x){f(x)} sig run:forall a.(a)->a fun run(x:a){use(fun(y:a){y:a},x)} (run(42),run(true))
+args : --fresco
+stdout : (42, true) : (Int, Bool)
+
+A free rigid parameter annotation is not implicitly generalised
+(fun(x:a){x:a})(42)
+args : --fresco
+exit : 1
+stderr : @.*Type error: Types are inconsistent.*In expression: fun\(x:a\)\{x:a\}.*
+
+Named flexible parameter solutions persist across calls
+var f=fun(x:%a){x:%a}; (f(42),f(true))
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*consistency.*In expression: f.*
+
+Parameter variables reject conflicting primary kinds
+fun(x:a,y:(|a)){(x,y)}
+args : --fresco
+exit : 1
+stderr : @.*Type error: Mismatch in kind for type variable.*a.*In expression:.*
+
+A named rigid parameter annotation passes strict IR checking
+fun(x:a){x:a}
+args : --fresco
+stdout : @fun : \(([a-z]+)\) -> \1
+
+A nested named parameter survives the outer lambda scope
+fun(x:Int){fun(y:b){y:b}}
+args : --fresco
+stdout : @fun : \(Int\) -> \(([a-z]+)\) -> \1

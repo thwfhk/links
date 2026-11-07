@@ -22,6 +22,13 @@ and dependent library/example migrations are outside the current D7 scope.
 Prioritise readiness for general-purpose functional programming: ordinary
 functions, polymorphism, data structures, modules, effects, and batch/REPL use.
 
+The user's later instruction to finish the most important work narrows the
+remaining D7 work to the annotation-scope fix, the default frontend switch and
+checks of ordinary functional/modal programs, REPL use and compilation.
+Remaining example migrations and exhaustive conversion of legacy regression
+suites are deferred. Explicit legacy runs remain compatibility checks and do
+not count as contextual coverage.
+
 - D1--D3d provide row/modality operations, shared modal types, surface syntax,
   and effect/operation resolution. D4a--D4f1 provide kind checks, persistent
   contexts, checked assignment, shared-type scope exit/export, skeleton
@@ -120,7 +127,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D7e2b | Canonical contextual prelude and custom batch bootstrap | `539bcd4d` |
 | D7e3a | Contextual REPL definitions, environments, loading and recovery | `605f0454` |
 | D7e3b | Contextual type search with isolated candidate checks | `b6fddccc` |
-| D7e4 | Contextual JavaScript compilation without source evaluation | This commit |
+| D7e4 | Contextual JavaScript compilation without source evaluation | `32df0483` |
+| D7e5a0 | Shared parameter annotation scopes and trusted rigid IR declarations | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -134,7 +142,7 @@ also requires the affected build/tests and review described in AGENTS.md.
 
 | Task | Depends on | Completion check |
 |---|---|---|
-| D7: Links integration and migration | D5--D6 | In-scope syntax/primitive inventory is covered; batch, REPL and typed rechecks use Fresco; in-scope programs migrate and old effect syntax rejects |
+| D7: Links integration and migration | D5--D6 | Core syntax/primitives and functional/modal programs are covered; batch, REPL, compilation and typed rechecks use Fresco by default; old effect syntax rejects |
 | D8: backends, documentation and final review | D7 | Interpreter/JS deep-handler checks, migration guide and selected suites pass; in-scope legacy effect inference is removed |
 
 D4k supplies the type-annotation and effect-signature elaboration APIs needed
@@ -214,13 +222,14 @@ user requested on 7 November 2026. The main agent owns integration and these rec
 | D7e3a: REPL and ordinary directives | Definitions, loading and environments use persistent contextual state with failure recovery |
 | D7e3b: contextual type search | Type queries elaborate and match through isolated contextual inference without changing live state |
 | D7e4: JavaScript compilation | Existing compile options consume contextual IR without evaluating the source program |
-| D7e5: default frontend and source migration | Fresco is the default; ordinary selected suites and handler examples migrate; old effect syntax rejects |
+| D7e5a0: parameter annotation scopes | Named type, row and presence variables share the intended parameter/body scope; annotations elaborate once and preserve scope-exit checks |
+| D7e5: default frontend | Fresco is the default; functional/modal source checks and no-selector batch/REPL/compile checks pass; old effect syntax rejects; compatibility routes are explicit |
 | D8a: backend execution | Actual interpreter and JavaScript deep-handler execution covers nesting, repeated identities, parameters and closures; interpreter shallow execution and JavaScript rejection remain checked |
 | D8b: removal and final review | In-scope legacy inference routes are removed; recursive consumers and exports are reviewed; migration guide and final selected suites pass |
 
 D7a (`1f7ff34e`), D7b1 (`4fad3532`) and D7b2a (`db0d3a75`) are complete.
 D7b2b (`72e47dbc`) and D7b3 (`f09237bd`) are complete. D7b4a0 (`8cfe88a3`) is complete. D7b4a collection migration (`0b2c0d3f`) is complete. D7b4b (`efc1bca2`) is complete. D7b4c (`4e009da6`) is complete. D7c1a core actors (`ef94a794`) and D7c1b actor variants are complete.
-D7c1b1 polymorphic export is complete. D7c1c actor migration is complete. D7c2a session primitives are complete. D7c2b selection/offer is complete. D7c2c1 split-end helpers are complete. D7c2c2 callback helpers are complete. D7c2d CP is complete. D7c2e1 ordinary session regression migration is complete. D7c2e2 ordinary examples are complete. D7c2e3a recursive/encoded protocol examples are complete. D7c2e3b remaining generic protocols are complete. D7d3a ordinary list, character and date helpers are complete. D7d3b ordinary helper interfaces are complete. D7d3c binary trees are complete. D7d3d0 empty switches is complete. D7d3d1 switch functions is complete. D7d3d2 Church numerals and bit lists is complete. D7d3d3a explicit upcasts is complete; D7d3d3b extensible cases is complete. D7d3e1 buffered channels is complete. D7e1 checked preparation is complete. D7e2a persistent parsing state is complete. D7e2b contextual prelude loading is complete. D7e3a contextual REPL is complete. D7e3b contextual type search is complete. D7e4 contextual JavaScript compilation is complete. Later boundaries may be split further when a dependency needs
+D7c1b1 polymorphic export is complete. D7c1c actor migration is complete. D7c2a session primitives are complete. D7c2b selection/offer is complete. D7c2c1 split-end helpers are complete. D7c2c2 callback helpers are complete. D7c2d CP is complete. D7c2e1 ordinary session regression migration is complete. D7c2e2 ordinary examples are complete. D7c2e3a recursive/encoded protocol examples are complete. D7c2e3b remaining generic protocols are complete. D7d3a ordinary list, character and date helpers are complete. D7d3b ordinary helper interfaces are complete. D7d3c binary trees are complete. D7d3d0 empty switches is complete. D7d3d1 switch functions is complete. D7d3d2 Church numerals and bit lists is complete. D7d3d3a explicit upcasts is complete; D7d3d3b extensible cases is complete. D7d3e1 buffered channels is complete. D7e1 checked preparation is complete. D7e2a persistent parsing state is complete. D7e2b contextual prelude loading is complete. D7e3a contextual REPL is complete. D7e3b contextual type search is complete. D7e4 contextual JavaScript compilation is complete. D7e5a0 parameter annotation scopes are complete. The prioritised D7e5 default switch remains. Later boundaries may be split further when a dependency needs
 its own review and checks.
 
 ### Future TODOs
@@ -237,10 +246,19 @@ assignments in the design's migration inventory.
 | D7d1: XML and forms | XML, form/page constructs and their prelude dependencies check and execute |
 | D7d2: FFI and function locations | Foreign declarations, locations and FFI dependencies survive checking and lowering |
 | D7d3e2: console example | Console helpers and finite actor games retain their callback contracts and results |
+| D7e5 migration remainder | Convert remaining legacy regression assertions and standalone examples using the recorded inventory; preserve intended rejection causes and complete type expectations |
 
 The console example is deferred following the user's concern about time spent
 on work peripheral to modal effects. Prioritise D7 frontend integration; this
 scope choice is recorded for review in the design.
+
+The remaining legacy-suite and example conversion was deferred after the user
+asked to focus on finishing the most important work. Its inventory is
+`/tmp/links-d7e5-inventory.md`, independently reviewed in
+`/tmp/links-d7e5-inventory-review-summary.log`. Keep existing migrated cases on
+Fresco and label the remaining suites as legacy compatibility. D8's legacy
+inference removal must resolve this compatibility dependency before deleting
+the retained route.
 
 The formlet State helpers retain their existing capture contract and are deferred
 with D7d1. This implementation choice is [recorded for review](doc/modal-effects-design.md#d7-ordinary-library-inventory).
@@ -258,46 +276,58 @@ and design:
 
 ## Latest task and verification
 
-7 November 2026, D7e4, base `b6fddccc`: contextual compile mode emits
-JavaScript from the prelude and checked inputs without source evaluation.
-Composition refreshes earlier types from final solutions and retains preceding
-final expressions. The [design](doc/modal-effects-design.md#d7-frontend-integration-plan)
-records input ordering, isolation and output choices for review.
+7 November 2026, D7e5a0, base `32df0483`: lambda parameter annotations
+share named type, row and presence variables through sibling, curried and nested
+parameters. Copied parameter annotations elaborate once. Per-call immutable
+caches preserve identities across inference passes; enclosing quantified names
+retain priority. Strict contextual IR receives active source rigid declarations.
+The [design](doc/modal-effects-design.md#contextual-annotation-and-declaration-elaboration)
+records the scope choice and deferred later-result forall name metadata.
 
-Default-prelude compilation exposed an existing unary arithmetic wrapper arity
-bug. The small repair was checked through generated syntax and isolated Node
-execution: `-42,-2.5,42`. Deep-handler JavaScript execution remains in D8.
-The initial diagnostic is `/tmp/links-d7e4-default-diagnostic.log`.
+Independent review passed all twelve new unit groups and nine new source cases;
+no remaining findings: `/tmp/links-d7e5a0-review-summary.log`.
+Early review corrected collection from body patterns and descriptor cache/scope
+handling. Strict IR testing exposed missing free-rigid transport; missing IDs,
+wrong kinds and closed forall binders remain rejected. All eight writer hashes
+matched. Writers finished and the combined diff was inspected before integration.
 
-Independent review passed three composition groups and six selected compile
-groups; no remaining findings: `/tmp/links-d7e4-review-summary.log`.
-All eleven writer hashes matched. Writers finished and the combined diff was
-reviewed before integration. Initial test corrections preserved earlier output
-when a later isolated input fails and supplied the custom arithmetic runtime's
-unused receive guard.
-
-The build, 1,517 unit tests, ten REPL scenarios, ten compile scenarios and
-636 regression cases passed; 14 existing examples remain ignored. Logs are in
-`/tmp/links-d7e4-verification`; `revision.txt` and `source.sha256` identify the
-tested sources. Frozen source hashes and added/new-line whitespace passed.
+The build, 1,529 unit tests, ten REPL scenarios, ten compile scenarios and
+1,075 mixed regression cases passed; 16 existing cases remain ignored. These
+mixed-suite results include legacy compatibility checks. Logs are in
+`/tmp/links-d7e5a0-verification`; `revision.txt` and `source.sha256` identify the
+tested sources. Frozen source hashes and added-line whitespace passed.
 
 | Command | Result | Log |
 |---|---|---|
 | `make no-db` | Passed | `build.log` |
-| `opam exec -- ./run-tests nodb-unit-tests` | 1,517 passed | `unit.log` |
+| `opam exec -- ./run-tests nodb-unit-tests` | 1,529 passed | `unit.log` |
 | `python3 tests/fresco_repl.py` | 10 passed | `repl.log` |
 | `python3 tests/fresco_compile.py` | 10 passed | `compile.log` |
+| `./test-harness tests/fresco_batch.tests` | 11 passed | `fresco_batch.log` |
+| `./test-harness tests/fresco_examples.tests` | 36 passed | `fresco_examples.log` |
+| `./test-harness tests/switch_functions.tests` | 14 passed | `switch_functions.log` |
+| `./test-harness tests/records.tests` | 30 passed | `records.log` |
+| `./test-harness tests/patterns.tests` | 34 passed, 2 ignored | `patterns.log` |
+| `./test-harness tests/binaryTrees.tests` | 28 passed | `binaryTrees.log` |
 | `./test-harness tests/handlers.tests` | 95 passed | `handlers.log` |
 | `./test-harness tests/effect_sugar.tests` | 44 passed | `effect_sugar.log` |
-| `./test-harness tests/fresco.tests` | 105 passed | `fresco.log` |
-| `./test-harness tests/fresco_modal.tests` | 20 passed | `fresco_modal.log` |
-| `./test-harness tests/fresco_batch.tests` | 11 passed | `fresco_batch.log` |
+| `./test-harness tests/fresco.tests` | 114 passed | `fresco.log` |
 | `./test-harness tests/fresco_typecheck.tests` | 9 passed | `fresco_typecheck.log` |
+| `./test-harness tests/fresco_modal.tests` | 20 passed | `fresco_modal.log` |
+| `./test-harness tests/fresco_prelude.tests` | 86 passed | `fresco_prelude.log` |
+| `./test-harness tests/fresco_actors.tests` | 49 passed | `fresco_actors.log` |
+| `./test-harness tests/fresco_sessions.tests` | 35 passed | `fresco_sessions.log` |
+| `./test-harness tests/fresco_cp.tests` | 22 passed | `fresco_cp.log` |
+| `./test-harness tests/fresco_session_examples.tests` | 24 passed | `fresco_session_examples.log` |
+| `./test-harness tests/messages.tests` | 11 passed | `messages.log` |
+| `./test-harness tests/sessions.tests` | 13 passed | `sessions.log` |
+| `./test-harness tests/typed_ir.tests` | 26 passed | `typed_ir.log` |
+| `./test-harness tests/functions.tests` | 33 passed | `functions.log` |
 | `./test-harness tests/polymorphism.tests` | 55 passed | `polymorphism.log` |
 | `./test-harness tests/typecheck_examples.tests` | 170 passed, 14 ignored | `typecheck_examples.log` |
+| `./test-harness tests/continuations.tests` | 15 passed | `continuations.log` |
 | `./test-harness tests/modules.tests` | 41 passed | `modules.log` |
 | `./test-harness tests/freezeml.tests` | 60 passed | `freezeml.log` |
-| `./test-harness tests/typed_ir.tests` | 26 passed | `typed_ir.log` |
 | `make rule-check` | Passed; GNU-find tab check skipped, formatter disabled | `rule-check.log` |
 | Frozen source hashes and `git diff --check` | Passed | `source-check.log`, `diff-check.log` |
 
@@ -310,7 +340,16 @@ Documentation-only update: text and whitespace checked.
 
 ## Next action
 
-Complete D7e frontend/source migration, starting with the default frontend and selected source migration. Prioritise ordinary functional-language use. Keep socket
+The forced-contextual baseline is in `/tmp/links-d7e5-inventory/` at
+`32df0483`. Review confirmed duplicate elaboration of lambda parameter
+annotations with distinct rigid identities. This prerequisite is complete. Switch the default frontend and verify its
+entry points. Selected evidence:
+`/tmp/links-d7e5-review-selected-functions.log`. Closure capture still rejects
+linear payloads; the inferred type display needs separate checking.
+
+Complete the prioritised D7 work: the default frontend with core
+functional/modal checks. Keep the remaining legacy-suite and
+example conversion in future work. Keep socket
 examples, XML/forms, FFI/function locations and their dependent migrations
 in [future work](#future-todos).
 Review, test and commit each milestone before the next. Pause after D7 is

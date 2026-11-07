@@ -29,6 +29,11 @@ val effects : t -> effect_info list
 val resolution_state : t -> DesugarModules.resolution_state
 val with_resolution_state : DesugarModules.resolution_state -> t -> t
 
+(** Predeclare free named lambda-parameter variables without elaborating aliases
+    or effects in their enclosing annotations. Existing scope entries win. *)
+val parameter_scope : t -> scope ->
+  (SourceCode.Position.t * CommonTypes.PrimaryKind.t * Sugartypes.SugarTypeVar.t) list -> t * scope
+
 (** Resolve source names and type variables. Free named variables and anonymous
     placeholders are retained in the returned context; lexical descriptors in
     [scope] retain their identities and modal kinds. Scope entries are ordered

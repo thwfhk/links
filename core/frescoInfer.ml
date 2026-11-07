@@ -76,6 +76,7 @@ type t = {
   uses : int IntMap.t;
   next : int;
   operator_table : Shunting.Optable.t;
+  parameter_scopes : (G.Pattern.with_pos list list * G.phrase * FrescoElaborate.scope) list;
 }
 let wild_elaboration = FrescoElaborate.declarations FrescoElaborate.empty "effect Wild {}"
 let wild = match FrescoElaborate.effects wild_elaboration with
@@ -86,7 +87,7 @@ let builtin_effects = List.map (fun (info : FrescoElaborate.effect_info) -> info
   (FrescoElaborate.effects initial_elaboration)
 let empty = { elaboration = initial_elaboration; variables = []; scope = [];
   ambient = [{ EffectRow.name = wild; arguments = [] }]; locks = [];
-  uses = IntMap.empty; next = 0; operator_table = Shunting.Optable.defaults }
+  uses = IntMap.empty; next = 0; operator_table = Shunting.Optable.defaults; parameter_scopes = [] }
 let elaboration s = s.elaboration
 let with_elaboration elaboration s = { s with elaboration }
 let context s = FrescoElaborate.context s.elaboration
@@ -264,6 +265,119 @@ let add_term s name typ = fst (bind s name (from_type s Position.dummy typ))
 let annotate s syntax =
   let elaboration, a = FrescoElaborate.annotation ~scope:s.scope ~resolved:true s.elaboration syntax in
   let s = { s with elaboration } in s, from_type s (WithPos.pos syntax) a.FrescoElaborate.typ
+let pattern_annotation s syntax = function
+  | None -> annotate s syntax
+  | Some typ -> s,from_type s (WithPos.pos syntax) typ
+
+let prepare_patterns s patterns =
+  let state = ref s in
+  let visitor = object
+    inherit SugarTraversals.map as super
+    method! patternnode = function
+      | G.Pattern.HasType (pattern,(syntax,_)) ->
+         let s,typ = annotate !state syntax in
+         state := s;
+         let typ = to_type s (WithPos.pos syntax) typ in
+         G.Pattern.HasType (super#pattern pattern,(syntax,Some typ))
+      | pattern -> super#patternnode pattern
+  end in
+  let patterns = List.map visitor#pattern patterns in
+  !state,patterns
+
+(* Only parameter annotations contribute names. Quantified types and explicit
+   abstractions mask their binders; signed nested functions establish a scope
+   of their own. Body annotations retain their existing elaboration rule. *)
+let parameter_variables groups body =
+  let occurrences = ref [] and bound = ref StringSet.empty in
+  let masked names f =
+    let previous = !bound in
+    bound := List.fold_left (fun set name -> StringSet.add name set) previous names;
+    Fun.protect ~finally:(fun () -> bound := previous) f in
+  let add position primary var = match var with
+    | G.SugarTypeVar.TUnresolved (name,_,_) when name <> "" && name.[0] <> '$'
+        && not (StringSet.mem name !bound) ->
+       occurrences := (position,primary,var) :: !occurrences
+    | _ -> () in
+  let annotation position = object
+    inherit SugarTraversals.map as super
+    method! datatypenode = function
+      | G.Datatype.TypeVar var as typ -> add position PrimaryKind.Type var; typ
+      | G.Datatype.Forall (qs,body) ->
+         masked (List.map G.SugarQuantifier.get_unresolved_name_exn qs)
+           (fun () -> super#datatypenode (G.Datatype.Forall (qs,body)))
+      | G.Datatype.Mu (var,body) ->
+         masked [G.SugarTypeVar.get_unresolved_name_exn var]
+           (fun () -> G.Datatype.Mu (var,super#datatype body))
+      | typ -> super#datatypenode typ
+    method! row_var = function
+      | G.Datatype.Open var as row -> add position PrimaryKind.Row var; row
+      | G.Datatype.Recursive (var,row) ->
+         masked [G.SugarTypeVar.get_unresolved_name_exn var]
+           (fun () -> G.Datatype.Recursive (var,super#row row))
+      | row -> super#row_var row
+    method! fieldspec = function
+      | G.Datatype.Var var as field -> add position PrimaryKind.Presence var; field
+      | field -> super#fieldspec field
+  end in
+  let in_parameters = ref false in
+  let visitor = object
+    inherit SugarTraversals.map as super
+    method! datatype syntax = syntax
+    method! funlit = function
+      | G.NormalFunlit (groups,body) ->
+         in_parameters := true;
+         let groups = List.map (List.map super#pattern) groups in
+         in_parameters := false;
+         G.NormalFunlit (groups,super#phrase body)
+      | funlit -> super#funlit funlit
+    method! patternnode = function
+      | G.Pattern.HasType (pattern,(syntax,cached)) when !in_parameters ->
+         ignore ((annotation (WithPos.pos syntax))#datatype syntax);
+         G.Pattern.HasType (super#pattern pattern,(syntax,cached))
+      | pattern -> super#patternnode pattern
+    method! phrasenode = function
+      | G.TAbstr (qs,body) ->
+         masked (List.map G.SugarQuantifier.get_unresolved_name_exn qs)
+           (fun () -> G.TAbstr (qs,super#phrase body))
+      | phrase -> super#phrasenode phrase
+    method! function_definition definition =
+      if Option.is_some definition.G.fun_signature then definition
+      else super#function_definition definition
+    method! recursive_functionnode definition =
+      if Option.is_some definition.G.rec_signature then definition
+      else super#recursive_functionnode definition
+    method! bindingnode = function
+      | G.Val (_,_,_,Some _) as binding -> binding
+      | binding -> super#bindingnode binding
+  end in
+  ignore (visitor#funlit (G.NormalFunlit (groups,body)));
+  List.rev !occurrences
+
+let prepare_parameter_scope s source = match WithPos.node source with
+  | G.FunLit (_,_,G.NormalFunlit (groups,body),_) ->
+     let cached = match List.find_opt (fun (old_groups,old_body,_) ->
+       old_groups == groups && old_body == body) s.parameter_scopes with
+       | Some (_,_,scope) -> scope | None -> [] in
+     let incoming = s.scope in
+     let retained = List.filter (fun (name,_,_) ->
+       not (List.exists (fun (current,_,_) -> current = name) incoming)) cached in
+     let s = List.fold_left (fun s (_,q,freedom) ->
+       if Option.is_some (FrescoContext.lookup (Quantifier.to_var q) (context s)) then s else
+       let declaration = { FrescoContext.id = Quantifier.to_var q;
+         kind = Quantifier.to_kind q; modal_kind = Quantifier.to_modal_kind q } in
+       ctx s (get (WithPos.pos source) "Cannot restore parameter variable"
+         ((match freedom with `Rigid -> FrescoContext.add_rigid
+           | `Flexible -> FrescoContext.add_flexible) declaration (context s)))) s retained in
+     let elaboration,scope = FrescoElaborate.parameter_scope s.elaboration
+       (incoming @ retained) (parameter_variables groups body) in
+     let introduced = cached @ List.filter (fun (name,_,_) ->
+       not (List.exists (fun (current,_,_) -> current = name) (incoming @ cached))) scope in
+     let others = List.filter (fun (old_groups,old_body,_) ->
+       not (old_groups == groups && old_body == body)) s.parameter_scopes in
+     { s with elaboration; scope;
+       parameter_scopes = (groups,body,introduced) :: others }
+  | _ -> s
+
 let signature s ~global syntax =
   let elaboration, a = FrescoElaborate.signature ~global ~scope:s.scope ~resolved:true s.elaboration syntax in
   let s = { s with elaboration } in s, from_type s (WithPos.pos syntax) a.FrescoElaborate.typ, a.FrescoElaborate.scope
@@ -582,6 +696,11 @@ let primitive s pos name =
   | _ -> s,expression
 
 let rec infer_term support s mode source =
+  let original_scope = s.scope in
+  let s = prepare_parameter_scope s source in
+  let s,e = infer_scoped support s mode source in
+  { s with scope = original_scope },e
+and infer_scoped support s mode source =
   let pos = WithPos.pos source in
   let intro = match WithPos.node source with
     | G.TupleLit [_] -> false
@@ -1476,6 +1595,7 @@ and infer_lambda support s mode pos lin groups body =
   | patterns :: groups ->
      unique_patterns pos (List.concat (patterns :: groups));
      let before = s in let mark,s = marker s in
+     let s,patterns = prepare_patterns s patterns in
      let arity = List.length patterns in
      let s,domain,result_mode,result_expected = match mode with
        | C.Check expected -> (match head s pos expected with
@@ -1494,7 +1614,7 @@ and infer_lambda support s mode pos lin groups body =
        | [],[] -> s,List.rev names,List.rev lets
        | p :: ps,t :: ts ->
           let s,t = match WithPos.node p with
-            | G.Pattern.HasType (_,(a,_)) -> let s,a = annotate s a in join s pos t a
+            | G.Pattern.HasType (_,(a,cached)) -> let s,a = pattern_annotation s a cached in join s pos t a
             | _ -> if support = C.Type then guess s pos t else s,t in
           let name = match WithPos.node p with
             | G.Pattern.Variable b -> G.Binder.to_name b
@@ -1528,8 +1648,8 @@ and check_pattern ?(discard=true) support s source typ =
   match head s pos typ with
   | S.Modal (modality,payload) ->
      let s,source = match WithPos.node source with
-       | G.Pattern.HasType (pattern,(annotation,_)) ->
-          let annotated_state,annotation = annotate s annotation in
+       | G.Pattern.HasType (pattern,(annotation,cached)) ->
+          let annotated_state,annotation = pattern_annotation s annotation cached in
           (match head annotated_state pos annotation with
            | S.Modal _ -> let s,_ = join annotated_state pos typ annotation in s,pattern
            | _ -> s,source)
@@ -1550,8 +1670,8 @@ and check_pattern_node ~discard support s source typ =
   | G.Pattern.Variable b -> let name = G.Binder.to_name b in
      let s,_ = bind s name typ in result s typ (PVariable name)
   | G.Pattern.Any -> let s = if support = C.Type then unlimited s pos typ else s in result s typ PAny
-  | G.Pattern.HasType (p,(annotation,_)) ->
-     let s,t = annotate s annotation in
+  | G.Pattern.HasType (p,(annotation,cached)) ->
+     let s,t = pattern_annotation s annotation cached in
      let s,p = check_pattern ~discard support s p typ in
      let s,inner = join s pos p.pattern_inner_type t in
      s,{ p with pattern_inner_type = inner }
@@ -1709,11 +1829,15 @@ and infer_binding support global s binding =
   | _ -> error pos "This declaration is not supported by contextual inference"
 
 let infer s source =
-  let s,e = infer_term C.Type s C.Infer source in s,export s e
+  let s,e = infer_term C.Type { s with parameter_scopes = [] } C.Infer source in
+  { s with parameter_scopes = [] },export s e
 let check s source typ =
+  let s = { s with parameter_scopes = [] } in
   let typ = from_type s (WithPos.pos source) typ in
-  let s,e = infer_term C.Type s (C.Check typ) source in s,export s e
+  let s,e = infer_term C.Type s (C.Check typ) source in
+  { s with parameter_scopes = [] },export s e
 let program s syntax =
+  let s = { s with parameter_scopes = [] } in
   let reserved = object
     inherit SugarTraversals.map as super
     method! effect_declaration declaration =
@@ -1738,7 +1862,7 @@ let program s syntax =
   let combined = export s (term position body.typ (Let (bindings,body))) in
   match combined.node with
   | Let (bindings,body) ->
-     { s with operator_table = shunter#get_optable () },bindings,Option.map (fun _ -> body) expression
+     { s with operator_table = shunter#get_optable (); parameter_scopes = [] },bindings,Option.map (fun _ -> body) expression
   | _ -> assert false
 let read s text =
   let syntax,source = Parse.parse_string Parse.program text in

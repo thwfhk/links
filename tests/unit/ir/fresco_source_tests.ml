@@ -2357,4 +2357,165 @@ let upcast_suite = "explicit width upcasts" >::: [
       (Types.Arrow (Types.make_tuple_type [Types.int_type;Types.bool_type],Types.int_type)));
 ]
 
-let suite = "Fresco source" >::: [reference_suite; source_suite; callback_sequence_suite; primitive_suite; regex_suite; continuations_suite; comprehensions_suite; sections_patterns_updates_suite; collection_suite; foundation_suite; remaining_core_suite; split_end_suite; session_callback_suite; ir_suite; recursive_value_suite; empty_switch_suite; upcast_suite]
+let parameter_scope_suite = "lambda parameter annotation scope" >::: [
+  "named variables share sibling curried and nested parameter scope" >:: (fun _ ->
+    ignore (identity_variables `Rigid (infer "fun(x:a){x:a}"));
+    let arguments,result = arrow (infer "fun(x:a,y:a){(x,y)}") in
+    let ids = List.map (variable `Rigid) arguments in
+    assert_equal (List.hd ids) (List.nth ids 1);
+    assert_equal ids (List.map (variable `Rigid) (tuple result));
+    let first,rest = unary (infer "fun(x:a)(y:a){(x,y)}") in
+    let second,result = unary rest in
+    let id = variable `Rigid first in
+    assert_equal id (variable `Rigid second);
+    assert_equal [id;id] (List.map (variable `Rigid) (tuple result));
+    let _,nested = unary (infer "fun(x){fun(y:b){y:b}}") in
+    ignore (identity_variables `Rigid nested));
+
+  "row and presence names are shared by sibling parameters" >:: (fun _ ->
+    let arguments,_ = arrow (infer
+      "fun(x:[|Foo|Bar{p}|r|],y:[|Foo|Bar{p}|r|]){(x,y)}") in
+    let components typ = match expose typ with
+      | Types.Variant row -> (match expose row with
+          | Types.Row (fields,tail,false) ->
+             variable `Rigid (Unionfind.peek tail),
+             variable `Rigid (Utility.StringMap.find "Bar" fields)
+          | _ -> assert_failure "Expected an open variant row")
+      | _ -> assert_failure "Expected a variant" in
+    assert_equal (components (List.hd arguments)) (components (List.nth arguments 1)));
+
+  "free rigid variables retain rigidity and primary kinds" >:: (fun _ ->
+    List.iter (fun source -> reject (fun () -> infer source))
+      ["(fun(x:a){x:a})(42)";
+       "fun(x:a,y:b){if(true)x else y}";
+       "fun(x:a,y:(|a)){(x,y)}";
+       "fun(x:[|Foo|Bar{p}|],y:p){(x,y)}"]);
+
+  "flexible variables retain solutions across published states" >:: (fun _ ->
+    let state,_,_ = Infer.read Infer.empty "var f=fun(x:%a){x:%a}; ()" in
+    let solved,_,result = Infer.read state "f(42)" in
+    expect_type Types.int_type (Option.get result).Infer.typ;
+    reject (fun () -> Infer.read solved "f(true)");
+    let _,_,result = Infer.read state "f(true)" in
+    expect_type Types.bool_type (Option.get result).Infer.typ;
+    ignore (identity_variables `Flexible (Option.get (Infer.lookup state "f"))));
+
+  "supplied quantifiers and nested signed functions keep their own binders" >:: (fun _ ->
+    execution (Value.box [`Int 42;`Bool true]) {|
+      sig f:forall a,b.(a)->(b)->b
+      fun f(x:a)(y:b){y:b}
+      (f(0)(42),f(0)(true))
+    |} |> int_bool;
+    execution (Value.box [`Int 42;`Bool true]) {|
+      sig make:(Int)->forall b.(b)->b fun make(x:Int)(y){y}
+      (make(0)(42),make(0)(true))
+    |} |> int_bool;
+    let outer,inner = unary (infer {|
+      fun(x:a){sig f:forall a.(a)->a fun f(y:a){y:a} f}
+    |}) in
+    let outer = variable `Rigid outer in
+    let inner,_ = forall inner in
+    assert_bool "The nested signature shadows the free outer a" (outer <> inner);
+    let outer,inner = unary (infer {|fun(x:a){/\ [a]. {fun(y:a){y:a}}}|}) in
+    let outer = variable `Rigid outer in
+    let inner,_ = forall inner in
+    assert_bool "The explicit abstraction shadows the outer a" (outer <> inner);
+    reject (fun () -> infer
+      "sig f:forall a,b.(a)->(b)->a fun f(x:a)(y:b){y:b} ()"));
+
+  "nested annotations see aliases declared earlier in the body" >:: (fun _ ->
+    execution (`Int 42)
+      "(fun(){typename Local=Int; fun(x:Local){x}})()(42)"
+      |> expect_type Types.int_type;
+    execution (`Int 42) {|
+      typename Identity=forall a.(a)->a;
+      sig id:Identity fun id(x){x}
+      (fun(f:modal [] Identity){f(42)})(~id)
+    |} |> expect_type Types.int_type);
+
+  "application skeleton and full passes share free parameter descriptors" >:: (fun _ ->
+    ignore (identity_variables `Rigid (infer "(fun(f){f})(fun(y:a){y:a})"));
+    execution (`Int 42) "(fun(f){f})(fun(y:%a){y:%a})(42)"
+      |> expect_type Types.int_type;
+    execution (Value.box [`Int 42;`Bool true]) {|
+      sig use:forall a.((a)->a,a)->a fun use(f,x){f(x)}
+      sig run:forall a.(a)->a
+      fun run(x:a){use(fun(y:a){y:a},x)}
+      (run(42),run(true))
+    |} |> int_bool);
+
+  "body-only annotations keep their existing rule" >:: (fun _ ->
+    List.iter (fun source -> reject (fun () -> infer source))
+      ["fun(x){x:a}";
+       "fun(x){var (y:a)=x; y}";
+       "fun(x){switch(x){case (y:a) -> y}}"]);
+
+  "repeated inference preserves input syntax and restores name scopes" >:: (fun _ ->
+    let syntax,source = Parse.parse_string Parse.program "fun(x:a){x:a}" in
+    let _,expression = (ResolvePositions.resolve_positions source)#program syntax in
+    let source = Option.get expression in
+    let _,first = Infer.infer Infer.empty source in
+    let _,second = Infer.infer Infer.empty source in
+    assert_bool "Separate calls allocate separate free declarations"
+      (identity_variables `Rigid first.Infer.typ <> identity_variables `Rigid second.Infer.typ);
+    (match SourceCode.WithPos.node source with
+     | Sugartypes.FunLit (_,_,Sugartypes.NormalFunlit
+         ([[pattern]],_),_) ->
+        (match SourceCode.WithPos.node pattern with
+         | Sugartypes.Pattern.HasType (_ ,(_,None)) -> ()
+         | _ -> assert_failure "Input parameter syntax was changed")
+     | _ -> assert_failure "Expected the input lambda");
+    let state,_,_ = Infer.read Infer.empty "var f=fun(x:a){x:a}; ()" in
+    let previous = identity_variables `Rigid (Option.get (Infer.lookup state "f")) in
+    let _,_,next = Infer.read state "fun(y:a){y:a}" in
+    assert_bool "A later input has a new lexical a"
+      (previous <> identity_variables `Rigid (Option.get next).Infer.typ));
+
+  "free rigid parameter variables pass strict lowering and backend checks" >:: (fun _ ->
+    with_checked_ir (fun () ->
+      List.iter (fun source ->
+        let prepared = FrescoFrontend.prepare_string (FrescoFrontend.empty ()) source in
+        ignore (FrescoFrontend.compile prepared))
+        ["fun(x:a){x:a}"; "fun(x:a,y:a){(x,y)}";
+         "fun(x){fun(y:b){y:b}}";
+         "fun(x:a)(y:a){(x,y)}";
+         "fun(x:[|Foo|Bar{p}|r|],y:[|Foo|Bar{p}|r|]){(x,y)}"];
+      let prepared = FrescoFrontend.prepare_string (FrescoFrontend.empty ())
+        "var f=fun(x:a){x:a}; 0" in
+      let prepared = FrescoFrontend.append_string prepared "f" in
+      ignore (FrescoFrontend.compile prepared)));
+
+  "IR free rigid variables need the checked matching declaration" >:: (fun _ ->
+    let id = Types.fresh_raw_variable () in
+    let kind = PrimaryKind.Type,(Linearity.Unl,Restriction.Any) in
+    let typ = Types.Meta (Unionfind.fresh (Types.Var (id,kind,`Rigid))) in
+    let name = Var.fresh_raw_var () in
+    let check free_type_variables =
+      let typing_context = Context.{ empty with free_type_variables;
+        variable_environment = Env.Int.bind name typ Env.Int.empty } in
+      let state = IrTransform.{ context=typing_context; contextual=true; effect_signatures=[];
+        ambient_effects=[]; global_vars=Utility.IntSet.empty;
+        retained_vars=Utility.IntSet.empty; datatype=typ } in
+      ignore (IrCheck.Typecheck.program_strict state ([],Ir.Return (Ir.Variable name))) in
+    let rejects variables = match check variables with
+      | () -> assert_failure "Unchecked rigid scope was accepted"
+      | exception Errors.IRTypeError _ -> () in
+    check (Env.Int.bind id kind Env.Int.empty);
+    rejects Env.Int.empty;
+    rejects (Env.Int.bind id (PrimaryKind.Row,(Linearity.Unl,Restriction.Any)) Env.Int.empty);
+    let state,_,result = Infer.read Infer.empty
+      "sig id:forall a.(a)->a fun id(x:a){x:a} id" in
+    let q,_ = forall (match expose (Option.get result).Infer.typ with
+      | Types.Modal (_,typ) -> typ | typ -> typ) in
+    assert_bool "Closed forall binders leave the free source context"
+      (Option.is_none (FrescoContext.lookup q (Infer.context state))));
+
+  "parameter preparation preserves ordinary usage checks" >:: (fun _ ->
+    execution (`Int 42) "(fun(x:%a){x:%a})(42)" |> expect_type Types.int_type;
+    List.iter (fun source -> reject (fun () -> infer source))
+      ["fun(c:End){(c,c)}"; "fun(c:End){()}";
+       "fun(c:End){fun(){c}}";
+       "var f=fun(x:%a){x:%a}; (f(42),f(true))"]);
+]
+
+let suite = "Fresco source" >::: [reference_suite; source_suite; callback_sequence_suite; primitive_suite; regex_suite; continuations_suite; comprehensions_suite; sections_patterns_updates_suite; collection_suite; foundation_suite; remaining_core_suite; split_end_suite; session_callback_suite; ir_suite; recursive_value_suite; empty_switch_suite; upcast_suite; parameter_scope_suite]

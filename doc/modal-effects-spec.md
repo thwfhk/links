@@ -315,6 +315,12 @@ supplied. Their names remain available to annotations in the function body.
 Flexible named variables and anonymous placeholders are not implicitly
 quantified.
 
+Free named type, row and presence variables in lambda parameter annotations
+share a lexical scope through sibling parameters, curried groups, nested
+lambdas and their bodies. Explicit quantified binders retain their own scope.
+Parameter annotations reuse enclosing signature variables. Newly introduced
+names retain normal annotation rigidity and do not supply implicit quantifiers.
+
 An identity with type `forall a. modal [] ((a) -> a)` can be used at both
 `Int` and `Bool`. A local identity inferred with one unknown argument type
 cannot be used at both types without supplying polymorphism.

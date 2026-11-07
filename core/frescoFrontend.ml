@@ -369,6 +369,12 @@ let prior_types inference names =
   | Error _ ->
      raise (Errors.internal_error ~filename:"frescoFrontend.ml" ~message:"Cannot export previously checked bindings")
 
+let free_type_variables inference =
+  List.fold_left (fun variables -> function
+    | FrescoContext.Rigid declaration ->
+       Env.Int.bind declaration.FrescoContext.id declaration.FrescoContext.kind variables
+    | _ -> variables) Env.Int.empty (FrescoContext.entries (FrescoInfer.context inference))
+
 let effect_signatures inference =
   let elaboration = elaboration inference in
   let headers = DesugarModules.effect_headers (FrescoElaborate.resolution_state elaboration) in
@@ -432,7 +438,9 @@ let prepare_program state program =
     | Some expression ->
        expression.typ, Ir.with_bindings bindings (computation lowered [] expression) in
   let vars names = StringMap.fold (fun _ (var, _) vars -> IntSet.add var vars) names IntSet.empty in
-  let context = Context.{ empty with variable_environment = prior_types inference state.names } in
+  let context = Context.{ empty with
+    variable_environment = prior_types inference state.names;
+    free_type_variables = free_type_variables inference } in
   let prepared = {
     state = { state with inference; names };
     input = state;
@@ -485,7 +493,8 @@ let append prepare previous input =
   let names = publish previous.input.names lowered definitions
     |> StringMap.filter (fun name _ -> StringMap.mem name next.state.names) in
   let context = Context.{ empty with
-    variable_environment = prior_types next.state.inference previous.input.names } in
+    variable_environment = prior_types next.state.inference previous.input.names;
+    free_type_variables = free_type_variables next.state.inference } in
   let prepared = { next with
     input = previous.input; source;
     state = { next.state with names };

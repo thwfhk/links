@@ -1181,9 +1181,19 @@ rejected tests cover both boundaries, including the four legacy defects.
 The frontend audit at `8b27a80b` is recorded in
 `/tmp/links-d7e-inventory.md`. First separate checked preparation from execution,
 then add default/custom prelude loading, REPL directives and JavaScript output.
-Switch the default after the ordinary source migration checks pass. Retain
-explicit legacy access for deferred and excluded fixtures until D8; never
-fall back to legacy after a contextual type error.
+Switch the default after core functional/modal and entry-point checks pass.
+Retain explicit legacy access for compatibility, deferred and excluded fixtures;
+never fall back to legacy after a contextual type error.
+
+**Choice for review following the user's priority instruction:** defer the
+remaining standalone examples and exhaustive legacy-suite conversion. Finish
+the annotation-scope repair and default frontend, using the dedicated contextual
+suites and actual batch/REPL/compilation checks for D7 coverage. Keep existing
+migrated cases contextual and run old assertions through an explicit compatibility
+configuration. Report those compatibility results separately. The alternative is
+to finish every old-suite conversion before switching the default. The remaining
+work and false-positive negative assertions are recorded in
+`/tmp/links-d7e5-inventory.md`; legacy removal must resolve that dependency.
 
 The contextual frontend now checks typed lowering and retains operator
 fixities and loads the configured prelude as described below. Complete REPL
@@ -1583,6 +1593,44 @@ quantifiers. Preserve an explicit absolute modality in the leading type
 structure, including either placement relative to quantifiers. An absolute
 modality in a callback type does not supply the outer function's default.
 Local and expression annotations retain their supplied modalities.
+
+**Choice for review: lambda parameter annotation scope.** Share free named
+type, row and presence variables across sibling parameters, curried groups,
+nested lambda parameters and their bodies. Reuse enclosing signature or
+explicit-quantifier names. Introduce newly collected free declarations before
+the outer lambda's term marker, so a nested parameter's type can occur in the
+outer result. Restore the caller's name scope on exit. Explicit quantifiers,
+recursive type binders and nested signed functions retain their own scopes.
+
+Keep normal annotation rigidity: `a` is rigid and `%a` is flexible. These free
+declarations do not introduce `forall` or implicit let generalisation. Collect
+parameter variables before checking; elaborate parameter types at their normal
+source position, where local aliases and effects are available. Elaborate each
+parameter annotation once. Names used only in body annotations retain their
+existing rule.
+
+The selected legacy comparison is `DesugarTypeVariables.typevar_visitor`, which
+shares its variable map through ordinary nested function literals and restores
+explicit quantified scopes. Requiring signatures for these parameter annotations
+would reject existing source forms and conceal duplicate elaboration in the
+contextual lambda checker. The D7e5 review evidence is
+`/tmp/links-d7e5-review-selected-functions.log`.
+
+Strict contextual IR checks receive active free rigid variable IDs and ordinary
+kinds from the checked source context. Carry these in the shared compiler
+context, empty by default and ignored by the legacy checker. Do not discover
+them from the candidate IR: that would accept an undeclared or escaped variable.
+Local quantified binders retain the IR checker's existing entry/restore rules.
+The source probe that exposed this missing transport is
+`/tmp/links-d7e5a0-probes.log`.
+
+**Choice for review:** leave source-name metadata for a `forall` nested inside
+a function result for later work. For example, in
+`forall a. (a) -> forall b. (b) -> b`, the later `b` is available to type
+checking but its source name is not supplied to an annotated second parameter.
+Omitting that parameter annotation retains the nested-quantifier signature.
+The alternative is to extend source-name metadata through arrow positions;
+this is separate from sharing free parameter annotation variables.
 
 **Confirmed by the user: closed ordinary braced row arguments.** Treat the parser's
 synthetic `$eff` tail as closed when it comes from an ordinary braced Row
