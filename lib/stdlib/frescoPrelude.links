@@ -562,3 +562,35 @@ fun isInt (x) { x =~ /-?[0-9]+$/ }
 
 sig isFloat : (String) -> Bool
 fun isFloat (x) { x =~ /-?[0-9]+(\.[0-9]+)?$/ }
+
+### sessions with split ends ###
+typename EndBang = !().End;
+typename EndQuery = ?().End;
+
+sig wait : modal [Wild] ((EndQuery) -> ())
+fun wait(s) {
+  var (_, s) = receive(s);
+  close(s)
+}
+
+sig closeBang : modal [Wild] ((EndBang) -> ())
+fun closeBang(s) {
+  close(send((), s))
+}
+
+sig makeEndBang : modal [Wild] (() -> EndBang)
+fun makeEndBang() {
+  var ap = new();
+  var _ = spawn {
+    var c = accept(ap);
+    wait(c)
+  };
+  request(ap)
+}
+
+sig linkSync : forall s::Type(Any,Session,Any).
+  modal [Wild] ((s, ~s) -> EndBang)
+fun linkSync(s, c) {
+  link(s, c);
+  makeEndBang()
+}

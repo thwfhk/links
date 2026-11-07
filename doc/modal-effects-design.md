@@ -765,6 +765,14 @@ A request/acknowledgement exchange through the relay executes on both paths.
 D8 must check and resolve the close/link case; the reproducer and both results
 are in `/tmp/links-d7c2a-review-link-runtime.log`. D7c2a retains the runtime.
 
+Stage `EndBang = !().End`, `EndQuery = ?().End`, `wait`, `closeBang`,
+`makeEndBang` and `linkSync` in the contextual prelude. Their signatures require
+`Wild`. `wait` receives unit and closes; `closeBang` sends unit and closes.
+`makeEndBang` creates a peer that waits for that unit. `linkSync` links the
+supplied endpoints and returns a fresh `EndBang`; its protocol parameter
+retains `Type(Any,Session,Any)`. These ordinary session operations require no
+session-failure annotation or control-flow-linearity construct.
+
 **Choice for review:** require `Wild` for session selection and offer. Legacy
 source checking omits this requirement, while the IR checker requires it.
 The contextual rule agrees with the session primitives and the recorded

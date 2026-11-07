@@ -143,3 +143,47 @@ Maybe helpers retain their supplied element type
 open import FrescoPrelude; (fromMaybe(Just(42),0), fromMaybe(Nothing,true), isJust(Nothing : Maybe (Int)))
 args : --fresco --path=lib/stdlib
 stdout : (42, true, false) : (Int, Bool, Bool)
+
+Split-end helpers synchronise two processes
+open import FrescoPrelude; var ap = (new() : AP(EndBang)); var p = spawn { print("child"); closeBang(accept(ap)) }; { wait(request(ap)); print("parent") }
+args : --fresco --path=lib/stdlib
+stdout : childparent() : ()
+
+MakeEndBang creates a closing endpoint
+open import FrescoPrelude; closeBang(makeEndBang())
+args : --fresco --path=lib/stdlib
+stdout : () : ()
+
+LinkSync links two protocols and returns a closing endpoint
+open import FrescoPrelude; var first = new(); var second = new(); var producer = spawn { var c = send(42,accept(first)); var (ack,c) = receive(c); close(c) }; var relay = spawn { closeBang(linkSync(request(first),accept(second))) }; { var (x,c) = receive(request(second)); close(send((),c)); x }
+args : --fresco --path=lib/stdlib
+stdout : 42 : Int
+
+LinkSync retains a contextual residual protocol
+open import FrescoPrelude; sig join : forall s::Type(Any,Session,Any). modal [Wild] ((s,~s) -> EndBang) fun join(a,b) { ~linkSync[s](a,b) } ()
+args : --fresco --path=lib/stdlib
+stdout : () : ()
+
+Wait rejects the sending end
+open import FrescoPrelude; fun(c:EndBang) { wait(c) }
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*
+
+CloseBang rejects the receiving end
+open import FrescoPrelude; fun(c:EndQuery) { closeBang(c) }
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*
+
+Split-end helpers require Wild
+open import FrescoPrelude; sig finish : (EndBang) -> () fun finish(c) { closeBang(c) } ()
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*
+
+A split-end channel cannot be reused
+open import FrescoPrelude; fun(c:EndBang) { closeBang(c); closeBang(c) }
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*

@@ -1869,6 +1869,69 @@ let remaining_core_suite = "staged remaining core prelude" >::: [
        "find(fun(x) { x > do Get },[1,2])"]);
 ]
 
+let split_end_suite = "staged split-end session helpers" >::: [
+  "makeEndBang supplies a fresh end for each call" >:: (fun _ ->
+    collection_execution (`Int 42) {|
+      { closeBang(makeEndBang()); closeBang(makeEndBang()); 42 }
+    |} |> expect_type Types.int_type);
+
+  "wait and closeBang synchronise dual split ends" >:: (fun _ ->
+    collection_execution (`Int 42) {|
+      var ap = (new() : AP(EndBang));
+      var child = spawn { closeBang(accept(ap)) };
+      { wait(request(ap)); 42 }
+    |} |> expect_type Types.int_type);
+
+  "linkSync relays both directions and closes its returned end" >:: (fun _ ->
+    collection_execution (`Int 42) {|
+      var left = (new() : AP(!Int.?().EndBang));
+      var right = (new() : AP(!Int.?().EndBang));
+      var bridge = spawn { closeBang(linkSync(accept(left),request(right))) };
+      var sender = spawn {
+        var c = send(42,accept(right));
+        var (_,c) = receive(c);
+        closeBang(c)
+      };
+      { var (x,c) = receive(request(left)); wait(send((),c)); x }
+    |} |> expect_type Types.int_type);
+
+  "linkSync retains a generic contextual session protocol" >:: (fun _ ->
+    ignore (collection_check {|
+      sig relay : forall s::Type(Any,Session,Any).
+        modal [Wild] ((s,~s) -> EndBang)
+      fun relay(c,d) { ~linkSync[s](c,d) }
+      fun(c:(!(() -> Int).End),d:(?(() -> Int).End)) {
+        closeBang(linkSync(c,d))
+      }
+    |}));
+
+  "split ends require their matching helper" >:: (fun _ ->
+    List.iter (fun source -> reject (fun () -> collection_check source))
+      ["fun(c:EndBang) { wait(c) }";
+       "fun(c:EndQuery) { closeBang(c) }";
+       "fun(c:End) { wait(c) }";
+       "fun(c:End) { closeBang(c) }"]);
+
+  "linkSync rejects endpoints with the same non-self-dual protocol" >:: (fun _ ->
+    reject (fun () -> collection_check {|
+      fun(c:(!Int.End),d:(!Int.End)) { closeBang(linkSync(c,d)) }
+    |}));
+
+  "split-end helpers require Wild" >:: (fun _ ->
+    List.iter (fun source -> reject (fun () -> collection_check source))
+      ["sig pure : (EndQuery) -> () fun pure(c) { wait(c) } ()";
+       "sig pure : (EndBang) -> () fun pure(c) { closeBang(c) } ()";
+       "sig pure : () -> EndBang fun pure() { makeEndBang() } ()";
+       "sig pure : (End,End) -> EndBang fun pure(c,d) { linkSync(c,d) } ()"]);
+
+  "split ends retain linear consumption" >:: (fun _ ->
+    List.iter (fun source -> reject (fun () -> collection_check source))
+      ["{ var c = makeEndBang(); (c,c) }";
+       "{ var c = makeEndBang(); () }";
+       "fun(c:EndBang) { closeBang(c); closeBang(c) }";
+       "fun(c:End,d:End) { var _ = linkSync(c,d); () }"]);
+]
+
 let ir_suite =
   let arrow argument result = Types.Arrow (Types.make_tuple_type [argument], result) in
   let int, bool = Types.int_type, Types.bool_type in
@@ -1901,4 +1964,4 @@ let ir_suite =
       reject_coercion (forall (fun a -> arrow a int)) (forall (fun a -> arrow a a)));
   ]
 
-let suite = "Fresco source" >::: [reference_suite; source_suite; callback_sequence_suite; primitive_suite; regex_suite; continuations_suite; comprehensions_suite; sections_patterns_updates_suite; collection_suite; foundation_suite; remaining_core_suite; ir_suite]
+let suite = "Fresco source" >::: [reference_suite; source_suite; callback_sequence_suite; primitive_suite; regex_suite; continuations_suite; comprehensions_suite; sections_patterns_updates_suite; collection_suite; foundation_suite; remaining_core_suite; split_end_suite; ir_suite]
