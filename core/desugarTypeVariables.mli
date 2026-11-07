@@ -12,3 +12,15 @@ val is_anonymous : Sugartypes.SugarTypeVar.t -> bool
 val standalone_signature : Sugartypes.Datatype.with_pos -> Sugartypes.Datatype.with_pos
 
 include Transform.Untyped.S
+
+(** Contextual resolution owns fresh points and does not mutate supplied
+    descriptor scopes. Anonymous ordinary row variables are also resolved.
+    [avoid] reserves IDs in the caller's existing context; [scope] IDs are
+    reserved automatically. Scope entries are ordered nearest first.
+    Declaration callers must check closure before calling these functions. *)
+val contextual_annotation :
+  ?scope:(string * CommonTypes.Quantifier.t * CommonTypes.Freedom.t) list ->
+  ?avoid:Types.tid list ->
+  Sugartypes.Datatype.with_pos -> Sugartypes.Datatype.with_pos
+val contextual_effect : ?avoid:Types.tid list -> Sugartypes.effect_declaration -> Sugartypes.effect_declaration
+val contextual_alias : ?avoid:Types.tid list -> Sugartypes.alias -> Sugartypes.alias

@@ -25,6 +25,7 @@ let suites =
            FrescoCompare.suite;
            FrescoConsistency.suite;
            FrescoSubtype.suite;
+           FrescoElaborate.suite;
            ModalSyntax.suite;
            ModalDeclarations.suite;
            ModalResolution.suite;

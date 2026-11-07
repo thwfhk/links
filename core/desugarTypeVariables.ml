@@ -169,8 +169,8 @@ However, this is not the same as setting defaults. Instead,
 the info in the map takes precedence.
 
 *)
-let make_opt_kinded_var k ?(is_eff=false) sk_opt freedom : Types.t =
-  let var = Types.fresh_raw_variable () in
+let make_opt_kinded_var ?(fresh=Types.fresh_raw_variable) k ?(is_eff=false) sk_opt freedom : Types.t =
+  let var = fresh () in
   let sk = concrete_subkind ~is_effect:is_eff sk_opt in
   Types.Var (var, (k, sk), freedom)
 
@@ -179,30 +179,30 @@ let get_var_info (info : Types.t) =
   | Types.Var (var, k, fd) -> (var, k, fd)
   | _ -> raise found_non_var_meta_var
 
-let make_fresh_entry pk_opt ?(is_eff=false) sk_opt freedom : tyvar_map_entry =
+let make_fresh_entry ?(fresh=Types.fresh_raw_variable) pk_opt ?(is_eff=false) sk_opt freedom : tyvar_map_entry =
   let open PrimaryKind in
   match pk_opt with
     | None -> TVUnkinded (sk_opt, freedom)
     | Some Type ->
-       let point = Unionfind.fresh (make_opt_kinded_var ~is_eff:is_eff Type sk_opt freedom) in
+       let point = Unionfind.fresh (make_opt_kinded_var ~fresh ~is_eff:is_eff Type sk_opt freedom) in
        TVType (sk_opt, point)
     | Some Row ->
-       let point = Unionfind.fresh (make_opt_kinded_var ~is_eff:is_eff Row sk_opt freedom) in
+       let point = Unionfind.fresh (make_opt_kinded_var ~fresh ~is_eff:is_eff Row sk_opt freedom) in
        TVRow (sk_opt, point)
     | Some Presence ->
-       let point = Unionfind.fresh (make_opt_kinded_var ~is_eff:is_eff Presence sk_opt freedom) in
+       let point = Unionfind.fresh (make_opt_kinded_var ~fresh ~is_eff:is_eff Presence sk_opt freedom) in
        TVPresence (sk_opt, point)
 
 
 
 (* does not do all sanity checks *)
 (* Note that this always reuses existing points! *)
-let update_entry pk ?(is_eff=false) sk_opt freedom existing_entry : tyvar_map_entry =
+let update_entry ?(fresh=Types.fresh_raw_variable) pk ?(is_eff=false) sk_opt freedom existing_entry : tyvar_map_entry =
   let con_sk = concrete_subkind ~is_effect:is_eff sk_opt in
   let open PrimaryKind in
   match pk, existing_entry with
     | _, TVUnkinded _ ->
-       make_fresh_entry (Some pk) sk_opt freedom
+       make_fresh_entry ~fresh (Some pk) sk_opt freedom
     | Type, TVType (_, point) ->
        let (var, (_, prev_sk), _) = get_var_info (Unionfind.find point) in
        (if con_sk <> prev_sk then Unionfind.change point (Types.Var (var, (Type, con_sk), freedom)));
@@ -230,7 +230,7 @@ let resolved_var_of_entry =
 
 
 
-class typevar_visitor initial_map allow_implicits =
+class typevar_visitor ?(contextual=false) ?(fresh=Types.fresh_raw_variable) initial_map allow_implicits =
 object (o : 'self)
   inherit SugarTraversals.fold_map as super
 
@@ -316,7 +316,7 @@ object (o : 'self)
            the *existing* unionfind point carried inside the entry *)
         let entry =
           if pk' <> pk_union' || sk' <> sk_union' then
-            update_entry pk ~is_eff:is_eff sk freedom existing_entry
+            update_entry ~fresh pk ~is_eff:is_eff sk freedom existing_entry
           else
             existing_entry
         in
@@ -335,7 +335,7 @@ object (o : 'self)
            Since at this point we know the primary kind,
            this will always result in the creation of a unionfind point.
          *)
-        let entry = make_fresh_entry (Some pk) ~is_eff:is_eff sk freedom in
+        let entry = make_fresh_entry ~fresh (Some pk) ~is_eff:is_eff sk freedom in
         let o =
           if anon then o else o#bind name entry in
         let resolved_var = resolved_var_of_entry entry in
@@ -367,7 +367,7 @@ object (o : 'self)
         | _ -> pk in
       let freedom = if rigidify then `Rigid else freedom in
       (* let point = make_opt_kinded_point sk `Rigid in *)
-      let entry = make_fresh_entry pk sk freedom in
+      let entry = make_fresh_entry ~fresh pk sk freedom in
       let o' = o#bind name entry in
       let names' = StringSet.add name names in
       (o', names')
@@ -379,7 +379,7 @@ object (o : 'self)
       let o, ((pk, sk), _freedom), entry = o#unbind name original_o in
       let var = match get_entry_var_info entry with
           | Some (var, _, _) -> var
-          | None -> Types.fresh_raw_variable ()
+          | None -> fresh ()
       in
       let modal_kind = SugarQuantifier.modal_kind sq in
       (match pk, modal_kind with
@@ -412,7 +412,7 @@ object (o : 'self)
     | Mu (stv, t) ->
        let original_o = o in
        let name = SugarTypeVar.get_unresolved_name_exn stv in
-       let entry = make_fresh_entry (Some PrimaryKind.Type) None `Rigid in
+       let entry = make_fresh_entry ~fresh (Some PrimaryKind.Type) None `Rigid in
        let o = o#bind name entry in
        let o, t = o#datatype t in
        let o, _, _ = o#unbind name original_o in
@@ -429,7 +429,7 @@ object (o : 'self)
     | EffectApplication _ as ea ->
         super#row_var ea
     | Closed -> o, Closed
-    | Open srv as orig when is_anonymous srv ->
+    | Open srv as orig when not contextual && is_anonymous srv ->
        (* This transformation pass does not check whether anonymous row variables
           appear in contexts where implictly scoped variables are allowed.  *)
        o, orig
@@ -441,7 +441,7 @@ object (o : 'self)
        let original_o = o in
 
        let name = SugarTypeVar.get_unresolved_name_exn stv in
-       let entry = make_fresh_entry (Some PrimaryKind.Row) (Some default_subkind) `Rigid in
+       let entry = make_fresh_entry ~fresh (Some PrimaryKind.Row) (Some default_subkind) `Rigid in
        let o = o#bind name entry in
        let o, t = o#row r in
        let o, _, _ = o#unbind name original_o in
@@ -661,6 +661,39 @@ let standalone_signature t =
   let allow_implicits = sig_allows_implicitly_bound_vars (Some (t, None)) in
   let v = new typevar_visitor StringMap.empty allow_implicits in
   snd (v#datatype t)
+
+
+(* Contextual callers supply descriptors, never mutable points. The resolver
+   owns every point it can update while collecting ordinary-kind information. *)
+let contextual_fresh avoid =
+  let avoid = IntSet.of_list avoid in
+  let rec fresh () =
+    let id = Types.fresh_raw_variable () in
+    if IntSet.mem id avoid then fresh () else id in
+  fresh
+
+let contextual_annotation ?(scope=[]) ?(avoid=[]) t =
+  let avoid = List.map (fun (_, q, _) -> Quantifier.to_var q) scope @ avoid in
+  let initial = List.fold_left (fun map (name, q, freedom) ->
+    let pk, sk = Quantifier.to_kind q in
+    let point = Unionfind.fresh (Types.Var (Quantifier.to_var q, (pk, sk), freedom)) in
+    let entry = match pk with
+      | PrimaryKind.Type -> TVType (Some sk, point)
+      | PrimaryKind.Row -> TVRow (Some sk, point)
+      | PrimaryKind.Presence -> TVPresence (Some sk, point) in
+    StringMap.add name entry map) StringMap.empty (List.rev scope) in
+  let v = new typevar_visitor ~contextual:true ~fresh:(contextual_fresh avoid) initial true in
+  snd (v#datatype t)
+
+let contextual_effect ?(avoid=[]) declaration =
+  let v = new typevar_visitor ~contextual:true ~fresh:(contextual_fresh avoid) StringMap.empty false in
+  match snd (v#bindingnode (EffectDeclaration declaration)) with
+  | EffectDeclaration declaration -> declaration
+  | _ -> assert false
+
+let contextual_alias ?(avoid=[]) alias =
+  let v = new typevar_visitor ~contextual:true ~fresh:(contextual_fresh avoid) StringMap.empty false in
+  snd (v#alias alias)
 
 
 

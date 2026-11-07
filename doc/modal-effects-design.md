@@ -562,6 +562,75 @@ Scope the mailbox unknown with the spawned body and connect receive-pattern
 types to the resulting `Process(a)`. Handlers are not transferred to a spawned
 process, so its body receives an absolute context of its own.
 
+### Contextual annotation and declaration elaboration
+
+Reuse `DesugarTypeVariables` for source variable occurrences, ordinary kind
+inference and defaults. Convert resolved syntax through contextual type
+operations. Legacy `Instantiate.alias` removes leading quantifiers and cannot
+apply modal aliases. Keep contextual conversion separate from the legacy
+frontend until source inference is ready.
+
+`FrescoElaborate` returns persistent context, alias, typed-effect and resolution
+state. It exposes annotations, ordinary Type/Row/Presence arguments, written
+function signatures and declaration groups. The source readers attach source
+text before resolution so formatted errors retain their positions. Callers
+with already resolved module names can use the same conversion path. The
+variable resolver copies supplied descriptors into private points and avoids
+IDs already present in the context or supplied source scope.
+
+Check closure of every operation signature in an effect declaration before
+resolving its variables. Reject unbound names, including flexible names, and
+anonymous type, row and presence placeholders. Then introduce fresh rigid
+parameters and a provisional self-effect descriptor. Publish typed operations
+only after all argument and result checks pass. Keep source positions through
+conversion and report the argument or result that fails its requirement.
+
+Build named recursive declaration groups privately before checking their
+bodies. Keep raw bodies and linearity callbacks stable after publication.
+Compute ordinary linearity through contextual kind checks, starting recursive
+flags at unrestricted and repeating until they stop changing. Legacy recursive
+dependency collection scans children that need not contribute to linearity.
+Keep cyclic groups nominal and acyclic aliases transparent. Recursive declaration
+arguments, including unused arguments, retain the comparison rules recorded above.
+Aliases may contain named flexible variables and anonymous flexible Type or
+Presence placeholders, as in Links. Rigid anonymous placeholders and anonymous
+row placeholders remain rejected. Resolve allowed unknowns in a fresh declaration
+scope and retain them in the returned context across applications. Alias parameters
+and variables do not capture enclosing source type variables. Operation signatures
+remain closed.
+
+**For user review: implicit binders in written function signatures.** Preserve
+Links' convention that named rigid variables in a written signature such as
+`sig id : (a) -> a` supply quantified binders. This follows the instruction to
+retain existing non-effect behaviour and keeps those names available to
+annotations in the function body. Explicit `forall` binders retain their scope.
+This choice does not generalise unsigned inferred types, flexible `%a` variables
+or anonymous placeholders. The main alternative is to require explicit
+`forall` in every polymorphic signature, which rejects existing signed
+programs. Legacy evidence is in `desugarTypeVariables.ml`'s function/signature
+visitor, `typeSugar.ml`'s signature generalisation, and
+`tests/desugar_datatypes/nestedQuantifiers1.links`.
+
+Insert a global function signature's default `modal []` inside its leading
+quantifiers. Preserve an explicit absolute modality in the leading type
+structure, including either placement relative to quantifiers. An absolute
+modality in a callback type does not supply the outer function's default.
+Local and expression annotations retain their supplied modalities.
+
+**For user review: closed ordinary braced row arguments.** Treat the parser's
+synthetic `$eff` tail as closed when it comes from an ordinary braced Row
+argument, such as `R({x:Int})`. Links accepts this as a closed row with
+`effect_sugar=false`. With legacy effect sugar enabled, the shared grammar
+adds an effect tail even in this ordinary Row position. Contextual types have
+no such effect tails. Keep explicitly written row variables and reject explicit
+anonymous placeholders in closed declarations. The alternative is to make
+the synthetic tail an ordinary unknown row, which would allow additional fields.
+Preserve Links' first-field precedence for duplicate ordinary row labels.
+Elaborate and validate discarded fields too. Checks beneath authored recursive
+types use the completed recursive body. A discarded field is checked separately
+after closing its recursive references with the retained recursive types; its
+enclosing ordinary quantifiers keep their original scope.
+
 ### Effect and operation resolution
 
 Use separate effect lexical frames and module exports. Frames retain every

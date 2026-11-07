@@ -303,6 +303,12 @@ settings remains deferred; Fresco retains its occurs check.
    implicit `modal []`. Preserve an explicitly supplied absolute modality.
    This shorthand also applies to global recursive function signatures.
 
+As in Links, named rigid type, row and presence variables in a written function
+signature are implicitly quantified when no explicit leading `forall` is
+supplied. Their names remain available to annotations in the function body.
+Flexible named variables and anonymous placeholders are not implicitly
+quantified.
+
 An identity with type `forall a. modal [] ((a) -> a)` can be used at both
 `Int` and `Bool`. A local identity inferred with one unknown argument type
 cannot be used at both types without supplying polymorphism.
