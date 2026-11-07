@@ -928,7 +928,11 @@ struct
                 if contextual || contains_contextual_type vt || contains_contextual_type t then
                   runtime_subtype context vt t
                 else is_sub_type (vt, t) in
-              ensure (eq_types (SVal orig) context (vt, t) || subtype ())
+              let admissible =
+                if contextual || contains_contextual_type vt || contains_contextual_type t then
+                  subtype () || eq_types (SVal orig) context (vt, t)
+                else eq_types (SVal orig) context (vt, t) || subtype () in
+              ensure admissible
                 (let vt_str = string_of_datatype vt in
                  let t_str  = string_of_datatype ~refresh_tyvar_names:false t in
                  Printf.sprintf "coercion error: %s is not a subtype of %s"

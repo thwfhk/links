@@ -14,7 +14,7 @@ implementation decisions, reasons, internal invariants and source comparisons.
 ## Current status
 
 D5 and D6 are complete, independently reviewed and checked in separate
-commits. Work is paused before D7.
+commits. D7 integration is in progress.
 
 - D1--D3d provide row/modality operations, shared modal types, surface syntax,
   and effect/operation resolution. D4a--D4f1 provide kind checks, persistent
@@ -77,7 +77,7 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D4j follow-up | Direct skeleton kind checking with ordinary ghosts at `Abs` | `81cfc187` |
 | D4k | Contextual source annotation and declaration elaboration | `8a5b5743` |
 | D5 | Pure source inference, opt-in frontend, shared IR/backend execution and persistent state | `4f12cd67` |
-| D6 | Modal source inference, complete handlers, inferred effect arguments and scoped IR/backend support | This commit |
+| D6 | Modal source inference, complete handlers, inferred effect arguments and scoped IR/backend support | `92d48828` |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -121,6 +121,30 @@ D8 performs the final backend audit.
   lowering, optimisation and both backends. Keep excluded features outside scope.
   Retain the [deferred recursive-row inference gap and compatibility decisions](doc/modal-effects-design.md#consistency-guessing-and-monotype-unification).
 
+### D7 and D8 milestones
+
+Complete, independently review, test and commit each milestone before starting
+implementation of the next. The main agent owns integration and these records.
+
+| Milestone | Completion checks |
+|---|---|
+| D7a: first-order primitives | Explicit contextual signatures cover pure/external primitives; source execution and modal rejection checks pass; remaining primitive categories are inventoried |
+| D7b1: sections, patterns and updates | Projection/minus sections, negative patterns and record updates check and execute |
+| D7b2: ranges, comprehensions and regex | List generators and regex operations check and execute with existing evaluation order |
+| D7b3: continuations | Escape typing, ordinary usage and execution match existing Links behaviour |
+| D7b4: prelude foundations | Signed collection helpers retain polymorphism and callback effects |
+| D7c1: actors | `Process(a)`, absolute mailbox types and isolated spawned contexts check and execute; migrated `messages.tests` passes |
+| D7c2: sessions | Existing session primitives, selection/offer and CP check and execute |
+| D7d1: XML and forms | XML, form/page constructs and their prelude dependencies check and execute |
+| D7d2: FFI and locations | Foreign declarations, locations and FFI dependencies survive checking and lowering |
+| D7d3: libraries and examples | In-scope libraries and examples migrate; independent-effect contracts are recorded separately from specialised uses |
+| D7e: frontend and source migration | Default batch, REPL, JavaScript compilation and typed rechecks use Fresco; selected suites and handler examples migrate; old effect syntax rejects |
+| D8a: backend execution | Actual interpreter and JavaScript deep-handler execution covers nesting, repeated identities, parameters and closures; interpreter shallow execution and JavaScript rejection remain checked |
+| D8b: removal and final review | In-scope legacy inference routes are removed; recursive consumers and exports are reviewed; migration guide and final selected suites pass |
+
+D7a is complete. D7b1 is next. Later boundaries may be split further when a dependency needs
+its own review and checks.
+
 ## Recorded decisions
 
 The user decisions of 6--7 November 2026 are recorded in the specification
@@ -134,60 +158,48 @@ and design:
 
 ## Latest task and verification
 
-7 November 2026, D6, this commit (base `4f12cd67`): modal source inference
-checks operations, complete handlers, omitted effect arguments, deep/shallow
-resumptions, parameters, modal access, ordinary usage and supplied polymorphism.
-Scoped IR evidence survives optimisation and closure conversion. Source tests
-execute handled operations yielding `42`, repeated effects yielding `11`,
-parameter updates, effectful `map`, returned closures and shallow resumptions.
+7 November 2026, D7a, base `45588466`: 199 contextual primitive signatures,
+checked public recursive aliases and the IR coercion ordering fix are complete.
+The inventory accounts for every runtime primitive; actor, session and callback
+categories remain in their assigned milestones. Independent review found no
+unresolved implementation issues after the canvas inventory and alias-readback
+fixes. See [primitive migration](doc/modal-effects-design.md#d7-primitive-migration).
 
-Independent review resolved operation annotations, guarded patterns/projection,
-handler result scope exit and list element requirements. No implementation
-findings remain. All writers finished and the combined changes were inspected
-before integrated testing. The 40 source/test hashes in
-`/tmp/links-d6-verification.WRWrKy/source.sha256` match the tested revision;
-checksums were rechecked after testing. Integrated logs are in that directory.
-Documentation was updated afterwards without source changes.
+All writers finished and the combined diff was inspected before integrated
+checks. Logs are in `/tmp/links-d7a-verification`; `source.sha256` records the
+six tested source/test files. Only the CLI XML display expectation changed after
+initial testing, from `Xml` to `List XmlItem`; its affected suite was rerun.
+`source-before-display-fix.sha256` retains the earlier test revision.
 
-| Check | Result |
-|---|---|
-| `make no-db` | Passed |
-| `opam exec -- ./run-tests nodb-unit-tests` | 1,181 passed, including 87 pure source/IR, 57 modal source, 20 scoped IR and 12 modal-join cases |
-| `tests/fresco.tests`, `tests/fresco_typecheck.tests`, `tests/fresco_modal.tests` | 5, 2 and 12 passed |
-| `tests/handlers.tests`, `tests/effect_sugar.tests` | 95 and 44 passed |
-| `tests/polymorphism.tests`, `tests/typecheck_examples.tests` | 55 and 167 passed; 15 ignored by existing settings |
-| `tests/freezeml.tests`, `tests/typed_ir.tests` | 59 and 26 passed |
-| `tests/collections.tests`, `tests/bindings.tests`, `tests/mutual.tests` | 37, 25 and 17 passed |
-| `tests/modules.tests`, `tests/desugar_datatypes.tests` | 41 and 44 passed |
-| `tests/type_print.tests`, `tests/roundtrippable_types.tests` | 10 and 5 passed |
-| `tests/operators.tests`, `tests/conditionals.tests` | 21 and 6 passed |
-| Optimised CLI REPL failure recovery | A failed handler leaves the declared effect and signed function available; subsequent execution yields `42` |
-| JavaScript generation and `node --check` | Eight pure/modal programs passed |
-| `make rule-check` | Passed; GNU-find tab check skipped, formatter check disabled |
-| Manual added/new-line tab/trailing-whitespace check, `git diff --check` | Passed |
+| Command | Result | Log |
+|---|---|---|
+| `make no-db` | Passed | `build.log` |
+| `opam exec -- ./run-tests nodb-unit-tests` | 1,200 passed | `unit.log` |
+| `./test-harness tests/fresco.tests` | 12 passed | `fresco-final.log` |
+| `./test-harness tests/fresco_typecheck.tests` | 2 passed | `fresco_typecheck.log` |
+| `./test-harness tests/fresco_modal.tests` | 12 passed | `fresco_modal.log` |
+| `./test-harness tests/handlers.tests` | 95 passed | `handlers.log` |
+| `./test-harness tests/effect_sugar.tests` | 44 passed | `effect_sugar.log` |
+| `./test-harness tests/typed_ir.tests` | 26 passed | `typed_ir.log` |
+| `make rule-check` | Passed; GNU-find tab check skipped, formatter disabled | `rule-check.log` |
+| Manual source tab/trailing-whitespace check; `git diff --check` | Passed | `diff-check.log` |
 
-The 18 regression suites total 671 successes. Earlier D5 verification is
-recorded in commit `4f12cd67`; its logs and matching source hashes remain in
-`/tmp/links-d5-verification.Q5tr7l`.
-The D6 focused review snapshot is `/tmp/links-d6-source-audit.mkwflS`.
-D8 retains the final JavaScript execution audit.
+Focused checks passed 106 source/IR cases in `/tmp/links-d7a-source.log`.
+The pre-fix nested-regex IR failure is preserved in
+`/tmp/links-d7a-primitives-before-ir-fix.log`: “Cannot establish recursive type
+equality in IR” during `Ir.Coerce`. The integrated initial display mismatch is
+in `fresco.log`. Earlier D6 results remain in Git history and
+`/tmp/links-d6-verification.WRWrKy`.
 
-## Decisions for review at the D6 pause
+## Confirmed D6 decisions
 
-The [D6 design](doc/modal-effects-design.md#d6-scoped-effects-in-ir) records
-these choices, their reasons and alternatives:
-
-1. Infer a handler result from its return clauses, then check operation clauses
-   at that type. A wider result needs an annotation on the whole handler.
-   Inferring a common result from all clause skeletons is the alternative.
-2. Keep modal call/access and effect-argument kind checks in source inference
-   during D6. The IR checks retained operation/handler evidence after runtime
-   type erasure. Retaining further call/coercion evidence and repeating kind
-   checks is the alternative; audit this boundary in D7/D8.
+7 November 2026: the user confirmed both D6 choices. The
+[design](doc/modal-effects-design.md#d6-scoped-effects-in-ir) records handler
+result inference from return clauses and source-only modal checks.
+Documentation-only update: text and whitespace checked.
 
 ## Next action
 
-Paused before D7. Discuss the two D6 choices above before resuming migration.
-D7 switches the default frontend, completes the in-scope syntax/primitive
-inventory, and migrates batch, REPL, typed rechecks and source programs.
-D8 completes the backend audit, JavaScript execution checks and migration docs.
+Implement D7b1 sections, negative patterns and record updates. Independently
+review, test and commit before D7b2. Continue through the remaining milestones
+without a pause. Both D6 choices are confirmed.

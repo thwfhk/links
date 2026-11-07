@@ -562,6 +562,39 @@ Scope the mailbox unknown with the spawned body and connect receive-pattern
 types to the resulting `Process(a)`. Handlers are not transferred to a spawned
 process, so its body receives an absolute context of its own.
 
+### D7 primitive migration
+
+Use explicit contextual source signatures for primitives, with the existing
+`Lib.nenv` identifiers and runtime implementations. Elaborate these signatures
+in the initial Fresco environment so that `Wild` has the same declaration
+identity as the ambient context. Keep primitive runtime types in the IR
+environment after modal erasure.
+
+Preserve the effect requirements of each legacy signature separately from
+`Lib.PURE` and `Lib.IMPURE`, which control optimisation. For example, division
+and numeric string conversion have no `wild` field in their signatures;
+`take`, `drop`, `strlen`, `explode` and `implode` require `wild` despite their
+`PURE` flags. Their migrated signatures therefore use `modal []` and
+`modal [Wild]`, respectively. Changing those requirements or optimiser flags
+would be a separate language or runtime change.
+
+D7a covers first-order primitives. Actor, session and callback signatures have
+separate migration checks in the following milestones. Database, lens and
+session-failure primitives remain outside the current scope.
+
+Nested regex execution exposed an IR coercion ordering issue: recursive
+equality could report an inconclusive comparison before the checker attempted
+contextual subtyping. Contextual coercions now try the subtyping proof first;
+equality remains the fallback. The legacy ordering is unchanged.
+
+**For user review: public XML variant aliases.** Publish `XmlVariant` and
+`XmlItemVariant` for the recursive shapes used by XML conversion primitives,
+alongside the existing `Repeat` and `Regex` names. This keeps printed primitive
+types usable in source annotations. Equivalent user-written recursive aliases
+remain accepted. The alternative is to print expanded recursive types at every
+use. Nested forest/item round trips, nested regex sequences and printed-type
+readback have source execution checks.
+
 ### D5/D6 source and runtime boundary
 
 Use an opt-in `--fresco` entry point with a small primitive environment while
@@ -643,18 +676,11 @@ resumption types, and the rows for the computation and clauses. Source inference
 checks modal introduction and variable access before lowering; the IR retains
 the evidence needed to recheck operation scopes and handler structure.
 
-**For user review: modal call checks stay in source inference during D6.**
-Keep the D5 runtime type erasure and add scoped operation/handler evidence.
-An erased function call has no remaining modal guard for the IR checker to
-compare with its caller's context. In particular, a manually constructed IR
-call to a shallow resumption can omit the handler required by its source type.
-Source inference rejects that call and checks effect argument kinds. The IR
-checks declaration membership, arity and equality of retained effect arguments,
-then compares instantiated operation arguments and results; it does not repeat
-their ordinary/modal kind checks. The alternative is to retain modal call and
-coercion evidence and repeat kind checks throughout IR transformations. Audit
-this boundary in D7/D8 before removing the legacy path; the D6 direct-IR tests
-cover the evidence that D6 retains.
+**Confirmed by the user, 7 November 2026: source-only modal checks.** Modal
+access, modal call admissibility and effect-argument kind checks remain in
+source inference. Keep runtime type erasure. IR checks operation identities,
+effect occurrences, signatures and handler structure without repeating those
+source checks.
 
 Keep the existing `enable_handlers` feature setting for execution during D6.
 The runtime selects its continuation implementation when the process starts;
@@ -696,18 +722,13 @@ treats ordinary ghosts as provisionally absolute; full inference repeats the
 join after filling them. These are the same kind and matching policies used
 by modal subtyping.
 
-**For user review: infer the handler result from return clauses first.** Join
-all return-clause results to choose the handler result type, then check every
-operation clause at that type. An expected handler result type supplies this
-choice. This prevents an operation clause from widening the result modality
-after resumptions have already been used with a narrower result type. The
-reference joins operation results after typing resumptions.
-
-For example, a return clause producing `modal [A] (() -> Int)` and an
-operation clause producing `modal [B] (() -> Int)` require a handler result
-annotation `modal [A,B] (() -> Int)`. Without it, D6 rejects the second clause.
-The main alternative is to infer a common result from all clause skeletons
-before checking any resumption uses, accepting more unannotated handlers.
+**Confirmed by the user, 7 November 2026: infer handler results from return
+clauses first.** Join the return-clause result types, then check operation
+clauses against that type, fixing the resumption result type before its uses.
+A return result `modal [A] (() -> Int)` and an operation result
+`modal [B] (() -> Int)` require an explicit handler result annotation
+`modal [A,B] (() -> Int)`. The reference implementation applies modal join
+across all clause results after typing resumptions.
 
 ### Contextual annotation and declaration elaboration
 

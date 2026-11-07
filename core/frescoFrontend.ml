@@ -10,33 +10,15 @@ type t = {
   values : Value.env;
 }
 
-let primitive_signatures =
-  let named names signature = List.map (fun name -> name, signature) names in
-  List.concat [
-    named ["+"; "-"; "*"; "^"] "modal [] ((Int, Int) -> Int)";
-    named ["+."; "-."; "*."; "/."; "^."] "modal [] ((Float, Float) -> Float)";
-    named ["^^"] "modal [] ((String, String) -> String)";
-    named ["=="; "<>"; "<"; ">"; "<="; ">="] "forall a. modal [] ((a, a) -> Bool)";
-    named ["not"] "modal [] ((Bool) -> Bool)";
-    named ["negate"] "modal [] ((Int) -> Int)";
-    named ["negatef"] "modal [] ((Float) -> Float)";
-    named ["intToString"] "modal [] ((Int) -> String)";
-    named ["Nil"] "forall a. List a";
-    named ["Cons"] "forall a. modal [] ((a, List a) -> List a)";
-    named ["Concat"] "forall a. modal [] ((List a, List a) -> List a)";
-    named ["length"] "forall a. modal [] ((List a) -> Int)";
-  ]
-
-let read_primitive (name, signature) =
-  let _, annotation = FrescoElaborate.read FrescoElaborate.empty signature in
-  name, (Env.String.find name Lib.nenv, annotation.FrescoElaborate.typ)
-
-let primitives = lazy (List.map read_primitive primitive_signatures)
+let primitive_elaboration =
+  FrescoPrimitives.initialise (FrescoInfer.elaboration FrescoInfer.empty)
+let primitives = lazy (FrescoPrimitives.bindings primitive_elaboration)
 
 let empty () =
   let inference, names = List.fold_left (fun (inference, names) (name, ((_, typ) as primitive)) ->
     add_term inference name typ, StringMap.add name primitive names
-  ) (FrescoInfer.empty, StringMap.empty) (Lazy.force primitives) in
+  ) (FrescoInfer.with_elaboration primitive_elaboration FrescoInfer.empty, StringMap.empty)
+    (Lazy.force primitives) in
   { inference; names; values = Value.Env.empty }
 
 let lookup state = FrescoInfer.lookup state.inference
@@ -56,10 +38,7 @@ let type_arguments quantifiers = List.map Types.quantified_type_argument quantif
 let with_quantifiers quantifiers typ = quantified quantifiers (runtime_type typ)
 
 let primitive_ir_types = lazy (
-  let list_helpers = List.map read_primitive [
-    "$$hd", "forall a. (List a) -> a";
-    "$$tl", "forall a. (List a) -> List a";
-  ] in
+  let list_helpers = FrescoPrimitives.internal_bindings primitive_elaboration in
   List.fold_left (fun env (_, (var, typ)) -> Env.Int.bind var (runtime_type typ) env)
     Env.Int.empty (list_helpers @ Lazy.force primitives))
 

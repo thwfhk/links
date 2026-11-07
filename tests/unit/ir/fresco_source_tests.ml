@@ -565,6 +565,129 @@ let source_suite = "Links source" >::: [
     expect_type Types.bool_type (expose expression.Infer.typ));
 ]
 
+let primitive_suite = "primitive environment" >::: [
+  "every runtime primitive has an inventory entry" >:: (fun _ ->
+    let names = FrescoPrimitives.names @ ["$$hd"; "$$tl"] @
+      List.concat_map snd FrescoPrimitives.deferred in
+    let sorted = List.sort String.compare names in
+    assert_equal ~printer:(String.concat ", ") sorted (List.sort_uniq String.compare names);
+    assert_equal ~printer:(String.concat ", ") Lib.primitive_names sorted);
+
+  "runtime identities and arities are retained" >:: (fun _ ->
+    let elaboration = FrescoPrimitives.initialise (Infer.elaboration Infer.empty) in
+    let bindings = FrescoPrimitives.bindings elaboration @
+      FrescoPrimitives.internal_bindings elaboration in
+    let rec arity typ = match expose typ with
+      | Types.ForAll (_, body) | Types.Modal (_, body) -> arity body
+      | Types.Arrow (arguments, _) -> Some (List.length (tuple arguments))
+      | _ -> None in
+    List.iter (fun (name, (var, typ)) ->
+      assert_equal ~msg:name (Env.String.find name Lib.nenv) var;
+      assert_equal ~msg:name (Lib.primitive_arity name) (arity typ)) bindings);
+
+  "polymorphic binders retain unlimited ordinary kinds" >:: (fun _ ->
+    let bindings = FrescoPrimitives.bindings (FrescoPrimitives.initialise (Infer.elaboration Infer.empty)) in
+    List.iter (fun (name, (_, typ)) ->
+      match expose typ with
+      | Types.ForAll (quantifiers, _) -> List.iter (fun q ->
+          assert_equal ~msg:name (PrimaryKind.Type, (Linearity.Unl, Restriction.Any))
+            (Quantifier.to_kind q);
+          assert_equal ~msg:name ModalKind.Any (Quantifier.to_modal_kind q)) quantifiers
+      | _ -> ()) bindings);
+
+  "Wild uses the inference state's resolved identity" >:: (fun _ ->
+    let typ = Option.get (FrescoFrontend.lookup (FrescoFrontend.empty ()) "print") in
+    match expose typ with
+    | Types.Modal (Modality.Absolute [entry], _) ->
+        let ambient = Infer.ambient Infer.empty in
+        assert_equal (List.hd ambient).EffectRow.name entry.EffectRow.name
+    | _ -> assert_failure "Expected a Wild modality");
+
+  "external primitives require Wild in a global function" >:: (fun _ ->
+    let check source = FrescoFrontend.check_string (FrescoFrontend.empty ()) source in
+    reject (fun () -> check "sig f : () -> () fun f() { print(\"\") } f()");
+    ignore (check "sig f : modal [Wild] (() -> ()) fun f() { print(\"\") } f()"));
+
+  "effect requirements and optimiser purity remain separate" >:: (fun _ ->
+    assert_bool "take remains optimiser-pure" (Lib.is_pure_primitive "take");
+    assert_bool "random remains optimiser-impure" (not (Lib.is_pure_primitive "random"));
+    reject (fun () -> FrescoFrontend.check_string (FrescoFrontend.empty ())
+      "sig f : () -> List Int fun f() { take(1, [42]) } f()");
+    execution (`Int 42) "sig f : () -> Int fun f() { stringToInt(\"84\") / 2 } f()"
+      |> expect_type Types.int_type);
+
+  "arithmetic and scalar conversions execute" >:: (fun _ ->
+    execution (`Int 42) "floatToInt(sqrt(intToFloat(1764)))" |> expect_type Types.int_type;
+    execution (`Float 42.0) "stringToFloat(floatToString(42.0))" |> expect_type Types.float_type;
+    execution (`Int 42) "ord(chr(42))" |> expect_type Types.int_type);
+
+  "list primitives instantiate at separate types" >:: (fun _ ->
+    execution (Value.box [`Int 42; `Bool true]) "(hd([42]), hd([true]))" |> int_bool;
+    execution (`Int 42) "hd(drop(1, take(2, [0, 42, 100])))" |> expect_type Types.int_type;
+    reject (fun () -> FrescoFrontend.check_string (FrescoFrontend.empty ()) "hd(42)"));
+
+  "list binders reject linear elements" >:: (fun _ ->
+    reject (fun () -> FrescoFrontend.check_string (FrescoFrontend.empty ())
+      "hd([linfun() { 42 }])"));
+
+  "string primitives execute" >:: (fun _ ->
+    execution (`String "42") "implode(explode(strsub(\"x42y\", 1, 2)))" |> expect_type Types.string_type;
+    execution (`Int 42) "strlen(\"forty\") + ord(charAt(\"%\", 0))" |> expect_type Types.int_type);
+
+  "XML forest conversion executes" >:: (fun _ ->
+    execution (`List [`XML (Value.Text "42")])
+      "variantToXml(xmlToVariant(stringToXml(\"42\")))" |> ignore);
+
+  "nested XML forest conversion preserves user recursive aliases" >:: (fun _ ->
+    execution (`String "outer") {|
+      typename Forest = List [|Text:String | Attr:(String, String)
+        | Node:(String, Forest) | NsAttr:(String, String, String)
+        | NsNode:(String, String, Forest)|];
+      var xml = [makeXml("outer", [], [makeXml("inner", [], stringToXml("42"))])];
+      var converted = xmlToVariant(xml) : Forest;
+      getTagName(variantToXml(converted))
+    |} |> expect_type Types.string_type);
+
+  "nested XML item conversion preserves user recursive aliases" >:: (fun _ ->
+    execution (`String "outer") {|
+      typename Item = [|Text:String | Attr:(String, String)
+        | Node:(String, List Item) | NsAttr:(String, String, String)
+        | NsNode:(String, String, List Item)|];
+      var xml = makeXml("outer", [], [makeXml("inner", [], stringToXml("42"))]);
+      var converted = xmlItemToVariant(xml) : Item;
+      getTagName([variantToXmlItem(converted)])
+    |} |> expect_type Types.string_type);
+
+  "XML item conversion executes" >:: (fun _ ->
+    execution (`String "42")
+      "itemTextContent(variantToXmlItem(xmlItemToVariant(hd(stringToXml(\"42\")))))"
+      |> expect_type Types.string_type);
+
+  "XML attributes and constructor execute" >:: (fun _ ->
+    execution (`String "item")
+      "getTagName([makeXml(\"item\", [(\"key\", \"value\")], stringToXml(\"42\"))])"
+      |> expect_type Types.string_type);
+
+  "regular expression primitives execute" >:: (fun _ ->
+    execution (`Bool true) "tilde(\"42\", Seq([Simply(\"4\"), Simply(\"2\")]))" |> expect_type Types.bool_type);
+
+  "printed primitive aliases can be read as source annotations" >:: (fun _ ->
+    let state = FrescoFrontend.empty () in
+    List.iter (fun source ->
+      let typ = FrescoFrontend.check_string state source in
+      ignore (FrescoFrontend.check_string state
+        ("(" ^ source ^ ") : " ^ Types.string_of_datatype typ)))
+      ["xmlToVariant(stringToXml(\"42\"))";
+       "xmlItemToVariant(hd(stringToXml(\"42\")))"];
+    ignore (FrescoFrontend.check_string state "Simply(\"42\") : Regex");
+    ignore (FrescoFrontend.check_string state "Star : Repeat"));
+
+  "date projections retain offset arguments" >:: (fun _ ->
+    execution (`Int 1970) "dateYear(intToDate(0), 0)" |> expect_type Types.int_type;
+    reject (fun () -> FrescoFrontend.check_string (FrescoFrontend.empty ())
+      "dateYear(intToDate(0))"));
+]
+
 let check_coercion source target =
   with_checked_ir (fun () ->
     let variable = Var.fresh_raw_var () in
@@ -599,6 +722,17 @@ let ir_suite =
     "equal and instantiated arrows pass" >:: (fun _ ->
       check_coercion (arrow int int) (arrow int int);
       check_coercion (forall (fun a -> arrow a a)) (arrow int int));
+    "recursive variant payload comparison checks recursive fields" >:: (fun _ ->
+      let elaboration = FrescoElaborate.declarations (Infer.elaboration Infer.empty) {|
+        typename IntChain = [|Stop | More:(Int, IntChain)|];
+        typename OtherIntChain = [|Stop | More:(Int, OtherIntChain)|];
+        typename BoolChain = [|Stop | More:(Bool, BoolChain)|];
+      |} in
+      let read name =
+        let _, annotation = FrescoElaborate.read elaboration name in
+        annotation.FrescoElaborate.typ in
+      check_coercion (read "IntChain") (read "OtherIntChain");
+      reject_coercion (read "IntChain") (read "BoolChain"));
     "wrong domain rejects" >:: (fun _ ->
       reject_coercion (arrow int int) (arrow bool int));
     "wrong result rejects" >:: (fun _ ->
@@ -609,4 +743,4 @@ let ir_suite =
       reject_coercion (forall (fun a -> arrow a int)) (forall (fun a -> arrow a a)));
   ]
 
-let suite = "Fresco source" >::: [reference_suite; source_suite; ir_suite]
+let suite = "Fresco source" >::: [reference_suite; source_suite; primitive_suite; ir_suite]

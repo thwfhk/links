@@ -7,6 +7,42 @@ Frozen higher-rank argument executes (e3b)
 args : --fresco
 stdout : (42, true) : (Int, Bool)
 
+External print executes in the initial Wild context
+{ print("answer="); 42 }
+args : --fresco
+stdout : answer=42 : Int
+
+An explicitly Wild function executes
+sig emit : modal [Wild] ((String) -> ()) fun emit(x) { print(x) } emit("ok ")
+args : --fresco
+stdout : ok () : ()
+
+A pure global signature rejects external print
+sig emit : (String) -> () fun emit(x) { print(x) } emit("bad")
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+Numeric conversions and division execute
+floatToInt(intToFloat(84 / 2))
+args : --fresco
+stdout : 42 : Int
+
+External list primitives retain polymorphism
+(hd([42]), hd([true]))
+args : --fresco
+stdout : (42, true) : (Int, Bool)
+
+String primitives execute
+strsub("answer", 0, 3)
+args : --fresco
+stdout : "ans" : String
+
+XML conversion executes
+stringToXml("answer")
+args : --fresco
+stdout : answer : List XmlItem
+
 List cons executes
 1 :: [2]
 args : --fresco
