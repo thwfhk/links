@@ -1186,8 +1186,8 @@ explicit legacy access for deferred and excluded fixtures until D8; never
 fall back to legacy after a contextual type error.
 
 The contextual frontend now checks typed lowering and retains operator
-fixities as described below. It still ignores the configured prelude. Resolve
-prelude loading before the default switch. Preserve module identities across
+fixities and loads the configured prelude as described below. Complete REPL
+and compilation integration before the default switch. Preserve module identities across
 prelude loading and later imports. JavaScript compilation needs the preceding
 prelude bindings as well as the current source's IR, without evaluating the
 source program. Existing shared backend generation remains the implementation.
@@ -1228,6 +1228,30 @@ String parsing already reads `Parse.pp`. File preparation now uses
 positions. Its unprocessed-file branch uses `call_with_open_infile`, preserving
 the deterministic channel closure previously provided by the Fresco wrapper.
 No parser grammar or preprocessing command semantics change.
+
+**Choice for review:** an unset `prelude` setting selects the frontend's
+default: the root `prelude.links` for legacy checking and canonical
+`open import FrescoPrelude` for contextual checking. Explicit paths override
+either default, including the existing empty-prelude file. Install the
+contextual module with the standard library and use existing path discovery.
+Opening the same module later must reuse its declaration identity.
+
+Prepare the bootstrap before processing user input. Interpretation evaluates
+that prepared bootstrap once and suppresses its result. Typecheck-only mode
+uses its checked state without evaluating it. The checked-state accessor has
+no new runtime values and is for checking, preparation and compilation;
+interpretation must obtain its state by running the prepared bootstrap.
+Retain the prepared bootstrap IR for the later JavaScript compilation step.
+
+**Choice for review:** bootstrap preparation always lowers the prelude, also
+in typecheck-only mode. A custom prelude must satisfy lowering extension guards
+even when the user-program frontend-recheck filter is `none`. This preserves
+one prepared module identity without introducing a second source-only bootstrap
+state. Keep the existing first-input exit for typecheck-only mode in this
+milestone. Normal batch isolation and expression-before-file ordering remain.
+Use the existing `--set=fresco=false` for explicit legacy selection. A separate
+`--legacy` flag would make selection depend on registration order in Settings;
+keep one frontend setting.
 
 ### D7 inferred linear results
 

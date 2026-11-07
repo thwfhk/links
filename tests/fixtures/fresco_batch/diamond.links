@@ -1,0 +1,4 @@
+open import FrescoPrelude;
+open import DiamondLeft;
+open import DiamondRight;
+DiamondRight.answer(fun() { DiamondLeft.read() })

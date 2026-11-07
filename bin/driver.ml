@@ -5,7 +5,7 @@ open Utility
 
 (** Name of the file containing the prelude code. *)
 let prelude_file =
-  Settings.(option ~default: (Some Linkspath.prelude) "prelude"
+  Settings.(option "prelude"
             |> synopsis "The Links prelude source file"
             |> to_string from_string_option
             |> convert (Sys.expand ->- some)
@@ -136,7 +136,7 @@ module Phases = struct
     let context = Context.({ empty with name_environment = Lib.nenv;
                                         typing_environment = Lib.typing_env })
     in
-    let filename = val_of (Settings.get prelude_file) in
+    let filename = Option.value ~default:Linkspath.prelude (Settings.get prelude_file) in
     let result =
       Parse.run context filename
       |> Desugar.run

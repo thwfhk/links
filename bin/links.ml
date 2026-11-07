@@ -5,7 +5,7 @@ module BS = Basicsettings
 
 let fresco =
   Settings.(flag "fresco"
-            |> synopsis "Use the contextual frontend for pure programs (development)"
+            |> synopsis "Use the contextual frontend (development)"
             |> convert parse_bool
             |> CLI.(add (long "fresco"))
             |> sync)
@@ -139,7 +139,17 @@ let run_fresco file_list to_evaluate =
     print_simple datatype value;
     context
   in
-  let context = handle_errors (lazy (FrescoFrontend.empty ())) in
+  let prelude = handle_errors (lazy (
+    let state = FrescoFrontend.empty () in
+    match Settings.get Driver.prelude_file with
+    | None -> FrescoFrontend.prepare_string state "open import FrescoPrelude;"
+    | Some filename -> FrescoFrontend.prepare_file state filename)) in
+  let context =
+    if Settings.get Driver.typecheck_only then FrescoFrontend.checked_state prelude
+    else
+      let state,_,_ = handle_errors (lazy (FrescoFrontend.run_prepared prelude)) in
+      state
+  in
   let context = for_each context (process FrescoFrontend.check_string FrescoFrontend.run_string) to_evaluate in
   let context = for_each context (process FrescoFrontend.check_file FrescoFrontend.run_file) file_list in
   if file_list = [] && to_evaluate = [] then begin

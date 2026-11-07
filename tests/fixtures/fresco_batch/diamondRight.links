@@ -1,0 +1,5 @@
+open import FrescoPrelude;
+sig answer : ((modal [Shared] (() -> Int))) -> Int
+fun answer(f) {
+  handle <Shared> (f()) { case x -> x case <Ask => k> -> k(seed+2) }
+}

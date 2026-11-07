@@ -1,0 +1,68 @@
+---
+config: tests/fresco_batch.config
+args: --fresco
+---
+
+The default contextual prelude supplies collections without extra paths
+(map(fun(x) { x+1 },[40,41]),Just(42) : Maybe(Int))
+stdout : ([41, 42], Just(42)) : (List Int, [|Just:Int|Nothing|])
+
+An explicit later prelude import uses its qualified aliases
+open import FrescoPrelude; var x=(Just(42) : FrescoPrelude.Maybe(Int)); switch(x) { case Just(n) -> n case Nothing -> 0 }
+stdout : 42 : Int
+
+An explicit custom prelude supplies values and persistent fixities
+(seed+2,10 +++ 3 +++ 1)
+args : --fresco --set=prelude=tests/fixtures/fresco_batch/customPrelude.links
+stdout : prelude:tail:(42, 8) : (Int, Int)
+
+An explicit empty prelude keeps the primitive only environment
+map(fun(x) { x+1 },[41])
+args : --fresco --set=prelude=tests/empty_prelude.links
+exit : 1
+stderr : @.*Type error: Unbound variable map.*
+
+A custom prelude error stops before user evaluation
+print("user must not execute")
+args : --fresco --set=prelude=tests/fixtures/fresco_batch/invalidPrelude.links
+exit : 1
+stdout : @^$
+stderr : @.*invalidPrelude.links:1: Type error:.*
+
+Typecheck only mode checks the custom prelude and source without evaluation
+tests/fixtures/fresco_batch/check.links
+filemode : true
+args : --fresco --set=typecheck_only=true --set=prelude=tests/fixtures/fresco_batch/customPrelude.links --set=recheck_frontend_transformations=true
+stdout : @^$
+
+Canonical bootstrap and diamond imports share one effect identity and evaluation
+tests/fixtures/fresco_batch/diamond.links
+filemode : true
+args : --fresco --enable-handlers --set=stdlib_path=tests/fixtures/fresco_batch/stdlib --path=tests/fixtures/fresco_batch
+stdout : once:42 : Int
+
+Shared batch inputs retain bootstrap identity and evaluate expressions before files
+tests/fixtures/fresco_batch/persistent.links
+filemode : true
+args : --fresco --set=isolation=false --set=stdlib_path=tests/fixtures/fresco_batch/stdlib -e "var saved=40; saved"
+stdout : @once:40 : Int\n42 : Int$
+
+Isolated batch inputs retain the initial prelude and discard earlier definitions
+tests/fixtures/fresco_batch/persistent.links
+filemode : true
+args : --fresco --set=stdlib_path=tests/fixtures/fresco_batch/stdlib -e "var saved=40; saved"
+exit : 1
+stdout : once:40 : Int
+stderr : @.*Type error: Unbound variable saved.*
+
+The explicit legacy selector retains the legacy default prelude
+var old=(fun() { 42 } : () ~> Int); hd(map(fun(x) { x },[42]))
+args : --fresco --set=fresco=false
+stdout : 42 : Int
+
+A missing explicit prelude stops before user evaluation
+print("user must not execute")
+args : --fresco --set=prelude=tests/fixtures/fresco_batch/missingPrelude.links
+exit : 1
+stdout : @^$
+stderr : @.*Sys_error.*missingPrelude.links.*

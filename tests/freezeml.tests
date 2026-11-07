@@ -209,21 +209,21 @@ stderr : @.*Type error:.*
 Do not infer polymorphic arguments (3)
 tests/freezeml/session1.links
 filemode : true
-args : --fresco
+args : --fresco --set=prelude=tests/empty_prelude.links
 exit : 1
 stderr : @.*Type error:.*\(monotype\).*In expression: first\..*
 
 Do not infer polymorphic arguments (4)
 tests/freezeml/session2.links
 filemode : true
-args : --fresco
+args : --fresco --set=prelude=tests/empty_prelude.links
 exit : 1
 stderr : @.*Type error:.*\(instantiation constraints\).*In expression: first\..*
 
 Explicit polymorphic session payloads support both receive orders
 tests/freezeml/session-explicit.links
 filemode : true
-args : --fresco
+args : --fresco --set=prelude=tests/empty_prelude.links
 stdout : (42, 42) : (Int, Int)
 
 Do not infer polymorphic values (1)

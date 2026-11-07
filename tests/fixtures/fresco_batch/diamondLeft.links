@@ -1,0 +1,3 @@
+open import FrescoPrelude;
+sig read : modal [Shared] (() -> Int)
+fun read() { do Ask }

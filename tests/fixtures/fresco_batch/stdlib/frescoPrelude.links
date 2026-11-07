@@ -1,0 +1,2 @@
+effect Shared { Ask : () => Int; }
+var seed={ print("once:"); 40 };

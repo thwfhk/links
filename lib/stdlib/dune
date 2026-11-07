@@ -2,6 +2,7 @@
   (section lib)
   (files (binaryTree.links as stdlib/binaryTree.links)
          (comparators.links as stdlib/comparators.links)
+         (frescoPrelude.links as stdlib/frescoPrelude.links)
          (mvu.links as stdlib/mvu.links)
          (mvuAttrs.links as stdlib/mvuAttrs.links)
          (mvuEvents.links as stdlib/mvuEvents.links)

@@ -396,6 +396,7 @@ type prepared = {
   retain : IntSet.t;
 }
 
+let checked_state prepared = prepared.state
 let datatype prepared = prepared.datatype
 let program prepared = prepared.program
 

@@ -10,6 +10,10 @@ type prepared
 val prepare_program : t -> Sugartypes.program -> prepared
 val prepare_string : t -> string -> prepared
 val prepare_file : t -> string -> prepared
+(** The checked names and resolution state, with the input runtime values.
+    New names have no runtime values yet. Use this state only for subsequent
+    checking or preparation; use [run_prepared] before interpreting source. *)
+val checked_state : prepared -> t
 val datatype : prepared -> Types.typ
 val program : prepared -> Ir.program
 
