@@ -266,7 +266,8 @@ let collection env initial binder source target_mode =
     | _, Check (S.ForAll (qs, q)) ->
        let qs, q = open_one qs q in sub left_bound (qs @ right_bound) p (Check q)
     | _, Check (S.Modal (_, q)) -> sub left_bound right_bound p (Check q)
-    | S.Arrow (p, q), Fun (r, mode) | S.LinearArrow (p, q), LinearFun (r, mode) ->
+    | S.Arrow (p, q), Fun (r, mode)
+    | S.LinearArrow (p, q), (Fun (r, mode) | LinearFun (r, mode)) ->
        let domain = eq left_bound right_bound PrimaryKind.Type p r in
        let result = sub left_bound right_bound q mode in domain @ result
     | S.ForAll (qs, p), _ -> let qs, p = open_one qs p in sub (qs @ left_bound) right_bound p mode
@@ -315,7 +316,10 @@ let extraction env initial ~avoid action =
     | S.ForAll (qs, p), S.ForAll (rs, q) when same_quantifiers qs rs ->
        scoped qs p (fun qs p -> eq (qs @ forbidden) pk p (rename_body rs qs q))
     | S.ForAll (qs, p), S.UniversalGhost _ -> scoped qs p (fun qs p -> eq (qs @ forbidden) pk p q)
-    | S.UniversalGhost _, S.ForAll (qs, q) -> scoped qs q (fun qs q -> eq (qs @ forbidden) pk p q)
+    | S.UniversalGhost _, S.ForAll (qs, q) ->
+       (* These binders are supplied by the right-hand type and retained in
+          the output. They do not enclose the left-hand ghosts. *)
+       scoped qs q (fun _ q -> eq forbidden pk p q)
     | S.UniversalGhost p, S.UniversalGhost q -> S.UniversalGhost (eq forbidden pk p q)
     | S.Modal (m, p), S.Modal (n, q) ->
        let pairs = match modality_pairs m n with Some pairs -> pairs | None -> fail Mismatch in
@@ -376,7 +380,7 @@ let extraction env initial ~avoid action =
     | _, Check (S.Modal (_, q)) -> sub forbidden p (Check q)
     | S.Arrow (a, b), Fun (c, m) ->
        let a = eq forbidden PrimaryKind.Type a c in let b = sub forbidden b m in S.Arrow (a, b)
-    | S.LinearArrow (a, b), LinearFun (c, m) ->
+    | S.LinearArrow (a, b), (Fun (c, m) | LinearFun (c, m)) ->
        let a = eq forbidden PrimaryKind.Type a c in let b = sub forbidden b m in S.LinearArrow (a, b)
     | S.Ghost, Fun (a, m) ->
        let a = eq forbidden PrimaryKind.Type S.Ghost a in let b = sub forbidden S.Ghost m in S.UniversalGhost (S.Arrow (a, b))

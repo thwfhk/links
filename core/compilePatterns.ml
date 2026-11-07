@@ -177,6 +177,17 @@ let rec desugar_pattern : Types.row -> Sugartypes.Pattern.with_pos -> Pattern.t 
 type raw_bound_computation = raw_env -> computation
 type bound_computation = env -> computation
 
+let primitive_application (_nenv, tenv, effects) name argument =
+  let var = NEnv.find name Lib.nenv in
+  let args = [PrimaryKind.Type, argument] in
+  let args =
+    match TEnv.find_opt var tenv with
+    | Some typ when
+        (match snd (TypeUtils.split_quantified_type typ) with Types.Arrow _ -> true | _ -> false) ->
+       args
+    | _ -> args @ [PrimaryKind.Row, effects] in
+  TApp (Variable var, args)
+
 module CompileLists :
 sig
   val nil : raw_env -> Types.datatype -> value
@@ -187,27 +198,15 @@ end
 struct
   open PrimaryKind
 
-  let lookup_effects (_nenv, _tenv, eff) = eff
-
   let nil _env t : value =
     TApp (Variable (NEnv.find "Nil" Lib.nenv),
            [(Type, t)])
 
   let list_head env t : value -> tail_computation = fun v ->
-    let eff = lookup_effects env in
-      Apply
-        (TApp
-           (Variable (NEnv.find "$$hd" Lib.nenv),
-            [(Type, t); (Row, eff)]),
-         [v])
+    Apply (primitive_application env "$$hd" t, [v])
 
   let list_tail env t : value -> tail_computation = fun v ->
-    let eff = lookup_effects env in
-      Apply
-        (TApp
-           (Variable (NEnv.find "$$tl" Lib.nenv),
-            [(Type, t); (Row, eff)]),
-         [v])
+    Apply (primitive_application env "$$tl" t, [v])
 end
 open CompileLists
 
@@ -217,17 +216,8 @@ sig
 end
   =
 struct
-  open PrimaryKind
-
-  let lookup_effects (_nenv, _tenv, eff) = eff
-
   let eq env t v1 v2 =
-    let eff = lookup_effects env in
-    ApplyPure
-      (TApp
-         (Variable (NEnv.find "==" Lib.nenv),
-          [(Type, t); (Row, eff)]),
-       [v1; v2])
+    ApplyPure (primitive_application env "==" t, [v1; v2])
 end
 open CompileEq
 

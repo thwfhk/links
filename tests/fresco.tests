@@ -1,0 +1,30 @@
+---
+config: tests/fresco.config
+---
+
+Frozen higher-rank argument executes (e3b)
+{ sig id : forall a. (a) -> a fun id(x) { x } sig app : forall a, b. ((a) -> b) -> (a) -> b fun app(f)(x) { f(x) } sig poly : (forall a. (a) -> a) -> (Int, Bool) fun poly(f) { (f(42), f(true)) } app(fun(x) { poly(x) })(~id) }
+args : --fresco
+stdout : (42, true) : (Int, Bool)
+
+List cons executes
+1 :: [2]
+args : --fresco
+stdout : [1, 2] : List Int
+
+List concatenation executes
+[1] ++ [2]
+args : --fresco
+stdout : [1, 2] : List Int
+
+An unsigned parameter cannot be used at two types (c1a)
+(fun(f) { (f(42), f(true)) })(fun(x) { x })
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+A variant field keeps its quantified type
+tests/fresco/polymorphic_variant.links
+args : --fresco
+filemode : true
+stdout : (42, true) : (Int, Bool)

@@ -562,6 +562,66 @@ Scope the mailbox unknown with the spawned body and connect receive-pattern
 types to the resulting `Process(a)`. Handlers are not transferred to a spawned
 process, so its body receives an absolute context of its own.
 
+### D5/D6 source and runtime boundary
+
+Use an opt-in `--fresco` entry point with a small primitive environment while
+the default frontend awaits D7. Keep inference state persistent between
+interactive definitions. Publish updated type and name-resolution state only
+after checking succeeds. The source tests must exercise retained unknowns and
+failure recovery through this entry point.
+
+The `typecheck_only` setting checks file and `-e` inputs without lowering or
+evaluating them. Reject this setting before reading interactive input. Signed
+recursion adds no `Wild` requirement, following the reference implementation.
+Top-level usage checks retain existing Links behaviour.
+
+Keep source types, annotations and exported inference state in the contextual
+representation. Lower checked terms to the existing Links IR and use its
+backend and interpreter. In the runtime type view, erase modal wrappers and
+retain contextual arrows, quantified structure and quantifier metadata.
+Modal access and instantiation requirements are checked before this erasure.
+IR checks still compare function domains, results and explicit type operations.
+D6 must carry the scoped-effect information needed to check operations and
+handlers; legacy operation-row sets cannot represent repeated effects.
+
+Validate each exported recursive declaration snapshot under its formal
+parameters before merging snapshots with the same nominal identity. Compare
+their representations and reject conflicting bodies. Build private runtime
+copies with structural substitution callbacks; source declaration callbacks
+remain contextual. Runtime coercions require a contextual subtyping proof and
+preserve the evaluated term. Recursive IR comparison uses contextual equality
+on this path. Previous interactive globals and published definitions remain
+available through optimisation and closure conversion.
+
+The source inference passes share a typed term representation. Preserve every
+annotation as a root when leaving a scope, including explicit type arguments,
+ambient effect arguments and lock arguments. Restore the roots returned by
+scope exit before using the reduced context. The skeleton pass supplies
+information for application inference; only the full pass counts term uses.
+
+Source testing exposed a restriction in directional equality extraction:
+when a universal ghost acquires a quantifier supplied only by the right-hand
+type, its ordinary ghosts may refer to that new binder. Retain the quantifier
+in the output, following `SolE-GhostForall` in the thesis. Continue forbidding
+capture under quantifiers already enclosing the left-hand ghosts. This uses
+the same distinction between the two sides as consistency. The corrected
+case accepts `choose(id)` checked at a function from a polymorphic identity
+to a polymorphic identity. Direct tests retain the rejection of a ghost under
+an existing binder being filled by that binder.
+
+Function mode describes an application and accepts both ordinary and linear
+arrows. Retain the source arrow's linearity in its output. `LinearFun` also
+requires a linear arrow, and checking against a written arrow still compares
+linearity. This permits applying a linear function returned by polymorphic
+identity without repeating source inference. Runtime coercion checks compare
+the resulting arrow with the requested target, so this application rule cannot
+convert a linear function into an unlimited function.
+
+Direct record and tuple fields retain independently inferred types. Reference
+examples using polymorphic nominal constructors are tested with an equivalent
+polymorphic helper application; replacing such an application with a direct
+Links tuple can change where supplied quantifiers are retained.
+
 ### Contextual annotation and declaration elaboration
 
 Reuse `DesugarTypeVariables` for source variable occurrences, ordinary kind
@@ -712,12 +772,13 @@ inference rejects these constructors before mutation.
 Non-recursive IR equality uses scoped row matching, mask multiset
 equality, full modal payload comparison, and modal binder kinds.
 Within these comparisons, session input/output types include their
-continuations. The transitional IR checker rejects recursive equality
-involving contextual arrows or modal types explicitly. The existing IR checker accepts recursive
-equality without comparing bodies; new modal types must not inherit
-that shortcut. Recursive traversal and substitution remain required.
-Contextual recursive comparison must replace this temporary rejection
-before accepting recursive modal programs through the IR checker.
+continuations. The opt-in contextual IR checker uses Fresco's recursive
+comparison. Runtime copies provide structural raw-body application callbacks
+for existing type consumers. Source inference and detached export retain
+their separate contextual operations. The legacy IR path still rejects
+recursive equality involving contextual arrows or modal types; its old
+recursive equality shortcut remains confined to legacy programs. D8 audits
+the remaining recursive consumers during migration.
 
 ### Contextual recursive type operations
 

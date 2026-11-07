@@ -23,6 +23,12 @@ val recursive_application : string -> Quantifier.t list -> Types.type_arg list -
 (* Given a quantified type and a list of type arguments, create the corresponding instantiation map *)
 val instantiation_maps_of_type_arguments : bool -> Types.datatype -> Types.type_arg list -> (Types.datatype * instantiation_maps)
 
+(** Substitute explicit, already kind-checked arguments in typed IR.
+    This checks arity and primary kinds and retains modal binder metadata. *)
+val type_argument_substitution : bool -> Types.datatype -> Types.type_arg list -> (Types.datatype * instantiation_maps)
+val apply_type_arguments : Types.datatype -> Types.type_arg list -> Types.datatype
+val substitute_type_parameters : Quantifier.t list -> Types.type_arg list -> Types.typ -> Types.typ
+
 (** Copy binders with fresh variable identities and preserve their modal kinds.
     The accompanying type arguments are occurrences of the copied binders. *)
 val build_fresh_quantifiers : Quantifier.t list -> Quantifier.t list * Types.type_arg list

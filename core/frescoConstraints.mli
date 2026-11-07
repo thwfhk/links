@@ -4,6 +4,10 @@ open CommonTypes
 type mode = Infer | Check of FrescoSkeleton.t | Fun of FrescoSkeleton.t * mode
           | LinearFun of FrescoSkeleton.t * mode
 type support = Type | Skeleton
+
+(** [Fun] describes source application, accepting either arrow and retaining
+    its linearity. [LinearFun] additionally requires a linear arrow. Checking
+    an arrow type still compares its declared linearity. *)
 type constraints
 type error =
   | Mismatch

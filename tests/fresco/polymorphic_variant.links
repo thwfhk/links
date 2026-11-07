@@ -1,0 +1,9 @@
+{
+  sig id : forall a. (a) -> a
+  fun id(x) { x }
+
+  var boxed = Box(~id) : [| Box:forall a. (a) -> a |];
+  switch (boxed) {
+    case Box(f) -> (f(42), f(true))
+  }
+}

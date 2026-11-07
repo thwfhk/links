@@ -17,7 +17,9 @@ let check_program_first_error ir_prog =
     {
       (* The IR type-checker only uses the context field, the rest is irrelevant *)
       IrTransform.context = dummy_context;
-      IrTransform.primitive_vars = Utility.IntSet.empty;
+      IrTransform.global_vars = Utility.IntSet.empty;
+      IrTransform.retained_vars = Utility.IntSet.empty;
+      IrTransform.contextual = false;
       IrTransform.datatype = Types.Not_typed;
     }
   in

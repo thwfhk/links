@@ -119,6 +119,9 @@ struct
         | Inject (_, _, t) ->
           let o = o#typ t in
           o#super_value v
+        | Coerce (_, t) ->
+          let o = o#typ t in
+          o#super_value v
         | TAbs (quantifiers, v) ->
           let o = List.fold_left (fun o q -> o#quantifier q) o quantifiers in
           let (o, _, ti) = o#value v in
@@ -465,8 +468,8 @@ struct
               match zs, tyvars with
               | [], [] -> Variable x, x_type
               | _ ->
-                let tyargs = List.map Types.type_arg_of_quantifier tyvars in
-                let (remaining_type, instantiation_maps) = Instantiate.instantiation_maps_of_type_arguments false x_type tyargs in
+                let tyargs = List.map Types.quantified_type_argument tyvars in
+                let (remaining_type, instantiation_maps) = Instantiate.type_argument_substitution false x_type tyargs in
                 let overall_type = Instantiate.datatype instantiation_maps remaining_type in
                 if List.mem_assoc x parents then
                   Closure (x, tyargs,Variable parent_env), overall_type
@@ -746,7 +749,7 @@ let name = "closure_conversion"
 
 let program state program =
   let open IrTransform in
-  let globals = state.primitive_vars in
+  let globals = state.global_vars in
   let tenv = Context.variable_environment (context state) in
   let program' = Globalise.program program in
   let fenv = ClosureVars.program tenv globals program' in

@@ -137,7 +137,8 @@ module Env = Env.Int
 
 type type_eq_context = {
   typevar_subst : Var.var IntMap.t; (* equivalences of typevars *)
-  tyenv: Kind.t Env.t (* track kinds of bound typevars *)
+  tyenv: Kind.t Env.t; (* track kinds of bound typevars *)
+  contextual: bool
 }
 
 
@@ -211,6 +212,10 @@ let contextual_type_features t =
       | (Types.Arrow _ | Types.LinearArrow _ | Types.Modal _) as t ->
          found := true;
          super#visit_type vars t
+      | Types.ForAll (quantifiers, _) as t ->
+         if List.exists (fun q -> Quantifier.to_modal_kind q = ModalKind.Abs) quantifiers then
+           found := true;
+         super#visit_type vars t
       | Types.Alias (_, (_, _, args, _), body) ->
          List.iter (self#visit_type_arg vars) args;
          self#visit_type vars body
@@ -235,15 +240,113 @@ let contextual_type_features t =
 
 let contains_contextual_type t = fst (contextual_type_features t)
 
+(* Modal requirements have already been checked before runtime erasure.
+   A coercion between runtime types must still satisfy contextual subtyping,
+   with every variable already in the IR treated as fixed. *)
+let compare_runtime_types ~erase_modal_kinds ctx source target compare =
+  let declarations = Hashtbl.create 4 in
+  let proof_types = object (self)
+    inherit Types.Transform.visitor as super
+    method! quantifier q =
+      self, if erase_modal_kinds then Quantifier.make (Quantifier.to_var q) (Quantifier.to_kind q) else q
+    method! typ = function
+      | Types.Alias (_, _, body) -> self#typ body
+      | Types.RecursiveApplication app ->
+         let body = match Hashtbl.find_opt declarations app.Types.r_unique_name with
+           | Some body -> body
+           | None ->
+              let body = lazy (Option.map (fun (formals, body) ->
+                let formals = List.map (fun q -> snd (self#quantifier q)) formals in
+                formals, snd (self#typ body)) (app.Types.r_body ())) in
+              Hashtbl.add declarations app.Types.r_unique_name body;
+              body in
+         let self, r_args = self#type_args app.Types.r_args in
+         self, Types.RecursiveApplication { app with Types.r_args; r_body = (fun () -> Lazy.force body) }
+      | typ -> super#typ typ
+    method! meta_type_var point =
+      match Unionfind.peek point with
+      | Types.Var (id, kind, _) -> self, Unionfind.fresh (Types.Var (id, kind, `Rigid))
+      | _ -> super#meta_type_var point
+  end in
+  let context = ref (Ok FrescoContext.empty) in
+  let variables = object (self)
+    inherit Types.type_iter as super
+    method! visit_type ((apps, recs, binders) as scope) = function
+      | Types.RecursiveApplication app as typ ->
+         super#visit_type scope typ;
+         if not (StringSet.mem app.Types.r_unique_name apps) then
+           Option.iter (fun (formals, body) ->
+             self#visit_type (StringSet.add app.Types.r_unique_name apps, recs,
+               Types.TypeVarSet.add_quantifiers formals binders) body) (app.Types.r_body ())
+      | typ -> super#visit_type scope typ
+    method! visit_var _ (id, kind, freedom) =
+      match !context with
+      | Error _ -> ()
+      | Ok current ->
+         if freedom = `Rigid && Env.find_opt id ctx.tyenv <> Some kind then
+           context := Error (FrescoContext.Missing_variable id)
+         else if Option.is_none (FrescoContext.lookup id current) then
+           context := FrescoContext.add_rigid { id; kind; modal_kind = ModalKind.Any } current
+  end in
+  let visit, _ = variables#visitors in
+  visit source;
+  visit target;
+  match !context with
+  | Error _ -> false
+  | Ok context ->
+     let root typ = { FrescoContext.binders = []; primary_kind = PrimaryKind.Type;
+                      typ = snd (proof_types#typ typ) } in
+     let environment = FrescoContext.checking_environment {
+       FrescoKind.classification = FrescoKind.environment (fun _ -> None);
+       lookup_effect = (fun _ -> None) } context in
+     match FrescoSkeleton.of_types environment [root source; root target] with
+     | Ok [source; target] ->
+        let source = source.FrescoSkeleton.typ and target = target.FrescoSkeleton.typ in
+        compare environment context source target
+     | _ -> false
+
+let runtime_subtype ctx source target =
+  compare_runtime_types ~erase_modal_kinds:true ctx source target
+    (fun environment context source target ->
+      let rec mode = function
+        | FrescoSkeleton.Arrow (domain, result) -> FrescoConstraints.Fun (domain, mode result)
+        | FrescoSkeleton.LinearArrow (domain, result) -> FrescoConstraints.LinearFun (domain, mode result)
+        | target -> FrescoConstraints.Check target in
+      let result = match FrescoSubtype.check environment context ~ambient:[] source target with
+        | Ok result -> Ok result
+        | Error _ -> FrescoSubtype.run environment context ~support:FrescoConstraints.Type
+            ~mode:(mode target) ~ambient:[] source in
+      match result with
+      | Error _ -> false
+      | Ok result ->
+         (match FrescoCompare.compare_checked environment result.FrescoSubtype.context
+           ~primary_kind:PrimaryKind.Type result.FrescoSubtype.typ target with
+          | Ok (FrescoCompare.Equal _) -> true
+          | _ -> false))
+
+let runtime_equal occurrence ctx source target =
+  compare_runtime_types ~erase_modal_kinds:false ctx source target
+    (fun environment context source target ->
+      match FrescoCompare.compare_checked environment context ~primary_kind:PrimaryKind.Type source target with
+      | Ok (FrescoCompare.Equal _) -> true
+      | Ok (FrescoCompare.Inconclusive _) ->
+         raise_ir_type_error "Cannot establish recursive type equality in IR" occurrence
+      | _ -> false)
+
 let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
   let open Types in
   fun context (t1, t2) ->
     let contextual1, recursive1 = contextual_type_features t1 in
     let contextual2, recursive2 = contextual_type_features t2 in
     let contextual = contextual1 || contextual2 in
+    if context.contextual && (recursive1 || recursive2) then
+      runtime_equal occurrence context t1 t2
+    else
+    let () =
     if contextual && (recursive1 || recursive2) then
       raise_ir_type_error
-        "Recursive equality for contextual arrows or modal types is not supported" occurrence;
+        "Recursive equality for contextual arrows or modal types is not supported" occurrence
+    in
     let recursive_equality () =
       if contextual then
         raise_ir_type_error
@@ -405,7 +508,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
                   let lid = Quantifier.to_var lqvar in
                   let rid = Quantifier.to_var rqvar in
                   let r_kind = Quantifier.to_kind rqvar in
-                  let ctx' = { typevar_subst = IntMap.add lid rid context.typevar_subst;
+                  let ctx' = { context with typevar_subst = IntMap.add lid rid context.typevar_subst;
                                tyenv = Env.bind rid r_kind context.tyenv
                              } in
                   (ctx', prev_eq && Quantifier.same_kind lqvar rqvar)
@@ -602,7 +705,7 @@ struct
 
   type environment = datatype Env.t
 
-  let checker tyenv =
+  let checker contextual tyenv =
   object (o)
     inherit IrTraversals.Transform.visitor(tyenv) as super
 
@@ -617,7 +720,7 @@ struct
     method lookup_closure_def_for_fun fid = Env.find_opt fid closure_def_env
 
     (* Creates a context for type equality checking *)
-    method extract_type_equality_context () = { typevar_subst = IntMap.empty; tyenv = type_var_env }
+    method extract_type_equality_context () = { typevar_subst = IntMap.empty; tyenv = type_var_env; contextual }
 
     method set_allowed_effects eff_row = {< allowed_effects = eff_row >}, allowed_effects
 
@@ -704,7 +807,7 @@ struct
            o, TAbs (tyvars, v), t
         | TApp (v, ts)  ->
            let o, v, t = o#value v in
-           let t = Instantiate.apply_type t ts in
+           let t = Instantiate.apply_type_arguments t ts in
            o, TApp (v, ts), t
         | XmlNode (tag, attributes, children) ->
             let (o, attributes, attribute_types) = o#name_map (fun o -> o#value) attributes in
@@ -739,7 +842,7 @@ struct
             then
               ft
             else
-              let (remaining_type, instantiation_maps) = Instantiate.instantiation_maps_of_type_arguments false ft tyargs in
+              let (remaining_type, instantiation_maps) = Instantiate.type_argument_substitution false ft tyargs in
               Instantiate.datatype instantiation_maps remaining_type  in
 
           ensure (is_function_type (snd (TypeUtils.split_quantified_type ft_instantiated))) "Passing closure to non-function" (SVal orig);
@@ -758,7 +861,7 @@ struct
 
                 let instantiated_closure_type_exp =
                   let (closure_remaining_type, closure_instantiation_maps) =
-                    Instantiate.instantiation_maps_of_type_arguments true uninstantiated_closure_type_exp tyargs
+                    Instantiate.type_argument_substitution true uninstantiated_closure_type_exp tyargs
                   in
                   Instantiate.datatype closure_instantiation_maps closure_remaining_type
                 in
@@ -771,7 +874,7 @@ struct
 
         | Coerce (v, t) ->
             let o, v, vt = o#value v in
-            if RecursionDetector.is_recursive vt || RecursionDetector.is_recursive t then
+            if not contextual && (RecursionDetector.is_recursive vt || RecursionDetector.is_recursive t) then
               begin
               if contains_contextual_type vt || contains_contextual_type t then
                 raise_ir_type_error
@@ -782,8 +885,12 @@ struct
               end
             else
               begin
-              ensure (eq_types (SVal orig) (o#extract_type_equality_context ())
-                               (vt, t) || is_sub_type (vt, t))
+              let context = o#extract_type_equality_context () in
+              let subtype () =
+                if contextual || contains_contextual_type vt || contains_contextual_type t then
+                  runtime_subtype context vt t
+                else is_sub_type (vt, t) in
+              ensure (eq_types (SVal orig) context (vt, t) || subtype ())
                 (let vt_str = string_of_datatype vt in
                  let t_str  = string_of_datatype ~refresh_tyvar_names:false t in
                  Printf.sprintf "coercion error: %s is not a subtype of %s"
@@ -806,8 +913,11 @@ struct
             let o, f, ft = o#value f in
             let o, args, argtypes = o#list (fun o -> o#value) args in
             let exp_argstype = arg_types ~overstep_quantifiers:false ft in
-            let effects = effect_row ~overstep_quantifiers:false ft in
-            ensure_effect_rows_compatible (o#extract_type_equality_context ()) allowed_effects effects (STC orig);
+            (match TypeUtils.concrete_type ft with
+             | Arrow _ | LinearArrow _ -> ()
+             | _ ->
+                let effects = effect_row ~overstep_quantifiers:false ft in
+                ensure_effect_rows_compatible (o#extract_type_equality_context ()) allowed_effects effects (STC orig));
             check_eq_type_lists (o#extract_type_equality_context ()) exp_argstype argtypes (STC orig);
             o, Apply (f, args), return_type ~overstep_quantifiers:false ft
 
@@ -1269,9 +1379,13 @@ struct
         (* In order to obtain the effects to type-check the body with,
            we take the expected effects and substitute the quantifiers from the type
            annotation with those in the tyvar list *)
-        let quantifiers_as_type_args = List.map Types.type_arg_of_quantifier tyvars in
-        let exp_t_substed = Instantiate.apply_type expected_overall_funtype quantifiers_as_type_args in
-        let exp_effects_substed = TypeUtils.effect_row exp_t_substed in
+        let quantifiers_as_type_args = List.map Types.quantified_type_argument tyvars in
+        let exp_t_substed = Instantiate.apply_type_arguments expected_overall_funtype quantifiers_as_type_args in
+        let exp_effects_substed =
+          match TypeUtils.concrete_type exp_t_substed with
+          | Arrow _ | LinearArrow _ -> None
+          | _ -> Some (TypeUtils.effect_row exp_t_substed)
+        in
 
         (* The binder for the closure variable has its own quantifiers.
            We instantiate those quantifiers with the corresponding quantifiers in the tyvar list
@@ -1295,7 +1409,7 @@ struct
                    occurrence;
 
                let (closure_var_rem_type, instantiation_maps) =
-                 Instantiate.instantiation_maps_of_type_arguments
+                 Instantiate.type_argument_substitution
                    true (* This means we fail if |tyvars| < |closure_type_quants| *)
                    closure_type
                    (ListUtils.take (List.length closure_var_quants) quantifiers_as_type_args) in
@@ -1305,7 +1419,8 @@ struct
             | None -> o
         in
 
-        (if is_recursive then o#impose_presence_of_effect Types.wild_present occurrence);
+        (if is_recursive && Option.is_some exp_effects_substed then
+           o#impose_presence_of_effect Types.wild_present occurrence);
 
         let previous_tyenv = o#get_type_var_env in
         let o = List.fold_left
@@ -1315,20 +1430,23 @@ struct
                 o#add_typevar_to_context var kind) o tyvars in
 
         (* determine body type, using translated version of expected effects in context *)
-        let o, previously_allowed_effects = o#set_allowed_effects exp_effects_substed in
+        let allowed_effects =
+          Option.value ~default:(Types.make_empty_closed_row ()) exp_effects_substed in
+        let o, previously_allowed_effects = o#set_allowed_effects allowed_effects in
         let o, body, body_type = o#computation body in
 
         let o = o#set_type_var_env previous_tyenv in
         let o, _ = o#set_allowed_effects previously_allowed_effects in
 
 
-        let is_linear = not (Types.Unl.type_satisfies exp_unquant_t) in
         let actual_ft_unquant =
-          Types.make_function_type
-            ~linear:is_linear
-            parameter_types
-            exp_effects_substed
-            body_type in
+          match TypeUtils.concrete_type exp_t_substed with
+          | Arrow _ -> Arrow (Types.make_tuple_type parameter_types, body_type)
+          | LinearArrow _ -> LinearArrow (Types.make_tuple_type parameter_types, body_type)
+          | _ ->
+             let is_linear = not (Types.Unl.type_satisfies exp_unquant_t) in
+             Types.make_function_type ~linear:is_linear parameter_types allowed_effects body_type
+        in
         let actual_overall_funtype = Types.for_all (tyvars, actual_ft_unquant) in
 
         (* Compare the overall types. Note that the effects are actually unncessary here:
@@ -1533,7 +1651,7 @@ struct
     let open IrTransform in
     let tenv = Context.variable_environment (context state) in
     let check =
-      lazy (let _, program', _ = (checker tenv)#program program in program')
+      lazy (let _, program', _ = (checker state.contextual tenv)#program program in program')
     in
     let program'' = handle_ir_type_error check program (SProg program) in
     return state program''

@@ -1,0 +1,356 @@
+open CommonTypes
+open Utility
+open FrescoInfer
+
+module Eval = Evalir.Eval(Webserver.Webserver)
+
+type t = {
+  inference : FrescoInfer.t;
+  names : (Var.var * Types.typ) StringMap.t;
+  values : Value.env;
+}
+
+let primitive_signatures =
+  let named names signature = List.map (fun name -> name, signature) names in
+  List.concat [
+    named ["+"; "-"; "*"; "^"] "modal [] ((Int, Int) -> Int)";
+    named ["+."; "-."; "*."; "/."; "^."] "modal [] ((Float, Float) -> Float)";
+    named ["^^"] "modal [] ((String, String) -> String)";
+    named ["=="; "<>"; "<"; ">"; "<="; ">="] "forall a. modal [] ((a, a) -> Bool)";
+    named ["not"] "modal [] ((Bool) -> Bool)";
+    named ["negate"] "modal [] ((Int) -> Int)";
+    named ["negatef"] "modal [] ((Float) -> Float)";
+    named ["intToString"] "modal [] ((Int) -> String)";
+    named ["Nil"] "forall a. List a";
+    named ["Cons"] "forall a. modal [] ((a, List a) -> List a)";
+    named ["Concat"] "forall a. modal [] ((List a, List a) -> List a)";
+    named ["length"] "forall a. modal [] ((List a) -> Int)";
+  ]
+
+let read_primitive (name, signature) =
+  let _, annotation = FrescoElaborate.read FrescoElaborate.empty signature in
+  name, (Env.String.find name Lib.nenv, annotation.FrescoElaborate.typ)
+
+let primitives = lazy (List.map read_primitive primitive_signatures)
+
+let empty () =
+  let inference, names = List.fold_left (fun (inference, names) (name, ((_, typ) as primitive)) ->
+    add_term inference name typ, StringMap.add name primitive names
+  ) (FrescoInfer.empty, StringMap.empty) (Lazy.force primitives) in
+  { inference; names; values = Value.Env.empty }
+
+let lookup state = FrescoInfer.lookup state.inference
+
+let quantified quantifiers body =
+  match quantifiers, body with
+  | [], _ -> body
+  | _, Types.ForAll (inner, body) -> Types.ForAll (quantifiers @ inner, body)
+  | _, _ -> Types.ForAll (quantifiers, body)
+
+(* Source checking has already validated modal access. IR retains the arrow
+   and quantified types and uses their runtime representations at each use. *)
+let runtime_type typ =
+  let declarations = Hashtbl.create 4 in
+  let runtime_types = object (self)
+    inherit Types.Transform.visitor as super
+
+    method! typ = function
+      | Types.Modal (_, payload) -> self#typ payload
+      | Types.ForAll (quantifiers, body) ->
+         let self, body = self#typ body in
+         self, quantified quantifiers body
+      | (Types.Var _ | Types.Closed) as typ ->
+         self, Types.Meta (Unionfind.fresh typ)
+      | Types.Recursive _ as typ ->
+         let self, point = self#meta_type_var (Unionfind.fresh typ) in
+         self, Types.Meta point
+      | Types.RecursiveApplication app ->
+         let name = app.Types.r_unique_name in
+         let body =
+           match Hashtbl.find_opt declarations name with
+           | Some body -> body
+           | None ->
+              let body = lazy (Option.map (fun (formals, body) -> formals, snd (self#typ body))
+                (app.Types.r_body ())) in
+              Hashtbl.add declarations name body;
+              body in
+         let r_body () = Lazy.force body in
+         let r_unwind arguments dual =
+           match r_body () with
+           | None -> raise (Errors.internal_error ~filename:"frescoFrontend.ml"
+                             ~message:("Missing checked recursive type body for " ^ name))
+           | Some (formals, body) ->
+              let body = Instantiate.substitute_type_parameters formals arguments body in
+              if dual then Types.dual_type body else body in
+         let self, r_args = self#type_args app.Types.r_args in
+         self, Types.RecursiveApplication { app with Types.r_body; r_unwind; r_args }
+      | typ -> super#typ typ
+  end in
+  snd (runtime_types#typ typ)
+let runtime_type_arg (kind, typ) = kind, runtime_type typ
+let var_value var = Ir.Variable var
+let type_arguments quantifiers = List.map Types.quantified_type_argument quantifiers
+let with_quantifiers quantifiers typ = quantified quantifiers (runtime_type typ)
+
+let primitive_ir_types = lazy (
+  let list_helpers = List.map read_primitive [
+    "$$hd", "forall a. (List a) -> a";
+    "$$tl", "forall a. (List a) -> List a";
+  ] in
+  List.fold_left (fun env (_, (var, typ)) -> Env.Int.bind var (runtime_type typ) env)
+    Env.Int.empty (list_helpers @ Lazy.force primitives))
+
+let fresh_binder scope name typ = Var.fresh_binder (Var.make_info typ name scope)
+
+let bind scope name quantifiers typ tail =
+  let binder = fresh_binder scope name (with_quantifiers quantifiers typ) in
+  let value = Ir.tapp (var_value (Var.var_of_binder binder), type_arguments quantifiers) in
+  Ir.letm ~tyvars:quantifiers (binder, tail), value
+
+let lowering_error expression message =
+  raise (Errors.Type_error (expression.position, message))
+
+let rec pattern_ir names pattern =
+  let module P = CompilePatterns.Pattern in
+  let bind names name =
+    let binder = fresh_binder Var.Scope.Local name (runtime_type pattern.pattern_type) in
+    StringMap.add name (var_value (Var.var_of_binder binder)) names, binder in
+  match pattern.pattern with
+  | PAny -> names, P.Any
+  | PVariable name ->
+     let names, binder = bind names name in
+     names, P.Variable binder
+  | PConstant constant -> names, P.Constant constant
+  | PRecord (fields, rest) ->
+     let names, fields = List.fold_left (fun (names, fields) (label, pattern) ->
+       let names, pattern = pattern_ir names pattern in
+       names, StringMap.add label pattern fields) (names, StringMap.empty) fields in
+     let names, rest = match rest with
+       | None -> names, None
+       | Some rest -> let names, rest = pattern_ir names rest in names, Some rest in
+     names, P.Record (fields, rest)
+  | PVariant (label, payload) ->
+     let names, payload = pattern_ir names payload in
+     names, P.Variant (label, payload)
+  | PNil -> names, P.Nil
+  | PCons (head, tail) ->
+     let names, head = pattern_ir names head in
+     let names, tail = pattern_ir names tail in
+     names, P.Cons (head, tail)
+  | PAs (name, payload) ->
+     let names, binder = bind names name in
+     let names, payload = pattern_ir names payload in
+     names, P.As (binder, payload)
+
+let rec pattern_bindings pattern =
+  match pattern.pattern with
+  | PVariable name -> [name, pattern.pattern_type]
+  | PAs (name, payload) -> (name, pattern.pattern_type) :: pattern_bindings payload
+  | PRecord (fields, rest) ->
+     List.concat_map (fun (_, pattern) -> pattern_bindings pattern) fields @
+       Option.fold ~none:[] ~some:pattern_bindings rest
+  | PVariant (_, payload) -> pattern_bindings payload
+  | PCons (head, tail) -> pattern_bindings head @ pattern_bindings tail
+  | PAny | PConstant _ | PNil -> []
+
+let rec computation names quantifiers expression =
+  match expression.node with
+  | Apply (callee, arguments) ->
+     let callee_bindings, callee = value names quantifiers callee in
+     let argument_bindings, arguments = values names quantifiers arguments in
+     callee_bindings @ argument_bindings, Ir.Apply (callee, arguments)
+  | If (condition, yes, no) ->
+     let bindings, condition = value names quantifiers condition in
+     bindings, Ir.If (condition, computation names quantifiers yes, computation names quantifiers no)
+  | Switch (scrutinee, cases) ->
+     let typ = runtime_type scrutinee.typ in
+     let bindings, tail = computation names quantifiers scrutinee in
+     let binder, var = Var.fresh_var_of_type typ in
+     let cases = List.map (fun (pattern, body) ->
+       let names, pattern = pattern_ir names pattern in
+       [pattern], (fun _ -> computation names quantifiers body)) cases in
+     let types = Env.Int.bind var typ (Lazy.force primitive_ir_types) in
+     let env = Env.String.empty, types, Types.make_empty_closed_row () in
+     let cases = CompilePatterns.compile_cases env (runtime_type expression.typ, var, cases) in
+     Ir.with_bindings (bindings @ [Ir.letm (binder, tail)]) cases
+  | Let (definitions, body) ->
+     let names, bindings = definitions_ir names quantifiers Var.Scope.Local definitions in
+     Ir.with_bindings bindings (computation names quantifiers body)
+  | _ ->
+     let bindings, value = value names quantifiers expression in
+     bindings, Ir.Return value
+
+and value names quantifiers expression =
+  let child_value = value names quantifiers in
+  match expression.node with
+  | Constant c -> [], Ir.Constant c
+  | Variable name ->
+     let ir_value =
+       match StringMap.find_opt name names with
+       | Some value -> value
+       | None -> lowering_error expression ("Missing checked variable " ^ name) in
+     [], ir_value
+  | Lambda (_, parameters, body) ->
+     let binder = fresh_binder Var.Scope.Local "" (with_quantifiers quantifiers expression.typ) in
+     let def = function_ir names binder quantifiers parameters body in
+     [Ir.Fun def], Ir.tapp (var_value (Var.var_of_binder binder), type_arguments quantifiers)
+  | Record (fields, base) ->
+     let base_bindings, base = match base with
+       | None -> [], None
+       | Some base -> let bindings, base = child_value base in bindings, Some base in
+     let field_bindings, field_values = values names quantifiers (List.map snd fields) in
+     let fields = StringMap.of_list (List.map2 (fun (label, _) value -> label, value) fields field_values) in
+     base_bindings @ field_bindings, Ir.Extend (fields, base)
+  | Project (record, label) ->
+     let bindings, record = child_value record in
+     bindings, Ir.Project (label, record)
+  | List elements ->
+     let bindings, elements = values names quantifiers elements in
+     let argument = [PrimaryKind.Type, TypeUtils.element_type (runtime_type expression.typ)] in
+     let primitive name = Ir.TApp (var_value (Env.String.find name Lib.nenv), argument) in
+     bindings, List.fold_right (fun head tail -> Ir.ApplyPure (primitive "Cons", [head; tail]))
+       elements (primitive "Nil")
+  | Variant (label, payload) ->
+     let bindings, payload = child_value payload in
+     bindings, Ir.Inject (label, payload, runtime_type expression.typ)
+  | TypeAbstraction (binders, body) ->
+     let bindings, body = value names (quantifiers @ binders) body in
+     bindings, Ir.TAbs (binders, body)
+  | TypeApplication (polymorphic, arguments) ->
+     let bindings, polymorphic = child_value polymorphic in
+     bindings, Ir.tapp (polymorphic, List.map runtime_type_arg arguments)
+  | Coerce body ->
+     let bindings, body = child_value body in
+     bindings, Ir.Coerce (body, runtime_type expression.typ)
+  | Apply _ | If _ | Let _ | Switch _ ->
+     let bindings, tail = computation names quantifiers expression in
+     let binding, value = bind Var.Scope.Local "" quantifiers expression.typ tail in
+     bindings @ [binding], value
+
+and values names quantifiers expressions =
+  let bindings, values = List.split (List.map (value names quantifiers) expressions) in
+  List.concat bindings, values
+
+and function_ir names binder quantifiers parameters body =
+  let names, parameters = List.fold_left (fun (names, parameters) (name, typ) ->
+    let param = fresh_binder Var.Scope.Local name (runtime_type typ) in
+    StringMap.add name (var_value (Var.var_of_binder param)) names, param :: parameters
+  ) (names, []) parameters in
+  { Ir.fn_binder = binder; fn_tyvars = quantifiers; fn_params = List.rev parameters;
+    fn_body = computation names [] body; fn_closure = None; fn_location = Location.Unknown;
+    fn_unsafe = false }
+
+and definitions_ir names quantifiers scope definitions =
+  let names, bindings = List.fold_left (fun (names, bindings) definition ->
+    let names, next_bindings = definition_ir names quantifiers scope definition in
+    names, List.rev_append next_bindings bindings
+  ) (names, []) definitions in
+  names, List.rev bindings
+
+and definition_ir names quantifiers scope = function
+  | Value (name, expression) ->
+     let bindings, tail = computation names quantifiers expression in
+     let binding, value = bind scope name quantifiers expression.typ tail in
+     StringMap.add name value names, bindings @ [binding]
+  | Pattern (pattern, expression) ->
+     let captures = pattern_bindings pattern in
+     let pattern_names, pattern = pattern_ir names pattern in
+     let fields = List.map (fun (name, _) -> name, StringMap.find name pattern_names) captures in
+     let result_type = Types.make_record_type
+       (StringMap.of_list (List.map (fun (name, typ) -> name, runtime_type typ) captures)) in
+     let bindings, tail = computation names quantifiers expression in
+     let input, var = Var.fresh_var_of_type (runtime_type expression.typ) in
+     let env = Env.String.empty,
+       Env.Int.bind var (Var.type_of_binder input) (Lazy.force primitive_ir_types),
+       Types.make_empty_closed_row () in
+     let result = CompilePatterns.compile_cases env (result_type, var,
+       [[pattern], (fun _ -> [], Ir.Return (Ir.Extend (StringMap.of_list fields, None)))]) in
+     let result_bindings, result_tail = result in
+     let output, output_value = bind Var.Scope.Local "" quantifiers result_type result_tail in
+     let names, capture_bindings = List.fold_left (fun (names, bindings) (name, typ) ->
+       let binding, value = bind scope name quantifiers typ (Ir.Return (Ir.Project (name, output_value))) in
+       StringMap.add name value names, binding :: bindings) (names, []) captures in
+     names, bindings @ [Ir.letm (input, tail)] @ result_bindings @ [output] @ List.rev capture_bindings
+  | Recursive definitions ->
+     let names, definitions =
+       List.fold_left (fun (names, definitions) (name, expression) ->
+         let binder = fresh_binder scope name (with_quantifiers quantifiers expression.typ) in
+         let reference = Ir.tapp (var_value (Var.var_of_binder binder), type_arguments quantifiers) in
+         StringMap.add name reference names, (binder, expression) :: definitions
+       ) (names, []) definitions in
+     let rec lower binder binders expression =
+       match expression.node with
+       | TypeAbstraction (more, body) -> lower binder (binders @ more) body
+       | Coerce body -> lower binder binders body
+       | Lambda (_, parameters, body) -> function_ir names binder binders parameters body
+       | _ -> lowering_error expression "A recursive definition must lower to a function"
+     in
+     names, [Ir.Rec (List.rev_map (fun (binder, expression) -> lower binder quantifiers expression) definitions)]
+
+let publish names lowered definitions =
+  let add names (name, typ) =
+    match StringMap.find name lowered with
+    | Ir.Variable var -> StringMap.add name (var, typ) names
+    | _ -> assert false in
+  List.fold_left (fun names -> function
+    | Value (name, expression) -> add names (name, expression.typ)
+    | Pattern (pattern, _) -> List.fold_left add names (pattern_bindings pattern)
+    | Recursive definitions ->
+       List.fold_left (fun names (name, expression) -> add names (name, expression.typ)) names definitions) names definitions
+
+let prior_types inference names =
+  let names = StringMap.bindings names in
+  let roots = List.map (fun (_, (_, typ)) ->
+    { FrescoContext.binders = []; primary_kind = PrimaryKind.Type; typ }) names in
+  let environment = FrescoElaborate.checking_environment (elaboration inference) in
+  match FrescoContext.export environment ~roots (FrescoInfer.context inference) with
+  | Ok (roots, _) ->
+     List.fold_left2 (fun env (_, (var, _)) root ->
+       Env.Int.bind var (runtime_type root.FrescoContext.typ) env) (Lazy.force primitive_ir_types) names roots
+  | Error _ ->
+     raise (Errors.internal_error ~filename:"frescoFrontend.ml" ~message:"Cannot export previously checked bindings")
+
+let run_program state program =
+  let inference, definitions, expression = FrescoInfer.program state.inference program in
+  let previous = StringMap.map (fun (var, _) -> var_value var) state.names in
+  let lowered, bindings = definitions_ir previous [] Var.Scope.Global definitions in
+  let names = publish state.names lowered definitions in
+  let datatype, program =
+    match expression with
+    | None -> Types.unit_type, Ir.with_bindings bindings Ir.unit_comp
+    | Some expression ->
+       expression.typ, Ir.with_bindings bindings (computation lowered [] expression) in
+  let vars names = StringMap.fold (fun _ (var, _) vars -> IntSet.add var vars) names IntSet.empty in
+  let context = Context.{ empty with variable_environment = prior_types inference state.names } in
+  let compiled = Backend.program ~globals:(vars state.names) ~retain:(vars names) ~contextual:true
+    context (runtime_type datatype) program in
+  let values, value = Eval.run_program state.values compiled.program in
+  { inference; names; values }, datatype, value
+
+let parse_string text =
+  let program, source = Parse.parse_string Parse.program text in
+  (ResolvePositions.resolve_positions source)#program program
+
+let parse_file filename =
+  let program, source = call_with_open_infile filename (fun channel ->
+    Parse.parse_channel Parse.program (channel, filename)) in
+  (ResolvePositions.resolve_positions source)#program program
+
+let check_program state program =
+  let _, _, expression = FrescoInfer.program state.inference program in
+  match expression with None -> Types.unit_type | Some expression -> expression.typ
+
+let check_string state text = check_program state (parse_string text)
+let check_file state filename = check_program state (parse_file filename)
+let run_string state text = run_program state (parse_string text)
+let run_file state filename = run_program state (parse_file filename)
+
+let run_sentence ?source state sentence =
+  let sentence = match source with
+    | Some source -> (ResolvePositions.resolve_positions source)#sentence sentence
+    | None -> sentence in
+  match sentence with
+  | Sugartypes.Definitions bindings -> run_program state (bindings, None)
+  | Sugartypes.Expression expression -> run_program state ([], Some expression)
+  | Sugartypes.Directive _ ->
+     raise (Errors.Type_error (SourceCode.Position.dummy, "Expected a definition or expression"))

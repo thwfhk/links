@@ -1,0 +1,14 @@
+---
+config: tests/fresco_typecheck.config
+---
+
+Source-only checking does not execute recursive calls
+{ sig loop : (Int) -> Int fun loop(x) { loop(x) } loop(42) }
+args : --fresco
+stdout : @^$
+
+Source-only checking rejects a type error
+(fun(f) { (f(42), f(true)) })(fun(x) { x })
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*

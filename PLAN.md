@@ -13,17 +13,17 @@ implementation decisions, reasons, internal invariants and source comparisons.
 
 ## Current status
 
-D4 is complete. The D4j ghost-kinding follow-up and D4k are implemented,
-reviewed and tested. Work is paused before D5.
+D5 is complete. D6 follows with an independent review, integrated checks and
+a separate commit. Work will stop before D7.
 
 - D1--D3d provide row/modality operations, shared modal types, surface syntax,
   and effect/operation resolution. D4a--D4f1 provide kind checks, persistent
   contexts, checked assignment, shared-type scope exit/export, skeleton
   conversion, root substitution and quantifier opening.
-- The production batch and REPL frontends still call `TypeSugar.Check` and
-  the legacy desugaring passes. Modal source programs cannot yet run through
-  Fresco. New syntax is parsed and tested through separate entry points;
-  the legacy frontend rejects modal constructs.
+- The opt-in `--fresco` batch and REPL frontend checks and executes pure source
+  programs through contextual inference and shared IR/backend passes. The
+  default frontend retains `TypeSugar.Check` until D7. D6 adds operations and
+  handlers to the contextual path.
 - D4f2--D4i add skeleton expansion/scope exit preserving ghosts, flexible
   requirement refinement, contextual recursive operations, consistency,
   guessing and monotype unification.
@@ -31,8 +31,8 @@ reviewed and tested. Work is paused before D5.
   scoped polymorphic/modal instantiations and ordinary session comparison.
 - D4k elaborates source annotations, written function signatures, type
   arguments, aliases and closed effect declarations through contextual kind
-  checking, with positioned errors. Source term inference, runtime integration
-  and migration remain.
+  checking, with positioned errors. D5 adds pure source term inference, runtime
+  integration and persistent interactive state. Modal handlers and migration remain.
 - D3e removes higher-order effect flags, syntax and row rules. Ordinary
   operation arguments and results must be absolute.
 - D3f implements `List A`, combined kind annotations and angle-bracket
@@ -74,7 +74,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D4i | Persistent monotype unification, consistency and guessing | `e425984c` |
 | D4j | Subtyping, constraint collection/solving, `look` and session compatibility checks | `7b4f78be` |
 | D4j follow-up | Direct skeleton kind checking with ordinary ghosts at `Abs` | `81cfc187` |
-| D4k | Contextual source annotation and declaration elaboration | This commit |
+| D4k | Contextual source annotation and declaration elaboration | `8a5b5743` |
+| D5 | Pure source inference, opt-in frontend, shared IR/backend execution and persistent state | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -88,7 +89,6 @@ also requires the affected build/tests and review described in AGENTS.md.
 
 | Task | Depends on | Completion check |
 |---|---|---|
-| D5: pure Fresco source inference | D3, D4i--D4k, required IR/export support | Adapted Fresco examples typecheck or reject as specified; a pure example evaluates; top-level unknowns and REPL failure handling work |
 | D6: modal source inference and handlers | D3e--D3f, D4j--D4k, D5 | A handled operation evaluates to `42`; infer omitted handler arguments (including unused parameters); repeated rows, modal access/refinement, complete groups and polymorphism checks pass |
 | D7: Links integration and migration | D5--D6 | Syntax/primitive inventory is covered; batch, REPL and typed rechecks use Fresco; programs migrate and old effect syntax rejects |
 | D8: backends, documentation and final review | D7 | Interpreter/JS deep-handler checks, migration guide and selected suites pass; in-scope legacy effect inference is removed |
@@ -133,60 +133,40 @@ signature modalities. D5/D6 must check these choices through source inference.
 
 ## Latest task and verification
 
-7 November 2026, D4k, this commit (base `81cfc187`): contextual source type
-elaboration preserves scopes, explicit polymorphism/modalities, recursive alias
-groups and ordinary Links alias behaviour. Closed effect signatures are checked
-before fresh unknown allocation. Thirty-eight new source elaboration tests
-cover accepted and rejected annotations/declarations, kinds, scope, recursive
-fields, global signatures, module resolution and positioned errors.
+7 November 2026, D5, this commit (base `ff695bc8`): pure Fresco source inference
+and the opt-in `--fresco` frontend execute through shared IR, optimisation,
+closure conversion and the interpreter. Source-only checking honours
+`typecheck_only`. Interactive state retains unknowns and recovers after errors.
 
-The D4j follow-up adds seven ghost cases and replaces temporary guessing with
-direct skeleton kind checking. Its focused compilation and 548 selected unit
-tests passed before the final combined checks.
+Independent review covered the source rules, scope exit and recursive exports,
+coercions, linearity, runtime lowering and CLI checking. Review fixes are
+complete. All writers finished and the combined changes were inspected before
+integrated testing. The 32 source/test hashes in
+`/tmp/links-d5-verification.Q5tr7l/source.sha256` match the tested revision;
+checksums were rechecked after testing. Final integrated logs are in that
+directory. Earlier focused logs there include superseded failures.
+Documentation was updated after testing without source changes.
 
-Independent review resolved recursive alias requirements, discarded duplicate
-field validation, source scopes, positioned errors and fresh-ID collisions.
-No review findings remain. All writers finished and the combined changes were
-inspected before integrated testing. The source snapshot in
-`/tmp/links-d4-final.aqJiTp/source.sha256` matches all 16 changed source/test
-files in this commit and `81cfc187`; checksums were rechecked after testing.
-Build and test logs are in the same directory. Documentation was updated after
-the checks; source files did not change. Earlier checks retain their last tested
-milestones: Correction is `02f79356`, D3f is `aa9358e4`.
+| Check | Result |
+|---|---|
+| `make no-db` | Passed |
+| `opam exec -- ./run-tests nodb-unit-tests` | 1,092 passed, including 87 Fresco source/IR cases and the constraint corrections |
+| `tests/fresco.tests`, `tests/fresco_typecheck.tests` | 5 execution/typing and 2 source-only checking tests passed |
+| `tests/handlers.tests`, `tests/effect_sugar.tests` | 95 and 44 passed |
+| `tests/polymorphism.tests`, `tests/typecheck_examples.tests` | 55 and 167 passed; 15 ignored by existing settings |
+| `tests/freezeml.tests`, `tests/typed_ir.tests` | 59 and 26 passed |
+| `tests/collections.tests`, `tests/bindings.tests`, `tests/mutual.tests` | 37, 25 and 17 passed |
+| `tests/modules.tests`, `tests/desugar_datatypes.tests` | 41 and 44 passed |
+| `tests/type_print.tests`, `tests/roundtrippable_types.tests` | 10 and 5 passed |
+| `tests/operators.tests`, `tests/conditionals.tests` | 21 and 6 passed |
+| CLI REPL failure recovery | A failed mixed-type use leaves `id` available at `Bool`; passed |
+| JavaScript generation probe | Four focused pure programs generated; `node --check` passed |
+| `make rule-check` | Passed; GNU-find tab check skipped, formatter check disabled |
+| Manual added-line tab/trailing-whitespace check, `git diff --check` | Passed |
 
-| Check | Revision | Result |
-|---|---|---|
-| `make no-db` | D4k | Passed |
-| `tests/handlers.tests` | D4k | 95 passed |
-| `tests/effect_sugar.tests` | D4k | 44 passed |
-| `tests/polymorphism.tests` | D4k | 55 passed |
-| `tests/typecheck_examples.tests` | D4k | 167 passed, 15 ignored by existing settings |
-| `tests/type_print.tests` | D4k | 10 passed |
-| `tests/desugar_datatypes.tests` | D4k | 44 passed |
-| `tests/modules.tests` | D4k | 41 passed |
-| `tests/mutual.tests` | D3f | 17 passed |
-| `tests/collections.tests` | Correction | 37 passed |
-| `tests/library.tests` | D3f | 4 passed |
-| `tests/freezeml.tests` | D4k | 59 passed |
-| `tests/typed_ir.tests` | D4k | 26 passed |
-| `tests/binaryTrees.tests` | D3f | 5 passed |
-| `tests/cliArgs.tests` | D3f | 7 passed |
-| `tests/operators.tests` | D3f | 21 passed |
-| `tests/roundtrippable_types.tests` | D4k | 5 passed |
-| `tests/strings.tests` | D3f | 5 passed |
-| `tests/xml.tests` | D3f | 74 passed |
-| `tests/bindings.tests` | D3f | 25 passed |
-| `tests/conditionals.tests` | D3f | 6 passed |
-| `opam exec -- ./run-tests nodb-unit-tests` | D4k | 1,001 passed, including 38 new source elaboration tests and seven new ghost cases |
-| Menhir conflict check | Correction | Zero conflicts before and after the grammar change |
-| Parse-only source and expected-type comparison | D3f | No unexpected parse regressions; 1,374 programs and 838 type strings parse |
-| `make rule-check` | D4k | Passed; GNU-find tab check skipped, formatter check disabled |
-| Manual added-line tab/trailing-whitespace check | D4k | Passed |
-| `git diff --check` | D4k | Passed |
-
-D3f's parse-only audit covered excluded-feature fixtures without executing
-those suites. Existing invalid examples and deliberate rejection cases remain.
-Handler argument inference follows in D6; D3f preserves omission in the AST.
+The JavaScript generation probe is recorded in `/tmp/links-d5-js-probe.log`.
+D8 retains the final JavaScript execution audit. Handler argument inference
+follows in D6; omission remains in the source AST.
 
 ## Decisions and deferred work at the D4 pause
 
@@ -220,6 +200,12 @@ records two compatibility choices and their alternatives:
 
 ## Next action
 
-Pause before D5. Await the user's instruction before starting source inference.
-The production frontend still uses legacy inference; source Fresco integration
-follows in D5/D6.
+D5 is complete. Implement D6: modal access and refinement, operations and
+complete handlers, inferred handler arguments, deep/shallow execution and
+operation identities. Include source checks and the required IR/backend support,
+then independently review, test and commit.
+
+The user authorised routine and major choices during this task. Record choices
+needing review in the design and collect them in the final report. Continue
+through D6; pause before D7. The default frontend remains on legacy inference
+until D7.

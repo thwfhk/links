@@ -211,7 +211,7 @@ struct
         | TApp (v, ts) ->
             let o, v, t = o#value v in
               begin try
-                let t = Instantiate.apply_type t ts in
+                let t = Instantiate.apply_type_arguments t ts in
                   o, TApp (v, ts), t
               with
                   Instantiate.ArityMismatch _ ->
@@ -243,7 +243,7 @@ struct
               match tyargs with
                 | [] -> t
                 | _ ->
-                  let (remaining_type, instantiation_maps) = Instantiate.instantiation_maps_of_type_arguments false t tyargs in
+                  let (remaining_type, instantiation_maps) = Instantiate.type_argument_substitution false t tyargs in
                   Instantiate.datatype instantiation_maps remaining_type in
             let (o, z, _) = o#value z in
               (* TODO: check that closure environment types match expectations for f *)
@@ -756,6 +756,9 @@ module ElimDeadDefs = struct
             super#binding b
 
     method get_envs () = (env, rec_env, mutrec_env)
+
+    method retain x =
+      if IntMap.mem x env then o#inc x else o
   end
 
   let eliminator tyenv (env, rec_env, mutrec_env) =
@@ -830,6 +833,7 @@ module ElimDeadDefs = struct
     let open IrTransform in
     let tenv = Context.variable_environment (context state) in
     let o, _, _ = (counter tenv)#program program in
+    let o = IntSet.fold (fun var o -> o#retain var) state.retained_vars o in
     let envs = o#get_envs () in
     let _, program', _ = (eliminator tenv envs)#program program in
     return state program'

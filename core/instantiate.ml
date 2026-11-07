@@ -335,9 +335,7 @@ let presence = instantiates ->- thd3
 
 module SEnv = Env.String
 
-let populate_instantiation_map ?(allow_incomplete = false) ~name qs tyargs =
-  List.iter Quantifier.require_any qs;
-  List.iter (fun (_, t) -> check_legacy_quantifiers ~allow_incomplete t) tyargs;
+let type_argument_map ~name qs tyargs =
   List.fold_right2
     (fun q ((pk, _) as tyarg) inst_map ->
       if pk <> Quantifier.to_primary_kind q then
@@ -350,11 +348,20 @@ let populate_instantiation_map ?(allow_incomplete = false) ~name qs tyargs =
         IntMap.add (Quantifier.to_var q) tyarg inst_map)
     qs tyargs IntMap.empty
 
-let instantiation_maps_of_type_arguments :
+let substitute_type_parameters formals arguments body =
+  if List.length formals <> List.length arguments then
+    raise (ArityMismatch (List.length formals, List.length arguments));
+  let substitution = type_argument_map ~name:"type declaration" formals arguments in
+  datatype substitution body
+
+let populate_instantiation_map ?(allow_incomplete = false) ~name qs tyargs =
+  List.iter Quantifier.require_any qs;
+  List.iter (fun (_, t) -> check_legacy_quantifiers ~allow_incomplete t) tyargs;
+  type_argument_map ~name qs tyargs
+
+let type_argument_substitution :
       bool -> Types.datatype -> Types.type_arg list -> (datatype * instantiation_maps) =
   fun must_instantiate_all_quantifiers pt tyargs ->
-    check_legacy_quantifiers pt;
-    List.iter (fun (_, t) -> check_legacy_quantifiers t) tyargs;
     let vars, t = TypeUtils.split_quantified_type pt in
     let tyargs_length = List.length tyargs in
     let vars_length   = List.length vars   in
@@ -380,11 +387,20 @@ let instantiation_maps_of_type_arguments :
         vars, []
       else
         (take tyargs_length vars, drop tyargs_length vars) in
-    let inst_map = populate_instantiation_map ~name:(Types.string_of_datatype pt) vars tyargs in
+    let inst_map = type_argument_map ~name:(Types.string_of_datatype pt) vars tyargs in
     match remaining_quantifiers with
       | [] -> t, inst_map
       | _ -> ForAll (remaining_quantifiers, t),  inst_map
 
+
+let instantiation_maps_of_type_arguments all pt tyargs =
+  check_legacy_quantifiers pt;
+  List.iter (fun (_, t) -> check_legacy_quantifiers t) tyargs;
+  type_argument_substitution all pt tyargs
+
+let apply_type_arguments pt tyargs =
+  let t, substitution = type_argument_substitution false pt tyargs in
+  datatype substitution t
 
 let apply_type : Types.datatype -> Types.type_arg list -> Types.datatype = fun pt tyargs ->
   let (t, instantiation_map) = instantiation_maps_of_type_arguments false pt tyargs in

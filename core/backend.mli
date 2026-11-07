@@ -3,4 +3,5 @@ type result =
     datatype: Types.datatype;
     context: Context.t }
 
-val program : Context.t -> Types.datatype -> Ir.program -> result
+val program : ?globals:Utility.IntSet.t -> ?retain:Utility.IntSet.t ->
+  ?contextual:bool -> Context.t -> Types.datatype -> Ir.program -> result

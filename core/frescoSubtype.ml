@@ -125,11 +125,11 @@ let run env initial ~support ~mode ~ambient source = checked (fun () ->
          let result = go (binders @ qs) (path @ [0]) ambient (K.Check target) source in
          single (leave marker [root PrimaryKind.Type (S.ForAll (qs, result))])
       | K.Fun (a, m), _, S.Arrow (b, c)
-      | K.LinearFun (a, m), _, S.LinearArrow (b, c) ->
+      | (K.Fun (a, m) | K.LinearFun (a, m)), _, S.LinearArrow (b, c) ->
          let next, domain = consistency (J.consistent env !ctx a b) in
          ctx := next;
          let result = go binders (path @ [1]) ambient m c in
-         begin match mode with K.LinearFun _ -> S.LinearArrow (domain, result) | _ -> S.Arrow (domain, result) end
+         begin match source with S.LinearArrow _ -> S.LinearArrow (domain, result) | _ -> S.Arrow (domain, result) end
       | K.Check target, K.Type, source
         when (match target, source with S.Modal _, _ | _, S.Modal _ -> true | _ -> false) ->
          let target_modality, target_body = guarded_run target in

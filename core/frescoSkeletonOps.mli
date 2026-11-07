@@ -72,3 +72,8 @@ val expand_solutions : FrescoKind.checking_environment ->
 val leave_scope : FrescoKind.checking_environment -> FrescoContext.marker ->
   roots:FrescoSkeleton.scoped_root list -> FrescoContext.t ->
   (FrescoContext.t * FrescoSkeleton.scoped_root list, error) result
+
+(** Read-only representation equality of complete raw declaration graphs.
+    Callers must validate each input graph before using this to share independently
+    imported snapshots. Binder IDs, kinds, captures and linearity must agree. *)
+val same_declaration : FrescoSkeleton.declaration -> FrescoSkeleton.declaration -> bool

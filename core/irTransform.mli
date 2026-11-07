@@ -1,5 +1,7 @@
 type state = { context: Context.t;
-               primitive_vars: Utility.IntSet.t;
+               global_vars: Utility.IntSet.t;
+               retained_vars: Utility.IntSet.t;
+               contextual: bool;
                datatype: Types.datatype }
 
 type result = Result of { state: state;

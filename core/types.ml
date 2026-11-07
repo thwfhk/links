@@ -1074,9 +1074,8 @@ module Env = Env.String
   let make_rigid_variable var kind =
     Meta (build_type_variable `Rigid var kind)
 
-  let type_arg_of_quantifier : Quantifier.t -> type_arg =
+  let quantified_type_argument : Quantifier.t -> type_arg =
     fun q ->
-    Quantifier.require_any q;
     let var = Quantifier.to_var q in
     let pk, sk = Quantifier.to_kind q in
     let open PrimaryKind in
@@ -1084,6 +1083,10 @@ module Env = Env.String
     | Type     -> (Type, make_rigid_type_variable var sk)
     | Row      -> (Row, Row (StringMap.empty, make_rigid_row_variable var sk, false))
     | Presence -> (Presence, make_rigid_presence_variable var sk)
+
+  let type_arg_of_quantifier q =
+    Quantifier.require_any q;
+    quantified_type_argument q
 
   let is_closed_row : row -> bool =
     let rec is_closed rec_vars =

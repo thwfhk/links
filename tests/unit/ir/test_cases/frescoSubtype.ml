@@ -69,7 +69,17 @@ let suite = "Fresco subtyping and constraints" >::: [
       let result = ok (run ctx (K.Fun (int, K.Check bool)) (arrow (v ~freedom:`Flexible a) bool)) in
       equal result.T.context int (expand result.T.context PrimaryKind.Type (v ~freedom:`Flexible a)));
     "linear function mode" >:: (fun _ -> ignore (ok (run C.empty (K.LinearFun (int, K.Check bool)) (S.LinearArrow (int, bool)))));
-    "wrong function mode rejects" >:: (fun _ -> reject (run C.empty (K.Fun (int, K.Infer)) (S.LinearArrow (int, int))));
+    "application mode preserves linear arrows" >:: (fun _ ->
+      let result = ok (run C.empty (K.Fun (int, K.Infer)) (S.LinearArrow (int, int))) in
+      equal result.T.context (S.LinearArrow (int, int)) result.T.typ;
+      reject (run C.empty (K.LinearFun (int, K.Infer)) (arrow int int)));
+    "application mode retains a supplied linear instantiation" >:: (fun _ ->
+      let a = q () in
+      let supplied = S.LinearArrow (int, bool) in
+      let source = S.ForAll ([a], arrow (v a) (v a)) in
+      let result = ok (run C.empty (K.Fun (supplied, K.Fun (int, K.Check bool))) source) in
+      equal result.T.context supplied (one_argument result);
+      equal result.T.context (arrow supplied supplied) result.T.typ);
     "identity instantiates with supplied polymorphism" >:: (fun _ ->
       let p = poly () in let result = ok (run C.empty (K.Fun (p, K.Infer)) (poly ())) in
       equal result.T.context p (one_argument result));
@@ -307,6 +317,28 @@ let suite = "Fresco subtyping and constraints" >::: [
       let a = q () and b = q () in
       reject (K.solve_equal environment C.empty (S.ForAll ([a], arrow (v a) S.Ghost))
                 (S.ForAll ([b], arrow (v b) (v b)))));
+    "directional solve fills ghosts beneath a supplied quantifier" >:: (fun _ ->
+      let supplied = poly () in
+      let next, result = ok (K.solve_equal environment C.empty
+        (S.UniversalGhost (arrow S.Ghost S.Ghost)) supplied) in
+      equal next supplied result);
+    "directional solve retains capture checks beneath left quantifiers" >:: (fun _ ->
+      let a = q () and b = q () in
+      reject (K.solve_equal environment C.empty
+        (S.ForAll ([a], arrow (v a) S.Ghost))
+        (S.UniversalGhost (S.ForAll ([b], arrow (v b) (v b))))));
+    "look combines an argument skeleton with supplied result polymorphism" >:: (fun _ ->
+      let a = q () in
+      let supplied = poly () in
+      let unary t = record ["1", S.Present t] in
+      let source = S.ForAll ([a], arrow (unary (v a)) (arrow (unary (v a)) (v a))) in
+      let argument = S.UniversalGhost (arrow (unary S.Ghost) S.Ghost) in
+      let supplied = match supplied with
+        | S.ForAll (qs, S.Arrow (domain, result)) -> S.ForAll (qs, arrow (unary domain) result)
+        | _ -> assert false in
+      let result = ok (run C.empty (K.Fun (unary argument,
+        K.Check (arrow (unary supplied) supplied))) source) in
+      equal result.T.context supplied (one_argument result));
     "records remain invariant" >:: (fun _ -> reject (check C.empty (record ["x", S.Present int; "y", S.Present bool]) (record ["x", S.Present int])));
     "recursive nominal argument extraction" >:: (fun _ ->
       let a = q () and b = q () in let declaration = raw ~formals:[b] "D4jNominal" (v b) in

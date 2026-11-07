@@ -3,6 +3,13 @@ open Utility
 
 module BS = Basicsettings
 
+let fresco =
+  Settings.(flag "fresco"
+            |> synopsis "Use the contextual frontend for pure programs (development)"
+            |> convert parse_bool
+            |> CLI.(add (long "fresco"))
+            |> sync)
+
 let to_evaluate
   = Settings.(multi_option "evaluate"
               |> synopsis "Evaluates an expression"
@@ -77,8 +84,7 @@ let isolate
               |> CLI.(add (long "isolate"))
               |> sync)
 
-let for_each : Context.t -> (Context.t -> string -> Context.t) -> string list -> Context.t
-  = fun context f xs ->
+let for_each context f xs =
   List.fold_left
     (fun context x ->
       let context' = f context x in
@@ -117,6 +123,51 @@ let run : string list -> string list -> unit
            handle_errors (lazy (Driver.Phases.compile_js_only context file output_file)); context)
         file_list)
 
+let run_fresco file_list to_evaluate =
+  let open Basicsettings.System in
+  begin match Settings.get mode with
+  | None | Some Interactive -> ()
+  | Some (Web | Compile) ->
+     handle_errors (lazy (raise (Errors.settings_error "The Fresco frontend supports interpreter mode")))
+  end;
+  let process check run context source =
+    if Settings.get Driver.typecheck_only then begin
+      ignore (handle_errors (lazy (check context source)));
+      exit 0
+    end;
+    let context, datatype, value = handle_errors (lazy (run context source)) in
+    print_simple datatype value;
+    context
+  in
+  let context = handle_errors (lazy (FrescoFrontend.empty ())) in
+  let context = for_each context (process FrescoFrontend.check_string FrescoFrontend.run_string) to_evaluate in
+  let context = for_each context (process FrescoFrontend.check_file FrescoFrontend.run_file) file_list in
+  if file_list = [] && to_evaluate = [] then begin
+    if Settings.get Driver.typecheck_only then
+      handle_errors (lazy (raise (Errors.settings_error "The typecheck_only setting requires a source file or -e")));
+    Settings.set interactive_mode true;
+    let prompt = "links> " in
+    let rec loop context =
+      Parse.Readline.prepare_prompt prompt;
+      let result = try
+        match Parse.Readline.parse prompt with
+        | Sugartypes.Directive ("quit", []), _ -> None
+        | sentence, source ->
+           let context, typ, value = FrescoFrontend.run_sentence ~source context sentence in
+           (match sentence with
+            | Sugartypes.Expression _ -> print_simple typ value
+            | _ -> ());
+           Some context
+      with End_of_file -> None
+      | exn ->
+        Printf.eprintf "%s\n%!" (Errors.format_exception exn);
+        Some context
+      in
+      Option.iter loop result
+    in
+    loop context
+  end
+
 let main () =
   (* Attempt to synchronise all settings. If any setting commands are
      left unhandled, then error and exit. *)
@@ -124,6 +175,7 @@ let main () =
 
   let file_list = Settings.get_anonymous_arguments () in
   let to_evaluate = Settings.get to_evaluate in
-  run file_list to_evaluate
+  if Settings.get fresco then run_fresco file_list to_evaluate
+  else run file_list to_evaluate
 
 let _ = main()

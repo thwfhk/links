@@ -52,7 +52,9 @@ let check_ir_equal expected actual =
   let program = [Ir.Let (binder, ([], Ir.Special (Ir.Wrong actual)))],
                 Ir.Return (Ir.Variable var) in
   let state = { IrTransform.context = Context.empty;
-                primitive_vars = IntSet.empty; datatype = Types.Not_typed } in
+                global_vars = IntSet.empty; retained_vars = IntSet.empty;
+                contextual = false;
+                datatype = Types.Not_typed } in
   let previous = Settings.get IrCheck.fail_on_ir_type_error in
   Fun.protect ~finally:(fun () -> Settings.set IrCheck.fail_on_ir_type_error previous)
     (fun () ->

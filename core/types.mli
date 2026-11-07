@@ -275,6 +275,9 @@ val free_bound_type_arg_type_vars : type_arg -> Vars.vars_list
 (** Make an occurrence of an [Any] binder. Reject [Abs], since type arguments
     do not retain modal kinds. *)
 val type_arg_of_quantifier : Quantifier.t -> type_arg
+(** Build a rigid occurrence for an existing typed binder. The quantifier
+    still owns its modal kind. *)
+val quantified_type_argument : Quantifier.t -> type_arg
 (** Recover an [Any] binder from a legacy variable argument. *)
 val quantifier_of_type_arg : type_arg -> Quantifier.t
 val quantifiers_of_type_args : type_arg list -> Quantifier.t list
