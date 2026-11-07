@@ -1445,6 +1445,184 @@ let collection_suite = "staged collection prelude" >::: [
     |}));
 ]
 
+let foundation_suite = "staged foundation prelude" >::: [
+  "function helpers retain argument order and polymorphism" >:: (fun _ ->
+    collection_execution
+      (Value.box [`Int 7; `Int 7; `Int 7; `Int 42; `Bool true;
+                  `Int 42; `Bool true]) {|
+      (flip(fun(x,y) { x-y })(3,10),
+       curry(fun(x,y) { x-y })(10)(3),
+       uncurry(fun(x)(y) { x-y })(10,3),
+       compose(fun(x) { x+2 },fun(x) { x*2 })(20),
+       compose(not,fun(x) { x == 0 })(1), id(42), id(true))
+    |} |> ignore);
+
+  "tuple projections accept larger tuples and open record rows" >:: (fun _ ->
+    collection_execution
+      (Value.box [Value.box (List.init 5 (fun i -> `Int (i+1)));
+                  Value.box (List.init 5 (fun i -> `Int (i+6))); `Bool true; `Int 42]) {|
+      var p = (1,2,3,4,5,6,7,8,9,10,11);
+      sig project : forall a, r::Row. ((1:a | r)) -> a
+      fun project(p) { first(p) }
+      ((first(p), second(p), third(p), fourth(p), fifth(p)),
+       (sixth(p), seventh(p), eighth(p), ninth(p), tenth(p)),
+       project((1=true,extra="kept")), tenth((10=42,extra=false)))
+    |} |> ignore);
+
+  "mapi retains index and element order and empty cases" >:: (fun _ ->
+    collection_execution
+      (Value.box [`List [`Int 10; `Int 21; `Int 32];
+                  `List [`Bool true; `Bool false]; `List []]) {|
+      (mapi(fun(x,i) { x+i },[10,20,30]),
+       mapi(fun(x,i) { x && i == 0 },[true,true]),
+       mapi(fun(x,i) { x+i },[]))
+    |} |> ignore);
+
+  "substAt and reverse retain boundaries and polymorphism" >:: (fun _ ->
+    collection_execution
+      (Value.box [`List [`Int 9; `Int 2; `Int 3];
+                  `List [`Int 1; `Int 9; `Int 3];
+                  `List [`Int 1; `Int 2; `Int 3]; `List [];
+                  `List [`Bool false; `Bool true];
+                  `List [`Int 3; `Int 2; `Int 1]; `List []]) {|
+      (substAt([1,2,3],-1,9), substAt([1,2,3],1,9),
+       substAt([1,2,3],3,9), substAt([],0,true),
+       reverse([true,false]), reverse([1,2,3]), reverse([] : List Int))
+    |} |> ignore);
+
+  "concat join and intercalate retain separator boundaries" >:: (fun _ ->
+    collection_execution
+      (Value.box [`List [`Int 1; `Int 2; `Int 3]; `List [];
+                  `List [`Bool true; `Bool false];
+                  `List [`Int 1; `Int 0; `Int 2; `Int 0; `Int 3];
+                  `List []; `List [`Int 1];
+                  `List [`Int 0; `Int 1; `Int 0]]) {|
+      (concat([[1],[],[2,3]]), concat([] : List (List Int)),
+       concat([[true],[false]]), join([0],[[1],[2],[3]]),
+       join([0],[]), intercalate([0],[[1]]), intercalate([0],[[],[1],[]]))
+    |} |> ignore);
+
+  "span and while helpers retain the legacy end case order" >:: (fun _ ->
+    collection_execution
+      (Value.box [Value.box [`List [`Int 2; `Int 1]; `List []];
+                  Value.box [`List [`Int 1; `Int 2]; `List [`Int 3; `Int 4]];
+                  Value.box [`List []; `List [`Int 1; `Int 2]];
+                  Value.box [`List []; `List []];
+                  `List [`Int 3; `Int 2; `Int 1]; `List [`Int 3];
+                  `List [`Bool true]; `List [`Bool false]]) {|
+      (span(fun(x) { true },[1,2]), span(fun(x) { x < 3 },[1,2,3,4]),
+       span(fun(x) { false },[1,2]), span(fun(x) { x },[] : List Bool),
+       takeWhile(fun(x) { true },[1,2,3]), dropWhile(fun(x) { x < 3 },[1,2,3]),
+       takeWhile(fun(x) { x },[true,false]), dropWhile(fun(x) { x },[true,false]))
+    |} |> ignore);
+
+  "partial list helpers and integer helpers execute" >:: (fun _ ->
+    collection_execution
+      (Value.box [Value.box [`List [`Int 1; `Int 2]; `List [];
+                             `List [`Bool true]; `Int 3; `Bool true];
+                  Value.box [`Int 1; `Int 24; `Int 42; `Int 42; `Int 0]]) {|
+      ((init([1,2,3]), init([42]), curtail([true,false]), last([1,2,3]),
+        last([false,true])), (product([]), product([2,3,4]), abs(-42), abs(42), abs(0)))
+    |} |> ignore);
+
+  "string joins retain empty singleton and separator cases" >:: (fun _ ->
+    collection_execution
+      (Value.box [`String ""; `String "one"; `String "one\ntwo";
+                  `String "\nx\n"; `String ""; `String "one";
+                  `String "one two"; `String " x "]) {|
+      (unlines([]), unlines(["one"]), unlines(["one","two"]),
+       unlines(["","x",""]), unwords([]), unwords(["one"]),
+       unwords(["one","two"]), unwords(["","x",""]))
+    |} |> ignore);
+
+  "helpers preserve supplied higher-rank types with the global modality" >:: (fun _ ->
+    collection_execution
+      (Value.box [`Int 42; `Bool true; `Int 43; `Bool false]) {|
+      typename Identity = forall a::Any. modal [] ((a) -> a);
+      var f = ~first[Identity,{}]((1= ~id)) : Identity;
+      var g = ~last[Identity](reverse([~id])) : Identity;
+      (f(42),f(true),g(43),g(false))
+    |} |> ignore);
+
+  "helpers preserve supplied modal aliases" >:: (fun _ ->
+    ignore (collection_check {|
+      effect Needed {}
+      typename Action = modal [Needed] (() -> Int);
+      sig action : Action fun action() { 42 }
+      sig use : modal [Needed] (() -> Int)
+      fun use() {
+        var f = ~first[Action,{}]((1= ~action)) : Action;
+        var g = ~id[Action](~action) : Action;
+        f()+g()
+      }
+      42
+    |});
+    reject (fun () -> collection_check {|
+      effect Needed {}
+      typename Action = modal [Needed] (() -> Int);
+      sig action : Action fun action() { 42 }
+      var f = ~first[Action,{}]((1= ~action)) : Action;
+      f()
+    |}));
+
+  "foundation Wild contracts reject calls in a pure function" >:: (fun _ ->
+    List.iter (fun body ->
+      reject (fun () -> collection_check
+        ("sig pure : () -> () fun pure() { ignore(" ^ body ^ ") } pure()")))
+      ["substAt([42],0,43)"; "span(fun(x) { x },[true])";
+       "takeWhile(fun(x) { x },[true])"; "dropWhile(fun(x) { x },[true])";
+       "init([42])"; "curtail([42])"; "last([42])";
+       "unlines([\"a\"])"; "unwords([\"a\"])"]);
+
+  "foundation callbacks and record fields are checked" >:: (fun _ ->
+    List.iter (fun source -> reject (fun () -> collection_check source))
+      ["mapi(fun(x,i) { x && i },[true])";
+       "span(fun(x) { x+1 },[1])"; "takeWhile(fun(x) { x+1 },[1])";
+       "dropWhile(fun(x) { x+1 },[1])"; "first((other=42))";
+       "tenth((1,2,3))"; "compose(not,fun(x) { x+1 })(1)";
+       "uncurry(fun(x) { x+1 })(1,2)"]);
+
+  "foundation helpers consume linear arguments and return linear values" >:: (fun _ ->
+    collection_execution
+      (Value.box [`Int 42; `Int 42; `Int 42; `Int 42; `Int 42;
+                  `Int 42; `Int 42]) {|
+      (id(linfun() { 42 })(), first((linfun() { 42 },0))(),
+       second((0,linfun() { 42 },true))(),
+       tenth((0,0,0,0,0,0,0,0,0,linfun() { 42 },0))(),
+       flip(fun(f,n) { f()+n })(1,linfun() { 41 }),
+       uncurry(fun(n) { fun(f) { f()+n } })(1,linfun() { 41 }),
+       compose(fun(f) { f() },fun(x) { linfun() { x } })(42))
+    |} |> ignore);
+
+  "foundation helpers retain ordinary unlimited requirements" >:: (fun _ ->
+    List.iter (fun source -> reject (fun () -> collection_check source))
+      ["first((42,linfun() { 0 }))";
+       "mapi(fun(f,i) { f()+i },[linfun() { 42 }])";
+       "mapi(linfun(x,i) { x+i },[42])";
+       "{ var once = linfun() { 42 }; curry(fun(x,y) { once()+x+y })(0)(0) }";
+       "mapi(fun(x,i) { linfun() { x+i } },[42])";
+       "reverse([linfun() { 42 }])"]);
+
+  "foundation callback effects remain contextual" >:: (fun _ ->
+    ignore (collection_check {|
+      effect Read { Get : () => Int; }
+      sig use : modal [Read] (() -> Int)
+      fun use() {
+        curry(fun(x,y) { do Get+x-y })(10)(3) +
+        uncurry(fun(x)(y) { do Get+x-y })(10,3) +
+        flip(fun(x,y) { do Get+x-y })(3,10) +
+        compose(fun(x) { do Get+x },fun(x) { do Get+x })(0)
+      }
+      42
+    |});
+    List.iter (fun body -> reject (fun () -> collection_check
+      ("effect Read { Get : () => Int; } sig pure : () -> Int fun pure() { " ^ body ^ " } 42")))
+      ["curry(fun(x,y) { do Get+x-y })(10)(3)";
+       "uncurry(fun(x)(y) { do Get+x-y })(10,3)";
+       "flip(fun(x,y) { do Get+x-y })(3,10)";
+       "compose(fun(x) { do Get+x },fun(x) { x })(0)"]);
+]
+
 let ir_suite =
   let arrow argument result = Types.Arrow (Types.make_tuple_type [argument], result) in
   let int, bool = Types.int_type, Types.bool_type in
@@ -1477,4 +1655,4 @@ let ir_suite =
       reject_coercion (forall (fun a -> arrow a int)) (forall (fun a -> arrow a a)));
   ]
 
-let suite = "Fresco source" >::: [reference_suite; source_suite; callback_sequence_suite; primitive_suite; regex_suite; continuations_suite; comprehensions_suite; sections_patterns_updates_suite; collection_suite; ir_suite]
+let suite = "Fresco source" >::: [reference_suite; source_suite; callback_sequence_suite; primitive_suite; regex_suite; continuations_suite; comprehensions_suite; sections_patterns_updates_suite; collection_suite; foundation_suite; ir_suite]

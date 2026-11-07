@@ -666,6 +666,57 @@ linear callbacks and discarded linear callback results. Signed local recursion
 retains its surrounding type variables. The staged `intRange` uses the same
 equality-stop correction as range syntax.
 
+Migrate tuple projections with open ordinary record rows so they retain their
+behaviour on larger tuples. Their selected field, and the type parameters of
+`id`, `flip`, `uncurry` and `compose`, retain ordinary kind `Any` where the
+legacy helpers accept linear values. The discarded projection row remains
+`Unl`. Keep `mapi`'s element parameter `Unl`, as required by the existing
+`Types.list` constructor. Its legacy printed type leaves that variable at
+`Any`, but actual calls over nonempty linear lists reject.
+
+Preserve explicit legacy `Wild` contracts and the requirements of partial or
+external primitives. Pure helpers with exhaustive cases may have pure
+contextual signatures even when legacy inference included `Wild` through
+their switches or recursive calls. Preserve the existing `span` complete-match branch,
+which returns its accumulated prefix in reverse order, and the resulting
+`takeWhile` behaviour. This migration does not change those library results.
+
+**Choice for review:** the staged `curry`, `flip`, `uncurry` and `compose` use
+contextual arrows sharing the caller's ambient effects through closure
+construction and later calls. Their general legacy contracts permit an
+independent effect context for callbacks and returned calls; those contracts
+remain in the
+[independent-effect audit](#signatures-with-independent-effect-variables).
+Alternatives include separate helpers for fixed absolute callback contexts or
+requiring explicit wrappers at each use. Test effectful calls and returned
+closures so the specialised interface retains its stated effect requirements.
+
+### D7 inferred linear results
+
+**Choice for review:** retain the ordinary-arrow guess for unresolved callable
+types. A callback or result annotation, or an intermediate binding, is required
+when this guess would otherwise conflict with a later linear-arrow result.
+For example, with `apply : forall a::Any,b::Any. ((a)->b,a)->b`,
+`apply(fun(x){x},linfun(){42})()` rejects. Binding its inner application to
+`k` and then calling `k()` succeeds, as does supplying the callback parameter
+type or annotating the inner result with `() -@ Int`.
+
+`FrescoConstraints` extracts an ordinary arrow from a ghost under `Fun` mode.
+The callback skeleton can leave its parameter and result as separate ghosts,
+so that arrow choice can precede information from the full callback check.
+This applies to general function application as well as the staged helpers.
+Keep the helpers' `Any` parameters, which admit the supplied linear types.
+
+The skeleton abstraction discussion in the thesis'
+`chapters/maetel/algorithm.tex` explains why skeleton lambda parameters remain
+ghosts: a later check may supply polymorphic types. Sharing
+fresh monotype variables would lose that behaviour. Deferring callable modes
+requires retaining their polymorphic and modal information and checking the
+obligations after argument inference; retrying full inference requires restoring
+contexts, usage counts and scoped evidence. Both alternatives require further
+inference design. Independent design review selected the annotation/binding
+requirement for this migration. No inference rule or backend code changes here.
+
 ### D7 continuations
 
 `FrescoInfer` obtains the continuation argument type from a supplied expected
@@ -1658,7 +1709,7 @@ still migrate with fixed contexts or a changed interface.
 |---|---|---|
 | `examples/handlers/alert.links`, JavaScript `wait` declaration | Callback uses `e1`; scheduling call uses `e2` | Preserve the general contract as deferred; inspect actual callback effects before specialising |
 | `lib/stdlib/mvu.links`, `runHandle` and wrappers | View/update/subscription callbacks share `e`; caller uses separate `f` | Audit call sites against the fixed spawned-body context and actor migration |
-| `prelude.links`, `curry`; `tests/freezeml/a9.links` | Callback and final application share a row independent of closure construction | Record the general signature and test effectful uses at different contexts; pure uses alone do not establish preservation |
+| `prelude.links`, `curry`, `flip`, `uncurry`, `compose`; `tests/freezeml/a9.links` | Callbacks and returned applications share a row independent of closure construction | Staged helpers use a shared ambient context; retain the general contracts as deferred and test effectful calls and returned closures |
 
 The `wait` signature is:
 

@@ -199,3 +199,172 @@ fun replicate(n, item) {
   if (n <= 0) []
   else item :: replicate(n-1, item)
 }
+
+sig flip : forall a::Any, b::Any, c::Any. ((a, b) -> c) -> (b, a) -> c
+fun flip(f) {
+  fun(x,y) { f(y,x) }
+}
+
+sig curry : forall a, b, c. ((a, b) -> c) -> (a) -> (b) -> c
+fun curry(f) {
+  fun (x)(y) { f(x,y) }
+}
+
+sig uncurry : forall a::Any, b::Any, c::Any. ((a) -> (b) -> c) -> (a, b) -> c
+fun uncurry(f) {
+  fun (x, y) { f(x)(y) }
+}
+
+sig compose : forall a::Any, b::Any, c::Any. ((b) -> c, (a) -> b) -> (a) -> c
+fun compose(f, g) {
+  fun (x) { f(g(x)) }
+}
+
+sig id : forall a::Any. (a) -> a
+fun id(x) { x }
+
+sig first : forall a::Any, r::Row. ((1:a | r)) -> a
+fun first(p)   { p.1 }
+sig second : forall a::Any, r::Row. ((2:a | r)) -> a
+fun second(p)  { p.2 }
+sig third : forall a::Any, r::Row. ((3:a | r)) -> a
+fun third(p)   { p.3 }
+sig fourth : forall a::Any, r::Row. ((4:a | r)) -> a
+fun fourth(p)  { p.4 }
+sig fifth : forall a::Any, r::Row. ((5:a | r)) -> a
+fun fifth(p)   { p.5 }
+sig sixth : forall a::Any, r::Row. ((6:a | r)) -> a
+fun sixth(p)   { p.6 }
+sig seventh : forall a::Any, r::Row. ((7:a | r)) -> a
+fun seventh(p) { p.7 }
+sig eighth : forall a::Any, r::Row. ((8:a | r)) -> a
+fun eighth(p)  { p.8 }
+sig ninth : forall a::Any, r::Row. ((9:a | r)) -> a
+fun ninth(p)   { p.9 }
+sig tenth : forall a::Any, r::Row. ((10:a | r)) -> a
+fun tenth(p)   { p.10 }
+
+sig product : (List Int) -> Int
+fun product(ns) {
+  fold_left((*), 1, ns)
+}
+
+sig mapi : forall a, b. ((a, Int) -> b, List a) -> List b
+fun mapi(f, xs) {
+  sig mi : (Int, List a) -> List b
+  fun mi(i, xs) {
+    switch (xs) {
+      case []    -> []
+      case x::xs -> f(x, i) :: mi(i+1, xs)
+    }
+  }
+  mi(0, xs)
+}
+
+sig substAt : forall a. modal [Wild] ((List a, Int, a) -> List a)
+fun substAt(xs, i, y) {
+  switch (xs) {
+    case [] -> []
+    case x::xs -> if (i <= 0) {y :: xs}
+                  else {x :: substAt(xs, i-1, y)}
+  }
+}
+
+sig reverse : forall a. (List a) -> List a
+fun reverse(l) {
+  sig aux : (List a, List a) -> List a
+  fun aux(l,o) {
+    switch (l) {
+      case [] -> o
+      case x::xs -> aux(xs, x::o)
+    }
+  }
+  aux(l, [])
+}
+
+sig concat : forall a. (List (List a)) -> List a
+fun concat(list) {
+  switch (list) {
+    case [] -> []
+    case (x::xs) -> x ++ concat(xs)
+  }
+}
+
+sig join : forall a. (List a, List (List a)) -> List a
+fun join(glue,list) {
+  switch (list) {
+    case [] -> []
+    case [x] -> x
+    case (x::xs) -> x ++ glue ++ join(glue,xs)
+  }
+}
+
+sig span : forall a. modal [Wild] (((a) -> Bool, List a) -> (List a, List a))
+fun span(p, xs) {
+  sig go : (List a, List a, (a) -> Bool) -> (List a, List a)
+  fun go(acc, xs, p) {
+    switch(xs) {
+      case [] -> (acc, [])
+      case x :: xs ->
+        if (p(x)) {
+          go(x :: acc, xs, p)
+        } else {
+          (reverse(acc), x :: xs)
+        }
+    }
+  }
+  go([], xs, p)
+}
+
+sig takeWhile : forall a. modal [Wild] (((a) -> Bool, List a) -> List a)
+fun takeWhile(pred, list) {
+  first(span(pred, list))
+}
+
+sig dropWhile : forall a. modal [Wild] (((a) -> Bool, List a) -> List a)
+fun dropWhile(pred, list) {
+  second(span(pred, list))
+}
+
+sig abs : (Int) -> Int
+fun abs(i) {
+  if (i < 0) -i else i
+}
+
+sig init : forall a. modal [Wild] ((List a) -> List a)
+fun init(list) {
+  switch (list) {
+    case [y] -> []
+    case (h::t) -> h::init(t)
+  }
+}
+
+sig curtail : forall a. modal [Wild] ((List a) -> List a)
+fun curtail(list) { init(list) }
+
+sig last : forall a. modal [Wild] ((List a) -> a)
+fun last(list) {
+  switch (list) {
+    case [x] -> x
+    case (h::t) -> last(t)
+  }
+}
+
+sig intercalate : forall a. (List a, List (List a)) -> List a
+fun intercalate(bone, rushes) {
+  switch (rushes) {
+    case [] -> []
+    case [x] -> x
+    case x::xs -> x ++ bone ++ intercalate(bone, xs)
+  }
+}
+
+sig unlines : modal [Wild] ((List String) -> String)
+fun unlines(ws) {
+  implode(intercalate(explode("\n"), map(explode, ws)))
+}
+
+sig unwords : modal [Wild] ((List String) -> String)
+fun unwords(ws) {
+  implode(intercalate(explode(" "), map(explode, ws)))
+}

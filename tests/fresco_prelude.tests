@@ -60,3 +60,50 @@ Frozen map retains polymorphic elements
 open import FrescoPrelude; typename Identity = forall a. modal [] ((a) -> a); sig id : Identity fun id(x) { x } var xs = ~map[Identity,Identity](fun(x) { ~x }, [~id]); switch(xs) { case f::_ -> (f(42),f(true)) case [] -> (0,false) }
 args : --fresco --path=lib/stdlib
 stdout : (42, true) : (Int, Bool)
+
+Curry retains a handled callback effect
+open import FrescoPrelude; effect Offset { Get : () => Int; } handle <Offset> (curry(fun(x,y) { x+y+do Get })(1)(1)) { case x -> x case <Get => k> -> k(40) }
+args : --fresco --path=lib/stdlib
+stdout : 42 : Int
+
+A returned curried callback retains its effect requirement
+open import FrescoPrelude; effect Offset { Get : () => Int; } var step = handle <Offset> (curry(fun(x,y) { x+y+do Get })(1)) { case f -> f case <Get => k> -> k(40) }; step(1)
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*
+
+Tuple helpers accept larger tuples
+open import FrescoPrelude; (first((42,true,"x")), tenth((1,2,3,4,5,6,7,8,9,true,"x")))
+args : --fresco --path=lib/stdlib
+stdout : (42, true) : (Int, Bool)
+
+Indexed map preserves index and evaluation order
+open import FrescoPrelude; mapi(fun(x,i) { print(intToString(i)); x+i }, [40,41])
+args : --fresco --path=lib/stdlib
+stdout : 01[40, 42] : List Int
+
+Span retains the existing complete-match order
+open import FrescoPrelude; span(fun(x) { x > 0 }, [1,2,3])
+args : --fresco --path=lib/stdlib
+stdout : ([3, 2, 1], []) : (List Int, List Int)
+
+String joining uses the staged helpers
+open import FrescoPrelude; unwords(["modal","effects"])
+args : --fresco --path=lib/stdlib
+stdout : "modal effects" : String
+
+Span callbacks retain handled effects and stopping order
+open import FrescoPrelude; effect Limit { Get : () => Int; } handle <Limit> (span(fun(x) { print(intToString(x)); x < do Get }, [1,2,3])) { case xs -> xs case <Get => k> -> k(2) }
+args : --fresco --path=lib/stdlib
+stdout : 12([1], [2, 3]) : (List Int, List Int)
+
+Indexed map callbacks use the handled context
+open import FrescoPrelude; effect Offset { Get : () => Int; } handle <Offset> (mapi(fun(x,i) { x+i+do Get }, [1,1])) { case xs -> xs case <Get => k> -> k(40) }
+args : --fresco --path=lib/stdlib
+stdout : [41, 42] : List Int
+
+TakeWhile retains its Wild requirement
+open import FrescoPrelude; sig f : () -> List Int fun f() { takeWhile(fun(x) { x > 0 }, [1]) } f()
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*

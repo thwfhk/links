@@ -84,7 +84,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D7b2b | Ranges, list comprehensions, filters and ordering | `72e47dbc` |
 | D7b3 | Escape continuations and contextual capture checks | `f09237bd` |
 | D7b4a0 | Callback statement skeletons and frozen module names | `8cfe88a3` |
-| D7b4a | Signed collection prelude with contextual callbacks | This commit |
+| D7b4a | Signed collection prelude with contextual callbacks | `0b2c0d3f` |
+| D7b4b | Function, tuple, list and string helpers; inferred linear-call requirement | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -142,7 +143,8 @@ implementation of the next. The main agent owns integration and these records.
 | D7b3: continuations | Escape typing, ordinary usage and execution match existing Links behaviour |
 | D7b4a0: prelude prerequisites | Callback statement skeletons preserve effects; frozen module names resolve with scope |
 | D7b4a: collection prelude | Signed collection helpers through `replicate` retain polymorphism, callback effects and ordinary usage |
-| D7b4b: remaining prelude foundations | Function, tuple, string, numeric and association helpers migrate; independent-effect contracts remain recorded |
+| D7b4b: function, tuple and list helpers | Helpers through `unwords` migrate; specialised curry contract is recorded separately |
+| D7b4c: remaining core helpers | Maybe, numeric, association and string checks migrate |
 | D7c1: actors | `Process(a)`, absolute mailbox types and isolated spawned contexts check and execute; migrated `messages.tests` passes |
 | D7c2: sessions | Existing session primitives, selection/offer and CP check and execute |
 | D7d1: XML and forms | XML, form/page constructs and their prelude dependencies check and execute |
@@ -153,7 +155,7 @@ implementation of the next. The main agent owns integration and these records.
 | D8b: removal and final review | In-scope legacy inference routes are removed; recursive consumers and exports are reviewed; migration guide and final selected suites pass |
 
 D7a (`1f7ff34e`), D7b1 (`4fad3532`) and D7b2a (`db0d3a75`) are complete.
-D7b2b (`72e47dbc`) and D7b3 (`f09237bd`) are complete. D7b4a0 (`8cfe88a3`) is complete. D7b4a collection migration is complete. D7b4b is next. Later boundaries may be split further when a dependency needs
+D7b2b (`72e47dbc`) and D7b3 (`f09237bd`) are complete. D7b4a0 (`8cfe88a3`) is complete. D7b4a collection migration (`0b2c0d3f`) is complete. D7b4b is complete. D7b4c is next. Later boundaries may be split further when a dependency needs
 its own review and checks.
 
 ## Recorded decisions
@@ -169,38 +171,40 @@ and design:
 
 ## Latest task and verification
 
-7 November 2026, D7b4a, base `8cfe88a3`: the staged collection prelude is
-complete through `replicate`, with 28 exported signatures and signed local
-recursion. [The design](doc/modal-effects-design.md#d7-prelude-migration)
-records staging, callback effects, ordinary requirements and preserved contracts.
+7 November 2026, D7b4b, base `0b2c0d3f`: function, tuple, list and string
+helpers through `unwords` are complete. [The design](doc/modal-effects-design.md#d7-prelude-migration)
+records preserved ordinary kinds, explicit `Wild` contracts and specialised
+shared-context function helpers. [The linear-result decision](doc/modal-effects-design.md#d7-inferred-linear-results)
+records the annotation/intermediate-binding requirement for review.
 
-Independent review checked all migrated definitions and 43 intended source
-behaviours plus four additional frozen-name/module cases. It corrected the
-sorting-key annotation to `Row(Unl,Base)`. Higher-rank tests use the actual
-global function type, including its implicit `modal []`. No findings remain.
-All writers finished and the combined diff was inspected before integrated
-checks. The four source/test hashes in
-`/tmp/links-d7b4a-verification/source.sha256` still match after testing. Logs
-below are in that directory; documentation was updated afterwards.
+Independent review corrected ordinary `Any` parameters and retained explicit
+`Wild` contracts. It checked 38 source behaviours and the supported annotated
+forms of the three affected linear calls. A separate design review checked
+those application rules against the thesis. No findings remain. All writers
+finished and the combined diff was inspected before integrated checks. The
+four source/test hashes in `/tmp/links-d7b4b-verification/source.sha256` still
+match after testing. Logs below are in that directory; documentation was
+updated afterwards.
 
 | Command | Result | Log |
 |---|---|---|
-| `make no-db` | Passed | `build.log` |
-| `opam exec -- ./run-tests nodb-unit-tests` | 1,289 passed | `unit.log` |
-| `./test-harness tests/fresco.tests` | 58 passed | `fresco.log` |
+| Existing `make no-db` build | Compiler unchanged; reused D7b4a binary | `/tmp/links-d7b4a-verification/build.log` |
+| `opam exec -- ./run-tests nodb-unit-tests` | 1,304 passed | `unit.log` |
+| `./test-harness tests/fresco.tests` | 64 passed | `fresco.log` |
 | `./test-harness tests/fresco_typecheck.tests` | 2 passed | `fresco_typecheck.log` |
 | `./test-harness tests/fresco_modal.tests` | 20 passed | `fresco_modal.log` |
-| `./test-harness tests/fresco_prelude.tests` | 11 passed | `fresco_prelude.log` |
+| `./test-harness tests/fresco_prelude.tests` | 20 passed | `fresco_prelude.log` |
 | `make rule-check` | Passed; GNU-find tab check skipped, formatter disabled | `rule-check.log` |
 | Source hashes, tabs and trailing whitespace; `git diff --check` | Passed | `source-check.log`, `diff-check.log` |
 
-The focused collection suite passed 14 cases in
-`/tmp/links-d7b4a-unit-final-focused.log`. Independent review logs are
-`/tmp/links-d7b4a-review-final-source.log`,
-`/tmp/links-d7b4a-review-final-freeze.log` and
-`/tmp/links-d7b4a-review-timeouts.log`; the latter reran cases that timed out
-under concurrent build/test load. Earlier compiler regression results remain
-in Git history and `/tmp/links-d7b4a0-verification`.
+The focused helper suite passed 15 cases in
+`/tmp/links-d7b4b-unit-focused-final.log`. Review execution logs are
+`/tmp/links-d7b4b-review-source.log`,
+`/tmp/links-d7b4b-review-annotated.log` and
+`/tmp/links-d7b4b-review-strings.log`. Standalone linear-result checks are in
+`/tmp/links-d7b4b-linear-minimal.log` and
+`/tmp/links-d7b4b-linear-annotations.log`.
+Earlier milestone results remain in Git history and their verification logs.
 
 ## Confirmed D6 decisions
 
@@ -211,6 +215,6 @@ Documentation-only update: text and whitespace checked.
 
 ## Next action
 
-Implement D7b4b remaining prelude foundations in reviewed, tested commits,
-then continue to D7c1 actors. Continue through the remaining milestones
+Implement D7b4c remaining core prelude helpers, then continue to D7c1 actors.
+Review, test and commit each milestone. Continue through the remaining milestones
 without a pause. Both D6 choices are confirmed.

@@ -304,3 +304,35 @@ sig apply : forall a,b. ((a)->List b,a)->List b fun apply(f,x) { f(x) } apply(fu
 args : --fresco
 exit : 1
 stderr : @.*Type error:.*
+
+A chained linear result needs supplied callable information
+sig apply : forall a::Any,b::Any. ((a)->b,a)->b fun apply(f,x) { f(x) } apply(fun(x) { x }, linfun() { 42 })()
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+A callback annotation supplies a chained linear result
+sig apply : forall a::Any,b::Any. ((a)->b,a)->b fun apply(f,x) { f(x) } apply(fun(x:(() -@ Int)) { x }, linfun() { 42 })()
+args : --fresco
+stdout : 42 : Int
+
+A result annotation supplies a chained linear result
+sig apply : forall a::Any,b::Any. ((a)->b,a)->b fun apply(f,x) { f(x) } (apply(fun(x) { x }, linfun() { 42 }) : () -@ Int)()
+args : --fresco
+stdout : 42 : Int
+
+A binding retains an inferred linear result
+sig apply : forall a::Any,b::Any. ((a)->b,a)->b fun apply(f,x) { f(x) } var k = apply(fun(x) { x }, linfun() { 42 }); k()
+args : --fresco
+stdout : 42 : Int
+
+An ordinary result annotation rejects a linear result
+sig apply : forall a::Any,b::Any. ((a)->b,a)->b fun apply(f,x) { f(x) } (apply(fun(x) { x }, linfun() { 42 }) : () -> Int)()
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+A supplied unary linear result executes
+sig apply : forall a::Any,b::Any. ((a)->b,a)->b fun apply(f,x) { f(x) } (apply(fun(x) { x }, linfun(y) { y+1 }) : (Int) -@ Int)(41)
+args : --fresco
+stdout : 42 : Int

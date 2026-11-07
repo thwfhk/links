@@ -334,6 +334,12 @@ one inferred result type `B`. Access to `k` retains its capture context.
 Invoking `k` returns its argument from the enclosing escape expression.
 Continuations remain reusable.
 
+When application inference must guess an unresolved callable type, it chooses
+an ordinary arrow. A later linear-arrow solution is rejected. An affected
+chained application needs a callback or result annotation exposing the linear
+arrow, or a binding for the returned value before applying it. Supplied linear
+arrows retain their ordinary usage checks.
+
 Batch compilation and interactive definitions use the same rules.
 Successful interactive definitions retain their type requirements
 and declaration identities. Failed checking leaves the previous typing and
