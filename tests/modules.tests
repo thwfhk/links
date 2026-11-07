@@ -65,7 +65,7 @@ stdout : 5 : A.AInt
 Basic type in session type
 ./tests/modules/session-type.links
 filemode : true
-args : --path=tests/modules
+args : --fresco --path=tests/modules:lib/stdlib
 stdout : () : ()
 
 Mutually-recursive functions (1)

@@ -1,6 +1,14 @@
-fun(s:%::Session) {
-  var (_, s) = first(poly, receive(s : ?(%a).%::Session));
-  var (f, s) = receive(s : ?(%a).%::Session);
+typename Identity = modal [] (forall a. (a) -> a);
+sig poly : (Identity) -> (Int,Bool)
+fun poly(f) { (f(0),f(true)) }
+
+sig first : forall a::Type(Any,Any,Any), b::Type(Any,Any,Any), c::Type(Any,Any,Any).
+  ((a) -> b, (a,c)) -> (b,c)
+fun first(f,(x,y)) { (f(x),y) }
+
+fun(s:(?(modal [] %a).?(modal [] %a).%::Session)) {
+  var (_, s) = first(poly, receive(s));
+  var (f, s) = receive(s);
   var _ = f(42) + 1;
   s
 }

@@ -833,6 +833,37 @@ reports a unit result for link. The contextual translation uses the two written
 channel names and the split sending result directly. It shares the ordinary
 session and actor rules, including endpoint use and absolute child captures.
 
+### D7 session migration inventory
+
+Preserve feature settings in the ordinary `sessions` suite and the session
+cases in `modules` and `freezeml`. The two Freezeml cases now run their source
+files; their old entries passed file paths as expressions. Remove the stale
+Mono/Session ignore after checking both intended polymorphic-inference
+failures. Supply the channel shape and the absolute message wrapper, leaving
+the shared inner function type unknown. The first order rejects the initial
+polymorphic demand; the second accepts a monomorphic use and rejects the later
+polymorphic demand. Explicit `Identity` payloads provide a positive control
+for both orders. Session signature checks display all quantified binders;
+ordinary feature settings remain unchanged.
+
+Migrate the remaining examples in bounded groups:
+
+| Group | Sources under `examples/sessions` | Check |
+|---|---|---|
+| Ordinary protocols | `calc`, `calc-cp`, `calc-endbang`, `end`, `fuse`, `fusegg`, `givengrab`, `linear_if` | Preserve types and run terminating examples; retain the recorded close/link failure for D8 if reproduced |
+| Recursive/generic protocols | `atm`, `choice`, `reccalc`, `sim-calc`, `state`, `forkbomb`, `pi`, `two-factor`, `chatserver/linearList`, `mind/linearList` | Sign recursion and callbacks, preserve kinds; execute terminating local programs |
+| Socket models | `smtp`, `smtp-end`, `smtp-factored`, `smtp-factored-more`, `smtp-dummy`, `Elvina/SMTP_Real_CP`, `Elvina/SMTP_Real_GV`, `Elvina/IRC_Test` | Typecheck socket clients; execute the local dummy model |
+| XML/location prerequisites | `ap-multi-client`, browser calculators, bookshops, draggable examples, `gng-client`, `smtp-formlet`, `Elvina` web models and IRC, `mind/mindClient` and its `mindSessions` module | Migrate in D7d3 after XML/forms and function locations |
+| Excluded or already broken | Session-failure chatserver trio and `mind/mindServer`, `two-factor-cp`, ignored `counter` and `draggable-boring` | Preserve exclusions and recorded ignore reasons |
+
+The CP calculator, fusion and give/grab examples migrated in D7c2d. The
+`forkbomb` file defines its infinite computation without invoking it. `state`
+invokes an infinite computation; retain its typecheck-only use. Real SMTP/IRC
+clients retain typecheck-only checks. They send messages to external services.
+The ordinary session examples may need modal annotations on function messages
+and explicit polymorphic/recursive signatures. Record specialised callback
+contracts separately from interfaces needing independent effect contexts.
+
 ### D7 prelude prerequisites
 
 Library migration exposed two frontend gaps. Skeleton inference checks a

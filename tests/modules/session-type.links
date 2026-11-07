@@ -1,3 +1,5 @@
+open import FrescoPrelude;
+
 module A {
   typename AInt = Int;
   var foo = 5;
@@ -5,14 +7,17 @@ module A {
 
 typename Sess = ?(A.AInt).EndBang;
 
-sig srv : (Sess) ~> EndBang
+sig srv : modal [Wild] ((Sess) -> EndBang)
 fun srv(c) {
   var (_, c) = receive(c);
   c
 }
 
+sig bar : modal [Wild] (() -> ())
 fun bar() {
   var c = forkSync(srv);
   var c = send(5, c);
   wait(c)
 }
+
+bar()

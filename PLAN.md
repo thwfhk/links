@@ -95,7 +95,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D7c2b | Selection/offer inference, execution and contextual IR checks | `ceac5dce` |
 | D7c2c1 | Split-end aliases and synchronisation helpers | `45ffa14b` |
 | D7c2c2 | Callback session helpers and nested protocol skeleton duality | `0c46c06b` |
-| D7c2d | CP checking, composition, linking and focused example migration | This commit |
+| D7c2d | CP checking, composition, linking and focused example migration | `568b9db3` |
+| D7c2e1 | Ordinary session suite and module/polymorphic session cases | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -169,7 +170,9 @@ user requested on 7 November 2026. The main agent owns integration and these rec
 | D7c2c1: split-end helpers | EndBang/EndQuery, wait/closeBang/makeEndBang/linkSync have contextual signatures and execute |
 | D7c2c2: callback session helpers | Fork/connection helpers execute with explicit spawned-callback contracts and no session-failure support |
 | D7c2d: CP | All CP forms check/lower; composition, capture and linking examples execute |
-| D7c2e: session migration | Existing ordinary session suite and affected use sites migrate with their feature settings |
+| D7c2e1: session regression migration | Ordinary session suite and module/polymorphism cases retain their settings and intended checks |
+| D7c2e2: ordinary session examples | Finite calculator, split-end and channel examples migrate and execute |
+| D7c2e3: recursive session examples | Recursive/generic protocols and socket models typecheck; terminating local examples execute |
 | D7d1: XML and forms | XML, form/page constructs and their prelude dependencies check and execute |
 | D7d2: FFI and locations | Foreign declarations, locations and FFI dependencies survive checking and lowering |
 | D7d3: libraries and examples | In-scope libraries and examples migrate; independent-effect contracts are recorded separately from specialised uses |
@@ -179,7 +182,7 @@ user requested on 7 November 2026. The main agent owns integration and these rec
 
 D7a (`1f7ff34e`), D7b1 (`4fad3532`) and D7b2a (`db0d3a75`) are complete.
 D7b2b (`72e47dbc`) and D7b3 (`f09237bd`) are complete. D7b4a0 (`8cfe88a3`) is complete. D7b4a collection migration (`0b2c0d3f`) is complete. D7b4b (`efc1bca2`) is complete. D7b4c (`4e009da6`) is complete. D7c1a core actors (`ef94a794`) and D7c1b actor variants are complete.
-D7c1b1 polymorphic export is complete. D7c1c actor migration is complete. D7c2a session primitives are complete. D7c2b selection/offer is complete. D7c2c1 split-end helpers are complete. D7c2c2 callback helpers are complete. D7c2d CP is complete. D7c2e ordinary session migration is next. Later boundaries may be split further when a dependency needs
+D7c1b1 polymorphic export is complete. D7c1c actor migration is complete. D7c2a session primitives are complete. D7c2b selection/offer is complete. D7c2c1 split-end helpers are complete. D7c2c2 callback helpers are complete. D7c2d CP is complete. D7c2e1 ordinary session regression migration is complete. D7c2e2 ordinary examples are next. Later boundaries may be split further when a dependency needs
 its own review and checks.
 
 ## Recorded decisions
@@ -195,44 +198,37 @@ and design:
 
 ## Latest task and verification
 
-7 November 2026, D7c2d, base `0c46c06b`: all CP forms check and lower through
-ordinary session/actor constructs. Composition, selection, offer and linking
-execute with typed IR. Three migrated examples return `13`, `42` and
-`(42, 42)`. The [CP design](doc/modal-effects-design.md#d7-cp-integration)
-records channel scopes, primitive references and fixed skeleton results.
+7 November 2026, D7c2e1, base `568b9db3`: the ordinary session suite and
+session cases in the module and Freezeml suites use Fresco. Original feature
+settings remain; display flags expose complete signatures. The module case
+executes `bar`. Both Freezeml files now run as source files and reject at the
+intended polymorphic demand; a positive control executes both receive orders
+and returns `(42, 42)`. The
+[migration inventory](doc/modal-effects-design.md#d7-session-migration-inventory)
+records the corrected test method and remaining example dependencies.
 
-Independent review found no remaining issues. Seventeen focused unit groups
-passed (`/tmp/links-d7c2d-unit-focused.log`), including the internal empty-give
-constructor. The reviewer checked three selected unit groups and eight final
-CLI/IR cases; its record is `/tmp/links-d7c2d-review-summary.log`.
-All 22 CP regression cases passed, including captures, handler isolation,
-source shadowing, evaluation order, protocol errors and the unquote setting.
+Independent review found no remaining issues. Fourteen selected checks passed,
+including a monomorphic-use control and the explicit polymorphic execution:
+`/tmp/links-d7c2e1-review-summary.log`. The writer's focused suites passed:
+`/tmp/links-d7c2e1-sessions.log`, `/tmp/links-d7c2e1-modules.log` and
+`/tmp/links-d7c2e1-freezeml.log`. Initial printer mismatches were resolved with
+complete expected signatures and display settings.
 
-All writers finished and the combined diff was reviewed before integrated
-testing. Source hashes still match after testing. Logs below are in
-`/tmp/links-d7c2d-verification`; `revision.txt` and `source.sha256` identify
+The compiler is unchanged from `568b9db3`; its build and 1,442 unit passes
+remain recorded under `/tmp/links-d7c2d-verification`. All writers finished
+and the combined diff was reviewed before testing. All 216 affected regression
+cases passed. Source hashes still match. Logs below are in
+`/tmp/links-d7c2e1-verification`; `revision.txt` and `source.sha256` identify
 the tested source. Documentation was updated afterwards.
 
 | Command | Result | Log |
 |---|---|---|
-| `make no-db` | Passed | `build.log` |
-| `opam exec -- ./run-tests nodb-unit-tests` | 1,442 passed | `unit.log` |
-| `./test-harness tests/fresco.tests` | 70 passed | `fresco.log` |
-| `./test-harness tests/fresco_typecheck.tests` | 2 passed | `fresco_typecheck.log` |
-| `./test-harness tests/fresco_modal.tests` | 20 passed | `fresco_modal.log` |
+| `./test-harness tests/sessions.tests` | 13 passed | `sessions.log` |
+| `./test-harness tests/modules.tests` | 41 passed | `modules.log` |
+| `./test-harness tests/freezeml.tests` | 60 passed | `freezeml.log` |
 | `./test-harness tests/fresco_prelude.tests` | 45 passed | `fresco_prelude.log` |
-| `./test-harness tests/fresco_actors.tests` | 49 passed | `fresco_actors.log` |
 | `./test-harness tests/fresco_sessions.tests` | 35 passed | `fresco_sessions.log` |
 | `./test-harness tests/fresco_cp.tests` | 22 passed | `fresco_cp.log` |
-| `./test-harness tests/messages.tests` | 11 passed | `messages.log` |
-| `./test-harness tests/sessions.tests` | 11 passed | `sessions.log` |
-| `./test-harness tests/handlers.tests` | 95 passed | `handlers.log` |
-| `./test-harness tests/effect_sugar.tests` | 44 passed | `effect_sugar.log` |
-| `./test-harness tests/typed_ir.tests` | 26 passed | `typed_ir.log` |
-| `./test-harness tests/functions.tests` | 33 passed | `functions.log` |
-| `./test-harness tests/polymorphism.tests` | 55 passed | `polymorphism.log` |
-| `./test-harness tests/typecheck_examples.tests` | 167 passed, 15 ignored | `typecheck_examples.log` |
-| `./test-harness tests/continuations.tests` | 15 passed | `continuations.log` |
 | `make rule-check` | Passed; GNU-find tab check skipped, formatter disabled | `rule-check.log` |
 | Source hashes, added-line whitespace; `git diff --check` | Passed | `source-check.log`, `diff-check.log` |
 
@@ -245,7 +241,9 @@ Documentation-only update: text and whitespace checked.
 
 ## Next action
 
-Implement D7c2e ordinary session migration, then continue through the
-recorded D7 milestones. Review, test and commit each milestone before the
+Implement D7c2e2 ordinary session examples. The
+[session migration inventory](doc/modal-effects-design.md#d7-session-migration-inventory)
+assigns ordinary examples to D7c2e2/e3 and XML/location-dependent examples to
+D7d3 after their prerequisites. Then continue through the recorded D7 milestones. Review, test and commit each milestone before the
 next. Pause after D7 is complete, before starting D8, as requested on
 7 November 2026. Both D6 choices are confirmed.

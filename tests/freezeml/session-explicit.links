@@ -1,0 +1,39 @@
+typename Identity = modal [] (forall a. (a) -> a);
+sig identity : Identity
+fun identity(x) { x }
+
+sig poly : (Identity) -> (Int,Bool)
+fun poly(f) { (f(0),f(true)) }
+
+sig first : forall a::Type(Any,Any,Any), b::Type(Any,Any,Any), c::Type(Any,Any,Any).
+  ((a) -> b, (a,c)) -> (b,c)
+fun first(f,(x,y)) { (f(x),y) }
+
+sig before : modal [Wild] ((?Identity.?Identity.End) -> Int)
+fun before(s) {
+  var (_,s) = first(poly,receive(s));
+  var (f,s) = receive(s);
+  var result = f(41)+1;
+  close(s);
+  result
+}
+
+sig after : modal [Wild] ((?Identity.?Identity.End) -> Int)
+fun after(s) {
+  var (f,s) = receive(s);
+  var result = f(41)+1;
+  var (_,s) = first(poly,receive(s));
+  close(s);
+  result
+}
+
+var ap = (new() : AP(!Identity.!Identity.End));
+var child = spawn {
+  var c = accept(ap);
+  var c = ~send[Identity,!Identity.End](~identity,c);
+  close(~send[Identity,End](~identity,c));
+  var c = accept(ap);
+  var c = ~send[Identity,!Identity.End](~identity,c);
+  close(~send[Identity,End](~identity,c))
+};
+(before(request(ap)),after(request(ap)))
