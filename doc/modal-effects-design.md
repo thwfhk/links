@@ -599,7 +599,7 @@ scope and retain them in the returned context across applications. Alias paramet
 and variables do not capture enclosing source type variables. Operation signatures
 remain closed.
 
-**For user review: implicit binders in written function signatures.** Preserve
+**Confirmed by the user: implicit binders in written function signatures.** Preserve
 Links' convention that named rigid variables in a written signature such as
 `sig id : (a) -> a` supply quantified binders. This follows the instruction to
 retain existing non-effect behaviour and keeps those names available to
@@ -620,8 +620,9 @@ Local and expression annotations retain their supplied modalities.
 **For user review: closed ordinary braced row arguments.** Treat the parser's
 synthetic `$eff` tail as closed when it comes from an ordinary braced Row
 argument, such as `R({x:Int})`. Links accepts this as a closed row with
-`effect_sugar=false`. With legacy effect sugar enabled, the shared grammar
-adds an effect tail even in this ordinary Row position. Contextual types have
+`effect_sugar=false`. With both legacy `effect_sugar` and its `open_default`
+policy enabled, the shared grammar adds an effect tail even in this ordinary
+Row position. Contextual types have
 no such effect tails. Keep explicitly written row variables and reject explicit
 anonymous placeholders in closed declarations. The alternative is to make
 the synthetic tail an ordinary unknown row, which would allow additional fields.

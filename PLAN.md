@@ -204,15 +204,19 @@ Growing recursive equality retains the previously approved cannot-establish
 error. These cases and the compatibility probes are recorded in the
 [design](doc/modal-effects-design.md#consistency-guessing-and-monotype-unification).
 
-### Choices marked for user review
+### D4k compatibility choices
 
 The [D4k design](doc/modal-effects-design.md#contextual-annotation-and-declaration-elaboration)
 records two compatibility choices and their alternatives:
 
-1. Preserve Links' implicit named rigid Type/Row/Presence binders in written
-   function signatures, without generalising unsigned definitions.
-2. Close the parser's synthetic tail in ordinary braced Row arguments,
-   preserving Links' behaviour with legacy effect sugar disabled.
+1. The user confirmed preserving Links' implicit named rigid Type/Row/Presence
+   binders in written function signatures, without generalising unsigned
+   definitions.
+2. For review: close the parser's synthetic tail in ordinary braced Row
+   arguments, preserving Links' behaviour with legacy effect sugar disabled.
+   With both `effect_sugar` and `open_default` enabled, Links inserts an open
+   tail. The contextual implementation follows the documented replacement of
+   legacy effect sugar and closes this synthetic tail.
 
 ## Next action
 
