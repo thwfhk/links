@@ -137,16 +137,19 @@ let signatures =
     named ["recv"] "forall a::Type(Any,Any,Abs). modal [Wild, Receive(a)] (() -> a)";
     wild ["here"; "there"] "() -> Location";
     named ["spawn"] "forall a::Type(Any,Any,Abs), b. modal [Wild] ((modal [Wild, Receive(a)] (() -@ b)) -> Process(a))";
+    named ["spawnAt"; "spawnAngelAt"] "forall a::Type(Any,Any,Abs), b. modal [Wild] ((Location, modal [Wild, Receive(a)] (() -@ b)) -> Process(a))";
+    named ["spawnAngel"; "spawnClient"] "forall a::Type(Any,Any,Abs), b. modal [Wild] ((modal [Wild, Receive(a)] (() -@ b)) -> Process(a))";
+    named ["spawnWait"] "forall a::Type(Any,Any,Abs), b::Type(Any,Any,Abs). modal [Wild] ((modal [Wild, Receive(a)] (() -@ b)) -> b)";
+    named ["haveMail"] "forall a::Type(Any,Any,Abs). modal [Wild, Receive(a)] (() -> Bool)";
   ]
 
 let internal_signatures = [
   "$$hd", "forall a. (List a) -> a";
   "$$tl", "forall a. (List a) -> List a";
-  "spawnAt", "forall a::Type(Any,Any,Abs), b. modal [Wild] ((Location, modal [Wild, Receive(a)] (() -@ b)) -> Process(a))";
 ]
 
 let deferred = [
-  "actors", ["haveMail"; "spawnAt"; "spawnClient"; "spawnAngel"; "spawnAngelAt"; "spawnWait"; "spawnWait'"];
+  "actors", ["spawnWait'"];
   "sessions", ["send"; "receive"; "link"; "new"; "newAP"; "newClientAP";
     "newServerAP"; "accept"; "request"; "cancel"; "close"];
   "callbacks", ["registerEventHandlers"; "unsafePickleCont"; "jsSetInterval";

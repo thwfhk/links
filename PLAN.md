@@ -87,7 +87,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D7b4a | Signed collection prelude with contextual callbacks | `0b2c0d3f` |
 | D7b4b | Function, tuple, list and string helpers; inferred linear-call requirement | `efc1bca2` |
 | D7b4c | Maybe, numeric, association and string-check helpers | `4e009da6` |
-| D7c1a | Contextual Process, core actor primitives and ordinary spawn/receive | This commit |
+| D7c1a | Contextual Process, core actor primitives and ordinary spawn/receive | `ef94a794` |
+| D7c1b | Actor locations/variants, mailbox polling and spawnWait | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -134,7 +135,8 @@ D8 performs the final backend audit.
 ### D7 and D8 milestones
 
 Complete, independently review, test and commit each milestone before starting
-implementation of the next. The main agent owns integration and these records.
+implementation of the next. Continue through D7, then pause before D8 as the
+user requested on 7 November 2026. The main agent owns integration and these records.
 
 | Milestone | Completion checks |
 |---|---|
@@ -149,6 +151,7 @@ implementation of the next. The main agent owns integration and these records.
 | D7b4c: remaining core helpers | Maybe, numeric, association and string checks migrate |
 | D7c1a: core actors | `Process(a)`, Send/self/recv and ordinary spawn/receive check and execute with isolated mailboxes |
 | D7c1b: actor variants | Locations, angel/client variants, haveMail and spawnWait check and execute on supported runtimes |
+| D7c1b1: polymorphic export | Explicit modal-forall expressions passed to signed callers retain bound type variables through export |
 | D7c1c: actor migration | Full messages suite and actor use sites migrate with existing feature settings |
 | D7c2: sessions | Existing session primitives, selection/offer and CP check and execute |
 | D7d1: XML and forms | XML, form/page constructs and their prelude dependencies check and execute |
@@ -159,7 +162,8 @@ implementation of the next. The main agent owns integration and these records.
 | D8b: removal and final review | In-scope legacy inference routes are removed; recursive consumers and exports are reviewed; migration guide and final selected suites pass |
 
 D7a (`1f7ff34e`), D7b1 (`4fad3532`) and D7b2a (`db0d3a75`) are complete.
-D7b2b (`72e47dbc`) and D7b3 (`f09237bd`) are complete. D7b4a0 (`8cfe88a3`) is complete. D7b4a collection migration (`0b2c0d3f`) is complete. D7b4b (`efc1bca2`) is complete. D7b4c (`4e009da6`) is complete. D7c1a core actors are complete. D7c1b actor variants are next. Later boundaries may be split further when a dependency needs
+D7b2b (`72e47dbc`) and D7b3 (`f09237bd`) are complete. D7b4a0 (`8cfe88a3`) is complete. D7b4a collection migration (`0b2c0d3f`) is complete. D7b4b (`efc1bca2`) is complete. D7b4c (`4e009da6`) is complete. D7c1a core actors (`ef94a794`) and D7c1b actor variants are complete.
+D7c1b1 polymorphic export is next. Later boundaries may be split further when a dependency needs
 its own review and checks.
 
 ## Recorded decisions
@@ -175,30 +179,31 @@ and design:
 
 ## Latest task and verification
 
-7 November 2026, D7c1a, base `4e009da6`: core actors are complete, including
-`Process(a)`, Send/self/recv, ordinary spawn, receive cases and the send section.
-[The design](doc/modal-effects-design.md#d7-actor-integration) records the
-transitional constructor identity, child scope/usage rules, canonical primitives
-and supplied mailbox types.
+7 November 2026, D7c1b, base `ef94a794`: actor variants are complete.
+The [actor design](doc/modal-effects-design.md#d7-actor-integration) records
+caller-side location checking, isolated child scopes, the linear Wait body
+and absolute result, and the existing haveMail runtime boundary. The Wait
+body/result choices are marked for review.
 
-Independent review resolved primitive type shadowing and inherited mailbox
-information in skeleton inference. Actual interpreter execution checked isolated
-mailboxes, child handlers, linear captures/messages, reusable process identifiers,
-shadowed names and frozen polymorphic messages with typed IR enabled. No findings
-remain. All writers finished and the combined diff was inspected before
-integrated checks. The fifteen source/test hashes in
-`/tmp/links-d7c1a-verification/source.sha256` still match after testing. Logs
-below are in that directory; documentation was updated afterwards.
+Independent review resolved inherited polymorphic/modal Wait result failures.
+The full pass checks the child against its supplied type; generated primitive
+instantiation retains the exported types. No actor findings remain. Writer
+readiness, review and combined-diff inspection preceded integrated testing.
+Source hashes and commands are recorded under `/tmp/links-d7c1b-verification`.
+
+All integrated checks passed on the reviewed tree. The five source/test hashes
+in `source.sha256` still match after testing. Logs below are in
+`/tmp/links-d7c1b-verification`; documentation was updated afterwards.
 
 | Command | Result | Log |
 |---|---|---|
 | `make no-db` | Passed | `build.log` |
-| `opam exec -- ./run-tests nodb-unit-tests` | 1,345 passed | `unit.log` |
+| `opam exec -- ./run-tests nodb-unit-tests` | 1,353 passed | `unit.log` |
 | `./test-harness tests/fresco.tests` | 64 passed | `fresco.log` |
 | `./test-harness tests/fresco_typecheck.tests` | 2 passed | `fresco_typecheck.log` |
 | `./test-harness tests/fresco_modal.tests` | 20 passed | `fresco_modal.log` |
 | `./test-harness tests/fresco_prelude.tests` | 27 passed | `fresco_prelude.log` |
-| `./test-harness tests/fresco_actors.tests` | 24 passed | `fresco_actors.log` |
+| `./test-harness tests/fresco_actors.tests` | 46 passed | `fresco_actors.log` |
 | `./test-harness tests/messages.tests` | 11 passed on legacy path | `messages.log` |
 | `./test-harness tests/handlers.tests` | 95 passed | `handlers.log` |
 | `./test-harness tests/effect_sugar.tests` | 44 passed | `effect_sugar.log` |
@@ -210,12 +215,18 @@ below are in that directory; documentation was updated afterwards.
 | `make rule-check` | Passed; GNU-find tab check skipped, formatter disabled | `rule-check.log` |
 | Source hashes, added-line whitespace; `git diff --check` | Passed | `source-check.log`, `diff-check.log` |
 
-Focused actor and primitive suites passed 24 and 18 cases respectively in
-`/tmp/links-d7c1a-unit-actors-final.log` and
-`/tmp/links-d7c1a-unit-primitives-final.log`. Independent review commands,
-source hashes and execution logs are listed in
-`/tmp/links-d7c1a-review-summary.log`. Earlier results remain in Git history
-and their verification logs.
+Focused actor units passed 32 cases. Independent focused execution passed 15
+cases and further result/usage checks. Review evidence is in
+`/tmp/links-d7c1b-review-summary.log`; the focused unit log is
+`/tmp/links-d7c1b-core-unit-actors-focused.log`. Client spawning and haveMail
+passed checked-IR lowering; their actual JavaScript execution remains in D8.
+
+Review also found a shared annotation/export failure with
+`useId((fun(x) { x } : Identity))` where
+`Identity = modal [] (forall a. (a) -> a)`. An unannotated argument and a
+frozen let-bound annotated argument pass. The failure is independent of actor
+rules. D7c1b1 will repair it before actor migration; the review log contains
+the minimal program and source routes.
 
 ## Confirmed D6 decisions
 
@@ -226,6 +237,8 @@ Documentation-only update: text and whitespace checked.
 
 ## Next action
 
-Implement D7c1b actor variants, then D7c1c actor migration.
-Review, test and commit each milestone before continuing to D7c2 sessions. Continue through the remaining milestones
-without a pause. Both D6 choices are confirmed.
+Repair the shared polymorphic export
+failure in D7c1b1, then migrate actors in D7c1c and continue through the
+remaining D7 milestones. Review, test and commit each milestone before the
+next. Pause after D7 is complete, before starting D8, as requested on
+7 November 2026. Both D6 choices are confirmed.

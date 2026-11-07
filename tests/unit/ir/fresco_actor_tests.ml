@@ -48,7 +48,79 @@ let suite = "Fresco actors" >::: [
            assert_equal (PrimaryKind.Type,(Linearity.Unl,Restriction.Any))
              (Quantifier.to_kind q)) others
       | _ -> assert_failure ("Missing quantified signature for " ^ name))
-      ["Send"; "self"; "recv"; "spawn"]);
+      ["Send"; "self"; "recv"; "spawn"; "spawnAt"; "spawnAngelAt";
+        "spawnAngel"; "spawnClient"; "haveMail"]);
+
+  "wait results permit absolute linear values" >:: (fun _ ->
+    let state = FrescoFrontend.empty () in
+    match Pure.expose (Option.get (FrescoFrontend.lookup state "spawnWait")) with
+    | Types.ForAll ([mailbox;result],_) -> List.iter (fun q ->
+         assert_equal (PrimaryKind.Type,(Linearity.Any,Restriction.Any)) (Quantifier.to_kind q);
+         assert_equal ModalKind.Abs (Quantifier.to_modal_kind q)) [mailbox;result]
+    | _ -> assert_failure "Missing quantified spawnWait signature");
+
+  "spawn variants share mailbox checks" >:: (fun _ ->
+    List.iter (fun body ->
+      unit ("var p = " ^ body ^ "; p ! 41");
+      reject ("var p = " ^ body ^ "; p ! true"))
+      ["spawnAt(here(), { recv()+1 })"; "spawnAngel { recv()+1 }";
+        "spawnAngelAt(here(), { recv()+1 })"; "spawnClient { recv()+1 }"]);
+
+  "spawn variants retain supplied modal mailbox types" >:: (fun _ ->
+    List.iter (fun body -> unit ("typename Message = modal [] (() -@ Int); " ^
+      "sig usePid : modal [Wild] ((Process(Message)) -> ()) " ^
+      "fun usePid(p) { p ! (linfun() { 42 } : Message) } usePid(" ^ body ^ ")"))
+      ["spawnAt(here(), { receive { case (f:Message) -> f() } })";
+        "spawnAngel { receive { case (f:Message) -> f() } }";
+        "spawnAngelAt(here(), { receive { case (f:Message) -> f() } })";
+        "spawnClient { receive { case (f:Message) -> f() } }"]);
+
+  "spawn locations use caller effects" >:: (fun _ ->
+    accept {|effect Place { At : () => Location; }
+      handle <Place> (spawnAt(do At, { 42 })) {
+        case p -> p
+        case <At => k> -> k(here())
+      }|};
+    reject "spawnAt(42, { 0 })");
+
+  "mail polling requires a mailbox" >:: (fun _ ->
+    reject "haveMail()";
+    unit "var p = spawn { if (haveMail()) recv()+1 else 0 }; p ! 41");
+
+  "wait retains supplied modal and polymorphic results" >:: (fun _ ->
+    unit {|sig use : modal [Wild] ((modal [] (() -@ Int)) -> ())
+      fun use(f) { var n = f(); () }
+      use(spawnWait { linfun() { 42 } })|};
+    unit {|typename Message = forall a. modal [] ((a) -> a);
+      sig use : modal [Wild] ((Message) -> ())
+      fun use(f) { var pair = (f(42),f(true)); () }
+      use(spawnWait { fun(x) { x } })|};
+    unit {|typename Identity = modal [] (forall a. (a) -> a);
+      sig use : modal [] ((Identity) -> ())
+      fun use(f) { var pair = (f(42),f(true)); () }
+      use(spawnWait { fun(x) { x } })|};
+    unit {|typename Message = modal [] (() -@ Int);
+      var p = (spawn { receive { case f -> f() } } : Process(Message));
+      p ! spawnWait { (linfun() { 42 } : Message) }|};
+    reject "spawnWait { fun() { 42 } }");
+
+  "wait isolates effects and consumes linear captures" >:: (fun _ ->
+    accept {|var f = (linfun() { 42 } : modal [] (() -@ Int));
+      spawnWait { f() }|};
+    reject {|{ var f = (linfun() { 42 } : modal [] (() -@ Int));
+      spawnWait { f()+f() } }|};
+    reject {|effect Reader { Ask : () => Int; }
+      handle <Reader> (spawnWait { do Ask }) {
+        case x -> x
+        case <Ask => k> -> k(42)
+      }|};
+    reject "var x = spawnWait { self() ! 1; recv()+1 }; recv()");
+
+  "wait executes linear and polymorphic results with checked IR" >:: (fun _ ->
+    ignore (Pure.execution (`Int 42) {|var f =
+      (spawnWait { linfun() { 42 } } : modal [] (() -@ Int)); f()|});
+    ignore (Pure.execution (`Bool true) {|typename Message = forall a. modal [] ((a) -> a);
+      var f = (spawnWait { fun(x) { x } } : Message); f(true)|}));
 
   "send and receive share one mailbox type" >:: (fun _ ->
     unit "var p = spawn { recv()+1 }; p ! 41";

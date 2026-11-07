@@ -629,7 +629,7 @@ and infer_node support s mode source =
   | G.FunLit (_,_,G.SwitchFunlit _,_) -> error pos "Switch function syntax is not supported by contextual inference"
   | G.FnAppl (fn,args) ->
      infer_application support s mode pos (fun s mode -> infer_term support s mode fn) args
-  | G.Spawn (G.Demon,G.NoSpawnLocation,body,_) -> infer_spawn support s mode pos body
+  | G.Spawn (kind,location,body,_) -> infer_spawn support s mode pos kind location body
   | G.Receive (cases,_) ->
      let s,scrutinee = infer_application support s C.Infer pos
        (fun s mode -> let s,fn = primitive s pos "recv" in coerce support s pos mode fn) [] in
@@ -1135,8 +1135,11 @@ and infer_switch support s mode pos scrutinee cases =
        let pattern,body = match wrapped.node with Switch (_,[p,e]) -> p,e | _ -> assert false in
        branches s ((pattern,body) :: previous) (s.uses :: usages) cases in
   branches s [] [] cases
-and infer_spawn support s mode pos body =
-  if support = C.Skeleton then
+and infer_spawn support s mode pos spawn_kind location body =
+  let waiting = spawn_kind = G.Wait in
+  if support = C.Skeleton && waiting then
+    coerce support s pos mode (term pos S.Ghost (Constant (Constant.Bool false)))
+  else if support = C.Skeleton then
     (* The caller knows the Process constructor before the child is checked.
        Retain a supplied mailbox type; the full pass checks the child under it. *)
     let mailbox = match mode with
@@ -1151,6 +1154,18 @@ and infer_spawn support s mode pos body =
   else begin
     if Option.is_none (EffectRow.find wild s.ambient) then
       error pos "Spawn requires Wild in the ambient context";
+    (* An explicit location is checked in the caller's context and remains the
+       first runtime argument, before the child thunk is created. *)
+    let location_type = S.Application (Types.spawn_location,[]) in
+    let s,location = if waiting then s,None else
+      let s,location = match location with
+        | G.ExplicitSpawnLocation location -> infer_term support s (C.Check location_type) location
+        | G.NoSpawnLocation | G.SpawnClient ->
+           let name = if location = G.SpawnClient then "there" else "here" in
+           let s,fn = primitive s pos name in
+           let s,fn = coerce support s pos (C.Fun (tuple [],C.Check location_type)) fn in
+           s,term pos location_type (Apply (fn,[])) in
+      s,Some location in
     let before = s in let mark,s = marker s in
     let receive = List.find (fun (info : FrescoElaborate.effect_info) ->
       info.FrescoElaborate.name <> wild && List.mem info.FrescoElaborate.name builtin_effects)
@@ -1158,7 +1173,7 @@ and infer_spawn support s mode pos body =
     let s,mailbox = match mode with
       | C.Check expected -> (match head s pos expected with
           | S.Application (constructor,[(PrimaryKind.Type,payload)])
-              when Types.Abstype.equal constructor Types.mailbox_process ->
+              when not waiting && Types.Abstype.equal constructor Types.mailbox_process ->
              require s pos (Quantifier.to_parameter (List.hd receive.FrescoElaborate.parameters)) payload
           | _ -> fresh_parameter s pos (List.hd receive.FrescoElaborate.parameters))
       | _ -> fresh_parameter s pos (List.hd receive.FrescoElaborate.parameters) in
@@ -1166,23 +1181,51 @@ and infer_spawn support s mode pos body =
       { EffectRow.name = receive.FrescoElaborate.name; arguments = [mailbox] }] in
     let modality = Modality.Absolute ambient in
     let s = { s with ambient; locks = (modality,s.ambient) :: s.locks } in
-    let s,body = infer_term support s C.Infer body in
-    let s = unlimited s pos body.typ in
+    let body_mode = match waiting,mode with
+      | true,C.Check expected -> C.Check expected
+      | _ -> C.Infer in
+    let s,body = infer_term support s body_mode body in
+    let s,body_type = if waiting then
+      require s pos (TypeParameter.make ~modal_kind:ModalKind.Abs (kind PrimaryKind.Type)) body.typ
+      else unlimited s pos body.typ,body.typ in
+    let body = { body with typ = body_type } in
     let thunk_type = S.LinearArrow (tuple [],body.typ) in
     let thunk = term pos thunk_type (Lambda (DeclaredLinearity.Lin,[],body,ambient)) in
     let thunk = term pos (S.Modal (modality,thunk_type)) (Coerce thunk) in
-    let result = S.Application (Types.mailbox_process,[PrimaryKind.Type,mailbox]) in
+    let result = if waiting then body.typ else
+      S.Application (Types.mailbox_process,[PrimaryKind.Type,mailbox]) in
     (* Export every child annotation together, then restore the caller's row and locks. *)
     let s,thunk = leave before mark s (term pos result (Coerce thunk)) in
     let result = thunk.typ in
     let thunk = match thunk.node with Coerce thunk -> thunk | _ -> assert false in
-    let s,here = primitive s pos "here" in
-    let s,here = coerce support s pos (C.Fun (tuple [],C.Infer)) here in
-    let location_type = S.Application (Types.spawn_location,[]) in
-    let location = term pos location_type (Apply (here,[])) in
-    let s,spawn = primitive s pos "spawnAt" in
-    let s,spawn = coerce support s pos (C.Fun (tuple [location_type;thunk.typ],C.Check result)) spawn in
-    coerce support s pos mode (term pos result (Apply (spawn,[location;thunk])))
+    let name = if waiting then "spawnWait" else if spawn_kind = G.Angel then "spawnAngelAt" else "spawnAt" in
+    let arguments = Option.to_list location @ [thunk] in
+    let s,spawn = primitive s pos name in
+    let spawn = if not waiting then spawn else
+      (* The result may be polymorphic or modal, so retain the supplied type
+         through explicit primitive instantiation after leaving the child. *)
+      let mailbox = match head s pos thunk.typ with
+        | S.Modal (Modality.Absolute ambient,_) ->
+           (match EffectRow.find receive.FrescoElaborate.name ambient with
+            | Some { EffectRow.arguments = [mailbox]; _ } -> mailbox
+            | _ -> assert false)
+        | _ -> assert false in
+      let arguments = [PrimaryKind.Type,mailbox; PrimaryKind.Type,result] in
+      let typ = match head s pos spawn.typ with
+        | S.ForAll (formals,body) -> get pos "Cannot instantiate spawnWait"
+           (FrescoRecursive.apply_formals ~formals ~arguments ~primary_kind:PrimaryKind.Type body)
+        | _ -> assert false in
+      term pos typ (TypeApplication (spawn,arguments)) in
+    let s,spawn = if waiting then
+      match head s pos spawn.typ with
+      | S.Modal (_,arrow) -> s,term pos arrow (Coerce spawn)
+      | _ -> assert false
+      else coerce support s pos
+        (C.Fun (tuple (List.map (fun argument -> argument.typ) arguments),C.Check result)) spawn in
+    let expression = term pos result (Apply (spawn,arguments)) in
+    match waiting,mode with
+    | true,C.Check _ -> s,expression
+    | _ -> coerce support s pos mode expression
   end
 and join_results s pos a b =
   let a,b = match canonicalise s pos [root a;root b] with

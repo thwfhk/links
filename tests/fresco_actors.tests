@@ -129,3 +129,119 @@ A mailbox transfers a frozen polymorphic message
 typename Message = modal [] (forall a. (a) -> a); var msg = (fun(x) { x } : Message); var p = (spawn { receive { case f -> print(intToString(f(42))) } } : Process(Message)); p ! ~msg
 args : --fresco
 stdout : 42() : ()
+
+SpawnAt evaluates its location once before the child
+var p = spawnAt({ print("location"); here() }, { print("child") }); ()
+args : --fresco
+stdout : locationchild() : ()
+
+An explicit location uses the caller's handler
+effect Place { Where : () => Location; } handle <Place> (spawnAt(do Where, { print("child") })) { case p -> () case <Where => k> -> k(here()) }
+args : --fresco
+stdout : child() : ()
+
+SpawnAt rejects a non-location argument
+spawnAt(42, { () })
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+SpawnAngel executes its child
+var p = spawnAngel { print("angel") }; ()
+args : --fresco
+stdout : angel() : ()
+
+SpawnAngelAt executes at the supplied location
+var p = spawnAngelAt(here(), { print("angel") }); ()
+args : --fresco
+stdout : angel() : ()
+
+SpawnWait returns the child's result
+spawnWait { 42 }
+args : --fresco
+stdout : 42 : Int
+
+SpawnWait has a fresh mailbox
+spawnWait { var outer = self(); var p = spawn { outer ! intToString(recv()) }; p ! 42; recv() }
+args : --fresco
+stdout : "42" : String
+
+Nested SpawnWait bodies have separate mailbox types
+spawnWait { self() ! 40; var extra = spawnWait { self() ! "ab"; strlen(recv()) }; recv()+extra }
+args : --fresco
+stdout : 42 : Int
+
+SpawnWait consumes an absolute linear capture
+var once = (linfun() { 42 } : modal [] (() -@ Int)); spawnWait { once() }
+args : --fresco
+stdout : 42 : Int
+
+SpawnWait returns an absolute linear function
+var once = spawnWait { (linfun() { 42 } : modal [] (() -@ Int)) }; once()
+args : --fresco
+stdout : 42 : Int
+
+SpawnWait rejects a relative function result
+spawnWait { fun() { recv() } }
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+SpawnWait cannot call a captured contextual function
+var f = fun() { 42 }; spawnWait { f() }
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+SpawnWait does not transfer a caller's handler
+effect E { Op : () => Int; } handle <E> (spawnWait { do Op }) { case x -> x case <Op => k> -> k(42) }
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+SpawnWait permits a handler installed inside the child
+effect E { Op : () => Int; } spawnWait { handle <E> (do Op) { case x -> x case <Op => k> -> k(42) } }
+args : --fresco
+stdout : 42 : Int
+
+SpawnWait retains a supplied polymorphic result
+typename Identity = modal [] (forall a. (a) -> a); var id = (spawnWait { fun(x) { x } } : Identity); (id(42), id(true))
+args : --fresco
+stdout : (42, true) : (Int, Bool)
+
+SpawnAt retains a supplied linear mailbox type
+typename Message = modal [] (() -@ Int); var p = (spawnAt(here(), { receive { case f -> print(intToString(f())) } }) : Process(Message)); p ! (linfun() { 42 } : Message)
+args : --fresco
+stdout : 42() : ()
+
+SpawnWait restores the caller's mailbox context
+var n = spawnWait { 42 }; recv()
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+HaveMail requires a mailbox context
+haveMail()
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*
+
+A spawn location receives from the caller's mailbox
+spawnWait { self() ! here(); var p = spawnAt(recv(), { print(intToString(recv())) }); p ! 42; () }
+args : --fresco
+stdout : 42() : ()
+
+A signed caller supplies a polymorphic SpawnWait result
+typename Identity = modal [] (forall a. (a) -> a); sig useId : modal [] ((Identity) -> Int) fun useId(f) { f(42) } useId(spawnWait { fun(x) { x } })
+args : --fresco
+stdout : 42 : Int
+
+A SpawnWait result transfers through a linear mailbox
+typename Message = modal [] (() -@ Int); var p = (spawn { receive { case f -> print(intToString(f())) } } : Process(Message)); p ! spawnWait { (linfun() { 42 } : Message) }
+args : --fresco
+stdout : 42() : ()
+
+Client spawning and mailbox polling lower with checked IR
+sig start : modal [Wild] (() -> ()) fun start() { var p = spawnClient { if (haveMail()) recv()+1 else 0 }; () } ()
+args : --fresco
+stdout : () : ()

@@ -610,7 +610,8 @@ let primitive_suite = "primitive environment" >::: [
     let bindings = FrescoPrimitives.bindings (FrescoPrimitives.initialise (Infer.elaboration Infer.empty)) in
     List.iter (fun (name, (_, typ)) ->
       match expose typ with
-      | Types.ForAll (_, _) when List.mem name ["Send"; "self"; "recv"; "spawn"] -> ()
+      | Types.ForAll (_, _) when List.mem name ["Send"; "self"; "recv"; "spawn";
+          "spawnAt"; "spawnAngelAt"; "spawnAngel"; "spawnClient"; "spawnWait"; "haveMail"] -> ()
       | Types.ForAll (quantifiers, _) -> List.iter (fun q ->
           assert_equal ~msg:name (PrimaryKind.Type, (Linearity.Unl, Restriction.Any))
             (Quantifier.to_kind q);

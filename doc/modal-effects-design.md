@@ -677,6 +677,37 @@ retain Fresco's term-instantiation rules; modal or polymorphic mailbox types
 use explicit type arguments, for example `~recv[Message]()`. This does not
 change inference for other polymorphic functions.
 
+D7c1b extends this rule to explicit locations, angels and client processes.
+Check an explicit location in the caller's context before entering the child
+scope, and evaluate it once. Generated calls use the canonical `spawnAt` or
+`spawnAngelAt`, with canonical `here` or `there` for implicit locations.
+The existing interpreter and JavaScript process implementations remain in use.
+
+**Choice for review:** use a linear body for `spawnWait` and allow its result
+to have ordinary kind `Any`. Legacy source checks accepted linear captures
+and results, but the generated unlimited thunk could fail typed rechecking.
+A linear thunk matches the runtime, which invokes the child once. Retaining
+the unlimited generated thunk would reject those source programs.
+
+**Choice for review:** require the `spawnWait` result to have modal kind
+`Abs`. The child has its own mailbox and handlers, so a contextual function
+returned from it could depend on effects unavailable in the caller. An
+absolute modal function records its required effects and may be returned,
+including a linear function. Permitting arbitrary contextual results would
+need a separate rule connecting the child's effects to the caller's effects.
+A supplied modal or polymorphic result type must reach the child check.
+The skeleton pass leaves a ghost result and defers the child check. The full
+pass checks the child against a supplied result, requires `Abs`, and exports
+the result and thunk annotations together. Instantiate the canonical
+`spawnWait` with those exported types. The supplied result has already been
+checked, so the generated call does not repeat that subtype check.
+
+`haveMail` retains its legacy mailbox requirement from `() {:_|_}~> Bool`:
+its contextual type requires `Wild, Receive(a)`. JavaScript polls the current
+mailbox; the interpreter retains its existing unsupported-server error.
+`spawnWait'` remains private to the interpreter's continuation that retrieves
+a completed child's result; it is not a contextual source primitive.
+
 ### D7 prelude prerequisites
 
 Library migration exposed two frontend gaps. Skeleton inference checks a

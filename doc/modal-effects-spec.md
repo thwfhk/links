@@ -402,6 +402,18 @@ Messages may have linear types as well as modal kind `Abs`. A spawned body is
 a linear function, allowing it to capture linear values. Its discarded result
 must have an unlimited type, as required by Links' existing spawn checks.
 
+Explicit spawn locations are checked in the caller's context and evaluated
+once before the child starts. Angel and client variants use the same mailbox
+and capture rules as ordinary spawn.
+
+`spawnWait` creates a separate process and mailbox, waits for the child, and
+returns its result. Its body is linear. Its result may be linear and must have
+modal kind `Abs`; a returned function therefore needs an absolute modality.
+A supplied result type is passed into the child check, including polymorphic
+and modal types. `haveMail` requires `Wild` and `Receive(a)`. It retains the
+existing runtime support: JavaScript implements polling; the interpreter
+reports that server polling is unavailable.
+
 The actor signatures are:
 
 ```links
@@ -411,6 +423,10 @@ sig self : forall a::Type(Any,Any,Abs).
   modal [Wild, Receive(a)] (() -> Process(a))
 sig spawn : forall a::Type(Any,Any,Abs), b.
   modal [Wild] ((modal [Wild, Receive(a)] (() -@ b)) -> Process(a))
+sig spawnWait : forall a::Type(Any,Any,Abs), b::Type(Any,Any,Abs).
+  modal [Wild] ((modal [Wild, Receive(a)] (() -@ b)) -> b)
+sig haveMail : forall a::Type(Any,Any,Abs).
+  modal [Wild, Receive(a)] (() -> Bool)
 ```
 
 ## 8. Compatibility and examples
