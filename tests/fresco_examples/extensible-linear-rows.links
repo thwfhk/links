@@ -1,0 +1,6 @@
+sig fallback : modal [Wild] (([|Payload:End|]) -> String)
+fun fallback(v) { switch(v) { case Payload(c) -> close(c); "done" } }
+var ap=(new() : AP(End)); var pa=spawn { close(accept(ap)) };
+var bp=(new() : AP(End)); var pb=spawn { close(accept(bp)) };
+var cp=(new() : AP(End)); var pc=spawn { close(accept(cp)) };
+if (add_A(fallback)(Payload(request(ap)))=="done" && add_B(fallback)(Payload(request(bp)))=="done" && add_C(fallback)(Payload(request(cp)))=="done") 42 else 0

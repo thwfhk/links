@@ -1,0 +1,3 @@
+sig callback : modal [Wild] (([|Payload:End|]) -> String)
+fun callback(v) { switch(v) { case Payload(c) -> close(c); "done" } }
+defaultCase(callback)

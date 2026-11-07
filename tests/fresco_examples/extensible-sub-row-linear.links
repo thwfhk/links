@@ -1,0 +1,1 @@
+fun(c:End) { sub_A(fun(v) { switch(v) { case A -> 1 case B(k) -> close(k); 2 } })(B(c)) }

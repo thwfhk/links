@@ -1,0 +1,7 @@
+effect Echo { Read : () => String; }
+handle <Echo> ({
+  var suffix=fun() { do Read };
+  var fallback=fun(v) { switch(v) { case B(n) -> intToString(n) ^^ suffix() } };
+  var render=add_A(fallback);
+  if (render(A)=="A" && render(B(40))=="40!") 42 else 0
+}) { case x -> x case <Read => k> -> k("!") }

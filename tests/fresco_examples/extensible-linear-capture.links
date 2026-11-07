@@ -1,0 +1,1 @@
+fun(c:End) { add_A(fun(v) { close(c); "fallback" })(B) }

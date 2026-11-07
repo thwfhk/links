@@ -3,7 +3,8 @@
 # ICFP 2006
 
 
-# sig add_A : (([|A- |a|]) -> String) -> ([|A:()|a|]) -> String
+sig add_A : forall r::Row(Any,Any).
+  (([|A- |r|]) -> String) -> ([|A:()|r|]) -> String
 fun add_A(f) (e) {
   switch (e) {
     case A -> "A"
@@ -11,6 +12,8 @@ fun add_A(f) (e) {
   }
 }
 
+sig add_B : forall r::Row(Any,Any).
+  (([|B- |r|]) -> String) -> ([|B:()|r|]) -> String
 fun add_B(f) (e) {
   switch (e) {
     case B -> "B"
@@ -19,6 +22,8 @@ fun add_B(f) (e) {
 }
 
 
+sig add_C : forall r::Row(Any,Any).
+  (([|C- |r|]) -> String) -> ([|C:()|r|]) -> String
 fun add_C(f) (e) {
   switch (e) {
     case C -> "C"
@@ -26,15 +31,20 @@ fun add_C(f) (e) {
   }
 }
 
+sig defaultCase : forall rho::Row.
+  (([|rho|]) -> String) -> ([|rho|]) -> String
 fun defaultCase(f:(([|rho|]) -> String)) {
   f
 }
 
+sig nocases : forall a::Any. ([||]) -> a
 fun nocases(e:[||]) {
   switch (e) { }      # unreachable
 }
 
 
+sig sub_A : forall a,rho::Row,b::Any.
+  (([|A:a|rho|]) -> b) -> ([|A- |rho|]) -> b
 fun sub_A(f)(e) {
   f(e : [|A:a|rho|] <- [|A- |rho|])
 }

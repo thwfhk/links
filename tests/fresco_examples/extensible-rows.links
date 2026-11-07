@@ -1,0 +1,7 @@
+sig extend : forall r::Row(Any,Any).
+  (([|A- |r|]) -> String, [|A:()|r|]) -> String
+fun extend(g,v) { add_A(g)(v) }
+var rendered = extend(fun(v) { switch(v) { case B(n) -> intToString(n) } }, B(42));
+var same = defaultCase(fun(v:[|A:Int|B:Bool|]) { switch(v) { case A(n) -> intToString(n) case B(b) -> if (b) "true" else "false" } });
+var reduced = sub_A(fun(v:[|A:Int|B:Bool|]) { switch(v) { case A(n) -> n case B(b) -> if (b) 42 else 0 } });
+if (rendered=="42" && same(A(42))=="42" && same(B(true))=="true" && reduced(B(true))==42 && add_A(nocases)(A)=="A" && add_B(nocases)(B)=="B" && add_C(nocases)(C)=="C") 42 else 0

@@ -1,0 +1,5 @@
+sig impossible : ([||]) -> End
+fun impossible(z) { ~nocases[End](z) }
+var ap=(new() : AP(End)); var peer=spawn { close(accept(ap)) };
+var callback=fun(v:[|A:Int|B|]) { request(ap) };
+{ var c=sub_A(callback)(B); close(c); 42 }

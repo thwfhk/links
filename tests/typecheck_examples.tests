@@ -146,6 +146,7 @@ filemode : true
 Typecheck example file examples/extensible-case.links
 examples/extensible-case.links
 filemode : true
+args : --fresco
 
 Typecheck example file examples/factorial.links
 examples/factorial.links

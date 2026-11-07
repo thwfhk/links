@@ -69,3 +69,80 @@ stderr : @.*Type error:.*
 The finite bit-list renderer prints 32 rows of 32 characters
 open import Sierpinski_bits; sierpinski()
 stdout : @(?:[* ]{32}\n){32}\(\) : \(\)
+
+The extensible-case example executes its original tuple
+examples/extensible-case.links
+filemode : true
+stdout : ("A", "B", "C") : (String, String, String)
+
+Extensible cases retain open rows, callback identity and subtraction
+tests/fresco_examples/extensible-rows.links
+filemode : true
+args : --fresco --path=examples:lib/stdlib --set=isolation=false examples/extensible-case.links
+stdout : @\("A", "B", "C"\) : \(String, String, String\)\n42 : Int$
+
+Extensible case callbacks retain caller effects and captures
+tests/fresco_examples/extensible-effects.links
+filemode : true
+args : --fresco --path=examples:lib/stdlib --set=isolation=false examples/extensible-case.links
+stdout : @\("A", "B", "C"\) : \(String, String, String\)\n42 : Int$
+
+Extensible case extension accepts linear residual payloads
+tests/fresco_examples/extensible-linear-rows.links
+filemode : true
+args : --fresco --path=examples:lib/stdlib --set=isolation=false examples/extensible-case.links
+stdout : @\("A", "B", "C"\) : \(String, String, String\)\n42 : Int$
+
+Extensible case elimination and subtraction retain linear results
+tests/fresco_examples/extensible-linear-results.links
+filemode : true
+args : --fresco --path=examples:lib/stdlib --set=isolation=false examples/extensible-case.links
+stdout : @\("A", "B", "C"\) : \(String, String, String\)\n42 : Int$
+
+Default cases retain unrestricted residual rows
+tests/fresco_examples/extensible-default-linear.links
+filemode : true
+args : --fresco --path=examples:lib/stdlib --set=isolation=false examples/extensible-case.links
+stdout : ("A", "B", "C") : (String, String, String)
+exit : 1
+stderr : @.*Type error: Type does not match the required type \(instantiation constraints\).*In expression: defaultCase\.
+
+Case subtraction retains its unrestricted added payload
+tests/fresco_examples/extensible-phantom-linear.links
+filemode : true
+args : --fresco --path=examples:lib/stdlib --set=isolation=false examples/extensible-case.links
+stdout : ("A", "B", "C") : (String, String, String)
+exit : 1
+stderr : @.*Type error: Type does not match the required type \(instantiation constraints\).*In expression: sub_A\.
+
+Case subtraction retains unrestricted residual rows
+tests/fresco_examples/extensible-sub-row-linear.links
+filemode : true
+args : --fresco --path=examples:lib/stdlib --set=isolation=false examples/extensible-case.links
+stdout : ("A", "B", "C") : (String, String, String)
+exit : 1
+stderr : @.*Type error: Type does not match the required type \(instantiation constraints\).*In expression: sub_A\.
+
+Case construction requires the callback effect in its shared ambient context
+tests/fresco_examples/extensible-unavailable-effect.links
+filemode : true
+args : --fresco --path=examples:lib/stdlib --set=isolation=false examples/extensible-case.links
+stdout : ("A", "B", "C") : (String, String, String)
+exit : 1
+stderr : @.*Type error: Type does not match the required type.*In expression: callback\.
+
+Case extension rejects an incompatible selected payload
+tests/fresco_examples/extensible-wrong-payload.links
+filemode : true
+args : --fresco --path=examples:lib/stdlib --set=isolation=false examples/extensible-case.links
+stdout : ("A", "B", "C") : (String, String, String)
+exit : 1
+stderr : @.*Type error: Type does not match the required type \(consistency\).*In expression: add_A\.
+
+Unlimited case callbacks reject linear captures
+tests/fresco_examples/extensible-linear-capture.links
+filemode : true
+args : --fresco --path=examples:lib/stdlib --set=isolation=false examples/extensible-case.links
+stdout : ("A", "B", "C") : (String, String, String)
+exit : 1
+stderr : @.*Type error: Type does not satisfy its kind or usage requirement.*In expression: fun\(v\).*close\(c\)

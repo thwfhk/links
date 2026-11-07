@@ -1,0 +1,4 @@
+effect Echo { Read : () => String; }
+sig callback : modal [Echo] (([|B|]) -> String)
+fun callback(v) { do Read }
+add_A(callback)

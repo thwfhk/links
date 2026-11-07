@@ -1069,6 +1069,18 @@ The alternative all-absolute signature and successful numeral execution are in
 `/tmp/links-d7d3d2-church-fixed.log` and
 `/tmp/links-d7d3d2-church-shared.log`.
 
+**Choice for review:** the extensible-case example's curried helpers use a
+shared ambient context for construction, callbacks and returned calls. The
+legacy signatures permit separate construction effects. Preserve those general
+contracts in the [independent-effect inventory](#signatures-with-independent-effect-variables),
+as for the curried prelude helpers. Fixed modal callback contexts would select
+particular effects. Keep `add_A`/`add_B`/`add_C` residual rows at ordinary `Any`,
+`defaultCase` and `sub_A` residual rows at `Unl`, and `sub_A`'s added payload at
+`Unl`. Write the ordinary `Any` row kind in full as `Row(Any,Any)`:
+`Row(Any)` follows the existing effect-row shorthand, whose linearity is
+unlimited when control-flow linearity is disabled. The results of `nocases`
+and `sub_A` retain ordinary `Any`.
+
 The bit-list example retains all written `Wild` contracts and a contextual
 `zipbits` callback. Keep the empty-left branch's `f(y, false)` argument order
 and the local conversion loop's call to `intToBits`. Bounded conversions,
@@ -2208,6 +2220,7 @@ still migrate with fixed contexts or a changed interface.
 
 | Source | Independent effects | Migration action |
 |---|---|---|
+| `examples/extensible-case.links`, curried case helpers | Callback and returned-call effects are independent of construction | Use shared ambient contexts; retain the general contracts as deferred |
 | `lib/stdlib/binaryTree.links`, `leftmost_child` | Unused comparator and caller have independent rows | Specialise to a shared ambient context; preserve the general contract as deferred |
 | `examples/handlers/alert.links`, JavaScript `wait` declaration | Callback uses `e1`; scheduling call uses `e2` | Preserve the general contract as deferred; inspect actual callback effects before specialising |
 | `lib/stdlib/mvu.links`, `runHandle` and wrappers | View/update/subscription callbacks share `e`; caller uses separate `f` | Audit call sites against the fixed spawned-body context and actor migration |
