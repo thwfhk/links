@@ -525,3 +525,23 @@ let aliases state = FrescoElaborate.aliases (elaboration state.inference)
 let changed_aliases ~previous state =
   FrescoElaborate.changed_aliases ~previous:(elaboration previous.inference)
     (elaboration state.inference)
+
+let with_type state source =
+  let elaboration, annotation = FrescoElaborate.read (elaboration state.inference) source in
+  let environment = FrescoElaborate.checking_environment elaboration in
+  let context = FrescoElaborate.context elaboration in
+  let skeleton typ =
+    match FrescoSkeleton.of_types environment
+      [{ FrescoContext.binders = []; primary_kind = PrimaryKind.Type; typ }] with
+    | Ok [root] -> root.FrescoSkeleton.typ
+    | _ -> raise (Errors.internal_error ~filename:"frescoFrontend.ml"
+        ~message:"Cannot read a checked type for search") in
+  let query = skeleton annotation.FrescoElaborate.typ in
+  let ambient = EffectRow.map skeleton (FrescoInfer.ambient state.inference) in
+  StringMap.bindings state.names |> List.map fst |> export_types state
+  |> List.filter (fun (_,typ) ->
+       (* Each candidate starts from the query context. All inferred solutions
+          are discarded, including successful matches of shared unknowns. *)
+       match FrescoSubtype.check environment context ~ambient (skeleton typ) query with
+       | Ok _ -> true
+       | Error _ -> false)

@@ -13,6 +13,7 @@ let directives = [
   "load", "load a Links source file, extending the current environment";
   "dload", "dynamically load a Links extension";
   "help", "print the documentation of a setting";
+  "withtype", "search for functions that match the given contextual type";
 ]
 
 let print_types bindings =
@@ -58,8 +59,9 @@ let directive state = function
        | Settings.Unknown_setting name -> Printf.eprintf "Unknown setting '%s'\n%!" name);
       Some state
   | "help", _ -> prerr_endline "syntax: @help setting"; Some state
-  | "withtype", _ ->
-      prerr_endline "@withtype is not yet supported by the contextual REPL"; Some state
+  | "withtype", [] -> prerr_endline "syntax: @withtype type"; Some state
+  | "withtype", arguments ->
+      print_types (FrescoFrontend.with_type state (String.concat " " arguments)); Some state
   | name, _ -> Printf.eprintf "unknown directive : %s\n%!" name; Some state
 
 let interact state =

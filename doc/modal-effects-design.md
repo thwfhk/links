@@ -1265,9 +1265,20 @@ environment contains no value entry.
 `@env`, `@typeenv`, `@tyconenv` and `@builtins` use these contextual snapshots.
 Successful loads publish their state and retain module identities. Parse, type,
 load and interrupt errors retain the last successful state. The interaction loop
-restores the previous signal handler on exit. Contextual `@withtype` is the next
-integration step; it must elaborate and match queries in isolated inference
-state.
+restores the previous signal handler on exit. Contextual `@withtype` elaborates
+and matches queries in isolated inference state.
+
+**Choice for review:** `@withtype T` searches for values that can supply the
+query type `T`, using contextual subtyping from each candidate to `T` under the
+current ambient effects. Candidate polymorphism may instantiate; an explicit
+`forall` in `T` remains a requirement. Elaborate queries using current aliases
+and ordinary annotation rules: a named `a` is rigid and `%a` is flexible. The
+alternative is a separate symmetric query relation matching legacy unification;
+using contextual subtyping keeps search consistent with source use sites.
+Each candidate starts from the same persistent query context and discards its
+resulting context. Search neither refines live unknowns nor shares refinements
+between candidates. Include primitives and user definitions. Display each
+match's current type without applying solutions from the search.
 
 ### D7 inferred linear results
 

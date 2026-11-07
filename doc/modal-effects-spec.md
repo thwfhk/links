@@ -589,3 +589,8 @@ The REPL retains successful definitions, aliases, module imports and operator
 fixities across commands. Definitions print their values and inferred types;
 environment directives display current contextual types. `@load` extends the
 same state. A failed command retains the preceding successful state.
+
+`@withtype T` lists values that can be used at type `T` in the current ambient
+effect context. Queries use the current type aliases and normal annotation
+syntax, including modalities, `forall` and flexible variables such as `%a`.
+Searching does not change the REPL's type state.

@@ -45,3 +45,8 @@ val builtins : unit -> (string * Types.typ) list
 val definitions : previous:t -> t -> (string * Types.typ * Value.t) list
 val aliases : t -> (string * Types.tycon_spec) list
 val changed_aliases : previous:t -> t -> (string * Types.tycon_spec) list
+
+(** Candidates must supply the elaborated query type under the current ambient
+    effects. Each match uses an independent persistent context; query and live
+    binding solutions are never changed. Results include primitive bindings. *)
+val with_type : t -> string -> (string * Types.typ) list

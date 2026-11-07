@@ -268,4 +268,61 @@ let suite = "Fresco frontend preparation" >::: [
     Fresco_source_tests.expect_type Types.int_type (body (FrescoFrontend.aliases changed));
     assert_equal [] (FrescoFrontend.changed_aliases ~previous:state changed)));
 
+  "contextual type search preserves polymorphism modalities and arrow kinds" >:: (fun _ -> controls (fun () ->
+    let state,_,_ = FrescoFrontend.run_string (FrescoFrontend.empty ()) {|
+      effect E { Read : () => Int; }
+      typename Identity=modal [] (forall a.(a)->a);
+      sig polymorphic:Identity fun polymorphic(x) { x }
+      sig ints:modal [] ((Int)->Int) fun ints(x) { x }
+      sig bools:modal [] ((Bool)->Bool) fun bools(x) { x }
+      sig effectful:modal [E] ((Int)->Int) fun effectful(x) { x+do Read }
+      var linear=(linfun(x) { x } : modal [] ((Int) -@ Int)); ()
+    |} in
+    let names query = List.map fst (FrescoFrontend.with_type state query) in
+    let ordinary = names "(Int)->Int" in
+    List.iter (fun name -> assert_bool name (List.mem name ordinary)) ["ints";"polymorphic";"negate"];
+    List.iter (fun name -> assert_bool name (not (List.mem name ordinary))) ["bools";"linear";"effectful"];
+    let poly = names "Identity" in
+    assert_bool "Missing supplied polymorphism" (List.mem "polymorphic" poly);
+    assert_bool "Monomorphic candidate supplied forall" (not (List.mem "ints" poly));
+    let rigid = names "(a)->a" in
+    assert_bool "Rigid query parameter became Int" (not (List.mem "ints" rigid));
+    assert_bool "Polymorphic candidate did not instantiate" (List.mem "polymorphic" rigid);
+    let flexible = names "(%a)->%a" in
+    List.iter (fun name -> assert_bool name (List.mem name flexible)) ["ints";"bools"];
+    assert_bool "Missing supplied effect" (List.mem "effectful" (names "modal [E] ((Int)->Int)"));
+    let linear = names "modal [] ((Int) -@ Int)" in
+    assert_bool "Missing linear arrow" (List.mem "linear" linear);
+    assert_bool "Ordinary arrow supplied linear arrow" (not (List.mem "ints" linear))));
+
+  "type search isolates live candidate and shared query unknowns" >:: (fun _ -> controls (fun () ->
+    let state,_,_ = FrescoFrontend.run_string (FrescoFrontend.empty ()) {|
+      typename Shared=%a;
+      sig first:(Int)->Int fun first(x) { x }
+      sig last:(Bool)->Bool fun last(x) { x }
+      var unresolved=fun(x) { x }; ()
+    |} in
+    let names query = List.map fst (FrescoFrontend.with_type state query) in
+    let shared = names "(Shared)->Shared" in
+    List.iter (fun name -> assert_bool name (List.mem name shared)) ["first";"last"];
+    List.iter (fun query -> assert_bool query (List.mem "unresolved" (names query)))
+      ["(Int)->Int";"(String)->String"];
+    let _,_,value = FrescoFrontend.run_string state "var result=(true:Shared); unresolved(\"text\")" in
+    assert_equal (`String "text") value));
+
+  "type queries resolve module aliases and invalid queries leave state usable" >:: (fun _ -> controls (fun () ->
+    let state,_,_ = FrescoFrontend.run_string (FrescoFrontend.empty ()) {|
+      module Query { typename Identity=modal [] (forall a.(a)->a); typename Number=Int; }
+      sig chosen:Query.Identity fun chosen(x) { x }
+      sig numeric:(Int)->Int fun numeric(x) { x } ()
+    |} in
+    let names query = List.map fst (FrescoFrontend.with_type state query) in
+    assert_bool "Qualified polymorphic alias" (List.mem "chosen" (names "Query.Identity"));
+    assert_bool "Qualified parameter alias" (List.mem "numeric" (names "(Query.Number)->Query.Number"));
+    List.iter (fun query -> match FrescoFrontend.with_type state query with
+      | _ -> assert_failure ("Expected invalid type query: " ^ query)
+      | exception Errors.Type_error _ -> ()) ["() ~> Int";"MissingQueryAlias"];
+    let _,_,value = FrescoFrontend.run_string state "chosen(42)" in
+    assert_equal (`Int 42) value));
+
 ]

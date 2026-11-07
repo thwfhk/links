@@ -129,7 +129,7 @@ def settings(repl):
     require(repl.command("@directives;"), "@load", "@builtins", "@help")
     require(repl.command("@help printing_types;"), "printing_types", "Print types")
     require(repl.command("@settings;"), "printing_types", "print_pretty")
-    require(repl.command("@withtype Int;"), "not yet supported")
+    require(repl.command("@withtype;"), "syntax: @withtype type")
     require(repl.command('@dload "missing-repl-extension.cmxs";'), "dynamic linking error")
     require(repl.command("@unknown;"), "unknown directive")
     require(repl.command("40+2;"), "42 : Int")
@@ -150,6 +150,26 @@ def printing(repl):
     require(repl.command("42;"), "42 : Int")
 
 
+def type_search(repl):
+    repl.command("typename Identity=modal [] (forall a.(a)->a);")
+    repl.command("sig polymorphic:Identity fun polymorphic(x) { x };")
+    repl.command("sig ints:(Int)->Int fun ints(x) { x };")
+    repl.command("sig bools:(Bool)->Bool fun bools(x) { x };")
+    flexible = repl.command('@withtype "(%a)->%a";')
+    require(flexible, "ints", "bools", "polymorphic", "negate")
+    rigid = repl.command('@withtype "(a)->a";')
+    require(rigid, "polymorphic")
+    assert " ints " not in rigid, rigid
+    poly = repl.command('@withtype "Identity";')
+    require(poly, "polymorphic")
+    assert " ints " not in poly and " bools " not in poly, poly
+    repl.command("module Query { typename Target=Identity; }")
+    require(repl.command('@withtype "Query.Target";'), "polymorphic")
+    require(repl.command('@withtype "() ~> Int";'), "Type error")
+    require(repl.command('@withtype "MissingQueryAlias";'), "Type error")
+    require(repl.command('polymorphic("still usable");'), '"still usable" : String')
+
+
 def interrupt_and_eof(repl):
     repl.command("var saved=40;")
     os.kill(repl.process.pid, signal.SIGINT)
@@ -162,7 +182,7 @@ def interrupt_and_eof(repl):
 
 if __name__ == "__main__":
     cases = [definitions, polymorphism, alias_changes, environments, loading,
-             imports, settings, printing, interrupt_and_eof]
+             imports, settings, printing, type_search, interrupt_and_eof]
     for case in cases:
         repl = Repl()
         try:
