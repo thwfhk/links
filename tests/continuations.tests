@@ -34,9 +34,10 @@ continuation typing [5]
 stdout : 1 : Int
 
 continuation mailbox typing (see r321)
-fun () {(escape e in {spawn { e(self()) }}) ! ""; 1 + recv(); }
+spawnWait { (escape e in {spawn { e(self()) }}) ! ""; 1 + recv() }
+args : --fresco
 exit : 1
-stderr : @..*
+stderr : @.*Variable e cannot cross this modal scope.*
 
 Escape body [1]
 escape k in A

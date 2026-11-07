@@ -245,3 +245,19 @@ Client spawning and mailbox polling lower with checked IR
 sig start : modal [Wild] (() -> ()) fun start() { var p = spawnClient { if (haveMail()) recv()+1 else 0 }; () } ()
 args : --fresco
 stdout : () : ()
+
+Mailbox-indexed function aliases execute at separate message types
+typename F(a,b::Type(Any,Any,Abs)) = modal [Wild,Receive(b)] ((a) -> a); sig f : F(Int,Int) fun f(x) { recv()+x } sig g : F(Int,String) fun g(x) { stringToInt(recv())+x } (spawnWait { self() ! 40; f(2) }, spawnWait { self() ! "40"; g(2) })
+args : --fresco
+stdout : (42, 42) : (Int, Int)
+
+A signed receiver instantiates at separate mailbox types
+sig foo : forall a::Type(Any,Any,Abs). modal [Wild,Receive(a)] (() -> a) fun foo() { var x = recv(); x } (spawnWait { self() ! 42; ~foo[Int]() }, spawnWait { self() ! true; ~foo[Bool]() })
+args : --fresco
+stdout : (42, true) : (Int, Bool)
+
+An explicit receiver instance must match its mailbox
+sig foo : forall a::Type(Any,Any,Abs). modal [Wild,Receive(a)] (() -> a) fun foo() { var x = recv(); x } spawnWait { self() ! 42; ~foo[Bool]() }
+args : --fresco
+exit : 1
+stderr : @.*Type error:.*

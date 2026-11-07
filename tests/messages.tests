@@ -1,3 +1,8 @@
+---
+config: tests/messages.config
+args: --fresco
+---
+
 Correct message type sent to a process
 spawn { recv() + 1 } ! 1
 stdout : () : ()
@@ -8,40 +13,40 @@ stderr : @.*Type error.*
 exit : 1
 
 Receive types must unify (correct, closed rows)
-fun f() { receive { case Bar -> () }} fun g() { receive { case Bar -> () }} fun () { f(); g() }
-stdout : @fun : .*
+sig f : modal [Wild, Receive([|Bar|])] (() -> ()) fun f() { receive { case Bar -> () }} sig g : modal [Wild, Receive([|Bar|])] (() -> ()) fun g() { receive { case Bar -> () }} spawnWait { self() ! Bar; f(); self() ! Bar; g() }
+stdout : () : ()
 
 Receive types must unify (incorrect, closed rows)
-fun f() { receive { case Bar -> () }} fun g() { receive { case Foo -> () }} fun () { f(); g() }
+sig f : modal [Wild, Receive([|Bar|])] (() -> ()) fun f() { receive { case Bar -> () }} sig g : modal [Wild, Receive([|Foo|])] (() -> ()) fun g() { receive { case Foo -> () }} (fun () { f(); g() } : modal [Wild, Receive([|Bar|])] (() -> ()))
 stderr : @.*Type error.*
 exit : 1
 
 Receive types must unify (correct, open rows)
-fun f() { receive { case Bar -> () case x -> () }} fun g() { receive { case Foo -> () case x -> () }} fun () { f(); g() }
-stdout : @fun : .*
+spawnWait { var f = fun() { receive { case Bar -> () case x -> () }}; var g = fun() { receive { case Foo -> () case x -> () }}; self() ! Foo; f(); self() ! Bar; g() }
+stdout : () : ()
 
 Receive types must unify (incorrect, open rows)
-fun f() { receive { case Bar (x) -> x+1 case x -> 0 }} fun g() { receive { case Bar (s) -> s+.1.0 case x -> 0.0 }} fun () { f(); g() }
+spawn { var f = fun() { receive { case Bar (x) -> x+1 case x -> 0 }}; var g = fun() { receive { case Bar (s) -> s+.1.0 case x -> 0.0 }}; fun () { var _ = f(); g() } }
 stderr : @.*Type error.*
 exit : 1
 
 Basic send/receive test.
-fun main() { spawnWait { var p = spawn { recv() ! "The end" } ! self(); recv() } } main()
+sig main : modal [Wild] (() -> String) fun main() { spawnWait { var p = spawn { recv() ! "The end" } ! self(); recv() } } main()
 stdout : @"The end" : .*
 
 Mailboxes are not polymorphic [1]
-fun main() { spawnWait { var p = spawn { recv() ! "The end" } ! self(); recv() } } main()
+sig main : modal [Wild] (() -> String) fun main() { spawnWait { var p = spawn { recv() ! "The end" } ! self(); recv() } } main()
 stdout : "The end" : String
 
 Mailboxes are not polymorphic [2]
-var pid = spawn { recv() ++ [] }; { pid ! "one"; pid ! [2] }
+var pid = spawn { recv() ++ [] }; { pid ! ["one"]; pid ! [2] }
 stderr : @.*Type error.*
 exit : 1
 
 Built-in functions are polymorphic in their mailbox types
-fun f() {var x = recv(); intToString(x)} fun g(x) {var () = recv(); intToString(x)} (f, g)
-stdout : (fun, fun) : (() {:Int|_}~> String, (Int) {:()|_}~> String)
+sig f : modal [Wild, Receive(Int)] (() -> String) fun f() {var x = recv(); intToString(x)} sig g : modal [Wild, Receive(())] ((Int) -> String) fun g(x) {var () = recv(); intToString(x)} (f, g)
+stdout : (fun, fun) : (modal [effect_0$Wild, effect_1$Receive(Int)] (() -> String), modal [effect_0$Wild, effect_1$Receive(())] ((Int) -> String))
 
 SpawnWait works on the server
-fun go() { var p1 = spawn { receive { case Hi(pid) -> pid ! 100 } }; spawnWait { p1 ! Hi(self()) ; receive { case n -> n } } } go()
+sig go : modal [Wild] (() -> Int) fun go() { var p1 = spawn { receive { case Hi(pid) -> pid ! 100 } }; spawnWait { p1 ! Hi(self()) ; receive { case n -> n } } } go()
 stdout : 100 : Int

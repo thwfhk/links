@@ -68,8 +68,9 @@ stderr : @..*
 exit : 1
 
 Value restriction [2]
-sig foo : () {:a|r}~> a fun foo() {var x = recv(); x} foo
-stdout : fun : () {:a|_}~> a
+sig foo : forall a::Type(Any,Any,Abs). modal [Wild,Receive(a)] (() -> a) fun foo() {var x = recv(); x} foo
+args : --fresco
+stdout : @fun : modal \[.*Wild, .*Receive\(a::Any\)\] \(\(\) -> a::Any\)
 
 Overly general signatures
 sig id : (a) -> b fun id(x) {x}

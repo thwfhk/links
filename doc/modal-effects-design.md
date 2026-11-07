@@ -717,6 +717,18 @@ mailbox; the interpreter retains its existing unsupported-server error.
 `spawnWait'` remains private to the interpreter's continuation that retrieves
 a completed child's result; it is not a contextual source primitive.
 
+D7c1c migrates the full message suite and actor cases in the function,
+polymorphism, continuation and typed-IR suites. Keep the mixed suites' feature
+settings and select the contextual frontend for each migrated case. Closed
+variant mailboxes use explicit signatures; open variant mailboxes infer their
+shared payload from local receive functions in the child. Matching cases
+execute both receives. Function aliases and receiver signatures state their `Receive(a)` requirement. The
+continuation/mailbox counterexample uses a valid child mailbox context and
+requires the diagnostic for capturing its contextual continuation across spawn.
+The former source ended with an invalid semicolon and accepted any error.
+The list-mailbox mismatch sends a list of strings before a list of integers;
+this checks shared element types without an earlier String/List mismatch.
+
 ### D7 prelude prerequisites
 
 Library migration exposed two frontend gaps. Skeleton inference checks a

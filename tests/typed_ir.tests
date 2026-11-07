@@ -105,6 +105,7 @@ stdout : () : ()
 
 Generalisation obeys value restriction / Freshening of generalised type variables when turning lambda into named fun (#871)
 var foo = spawn { () }; ()
+args : --fresco
 exit : 0
 stdout : () : ()
 

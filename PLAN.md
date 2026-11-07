@@ -89,7 +89,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D7b4c | Maybe, numeric, association and string-check helpers | `4e009da6` |
 | D7c1a | Contextual Process, core actor primitives and ordinary spawn/receive | `ef94a794` |
 | D7c1b | Actor locations/variants, mailbox polling and spawnWait | `b6902b96` |
-| D7c1b1 | Bound type variables and argument positions in modal subtyping | This commit |
+| D7c1b1 | Bound type variables and argument positions in modal subtyping | `1822df37` |
+| D7c1c | Full message suite and actor cases in mixed suites | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -164,7 +165,7 @@ user requested on 7 November 2026. The main agent owns integration and these rec
 
 D7a (`1f7ff34e`), D7b1 (`4fad3532`) and D7b2a (`db0d3a75`) are complete.
 D7b2b (`72e47dbc`) and D7b3 (`f09237bd`) are complete. D7b4a0 (`8cfe88a3`) is complete. D7b4a collection migration (`0b2c0d3f`) is complete. D7b4b (`efc1bca2`) is complete. D7b4c (`4e009da6`) is complete. D7c1a core actors (`ef94a794`) and D7c1b actor variants are complete.
-D7c1b1 polymorphic export is complete. D7c1c actor migration is next. Later boundaries may be split further when a dependency needs
+D7c1b1 polymorphic export is complete. D7c1c actor migration is complete. D7c2 sessions are next. Later boundaries may be split further when a dependency needs
 its own review and checks.
 
 ## Recorded decisions
@@ -180,42 +181,34 @@ and design:
 
 ## Latest task and verification
 
-7 November 2026, D7c1b1, base `b6902b96`: the shared modal-polymorphic
-annotation/export failure is repaired. Modal subtyping retains its checked
-payload's fresh binders and records type-argument positions through the
-target's modal wrappers. The [design](doc/modal-effects-design.md#subtyping-and-instantiation-information)
-records the invariant. No language rule changed.
+7 November 2026, D7c1c, base `1822df37`: all eleven message cases and four
+actor cases in mixed suites now use Fresco. The [actor design](doc/modal-effects-design.md#d7-actor-integration)
+records explicit signatures, mailbox variants and corrected negative cases.
+The typed-IR suite retains its checks; the message suite records its original
+feature settings. Additional checked-IR executions cover mailbox-indexed
+aliases and polymorphic receivers.
 
-Independent review found no remaining issues. It checked nested modality
-wrappers, separate binders, source-only modalities, effect and rigid-variable
-rejections, and successful/failed/successful REPL checks. Writer readiness,
-review and combined-diff inspection preceded integrated checks. Focused units
-passed 129 cases (93 subtype/constraint and 36 source); 70 Fresco regression
-cases and 14 independent review cases passed before integrated verification.
-The review record is `/tmp/links-d7c1b1-review-summary.log`; focused unit output
-is `/tmp/links-d7c1b1-core-focused-final.log`.
+Independent review found and resolved an unrelated unit-sequence failure in
+the open-row rejection test. The incompatible payloads reject, and the aligned
+control passes. Review checked inventory, settings, source diagnostics and
+selected executions; no findings remain. Record:
+`/tmp/links-d7c1c-review-summary.log`.
 
-All integrated checks passed on the reviewed tree. The four source/test hashes
-in `source.sha256` still match after testing. Logs below are in
-`/tmp/links-d7c1b1-verification`; documentation was updated afterwards.
+The compiler is unchanged from `1822df37`. Its successful build and 1,359 unit
+tests are recorded under `/tmp/links-d7c1b1-verification`. All writers finished,
+review fixes were applied and the combined diff was inspected before testing.
+All 189 affected regression cases passed. The seven test/config hashes still
+match after testing. Logs below are in `/tmp/links-d7c1c-verification`;
+documentation was updated afterwards.
 
 | Command | Result | Log |
 |---|---|---|
-| `make no-db` | Passed | `build.log` |
-| `opam exec -- ./run-tests nodb-unit-tests` | 1,359 passed | `unit.log` |
-| `./test-harness tests/fresco.tests` | 70 passed | `fresco.log` |
-| `./test-harness tests/fresco_typecheck.tests` | 2 passed | `fresco_typecheck.log` |
-| `./test-harness tests/fresco_modal.tests` | 20 passed | `fresco_modal.log` |
-| `./test-harness tests/fresco_prelude.tests` | 27 passed | `fresco_prelude.log` |
-| `./test-harness tests/fresco_actors.tests` | 46 passed | `fresco_actors.log` |
-| `./test-harness tests/messages.tests` | 11 passed on legacy path | `messages.log` |
-| `./test-harness tests/handlers.tests` | 95 passed | `handlers.log` |
-| `./test-harness tests/effect_sugar.tests` | 44 passed | `effect_sugar.log` |
-| `./test-harness tests/typed_ir.tests` | 26 passed | `typed_ir.log` |
+| `./test-harness tests/messages.tests` | 11 passed on Fresco | `messages.log` |
 | `./test-harness tests/functions.tests` | 33 passed | `functions.log` |
 | `./test-harness tests/polymorphism.tests` | 55 passed | `polymorphism.log` |
-| `./test-harness tests/typecheck_examples.tests` | 167 passed; 15 ignored | `typecheck_examples.log` |
 | `./test-harness tests/continuations.tests` | 15 passed | `continuations.log` |
+| `./test-harness tests/typed_ir.tests` | 26 passed | `typed_ir.log` |
+| `./test-harness tests/fresco_actors.tests` | 49 passed | `fresco_actors.log` |
 | `make rule-check` | Passed; GNU-find tab check skipped, formatter disabled | `rule-check.log` |
 | Source hashes, added-line whitespace; `git diff --check` | Passed | `source-check.log`, `diff-check.log` |
 
@@ -228,7 +221,7 @@ Documentation-only update: text and whitespace checked.
 
 ## Next action
 
-Migrate actors in D7c1c, then continue
-through the remaining D7 milestones. Review, test and commit each milestone
-before the next. Pause after D7 is complete, before starting D8, as requested
-on 7 November 2026. Both D6 choices are confirmed.
+Split and implement D7c2 sessions,
+then continue through the remaining D7 milestones. Review, test and commit
+each milestone before the next. Pause after D7 is complete, before starting
+D8, as requested on 7 November 2026. Both D6 choices are confirmed.
