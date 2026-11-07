@@ -239,3 +239,109 @@ open import FrescoPrelude; { var once = (linfun() { 42 } : modal [] (() -@ Int))
 args : --fresco --path=lib/stdlib
 exit : 1
 stderr : @.*Type error:.*
+
+ElemIndex retains first-match indices and polymorphism
+open import FrescoPrelude; (elemIndex(2,[2,1,2])==Just(0), elemIndex(2,[1,2,2])==Just(1), elemIndex(2,[1,3])==Nothing, elemIndex(2,[])==Nothing, elemIndex("b",["a","b"])==Just(1))
+args : --fresco --path=lib/stdlib
+stdout : (true, true, true, true, true) : (Bool, Bool, Bool, Bool, Bool)
+
+ElemIndex retains Wild
+open import FrescoPrelude; sig f : () -> Maybe(Int) fun f() { elemIndex(2,[1,2]) } f()
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*In expression: elemIndex.*
+
+Partition retains reversed lists and caller effects
+open import FrescoPrelude; effect Limit { Get : () => Int; } handle <Limit> (partition(fun(x) { print(intToString(x)); x < do Get }, [1,2,3,4])) { case xs -> xs case <Get => k> -> k(3) }
+args : --fresco --path=lib/stdlib
+stdout : 1234([2, 1], [4, 3]) : (List Int, List Int)
+
+Partition retains Wild even for a pure callback
+open import FrescoPrelude; sig f : () -> (List Int,List Int) fun f() { partition(fun(x) { x > 0 },[1]) } f()
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*In expression: partition.*
+
+Partition rejects an unhandled callback effect
+open import FrescoPrelude; effect Limit { Get : () => Int; } partition(fun(x) { x < do Get },[1])
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*In expression:.*Get.*
+
+Partition rejects linear list elements
+open import FrescoPrelude; partition(fun(f) { true },[linfun() { 42 }])
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*
+
+GroupByFlat retains duplicate groups without Wild
+open import FrescoPrelude; sig groups : () -> List (Int,List Int) fun groups() { groupByFlat(fun(x) { x },[1,2,1]) } groups()
+args : --fresco --path=lib/stdlib
+stdout : [(1, [1, 1]), (2, [2]), (1, [1, 1])] : List (Int, List Int)
+
+GroupByFlat retains callback effects and evaluation order
+open import FrescoPrelude; effect Visit { Key : (Int) => Int; } handle <Visit> (groupByFlat(fun(x) { do Key(x) },[1,2])) { case xs -> xs case <Key(x) => k> -> print(intToString(x)); k(x) }
+args : --fresco --path=lib/stdlib
+stdout : 1111222122[(1, [1]), (2, [2])] : List (Int, List Int)
+
+ASCII predicates retain their boundaries without Wild
+open import FrescoPrelude; sig checks : () -> Bool fun checks() { map(isLower,map(chr,[96,97,122,123]))==[false,true,true,false] && map(isUpper,map(chr,[64,65,90,91]))==[false,true,true,false] && map(isAlpha,map(chr,[64,65,90,91,96,97,122,123,233]))==[false,true,true,false,false,true,true,false,false] && map(isDigit,map(chr,[47,48,57,58]))==[false,true,true,false] && map(isAlnum,map(chr,[47,48,57,58,65,97,233]))==[false,true,true,false,true,true,false] && map(isXDigit,map(chr,[47,48,57,58,64,65,70,71,96,97,102,103]))==[false,true,true,false,false,true,true,false,false,true,true,false] && map(isBlank,map(chr,[8,9,10,31,32,33]))==[false,true,false,false,true,false] } checks()
+args : --fresco --path=lib/stdlib
+stdout : true : Bool
+
+ASCII case conversion preserves boundaries and non-ASCII characters
+open import FrescoPrelude; sig checks : () -> Bool fun checks() { map(fun(n) { ord(toUpper(chr(n))) },[64,65,90,91,96,97,122,123,233,255])==[64,65,90,91,96,65,90,123,233,255] && map(fun(n) { ord(toLower(chr(n))) },[64,65,90,91,96,97,122,123,233,255])==[64,97,122,91,96,97,122,123,233,255] } checks()
+args : --fresco --path=lib/stdlib
+stdout : true : Bool
+
+UTC accessors and local milliseconds are pure on a fixed date
+open import FrescoPrelude; sig components : (DateTime) -> (Int,Int,Int,Int,Int,Int,Int,Int) fun components(dt) { (utcYear(dt),utcMonth(dt),utcDay(dt),utcHours(dt),utcMinutes(dt),utcSeconds(dt),utcMilliseconds(dt),localMilliseconds(dt)) } components(parseDate("2001-02-03 04:05:06+0"))
+args : --fresco --path=lib/stdlib
+stdout : (2001, 2, 3, 4, 5, 6, 0, 0) : (Int, Int, Int, Int, Int, Int, Int, Int)
+
+Local accessors and display retain their ordinary runtime results
+open import FrescoPrelude; var dt = parseDate("2001-02-03 04:05:06+0"); (localYear(dt)==dateYear(dt,utcOffset()),localMonth(dt)==dateMonth(dt,utcOffset()),localDay(dt)==dateDay(dt,utcOffset()),localHours(dt)==dateHours(dt,utcOffset()),localMinutes(dt)==5,localSeconds(dt)==6,parseDate(showLocal(dt))==dt)
+args : --fresco --path=lib/stdlib
+stdout : (true, true, true, true, true, true, true) : (Bool, Bool, Bool, Bool, Bool, Bool, Bool)
+
+LocalYear retains Wild
+open import FrescoPrelude; sig f : (DateTime) -> Int fun f(dt) { localYear(dt) } ()
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*In expression: localYear.*
+
+LocalMonth retains Wild
+open import FrescoPrelude; sig f : (DateTime) -> Int fun f(dt) { localMonth(dt) } ()
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*In expression: localMonth.*
+
+LocalDay retains Wild
+open import FrescoPrelude; sig f : (DateTime) -> Int fun f(dt) { localDay(dt) } ()
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*In expression: localDay.*
+
+LocalHours retains Wild
+open import FrescoPrelude; sig f : (DateTime) -> Int fun f(dt) { localHours(dt) } ()
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*In expression: localHours.*
+
+LocalMinutes retains Wild
+open import FrescoPrelude; sig f : (DateTime) -> Int fun f(dt) { localMinutes(dt) } ()
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*In expression: localMinutes.*
+
+LocalSeconds retains Wild
+open import FrescoPrelude; sig f : (DateTime) -> Int fun f(dt) { localSeconds(dt) } ()
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*In expression: localSeconds.*
+
+ShowLocal retains Wild
+open import FrescoPrelude; sig f : (DateTime) -> String fun f(dt) { showLocal(dt) } ()
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*In expression: showLocal.*

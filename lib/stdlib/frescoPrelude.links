@@ -563,6 +563,161 @@ fun isInt (x) { x =~ /-?[0-9]+$/ }
 sig isFloat : (String) -> Bool
 fun isFloat (x) { x =~ /-?[0-9]+(\.[0-9]+)?$/ }
 
+## Utility functions
+# Returns Just the index of x in xs if x is an element in xs, otherwise Nothing.
+sig elemIndex : forall a. modal [Wild] ((a, List a) -> Maybe(Int))
+fun elemIndex(x, xs) {
+  var n = fold_left(fun(acc, y) {
+    switch (acc) {
+       case (n,Just(i)) -> (n,Just(i))
+       case (n,Nothing) -> if (x == y) { (n, Just(n)) } else { (n+1,Nothing) }
+    }
+  }, (0,Nothing), xs);
+
+  second(n)
+}
+
+####
+
+sig partition : forall a. modal [Wild] (((a) -> Bool, List a) -> (List a, List a))
+fun partition(pred, xs) {
+  sig go : (List a, List a, List a) -> (List a, List a)
+  fun go(ayes, noes, xs) {
+    switch(xs) {
+      case [] -> (ayes, noes)
+      case x :: xs ->
+        if (pred(x)) {
+          go(x :: ayes, noes, xs)
+        } else {
+          go(ayes, x :: noes, xs)
+        }
+    }
+  }
+  go([], [], xs)
+}
+
+sig groupByFlat : forall a, c. ((a) -> c, List a) -> List (c, List a)
+fun groupByFlat(project, ts) {
+  for(t <- ts)
+    [(project(t),for (u <- ts) where (project(t) == project(u)) [u])]
+}
+
+# Operations on (ASCII) characters
+sig isLower : (Char) -> Bool
+fun isLower(ch) {
+  var c = ord(ch);
+  (97 <= c && c <= 122) # ord('a') = 97, ord('z') = 122
+}
+
+sig isUpper : (Char) -> Bool
+fun isUpper(ch) {
+  var c = ord(ch);
+  (65 <= c && c <= 90) # ord('A') = 65, ord('Z') = 90
+}
+
+sig isAlpha : (Char) -> Bool
+fun isAlpha(ch) {
+  isLower(ch) || isUpper(ch)
+}
+
+sig isDigit : (Char) -> Bool
+fun isDigit(ch) {
+  var c = ord(ch);
+  (48 <= c && c <= 57)
+}
+
+sig isAlnum : (Char) -> Bool
+fun isAlnum(ch) {
+ isAlpha(ch) || isDigit(ch)
+}
+
+sig isXDigit : (Char) -> Bool
+fun isXDigit(ch) {
+  isDigit(ch)
+  || ({ var c = ord(ch);
+        (65 <= c && c <= 70)        # ord('F') = 70
+        || (97 <= c && c <= 102) }) # ord('f') = 102
+}
+
+sig isBlank : (Char) -> Bool
+fun isBlank(ch) {
+  var c = ord(ch);
+  c == 32 || c == 9 # ord(' ') = 32, ord('\t') = 9
+}
+
+# Implements the behaviour of Char.uppercase_ascii in OCaml.
+sig toUpper : (Char) -> Char
+fun toUpper(ch) {
+  if (isLower(ch)) {
+    chr(ord(ch) - 32)
+  } else ch
+}
+
+# Implements the behaviour of Char.lowercase_ascii in OCaml.
+sig toLower : (Char) -> Char
+fun toLower(ch) {
+  if (isUpper(ch)) {
+    chr(ord(ch) + 32)
+  } else ch
+}
+
+### Date / Time functions
+
+# UTC Time Accessors
+
+sig utcYear : (DateTime) -> Int
+fun utcYear(dt) { dateYear(dt, 0) }
+
+sig utcDay : (DateTime) -> Int
+fun utcDay(dt) { dateDay(dt, 0) }
+
+sig utcMonth : (DateTime) -> Int
+fun utcMonth(dt) { dateMonth(dt, 0) }
+
+sig utcHours : (DateTime) -> Int
+fun utcHours(dt) { dateHours(dt, 0) }
+
+sig utcMinutes : (DateTime) -> Int
+fun utcMinutes(dt) { dateMinutes(dt) }
+
+sig utcSeconds : (DateTime) -> Int
+fun utcSeconds(dt) { dateSeconds(dt) }
+
+sig utcMilliseconds : (DateTime) -> Int
+fun utcMilliseconds(dt) { dateMilliseconds(dt) }
+
+# Local time accessors (Note that these are impure since we use utcOffset() to
+# get the currently-set UTC offset to convert from UTC to local time)
+
+sig localYear : modal [Wild] ((DateTime) -> Int)
+fun localYear(dt) { dateYear(dt, utcOffset()) }
+
+sig localDay : modal [Wild] ((DateTime) -> Int)
+fun localDay(dt) { dateDay(dt, utcOffset()) }
+
+sig localMonth : modal [Wild] ((DateTime) -> Int)
+fun localMonth(dt) { dateMonth(dt, utcOffset()) }
+
+sig localHours : modal [Wild] ((DateTime) -> Int)
+fun localHours(dt) { dateHours(dt, utcOffset()) }
+
+sig localMinutes : modal [Wild] ((DateTime) -> Int)
+fun localMinutes(dt) { dateMinutes(dt) }
+
+sig localSeconds : modal [Wild] ((DateTime) -> Int)
+fun localSeconds(dt) { dateSeconds(dt) }
+
+sig localMilliseconds : (DateTime) -> Int
+fun localMilliseconds(dt) { dateMilliseconds(dt) }
+
+# Default serialisation of DTs at the moment is in local time,
+# so `showLocal` is just a specialisation of the default `show`
+# function.
+sig showLocal : modal [Wild] ((DateTime) -> String)
+fun showLocal(dt) {
+    show(dt)
+}
+
 #### SESSION TYPING STUFF ####
 sig fork : forall s::Type(Any,Session,Abs).
   modal [Wild] ((modal [Wild] ((s) -> ())) -> ~s)

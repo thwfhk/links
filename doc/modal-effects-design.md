@@ -979,6 +979,65 @@ Alternatives include separate helpers for fixed absolute callback contexts or
 requiring explicit wrappers at each use. Test effectful calls and returned
 closures so the specialised interface retains its stated effect requirements.
 
+### D7 ordinary library inventory
+
+After the collection and session helpers, migrate the remaining ordinary
+helpers in small groups. The source audit is recorded in
+`/tmp/links-d7d3-inventory.md` at revision `8b27a80b`.
+
+| Group | Sources and completion checks |
+|---|---|
+| Lists, characters and dates | `elemIndex`, `partition`, `groupByFlat`, ASCII predicates/conversions and UTC/local wrappers; preserve list ordering, callback effects and explicit `Wild` contracts |
+| Other ordinary helpers | List grouping helpers embedded in mixed prelude sections, Maybe helpers, ordinary aliases and composition operators; record independent-context interfaces separately |
+| Trees | `binaryTree.links`, `comparators.links` and the five binary-tree cases; preserve algorithms and test contextual comparison callbacks |
+| Ordinary examples | Church numerals, extensible cases, recursive bit lists and switch functions; execute bounded results and retain polymorphic/row requirements |
+| Ordinary actor examples | Buffered channels and console helpers; check bounded message ordering and callback contracts |
+
+`elemIndex` retains its first-match result and explicit `Wild` requirement.
+`partition` retains its explicit `Wild` requirement and reverses each output
+list, while its predicate uses the caller's effects. `groupByFlat` retains a
+group for every source item, including duplicate keys, and repeats its projection
+calls in the existing order. ASCII helpers and UTC accessors remain pure;
+local accessors retain their written `Wild` contracts, except the existing pure
+`localMilliseconds` helper.
+
+The tree deletion example's existing two-child branch duplicates the left
+subtree. Preserve the recorded `remove2` result during type migration.
+Switch-function syntax already passes through `DesugarSwitchFuns` before
+Fresco inference. Its internal unsupported-node guard does not establish a
+source-language gap.
+
+Keep XML/formlet/page/DOM/routes, MVU modules, socket examples and explicit
+foreign/location dependencies with the deferred features. Keep database-facing
+Serial helpers and session-failure monitoring outside this work. General
+`Comp`/`gen0`/`gen1`/`gen2` effect-row interfaces remain in the independent-effect
+inventory. The formlet State helpers need a separate capture-contract check:
+legacy fixed-`Wild` returned closures can capture arbitrary values, while
+absolute modal closure construction imposes `Abs` on those captures.
+
+### D7 frontend integration plan
+
+The frontend audit at `8b27a80b` is recorded in
+`/tmp/links-d7e-inventory.md`. First separate checked preparation from execution,
+then add default/custom prelude loading, REPL directives and JavaScript output.
+Switch the default after the ordinary source migration checks pass. Retain
+explicit legacy access for deferred and excluded fixtures until D8; never
+fall back to legacy after a contextual type error.
+
+The current Fresco path ignores `recheck_frontend_transformations`, constructs
+a fresh fixity table for each input, and ignores the configured prelude.
+Resolve these gaps before the default switch. Preserve module identities across
+prelude loading and later imports. JavaScript compilation needs the preceding
+prelude bindings as well as the current source's IR, without evaluating the
+source program. Existing shared backend generation remains the implementation.
+
+**Choice for review:** make frontend rechecking validate the complete contextual
+IR immediately after typed lowering, including its result type. This is the
+common boundary after generated comprehensions, pattern compilation, scoped
+handlers and runtime type conversion. Earlier source expansions already pass
+through full Fresco inference. Preserve the filter/dump settings and keep
+backend checks after optimisation and closure conversion separate.
+
 ### D7 inferred linear results
 
 **Choice for review:** retain the ordinary-arrow guess for unresolved callable
@@ -2010,7 +2069,12 @@ still migrate with fixed contexts or a changed interface.
 |---|---|---|
 | `examples/handlers/alert.links`, JavaScript `wait` declaration | Callback uses `e1`; scheduling call uses `e2` | Preserve the general contract as deferred; inspect actual callback effects before specialising |
 | `lib/stdlib/mvu.links`, `runHandle` and wrappers | View/update/subscription callbacks share `e`; caller uses separate `f` | Audit call sites against the fixed spawned-body context and actor migration |
-| `prelude.links`, `curry`, `flip`, `uncurry`, `compose`; `tests/freezeml/a9.links` | Callbacks and returned applications share a row independent of closure construction | Staged helpers use a shared ambient context; retain the general contracts as deferred and test effectful calls and returned closures |
+| `prelude.links`, `curry`, `flip`, `uncurry`, `compose`, `lf`, `-<-`, `->-`; `tests/freezeml/a9.links` | Callbacks and returned applications share a row independent of closure construction | Migrated helpers use a shared ambient context; assess remaining helpers separately and retain the general contracts as deferred |
+
+The prelude's `Comp(a,e::Eff)` and `gen0`/`gen1`/`gen2` also expose effect-row
+parameters. Their general interfaces remain deferred with explicit effect
+variables. Concrete pure computations can use absolute modal types without
+preserving those general interfaces.
 
 The `wait` signature is:
 

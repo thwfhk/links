@@ -105,7 +105,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D7c2e1 | Ordinary session suite and module/polymorphic session cases | `79c2d173` |
 | D7c2e2 | Curried modal/quantified results and ordinary session examples | `fe1586af` |
 | D7c2e3a | Recursive/encoded protocols and staged linear-list modules | `f91695f5` |
-| D7c2e3b | Generic protocol examples and raw recursive runtime bindings | This commit |
+| D7c2e3b | Generic protocol examples and raw recursive runtime bindings | `8b27a80b` |
+| D7d3a | Remaining list, ASCII and date helpers | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -184,14 +185,22 @@ user requested on 7 November 2026. The main agent owns integration and these rec
 | D7c2e2: ordinary session examples | Curried modal/polymorphic results check; finite calculator, split-end and channel examples migrate and execute |
 | D7c2e3a: recursive and encoded protocols | Calculators, ATM, encoded choice and linear-list helpers typecheck; local executions and generic controls pass |
 | D7c2e3b: remaining generic protocols | State, process encoding, authentication and recursive duality examples typecheck; terminating cases execute |
-| D7d3: libraries and examples | In-scope libraries and examples migrate; independent-effect contracts are recorded separately from specialised uses |
-| D7e: frontend and source migration | Default batch, REPL, JavaScript compilation and typed rechecks use Fresco; selected suites and handler examples migrate; old effect syntax rejects |
+| D7d3a: remaining list, character and date helpers | Existing ordering, callback effects and pure/Wild contracts pass source execution checks |
+| D7d3b: ordinary helper interfaces | Remaining list/Maybe helpers, aliases and composition interfaces have explicit contracts and source checks |
+| D7d3c: binary trees | Comparator and binary-tree modules migrate; existing operations and contextual callbacks execute |
+| D7d3d: ordinary examples and switch functions | Polymorphic, recursive and open-variant examples execute; named/anonymous switch functions retain their checks |
+| D7d3e: remaining ordinary actor examples | Buffered channels and console helpers retain bounded behaviour and callback contracts |
+| D7e1: checked preparation | Separate checking/lowering from evaluation; contextual lowering rechecks validate annotations and result types |
+| D7e2: prelude and batch | Canonical prelude loading, custom preludes and persistent fixities work through Fresco |
+| D7e3: REPL and directives | Definitions, loading, environments and type search use persistent contextual state with failure recovery |
+| D7e4: JavaScript compilation | Existing compile options consume contextual IR without evaluating the source program |
+| D7e5: default frontend and source migration | Fresco is the default; ordinary selected suites and handler examples migrate; old effect syntax rejects |
 | D8a: backend execution | Actual interpreter and JavaScript deep-handler execution covers nesting, repeated identities, parameters and closures; interpreter shallow execution and JavaScript rejection remain checked |
 | D8b: removal and final review | In-scope legacy inference routes are removed; recursive consumers and exports are reviewed; migration guide and final selected suites pass |
 
 D7a (`1f7ff34e`), D7b1 (`4fad3532`) and D7b2a (`db0d3a75`) are complete.
 D7b2b (`72e47dbc`) and D7b3 (`f09237bd`) are complete. D7b4a0 (`8cfe88a3`) is complete. D7b4a collection migration (`0b2c0d3f`) is complete. D7b4b (`efc1bca2`) is complete. D7b4c (`4e009da6`) is complete. D7c1a core actors (`ef94a794`) and D7c1b actor variants are complete.
-D7c1b1 polymorphic export is complete. D7c1c actor migration is complete. D7c2a session primitives are complete. D7c2b selection/offer is complete. D7c2c1 split-end helpers are complete. D7c2c2 callback helpers are complete. D7c2d CP is complete. D7c2e1 ordinary session regression migration is complete. D7c2e2 ordinary examples are complete. D7c2e3a recursive/encoded protocol examples are complete. D7c2e3b remaining generic protocols are complete. D7d3 in-scope library/example migration is next. Later boundaries may be split further when a dependency needs
+D7c1b1 polymorphic export is complete. D7c1c actor migration is complete. D7c2a session primitives are complete. D7c2b selection/offer is complete. D7c2c1 split-end helpers are complete. D7c2c2 callback helpers are complete. D7c2d CP is complete. D7c2e1 ordinary session regression migration is complete. D7c2e2 ordinary examples are complete. D7c2e3a recursive/encoded protocol examples are complete. D7c2e3b remaining generic protocols are complete. D7d3a ordinary list, character and date helpers are complete. D7d3b ordinary helper interfaces are next. Later boundaries may be split further when a dependency needs
 its own review and checks.
 
 ### Future TODOs
@@ -221,53 +230,37 @@ and design:
 
 ## Latest task and verification
 
-7 November 2026, D7c2e3b, base `f91695f5`: State cells, process encoding,
-authentication and recursive duality examples use Fresco. Bounded State
-execution returns `(40, 41, 42)`; a linear-payload swap returns `42`;
-the finite process example returns unit and authentication returns
-`"secret data"`. Infinite computations were not invoked. The
-[migration inventory](doc/modal-effects-design.md#d7-session-migration-inventory)
-records their preserved generic and fixed-effect contracts.
+7 November 2026, D7d3a, base `8b27a80b`: migrated `elemIndex`, `partition`,
+`groupByFlat`, ASCII helpers and date wrappers. Original bodies, ordering and
+pure/`Wild` contracts remain. Nineteen new source cases cover duplicate keys,
+callback order/effects, byte-character boundaries and date results. One initial
+test used `chr(937)` outside Links' byte-character range; it was corrected to
+valid non-ASCII byte values. Independent review found no unresolved findings;
+thirteen selected checks passed. Review record:
+`/tmp/links-d7d3a-review-summary.log`.
 
-Raw recursive types exposed a lost binding in runtime normalisation: the
-binder was refreshed while its lexical references retained the old ID.
-Normalisation now builds fresh recursive point graphs, preserving free
-variables, quantified shadowing and independent declaration scope. Eight
-focused unit groups passed. Independent review found no unresolved findings;
-four selected unit groups, the build and sixteen CLI/IR checks passed.
-Review record: `/tmp/links-d7c2e3b-review-summary.log`.
-
-All writers finished and the combined diff was reviewed before integrated
-checks. The build, 1,456 unit tests and 829 regression cases passed; 15 existing
-example cases remain ignored. Source hashes still match. Logs below are in
-`/tmp/links-d7c2e3b-verification`; `revision.txt` and `source.sha256` identify
-the tested sources. Documentation was updated afterwards.
+All writers finished, review was complete and the combined diff was inspected
+before integrated checks. All 145 affected regression cases passed. Source
+hashes still match. Logs below are in `/tmp/links-d7d3a-verification`;
+`revision.txt` and `source.sha256` identify the tested sources. Documentation
+was updated afterwards.
 
 | Command | Result | Log |
 |---|---|---|
-| `make no-db` | Passed | `build.log` |
-| `opam exec -- ./run-tests nodb-unit-tests` | 1,456 passed | `unit.log` |
-| `./test-harness tests/fresco.tests` | 70 passed | `fresco.log` |
-| `./test-harness tests/fresco_typecheck.tests` | 2 passed | `fresco_typecheck.log` |
-| `./test-harness tests/fresco_modal.tests` | 20 passed | `fresco_modal.log` |
-| `./test-harness tests/fresco_prelude.tests` | 45 passed | `fresco_prelude.log` |
-| `./test-harness tests/fresco_actors.tests` | 49 passed | `fresco_actors.log` |
+| `./test-harness tests/fresco_prelude.tests` | 64 passed | `fresco_prelude.log` |
 | `./test-harness tests/fresco_sessions.tests` | 35 passed | `fresco_sessions.log` |
 | `./test-harness tests/fresco_cp.tests` | 22 passed | `fresco_cp.log` |
 | `./test-harness tests/fresco_session_examples.tests` | 24 passed | `fresco_session_examples.log` |
-| `./test-harness tests/messages.tests` | 11 passed | `messages.log` |
-| `./test-harness tests/sessions.tests` | 13 passed | `sessions.log` |
-| `./test-harness tests/handlers.tests` | 95 passed | `handlers.log` |
-| `./test-harness tests/effect_sugar.tests` | 44 passed | `effect_sugar.log` |
-| `./test-harness tests/typed_ir.tests` | 26 passed | `typed_ir.log` |
-| `./test-harness tests/functions.tests` | 33 passed | `functions.log` |
-| `./test-harness tests/polymorphism.tests` | 55 passed | `polymorphism.log` |
-| `./test-harness tests/typecheck_examples.tests` | 169 passed, 15 ignored | `typecheck_examples.log` |
-| `./test-harness tests/continuations.tests` | 15 passed | `continuations.log` |
-| `./test-harness tests/modules.tests` | 41 passed | `modules.log` |
-| `./test-harness tests/freezeml.tests` | 60 passed | `freezeml.log` |
 | `make rule-check` | Passed; GNU-find tab check skipped, formatter disabled | `rule-check.log` |
 | Source hashes, added-line whitespace; `git diff --check` | Passed | `source-check.log`, `diff-check.log` |
+
+Compiler sources are unchanged from `8b27a80b`. Its latest full verification
+passed `make no-db`, `opam exec -- ./run-tests nodb-unit-tests` (1,456 tests)
+and 829 selected regression cases; 15 existing example cases were ignored.
+Commands, base revision `f91695f5`, source hashes and full logs remain in
+`/tmp/links-d7c2e3b-verification`; the suite table is retained in that commit's
+PLAN.md. No compiler rebuild or unit rerun was required for this library-only
+milestone.
 
 ## Confirmed D6 decisions
 
@@ -278,7 +271,8 @@ Documentation-only update: text and whitespace checked.
 
 ## Next action
 
-Complete D7d3 in-scope library/example migration, then D7e frontend/source
+Complete D7d3b ordinary helper interfaces and the remaining library/example
+milestones, then D7e frontend/source
 migration, prioritising ordinary functional-language use. Keep socket
 examples, XML/forms, FFI/function locations and their dependent migrations
 in [future work](#future-todos).
