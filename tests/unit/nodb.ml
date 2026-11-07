@@ -39,6 +39,7 @@ let suites =
            Quantifiers.suite;
            Closures.suite;
            Variants.suite;
+           Runtime_types_tests.suite;
          ]);
        ]
 

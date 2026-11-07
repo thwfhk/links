@@ -72,3 +72,57 @@ stdout : stepstep42 : Int
 Encoded selection retains non-session alternatives in its residual row
 open import Choice; fun(e:(!(modal [] [|A:End|B:Int|]).End)) { close(sel_A(e)) }
 args : --fresco --path=examples/sessions:lib/stdlib --set=typecheck_only=true
+
+Execute the finite process-encoding example
+examples/sessions/pi.links
+filemode : true
+stdout : () : ()
+
+Compile recursive duality definitions without invoking them
+examples/sessions/forkbomb.links
+filemode : true
+stdout : () : ()
+
+Execute the successful two-factor session
+examples/sessions/two-factor.links
+filemode : true
+stdout : "secret data" : String
+
+State cells retain read write and swap behaviour
+open import State; { var cell = newCell(40); var before = get(cell); put(cell,41); var previous = swap(cell,42); (before,previous,get(cell))  }
+args : --fresco --path=examples/sessions:lib/stdlib
+stdout : (40, 41, 42) : (Int, Int, Int)
+
+State swaps transfer linear absolute payloads
+open import State; typename Once = modal [] (() -@ Int); var cell = ~newCell[Once]((linfun(){40}:Once)); var before = ~swap[Once](cell,(linfun(){2}:Once)); var previous = ~swap[Once](cell,(linfun(){0}:Once)); before()+previous()
+args : --fresco --path=examples/sessions:lib/stdlib
+stdout : 42 : Int
+
+State get rejects a linear payload
+open import State; typename Once = modal [] (() -@ Int); ~get[Once]
+args : --fresco --path=examples/sessions:lib/stdlib
+exit : 1
+stderr : @.*Type does not satisfy its kind or usage requirement.*In expression: ~get\[Once\].*
+
+State put rejects a linear payload
+open import State; typename Once = modal [] (() -@ Int); ~put[Once]
+args : --fresco --path=examples/sessions:lib/stdlib
+exit : 1
+stderr : @.*Type does not satisfy its kind or usage requirement.*In expression: ~put\[Once\].*
+
+State cells reject contextual function payloads
+open import State; newCell(fun(){42})
+args : --fresco --path=examples/sessions:lib/stdlib
+exit : 1
+stderr : @.*instantiation constraints.*In expression: newCell.*
+
+Process callbacks can install their own handler
+open import Pi; effect E {Read:()=>();} newChannel(fun(c){handle <E> (do Read) {case x->x case <Read => k> -> k(())};stop})()
+args : --fresco --path=examples/sessions:lib/stdlib
+stdout : () : ()
+
+Process callbacks cannot use the caller handler
+open import Pi; effect E { Read:()=>(); } handle <E> (newChannel(fun(c){do Read;stop})()) {case x->x case <Read => k> -> k(())}
+args : --fresco --path=examples/sessions:lib/stdlib
+exit : 1
+stderr : @.*The operation's effect is absent from the ambient context.*In expression: do Read.*

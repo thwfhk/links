@@ -1,10 +1,12 @@
+open import FrescoPrelude;
+
 typename Data = String;
 typename Error = String;
 typename Username = String;
 typename Password = String;
 typename User = (name:Username, password:Password);
 
-typename Checker(s::Session) = [+|Accept:s, Reject:!Error.EndBang|+];
+typename Checker(s::Type(Any,Session,Any)) = [+|Accept:s, Reject:!Error.EndBang|+];
 typename TwoFactor = ?User.Checker(!Int.?Int.Checker(!Data.EndBang));
 
 # We could use this slightly more general type for reportError:
@@ -22,7 +24,7 @@ typename TwoFactor = ?User.Checker(!Int.?Int.Checker(!Data.EndBang));
 #                                                     Reject:?Error.EndBang|&],
 #                                 Reject:?Error.EndBang|&];
 
-sig validUser : (User) ~> Bool
+sig validUser : modal [Wild] ((User) -> Bool)
 fun validUser(user) {
   switch (user.name) {
     case "me" -> true
@@ -30,23 +32,24 @@ fun validUser(user) {
   }
 }
 
-sig validHash : (Int, Int) ~> Bool
+sig validHash : modal [Wild] ((Int, Int) -> Bool)
 fun validHash(h, nonce) {
   h == 2 * nonce
 }
 
-sig generateNonce : () ~> Int
+sig generateNonce : modal [Wild] (() -> Int)
 fun generateNonce() {
   floatToInt(random() *. 65536.0)
 }
 
-sig reportError : (Error, Checker(s::Session)) ~> EndBang
+sig reportError : forall s::Type(Any,Session,Any).
+  modal [Wild] ((Error, Checker(s)) -> EndBang)
 fun reportError(e, s) {
   var s = select Reject s;
   send(e, s)
 }
 
-sig serve : (TwoFactor, Data) ~> EndBang
+sig serve : modal [Wild] ((TwoFactor, Data) -> EndBang)
 fun serve(s, data) {
   var (user, s) = receive(s);
   if (validUser(user)) {
@@ -65,7 +68,7 @@ fun serve(s, data) {
   }
 }
 
-sig goodMe : (~TwoFactor) ~> Data
+sig goodMe : modal [Wild] ((~TwoFactor) -> Data)
 fun goodMe(c) {
   var c = send((name="me", password="foo"), c);
   offer (c) {
@@ -85,7 +88,7 @@ fun goodMe(c) {
   }
 }
 
-sig goodYou : (~TwoFactor) ~> Data
+sig goodYou : modal [Wild] ((~TwoFactor) -> Data)
 fun goodYou(c) {
   var c = send((name="you", password="bar"), c);
   offer (c) {
@@ -105,7 +108,7 @@ fun goodYou(c) {
   }
 }
 
-sig badMe : (~TwoFactor) ~> Data
+sig badMe : modal [Wild] ((~TwoFactor) -> Data)
 fun badMe(c) {
   var c = send((name="me", password="foo"), c);
   offer (c) {
@@ -125,7 +128,7 @@ fun badMe(c) {
   }
 }
 
-sig serveData : ((~TwoFactor) ~e~> Data) ~e~> Data
+sig serveData : modal [Wild] (((~TwoFactor) -> Data) -> Data)
 fun serveData(user) {
   user(forkSync(fun (s) {serve(s, "secret data")}))
 }

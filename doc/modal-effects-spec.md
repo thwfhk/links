@@ -21,6 +21,10 @@ declarations, explicit effect variables from Met(X), term-level masking,
 database support, control-flow linearity and session failure are outside
 the scope of these changes.
 
+Socket examples, XML/forms, FFI/function locations and their dependent
+library/example migrations are deferred from the current D7 work.
+[PLAN.md](../PLAN.md#future-todos) records their future completion checks.
+
 ## 2. Syntax
 
 Programs, including type annotations and declaration bodies, contain no ghosts.

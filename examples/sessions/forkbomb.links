@@ -1,3 +1,5 @@
+open import FrescoPrelude;
+
 # Duality and recursive session types.
 
 # This example attempts to demonstrate that, perhaps by accident, Links does the right thing with
@@ -11,7 +13,7 @@ typename Forkee = mu a.?a.a;
 #                  = mu a.?a.a
 
 # The initiator of a fork bomb spawns copies of itself forever.
-sig f : (Forker) ~> ()
+sig f : modal [Wild] ((Forker) -> ())
 fun f(c) {
   var ap = new();
   ignore(spawn {
@@ -23,7 +25,7 @@ fun f(c) {
 
 # The recipient receives copies forever; of course, it has to fork copies of itself to receive the
 # copies from the copies.
-sig g : (Forkee) ~> ()
+sig g : modal [Wild] ((Forkee) -> ())
 fun g(c) {
   var (d,c) = receive(c);
   ignore(spawn {
@@ -33,6 +35,7 @@ fun g(c) {
 }
 
 # If those are dual, we should be able to connect them via an access point.
+sig forever : modal [Wild] (() -> ())
 fun forever() {
   var ap = new();
   ignore(spawn{f(accept(ap))});

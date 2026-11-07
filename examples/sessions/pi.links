@@ -2,27 +2,27 @@
 # access points and recursive types
 
 typename Channel = AP (!Channel.End);
-typename Proc = () {}~> ();
+typename Proc = modal [Wild] (() -> ());
 
-sig newChannel : ((Channel) {}~> Proc) {}~> Proc
+sig newChannel : modal [Wild] ((modal [Wild] ((Channel) -> Proc)) -> Proc)
 fun newChannel(p)() {
   p(new())()
 }
 
-sig sendChannel : (Channel, Channel, (Channel, Channel) {}~> Proc) {}~> Proc
+sig sendChannel : modal [Wild] ((Channel, Channel, modal [Wild] ((Channel, Channel) -> Proc)) -> Proc)
 fun sendChannel(c, d, p)() {
   close(send(c, accept(d)));
   p(c, d)()
 }
 
-sig receiveChannel : (Channel, (Channel, Channel) {}~> Proc) {}~> Proc
+sig receiveChannel : modal [Wild] ((Channel, modal [Wild] ((Channel, Channel) -> Proc)) -> Proc)
 fun receiveChannel(d, p)() {
   var (x, s) = receive(request(d));
   close(s);
   p(d, x)()
 }
 
-sig par : (Proc, Proc) {}~> Proc
+sig par : modal [Wild] ((Proc, Proc) -> Proc)
 fun par(p, q)() {
   var _ = spawn { p() }; q()
 #  var _ = spawn { q() };
@@ -33,14 +33,14 @@ sig stop : Proc
 fun stop() {()}
 
 # unsafe replication
-sig repeat : (Proc) {}~> Proc
+sig repeat : modal [Wild] ((Proc) -> Proc)
 fun repeat(p)() {
   var _ = spawn { p() };
   repeat(p)()
 }
 
 # guarded replication
-sig repeatReceive : (Channel, (Channel, Channel) {}~> Proc) {}~> Proc
+sig repeatReceive : modal [Wild] ((Channel, modal [Wild] ((Channel, Channel) -> Proc)) -> Proc)
 fun repeatReceive(d, p)() {
   var s = request(d);
   var _ = spawn {
@@ -79,6 +79,7 @@ fun repeatReceive(d, p)() {
 #}
 
 
+sig test1 : modal [Wild] (() -> ())
 fun test1() {
   newChannel(fun (x) {par(sendChannel(x, x, fun (x, y) {stop}),
                           receiveChannel(x, fun (x, y) {stop}))})()

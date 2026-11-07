@@ -856,14 +856,17 @@ polymorphic demand. Explicit `Identity` payloads provide a positive control
 for both orders. Session signature checks display all quantified binders;
 ordinary feature settings remain unchanged.
 
-Migrate the remaining examples in bounded groups:
+Migrate the remaining examples in bounded groups. The user deferred socket
+examples, XML/forms and FFI/function locations on 7 November 2026; the
+[future TODOs](../PLAN.md#future-todos) now govern those groups and their
+dependent migrations.
 
 | Group | Sources under `examples/sessions` | Check |
 |---|---|---|
 | Ordinary protocols | `calc`, `calc-cp`, `calc-endbang`, `end`, `fuse`, `fusegg`, `givengrab`, `linear_if` | Preserve types and run terminating examples; retain the recorded close/link failure for D8 if reproduced |
 | Recursive/generic protocols | `atm`, `choice`, `reccalc`, `sim-calc`, `state`, `forkbomb`, `pi`, `two-factor`, `chatserver/frescoLinearList`, `mind/frescoLinearList` | Sign recursion and callbacks, preserve kinds; execute terminating local programs |
-| Socket models | `smtp`, `smtp-end`, `smtp-factored`, `smtp-factored-more`, `smtp-dummy`, `Elvina/SMTP_Real_CP`, `Elvina/SMTP_Real_GV`, `Elvina/IRC_Test` | Typecheck socket clients; execute the local dummy model |
-| XML/location prerequisites | `ap-multi-client`, browser calculators, bookshops, draggable examples, `gng-client`, `smtp-formlet`, `Elvina` web models and IRC, `mind/mindClient` and its `mindSessions` module | Migrate in D7d3 after XML/forms and function locations |
+| Socket models | `smtp`, `smtp-end`, `smtp-factored`, `smtp-factored-more`, `smtp-dummy`, `Elvina/SMTP_Real_CP`, `Elvina/SMTP_Real_GV`, `Elvina/IRC_Test` | Deferred: typecheck socket clients and execute the local dummy model when resumed |
+| XML/location prerequisites | `ap-multi-client`, browser calculators, bookshops, draggable examples, `gng-client`, `smtp-formlet`, `Elvina` web models and IRC, `mind/mindClient` and its `mindSessions` module | Deferred with XML/forms and function locations |
 | Excluded or already broken | Session-failure chatserver trio and `mind/mindServer`, `two-factor-cp`, ignored `counter` and `draggable-boring` | Preserve exclusions and recorded ignore reasons |
 
 The CP calculator, fusion and give/grab examples migrated in D7c2d. The
@@ -887,7 +890,7 @@ category, including a non-session `B:Int` branch.
 **Choice for review:** stage `frescoLinearList.links` beside each existing
 `linearList.links`. The session-failure servers still use the legacy frontend
 and import the original module; changing it made both server checks fail.
-In-scope Fresco clients use the staged module during D7d3 migration. Migrating
+Fresco clients use the staged module when their migration is resumed. Migrating
 the session-failure servers would expand the current scope. Retain the two
 legacy modules until that separate feature migration.
 
@@ -896,6 +899,21 @@ over protocols with modal kind `Any`. Legacy controls accept `End` endpoints
 inside these lists; explicit parameter kinds preserve that support. A checked
 execution visits two endpoints under a caller-installed handler and then closes
 both endpoints.
+
+The State cell interface keeps `newCell` and `swap` generic over linear or
+unlimited absolute payloads. `get` copies the payload and `put` discards the
+old payload, so both require unlimited absolute payloads. The looping example
+supplies its `modal [Wild] (() -> ())` payload type explicitly. Import-based
+bounded checks use the actual definitions; the module loader omits the final
+phrase, which invokes `forever`.
+
+The process encoding retains the fixed `Wild` context of its original
+`{}~>` arrows. Its delayed callbacks and `Proc` values use `modal [Wild]`.
+Callbacks may install their own handlers. A caller's handler does not enter
+that fixed context. The authentication example retains a contextual caller
+callback in `serveData` and a modal-kind `Any` continuation in `Checker` and
+`reportError`. Keep the recursive duality example's raw `mu` types and check
+its definitions without invoking its infinite computations.
 
 ### D7 prelude prerequisites
 
@@ -1343,6 +1361,14 @@ their separate contextual operations. The legacy IR path still rejects
 recursive equality involving contextual arrows or modal types; its old
 recursive equality shortcut remains confined to legacy programs. D8 audits
 the remaining recursive consumers during migration.
+
+At the runtime boundary, convert lexical `Recursive` binders and their bound
+`Var` references to fresh recursive point graphs. The shared runtime visitors
+refresh recursive binder IDs and follow point cycles. Leaving a lexical
+reference unchanged during that refresh made `new():AP(mu a.!Int.a)` fail
+checked IR with an unbound variable. Preserve free variables, mask quantified
+binders, and normalise nominal declaration bodies in their independent scope.
+Source types remain unchanged. The comparison rules need no relaxation.
 
 ### Contextual recursive type operations
 

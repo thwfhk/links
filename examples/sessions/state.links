@@ -1,13 +1,13 @@
-typename State(a) = AP (!a.End);
+typename State(a::Type(Any,Any,Abs)) = AP (!a.End);
 
-sig newCell : forall a::Any, e::Eff.(a) ~e~> State(a)
+sig newCell : forall a::Type(Any,Any,Abs). modal [Wild] ((a) -> State(a))
 fun newCell(v) {
   var x = new();
   var _ = spawn {close(send(v, accept(x)))};
   x
 }
 
-sig put : (State(a), a) ~> ()
+sig put : forall a::Type(Unl,Any,Abs). modal [Wild] ((State(a), a) -> ())
 fun put(x, v) {
   var (_, s) = receive(request(x));
   close(s);
@@ -15,7 +15,7 @@ fun put(x, v) {
   ()
 }
 
-sig get : (State(a)) ~> a
+sig get : forall a::Type(Unl,Any,Abs). modal [Wild] ((State(a)) -> a)
 fun get(x) {
   var (v, s) = receive(request(x));
   close(s);
@@ -24,7 +24,7 @@ fun get(x) {
 }
 
 # an atomic swap operation
-sig swap : forall a::Any, e::Eff.(State(a), a) ~e~> a
+sig swap : forall a::Type(Any,Any,Abs). modal [Wild] ((State(a), a) -> a)
 fun swap(x, w) {
   var (v, s) = receive(request(x));
   close(s);
@@ -33,11 +33,12 @@ fun swap(x, w) {
 }
 
 # Landin's knot - this function loops forever
-sig forever : () ~> ()
+typename Action = modal [Wild] (() -> ());
+sig forever : modal [Wild] (() -> ())
 fun forever() {
-  var x = newCell(fun () {()});
-  put(x, fun () {get(x)()});
-  get(x)()
+  var x = ~newCell[Action](fun () {()});
+  ~put[Action](x, fun () {~get[Action](x)()});
+  ~get[Action](x)()
 }
 
 

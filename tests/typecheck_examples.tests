@@ -541,6 +541,7 @@ args : --fresco --path=lib/stdlib
 Typecheck example file examples/sessions/forkbomb.links
 examples/sessions/forkbomb.links
 filemode : true
+args : --fresco --path=lib/stdlib
 
 Typecheck example file examples/sessions/fuse-cp.links
 examples/sessions/fuse-cp.links
@@ -579,6 +580,7 @@ args : --fresco --path=lib/stdlib
 Typecheck example file examples/sessions/pi.links
 examples/sessions/pi.links
 filemode : true
+args : --fresco --path=lib/stdlib
 
 Typecheck example file examples/sessions/reccalc-client.links
 examples/sessions/reccalc-client.links
@@ -621,6 +623,7 @@ filemode : true
 Typecheck example file examples/sessions/state.links
 examples/sessions/state.links
 filemode : true
+args : --fresco --path=lib/stdlib
 
 Typecheck example file examples/sessions/two-factor-cp.links
 examples/sessions/two-factor-cp.links
@@ -631,6 +634,7 @@ args : --set=session_exceptions=true
 Typecheck example file examples/sessions/two-factor.links
 examples/sessions/two-factor.links
 filemode : true
+args : --fresco --path=lib/stdlib
 
 Typecheck example file  examples/Shopping-Cart.links
 examples/Shopping-Cart.links
