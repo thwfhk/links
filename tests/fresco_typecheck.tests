@@ -12,3 +12,24 @@ Source-only checking rejects a type error
 args : --fresco
 exit : 1
 stderr : @.*Type error:.*
+
+Selected frontend rechecking lowers without evaluating source
+sig absurd:(Int)->Int fun absurd(x) { switch(x) {} } { print("must not execute"); absurd(42) }
+args : --fresco --set=recheck_frontend_transformations=true --set=recheck_frontend_transformations_filter=fresco-lowering --set=typecheck_ir=false --set=fail_on_ir_type_error=false
+stdout : @^$
+
+The selected lowering checkpoint checks effects and generated comprehensions
+effect E { Read : () => Int; } handle <E> (for (x <- [1..3]) where (x <> 2) [x+do Read]) { case xs -> xs case <Read => k> -> k(40) }
+args : --fresco --enable-handlers --set=typecheck_only=false --set=recheck_frontend_transformations=true --set=typecheck_ir=false --set=fail_on_ir_type_error=false
+stdout : [41, 43] : List Int
+
+A disabled frontend checkpoint keeps source-only checking
+effect E { Read : () => Int; } sig f:modal [E] (() -> Int) fun f() { do Read } 42
+args : --fresco --set=enable_handlers=false --set=recheck_frontend_transformations=true --set=recheck_frontend_transformations_filter=none
+stdout : @^$
+
+A selected frontend checkpoint requires the lowering extension
+effect E { Read : () => Int; } sig f:modal [E] (() -> Int) fun f() { do Read } 42
+args : --fresco --set=enable_handlers=false --set=recheck_frontend_transformations=true --set=recheck_frontend_transformations_filter=all
+exit : 1
+stderr : @.*Effect handlers.*enable_handlers.*

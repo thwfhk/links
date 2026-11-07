@@ -4,7 +4,25 @@ type t
 val empty : unit -> t
 val lookup : t -> string -> Types.typ option
 
-(** Check source using the current state and return its contextual result type. *)
+(** Checked source and lowered IR, before backend processing or evaluation. *)
+type prepared
+
+val prepare_program : t -> Sugartypes.program -> prepared
+val prepare_string : t -> string -> prepared
+val prepare_file : t -> string -> prepared
+val datatype : prepared -> Types.typ
+val program : prepared -> Ir.program
+
+(** Validate candidate IR in the prepared environment, including its result
+    type, when the [fresco-lowering] frontend checkpoint is selected. *)
+val verify_lowering : prepared -> Ir.program -> unit
+
+(** Apply the existing backend without evaluating the program. *)
+val compile : prepared -> Backend.result
+val run_prepared : prepared -> t * Types.typ * Value.t
+
+(** Check source using the current state and return its contextual result type.
+    The selected frontend recheck also lowers and checks IR, without evaluation. *)
 val check_string : t -> string -> Types.typ
 val check_file : t -> string -> Types.typ
 

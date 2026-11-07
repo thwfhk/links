@@ -1185,9 +1185,9 @@ Switch the default after the ordinary source migration checks pass. Retain
 explicit legacy access for deferred and excluded fixtures until D8; never
 fall back to legacy after a contextual type error.
 
-The current Fresco path ignores `recheck_frontend_transformations`, constructs
-a fresh fixity table for each input, and ignores the configured prelude.
-Resolve these gaps before the default switch. Preserve module identities across
+The contextual frontend now checks typed lowering as described below.
+It still constructs a fresh fixity table for each input and ignores the
+configured prelude. Resolve these remaining gaps before the default switch. Preserve module identities across
 prelude loading and later imports. JavaScript compilation needs the preceding
 prelude bindings as well as the current source's IR, without evaluating the
 source program. Existing shared backend generation remains the implementation.
@@ -1198,6 +1198,25 @@ common boundary after generated comprehensions, pattern compilation, scoped
 handlers and runtime type conversion. Earlier source expansions already pass
 through full Fresco inference. Preserve the filter/dump settings and keep
 backend checks after optimisation and closure conversion separate.
+
+Checked preparation is separate from execution in `FrescoFrontend`.
+A prepared value contains the next inference/name state, prior runtime values,
+lowered IR, source result type, prior type environment, effect declarations and
+ambient row. Preparation and compilation do not evaluate source code;
+`run_prepared` evaluates and returns the published state. Keep `empty` limited
+to primitives for unit tests. Prelude loading and REPL snapshots remain separate
+integration steps.
+
+The `fresco-lowering` check uses the existing frontend flag, newline-separated
+filter and failure-dump setting. Its strict IR entry checks all internal
+annotations and the result against the source's runtime type. Strictness is
+passed through the checker's local recovery sites; it does not change global
+settings. The existing backend checker retains its warning behaviour. The
+selected frontend check raises even when `typecheck_ir` and
+`fail_on_ir_type_error` are false. As with legacy frontend dumps, diagnostic
+dumping requires debug output. With this checkpoint selected, `check_string`
+and `check_file` also lower and check IR without evaluation; otherwise they
+retain source-only checking.
 
 ### D7 inferred linear results
 

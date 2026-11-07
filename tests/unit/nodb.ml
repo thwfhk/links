@@ -41,6 +41,7 @@ let suites =
            Variants.suite;
            Runtime_types_tests.suite;
            FrescoUpcast.suite;
+           Fresco_frontend_tests.suite;
          ]);
        ]
 

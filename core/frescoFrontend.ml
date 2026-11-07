@@ -385,7 +385,40 @@ let effect_signatures inference =
       effect_parameters = effect_info.parameters; effect_operations }
   ) (FrescoElaborate.effects elaboration)
 
-let run_program state program =
+type prepared = {
+  state : t;
+  datatype : Types.typ;
+  program : Ir.program;
+  context : Context.t;
+  effects : Ir.effect_signature list;
+  ambient : Types.scoped_effect_row;
+  globals : IntSet.t;
+  retain : IntSet.t;
+}
+
+let datatype prepared = prepared.datatype
+let program prepared = prepared.program
+
+let verify_lowering (prepared : prepared) candidate =
+  if Frontend.verify_transformation "fresco-lowering" then
+    let state = IrTransform.{
+      context = prepared.context;
+      global_vars = prepared.globals;
+      retained_vars = prepared.retain;
+      contextual = true;
+      effect_signatures = prepared.effects;
+      ambient_effects = prepared.ambient;
+      datatype = runtime_type prepared.datatype;
+    } in
+    try ignore (IrCheck.Typecheck.program_strict state candidate) with exn ->
+      let backtrace = Printexc.get_raw_backtrace () in
+      Debug.print "error: transformation pass 'fresco-lowering' produced an ill-typed program.";
+      Debug.if_set Frontend.check_frontend_transformations_dump (fun () ->
+        "Source result type:\n" ^ Types.string_of_datatype prepared.datatype ^
+        "\n\nLowered program:\n" ^ Ir.string_of_program candidate);
+      Printexc.raise_with_backtrace exn backtrace
+
+let prepare_program state program =
   let inference, definitions, expression = FrescoInfer.program state.inference program in
   let previous = StringMap.map (fun (var, _) -> var_value var) state.names in
   let lowered, bindings = definitions_ir previous [] Var.Scope.Global definitions in
@@ -397,12 +430,28 @@ let run_program state program =
        expression.typ, Ir.with_bindings bindings (computation lowered [] expression) in
   let vars names = StringMap.fold (fun _ (var, _) vars -> IntSet.add var vars) names IntSet.empty in
   let context = Context.{ empty with variable_environment = prior_types inference state.names } in
-  let compiled = Backend.program ~globals:(vars state.names) ~retain:(vars names) ~contextual:true
-    ~effects:(effect_signatures inference)
-    ~ambient:(EffectRow.map (RuntimeTypes.normalise ~erase_modal:false) (FrescoInfer.ambient inference))
-    context (runtime_type datatype) program in
-  let values, value = Eval.run_program state.values compiled.program in
-  { inference; names; values }, datatype, value
+  let prepared = {
+    state = { state with inference; names };
+    datatype; program; context;
+    effects = effect_signatures inference;
+    ambient = EffectRow.map (RuntimeTypes.normalise ~erase_modal:false) (FrescoInfer.ambient inference);
+    globals = vars state.names;
+    retain = vars names;
+  } in
+  verify_lowering prepared program;
+  prepared
+
+let compile prepared =
+  Backend.program ~globals:prepared.globals ~retain:prepared.retain ~contextual:true
+    ~effects:prepared.effects ~ambient:prepared.ambient prepared.context
+    (runtime_type prepared.datatype) prepared.program
+
+let run_prepared prepared =
+  let compiled = compile prepared in
+  let values, value = Eval.run_program prepared.state.values compiled.program in
+  { prepared.state with values }, prepared.datatype, value
+
+let run_program state source = run_prepared (prepare_program state source)
 
 let parse_string text =
   let program, source = Parse.parse_string Parse.program text in
@@ -413,9 +462,17 @@ let parse_file filename =
     Parse.parse_channel Parse.program (channel, filename)) in
   (ResolvePositions.resolve_positions source)#program program
 
-let check_program state program =
+let infer_program state program =
   let _, _, expression = FrescoInfer.program state.inference program in
   match expression with None -> Types.unit_type | Some expression -> expression.typ
+
+let prepare_string state text = prepare_program state (parse_string text)
+let prepare_file state filename = prepare_program state (parse_file filename)
+
+let check_program state source =
+  if Frontend.verify_transformation "fresco-lowering" then
+    datatype (prepare_program state source)
+  else infer_program state source
 
 let check_string state text = check_program state (parse_string text)
 let check_file state filename = check_program state (parse_file filename)

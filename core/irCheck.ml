@@ -68,8 +68,8 @@ let raise_ir_type_error msg occurrence =
    If we are supposed to fail on IR exceptions, we don't catch any of them.
    If we are supposed to continue after IR type errors, we print a debug
    message and return the alternative value in case of an exception. *)
-let handle_ir_type_error lazy_val alternative occurrence =
-  if Settings.get fail_on_ir_type_error then
+let handle_ir_type_error ?(strict=false) lazy_val alternative occurrence =
+  if strict || Settings.get fail_on_ir_type_error then
     (* All exceptions are left unhandled, leaving them for the error handling
        facilities outside of the IR type checker *)
     Lazy.force lazy_val
@@ -718,7 +718,9 @@ struct
 
   type environment = datatype Env.t
 
-  let checker contextual effect_signatures initial_ambient tyenv =
+  let checker ~strict contextual effect_signatures initial_ambient tyenv =
+  let handle_ir_type_error value alternative occurrence =
+    handle_ir_type_error ~strict value alternative occurrence in
   object (o)
     inherit IrTraversals.Transform.visitor(tyenv) as super
 
@@ -1837,30 +1839,33 @@ struct
 
   let name = "ir_typechecker"
 
-  let program state program =
+  let check_program ~strict state program =
     let open IrTransform in
     let tenv = Context.variable_environment (context state) in
-    let check =
-      lazy (
-        if state.contextual then begin
-          let environment = {
-            FrescoKind.classification = FrescoKind.environment (fun _ -> None);
-            lookup_effect = (fun name -> Option.map (fun signature ->
-              { FrescoKind.parameters = List.map Quantifier.to_parameter signature.effect_parameters })
-              (List.find_opt (fun signature -> signature.effect_name = name) state.effect_signatures)) } in
-          List.iter (fun signature ->
-            try FrescoKind.check_effect_signature environment
-              ~parameters:signature.effect_parameters
-              ~operations:(List.map (fun (_, operation) ->
-                operation.operation_arguments, operation.operation_result)
-                (StringMap.bindings signature.effect_operations))
-            with FrescoKind.Error _ -> raise_ir_type_error "Invalid scoped effect declaration" (SProg program)
-          ) state.effect_signatures
-        end;
-        let checker = checker state.contextual state.effect_signatures state.ambient_effects tenv in
-        if state.contextual then checker#validate_scoped_row state.ambient_effects (SProg program);
-        let _, program', _ = checker#program program in program')
-    in
-    let program'' = handle_ir_type_error check program (SProg program) in
-    return state program''
+    if state.contextual then begin
+      let environment = {
+        FrescoKind.classification = FrescoKind.environment (fun _ -> None);
+        lookup_effect = (fun name -> Option.map (fun signature ->
+          { FrescoKind.parameters = List.map Quantifier.to_parameter signature.effect_parameters })
+          (List.find_opt (fun signature -> signature.effect_name = name) state.effect_signatures)) } in
+      List.iter (fun signature ->
+        try FrescoKind.check_effect_signature environment
+          ~parameters:signature.effect_parameters
+          ~operations:(List.map (fun (_, operation) ->
+            operation.operation_arguments, operation.operation_result)
+            (StringMap.bindings signature.effect_operations))
+        with FrescoKind.Error _ -> raise_ir_type_error "Invalid scoped effect declaration" (SProg program)
+      ) state.effect_signatures
+    end;
+    let checker = checker ~strict state.contextual state.effect_signatures state.ambient_effects tenv in
+    if state.contextual then checker#validate_scoped_row state.ambient_effects (SProg program);
+    let checker, program, datatype = checker#program program in
+    if strict then checker#check_eq_types state.datatype datatype (SProg program);
+    program, datatype
+
+  let program_strict state program = check_program ~strict:true state program
+
+  let program state program =
+    let checked = lazy (fst (check_program ~strict:false state program)) in
+    IrTransform.return state (handle_ir_type_error checked program (SProg program))
 end
