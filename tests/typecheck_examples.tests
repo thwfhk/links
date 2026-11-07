@@ -61,7 +61,7 @@ filemode : true
 Typecheck example file examples/church.links
 examples/church.links
 filemode : true
-ignore : broken example
+args : --fresco
 
 Typecheck example file examples/citations.links
 examples/citations.links
@@ -696,6 +696,7 @@ filemode : true
 Typecheck example file examples/sierpinski_bits.links
 examples/sierpinski_bits.links
 filemode : true
+args : --fresco --path=lib/stdlib
 
 Typecheck example file examples/webserver/buttons.links
 examples/webserver/buttons.links

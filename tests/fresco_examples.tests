@@ -1,0 +1,71 @@
+---
+config: tests/fresco_examples.config
+args: --fresco --path=examples:lib/stdlib
+---
+
+The Church numeral example executes its original result
+examples/church.links
+filemode : true
+stdout : 4 : Int
+
+The bit-list example compiles and executes its definitions
+examples/sierpinski_bits.links
+filemode : true
+stdout : () : ()
+
+Imported Church numerals retain different accumulator instantiations
+open import Church; (zero(0)(fun(x) { x+1 }),four(0)(fun(x) { x+1 }),four("")(fun(x) { x ^^ "x" }),four(false)(fun(x) { not(x) }),natToInt(add(two)(zero)))
+stdout : (0, 4, "xxxx", false, 2) : (Int, Int, String, Bool, Int)
+
+A Church partial application retains a contextual function accumulator
+open import Church; effect E { Read : () => Int; } handle <E> ({var seed=fun() { do Read }; var partial=four(seed); var result=partial(fun(f) { f }); result()}) {case x -> x case <Read => k> -> k(42)}
+stdout : 42 : Int
+
+Church numeral conversion remains pure
+open import Church; sig answer:()->Int fun answer() { natToInt(four) } answer()
+stdout : 4 : Int
+
+Church steps require the supplied pure modal context
+open import Church; effect E { Read : () => Int; } handle <E> (four(0)(fun(x) { x+do Read })) {case x -> x case <Read => k> -> k(1)}
+exit : 1
+stderr : @.*Type error:.*
+
+A pure Church step cannot capture a contextual function seed
+open import Church; effect E { Read : () => Int; } handle <E> ({var seed=fun() { do Read }; four(seed)(fun(_) { seed })}) {case f -> f case <Read => k> -> k(42)}
+exit : 1
+stderr : @.*Type error:.*seed.*
+
+Church accumulators retain their unrestricted ordinary kind
+open import Church; zero(linfun() { 42 })(fun(f) { f })
+exit : 1
+stderr : @.*Type error:.*
+
+Bit conversion retains bounds and bounded round trips
+open import FrescoPrelude; open import Sierpinski_bits; (intToBits(-1)==[],intToBits(0)==[],intToBits(1)==[true],pow2(0)==1,pow2(5)==32,bitsToInt([])==0,bitsToInt([true,false,true])==5,all(fun(i) { bitsToInt(intToBits(i))==i },[0..64]))
+stdout : (true, true, true, true, true, true, true, true) : (Bool, Bool, Bool, Bool, Bool, Bool, Bool, Bool)
+
+Unequal bit-list padding retains the original callback argument order
+open import Sierpinski_bits; var f=fun(x,y) { x && not(y) }; (zipbits(f,[],[true,false]),zipbits(f,[true,false],[]),zipbits(f,[false],[true,true]))
+stdout : ([true, false], [true, false], [false, true]) : (List Bool, List Bool, List Bool)
+
+Bitwise and retains empty and unequal inputs
+open import Sierpinski_bits; (band([true],[true,true])==[true,false],band([true,true],[false])==[false,false],band([],[])==[],band([],[true])==[false])
+stdout : (true, true, true, true) : (Bool, Bool, Bool, Bool)
+
+Bit-list callbacks retain handled effects and source order
+open import Sierpinski_bits; effect Visit { Step : (Bool,Bool) => Bool; } handle <Visit> (zipbits(fun(x,y) { do Step(x,y) },[true,false],[false,true,true])) {case xs -> xs case <Step(x,y) => k> -> print(if (x) "1" else "0"); print(if (y) "1" else "0"); k(x && not(y))}
+stdout : 100110[true, false, true] : List Bool
+
+Bit-list callbacks reject an unavailable caller effect
+open import Sierpinski_bits; effect Visit { Step : (Bool,Bool) => Bool; } sig callback:modal [Visit] ((Bool,Bool)->Bool) fun callback(x,y) { do Step(x,y) } zipbits(callback,[],[true])
+exit : 1
+stderr : @.*Type error:.*
+
+Bit-list zipping retains its explicit Wild requirement
+open import Sierpinski_bits; sig pure:()->List Bool fun pure() { zipbits(fun(x,y) { x && y },[],[]) } ()
+exit : 1
+stderr : @.*Type error:.*
+
+The finite bit-list renderer prints 32 rows of 32 characters
+open import Sierpinski_bits; sierpinski()
+stdout : @(?:[* ]{32}\n){32}\(\) : \(\)

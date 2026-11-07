@@ -110,7 +110,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D7d3b | Ordinary helper interfaces and linear variant aliases | `23c0b7ba` |
 | D7d3c | Binary trees and parameter-dependent recursive value kinds | `48986cb7` |
 | D7d3d0 | Empty switches with mode-directed results and existing partial-match behaviour | `160598c6` |
-| D7d3d1 | Switch-function source migration and execution controls | This commit |
+| D7d3d1 | Switch-function source migration and execution controls | `7468a1e4` |
+| D7d3d2 | Church numerals and recursive bit-list examples | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -207,7 +208,7 @@ user requested on 7 November 2026. The main agent owns integration and these rec
 
 D7a (`1f7ff34e`), D7b1 (`4fad3532`) and D7b2a (`db0d3a75`) are complete.
 D7b2b (`72e47dbc`) and D7b3 (`f09237bd`) are complete. D7b4a0 (`8cfe88a3`) is complete. D7b4a collection migration (`0b2c0d3f`) is complete. D7b4b (`efc1bca2`) is complete. D7b4c (`4e009da6`) is complete. D7c1a core actors (`ef94a794`) and D7c1b actor variants are complete.
-D7c1b1 polymorphic export is complete. D7c1c actor migration is complete. D7c2a session primitives are complete. D7c2b selection/offer is complete. D7c2c1 split-end helpers are complete. D7c2c2 callback helpers are complete. D7c2d CP is complete. D7c2e1 ordinary session regression migration is complete. D7c2e2 ordinary examples are complete. D7c2e3a recursive/encoded protocol examples are complete. D7c2e3b remaining generic protocols are complete. D7d3a ordinary list, character and date helpers are complete. D7d3b ordinary helper interfaces are complete. D7d3c binary trees are complete. D7d3d0 empty switches is complete. D7d3d1 switch functions is complete. Later boundaries may be split further when a dependency needs
+D7c1b1 polymorphic export is complete. D7c1c actor migration is complete. D7c2a session primitives are complete. D7c2b selection/offer is complete. D7c2c1 split-end helpers are complete. D7c2c2 callback helpers are complete. D7c2d CP is complete. D7c2e1 ordinary session regression migration is complete. D7c2e2 ordinary examples are complete. D7c2e3a recursive/encoded protocol examples are complete. D7c2e3b remaining generic protocols are complete. D7d3a ordinary list, character and date helpers are complete. D7d3b ordinary helper interfaces are complete. D7d3c binary trees are complete. D7d3d0 empty switches is complete. D7d3d1 switch functions is complete. D7d3d2 Church numerals and bit lists is complete. Later boundaries may be split further when a dependency needs
 its own review and checks.
 
 ### Future TODOs
@@ -240,30 +241,32 @@ and design:
 
 ## Latest task and verification
 
-7 November 2026, D7d3d1, base `160598c6`: all seven switch-function cases
-use contextual signatures and Fresco. Seven added cases check polymorphic and
-nested calls, filename/line reporting, `Wild` and unrestricted inputs. The
-original feature configuration and execution results are preserved.
+7 November 2026, D7d3d2, base `7468a1e4`: Church numerals and recursive
+bit lists check and execute through Fresco. Church's previously ignored case
+now passes. The [design](doc/modal-effects-design.md#d7-ordinary-library-inventory)
+records its selected curried interface and capture restrictions for review.
+Bit-list algorithms, callback order and written `Wild` contracts remain.
+All 1,024 cells of the finite renderer match the expected pattern.
 
-Independent review passed eight selected cases and three modal-capture and
-feature-flag controls, with no remaining findings:
-`/tmp/links-d7d3d1-review-summary.log`.
+Independent review passed eight selected cases, a partial-application capture
+pair and selected renderer rows; no remaining findings:
+`/tmp/links-d7d3d2-review-summary.log`.
 
 All writers finished, review was complete and the combined diff was inspected
-before integration. All 277 cases in the five suites below passed. Logs are in
-`/tmp/links-d7d3d1-verification`; `revision.txt` and `source.sha256` identify the
-tested sources. Source hashes match; added/new-line whitespace passes.
-Documentation was updated afterwards. Compiler sources are unchanged from
-`160598c6`, whose build, 1,473 unit tests and 919 regression cases passed in
-`/tmp/links-d7d3d0-verification` (15 existing ignored examples).
+before integration. All 386 cases in the five suites below passed; 14 existing
+examples remain ignored. Logs are in `/tmp/links-d7d3d2-verification`;
+`revision.txt` and `source.sha256` identify the tested sources. Source hashes
+match; added/new-line whitespace passes. Documentation was updated afterwards.
+Compiler sources are unchanged from `160598c6`, whose build, 1,473 unit tests
+and 919 regression cases passed in `/tmp/links-d7d3d0-verification`.
 
 | Command | Result | Log |
 |---|---|---|
-| `./test-harness tests/switch_functions.tests` | 14 passed | `switch_functions.log` |
-| `./test-harness tests/functions.tests` | 33 passed | `functions.log` |
-| `./test-harness tests/fresco.tests` | 91 passed | `fresco.log` |
-| `./test-harness tests/handlers.tests` | 95 passed | `handlers.log` |
-| `./test-harness tests/effect_sugar.tests` | 44 passed | `effect_sugar.log` |
+| `./test-harness tests/fresco_examples.tests` | 15 passed | `fresco_examples.log` |
+| `./test-harness tests/typecheck_examples.tests` | 170 passed, 14 ignored | `typecheck_examples.log` |
+| `./test-harness tests/polymorphism.tests` | 55 passed | `polymorphism.log` |
+| `./test-harness tests/freezeml.tests` | 60 passed | `freezeml.log` |
+| `./test-harness tests/fresco_prelude.tests` | 86 passed | `fresco_prelude.log` |
 | `make rule-check` | Passed; GNU-find tab check skipped, formatter disabled | `rule-check.log` |
 | Source hashes; `git diff --check` | Passed | `source-check.log`, `diff-check.log` |
 
@@ -276,7 +279,7 @@ Documentation-only update: text and whitespace checked.
 
 ## Next action
 
-Complete D7d3d2 Church numerals and bit lists, then remaining library/example milestones,
+Complete D7d3d3 extensible cases, then remaining ordinary actor examples,
 then D7e frontend/source
 migration, prioritising ordinary functional-language use. Keep socket
 examples, XML/forms, FFI/function locations and their dependent migrations

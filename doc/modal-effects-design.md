@@ -1051,6 +1051,31 @@ controls exercise named/anonymous polymorphism, nested bodies, filename/line
 reporting, unavailable `Wild` and rejected endpoint inputs. Empty switches use
 the separate rule below when migrating extensible cases.
 
+**Choice for review:** the Church numeral example uses
+`Nat = modal [] (forall a. (a) -> (modal [] ((a) -> a)) -> a)`.
+The numeral and step function remain pure. Its intermediate function is
+contextual, so `zero` can retain its seed of ordinary unlimited, modal `Any`
+type `a`. Giving that intermediate function an absolute modality rejects this
+capture; requiring `a::Abs` would narrow the seed type. The selected interface
+retains contextual seeds and specialises the legacy fixed-pure intermediate
+function contract. A bound `two(seed)` can be called in its current context;
+capturing it in a fresh absolute function requires an absolute wrapper or
+construction inside that scope, including when the seed is an integer.
+The absolute step also rejects a closure that captures a contextual seed;
+a pure identity step can still pass that seed through. Legacy fixed-pure
+arrows permit the former capture. The selected comparison is in
+`/tmp/links-d7d3d2-review-legacy-step-capture.log`.
+The alternative all-absolute signature and successful numeral execution are in
+`/tmp/links-d7d3d2-church-fixed.log` and
+`/tmp/links-d7d3d2-church-shared.log`.
+
+The bit-list example retains all written `Wild` contracts and a contextual
+`zipbits` callback. Keep the empty-left branch's `f(y, false)` argument order
+and the local conversion loop's call to `intToBits`. Bounded conversions,
+unequal padding, callback order and the finite renderer execute through the
+actual module. All 1,024 rendered cells match `(i & j) == 0`; the check is in
+`/tmp/links-d7d3d2-renderer-check.log`.
+
 Keep XML/formlet/page/DOM/routes, MVU modules, socket examples and explicit
 foreign/location dependencies with the deferred features. Keep database-facing
 Serial helpers and session-failure monitoring outside this work. General
