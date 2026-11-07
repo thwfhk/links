@@ -1185,9 +1185,9 @@ Switch the default after the ordinary source migration checks pass. Retain
 explicit legacy access for deferred and excluded fixtures until D8; never
 fall back to legacy after a contextual type error.
 
-The contextual frontend now checks typed lowering as described below.
-It still constructs a fresh fixity table for each input and ignores the
-configured prelude. Resolve these remaining gaps before the default switch. Preserve module identities across
+The contextual frontend now checks typed lowering and retains operator
+fixities as described below. It still ignores the configured prelude. Resolve
+prelude loading before the default switch. Preserve module identities across
 prelude loading and later imports. JavaScript compilation needs the preceding
 prelude bindings as well as the current source's IR, without evaluating the
 source program. Existing shared backend generation remains the implementation.
@@ -1217,6 +1217,17 @@ selected frontend check raises even when `typecheck_ir` and
 dumping requires debug output. With this checkpoint selected, `check_string`
 and `check_file` also lower and check IR without evaluation; otherwise they
 retain source-only checking.
+
+Persist the immutable shunting operator table in `FrescoInfer.t`, beginning
+with the existing defaults. Each input uses a local shunter; only successful
+checking returns a state containing its updated table. Failed preparation and
+check-only calls leave the caller's table unchanged.
+
+String parsing already reads `Parse.pp`. File preparation now uses
+`Parse.parse_file` so preprocessing retains the file's source name and
+positions. Its unprocessed-file branch uses `call_with_open_infile`, preserving
+the deterministic channel closure previously provided by the Fresco wrapper.
+No parser grammar or preprocessing command semantics change.
 
 ### D7 inferred linear results
 

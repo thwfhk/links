@@ -1,0 +1,3 @@
+infixr 5 +++;
+sig +++:(Int,Int)->Int
+op x +++ y { x-y }

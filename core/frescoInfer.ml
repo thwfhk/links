@@ -75,6 +75,7 @@ type t = {
   locks : (S.t Modality.t * S.t EffectRow.t) list;
   uses : int IntMap.t;
   next : int;
+  operator_table : Shunting.Optable.t;
 }
 let wild_elaboration = FrescoElaborate.declarations FrescoElaborate.empty "effect Wild {}"
 let wild = match FrescoElaborate.effects wild_elaboration with
@@ -85,7 +86,7 @@ let builtin_effects = List.map (fun (info : FrescoElaborate.effect_info) -> info
   (FrescoElaborate.effects initial_elaboration)
 let empty = { elaboration = initial_elaboration; variables = []; scope = [];
   ambient = [{ EffectRow.name = wild; arguments = [] }]; locks = [];
-  uses = IntMap.empty; next = 0 }
+  uses = IntMap.empty; next = 0; operator_table = Shunting.Optable.defaults }
 let elaboration s = s.elaboration
 let with_elaboration elaboration s = { s with elaboration }
 let context s = FrescoElaborate.context s.elaboration
@@ -1719,7 +1720,8 @@ let program s syntax =
   let syntax = DesugarSwitchFuns.desugar_switching#program syntax in
   let syntax,resolution = DesugarModules.resolve_program
     (FrescoElaborate.resolution_state s.elaboration) syntax in
-  let syntax = (new Shunting.shunt Shunting.Optable.defaults)#program syntax in
+  let shunter = new Shunting.shunt s.operator_table in
+  let syntax = shunter#program syntax in
   let bindings,expression = LiftRecursive.lift_funs#program syntax in
   let s = { s with elaboration = FrescoElaborate.with_resolution_state resolution s.elaboration } in
   let s,bindings = infer_bindings C.Type true s bindings in
@@ -1729,7 +1731,8 @@ let program s syntax =
   let body = Option.value ~default:(term position (tuple []) (Record ([],None))) expression in
   let combined = export s (term position body.typ (Let (bindings,body))) in
   match combined.node with
-  | Let (bindings,body) -> s,bindings,Option.map (fun _ -> body) expression
+  | Let (bindings,body) ->
+     { s with operator_table = shunter#get_optable () },bindings,Option.map (fun _ -> body) expression
   | _ -> assert false
 let read s text =
   let syntax,source = Parse.parse_string Parse.program text in

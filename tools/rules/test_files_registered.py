@@ -11,6 +11,7 @@ BLACKLIST = {
   "tests/database/grouping.links",
   "tests/empty_prelude.links",
   "tests/freezeml_prelude.links",
+  "tests/fixtures/fresco-fixities-definitions.links",
   "tests/presence_type_arg_typename.links",
   "tests/modules/alien_blocks_dependency.links",
   "tests/modules/cyclicA.links",

@@ -1,0 +1,3 @@
+sig absurd:(Int)->Int
+fun absurd(x) { switch(x) {} }
+absurd(TOKEN)

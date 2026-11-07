@@ -84,7 +84,8 @@ let parse_channel ?interactive ?in_context:context grammar (channel, name) =
 
 let parse_file ?(pp=default_preprocessor ()) ?in_context:context grammar filename =
   match normalize_pp pp with
-    | None -> parse_channel ?in_context:context grammar (open_in filename, filename)
+    | None -> Utility.call_with_open_infile filename (fun channel ->
+        parse_channel ?in_context:context grammar (channel, filename))
     | Some pp ->
         Utility.call_with_open_infile filename
           (fun channel ->

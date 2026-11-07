@@ -359,8 +359,8 @@ arrow, or a binding for the returned value before applying it. Supplied linear
 arrows retain their ordinary usage checks.
 
 Batch compilation and interactive definitions use the same rules.
-Successful interactive definitions retain their type requirements
-and declaration identities. Failed checking leaves the previous typing and
+Successful interactive definitions retain their type requirements, operator
+fixities and declaration identities. Failed checking leaves the previous typing and
 name-resolution state unchanged.
 Typecheck-only mode does not evaluate the program. Selecting the contextual
 frontend recheck also validates lowered IR and its result type.

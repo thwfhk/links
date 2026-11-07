@@ -458,8 +458,7 @@ let parse_string text =
   (ResolvePositions.resolve_positions source)#program program
 
 let parse_file filename =
-  let program, source = call_with_open_infile filename (fun channel ->
-    Parse.parse_channel Parse.program (channel, filename)) in
+  let program, source = Parse.parse_file Parse.program filename in
   (ResolvePositions.resolve_positions source)#program program
 
 let infer_program state program =

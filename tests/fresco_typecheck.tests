@@ -33,3 +33,22 @@ effect E { Read : () => Int; } sig f:modal [E] (() -> Int) fun f() { do Read } 4
 args : --fresco --set=enable_handlers=false --set=recheck_frontend_transformations=true --set=recheck_frontend_transformations_filter=all
 exit : 1
 stderr : @.*Effect handlers.*enable_handlers.*
+
+
+Fixities persist between shared batch files
+tests/fixtures/fresco-fixities-use.links
+filemode : true
+args : --fresco --set=typecheck_only=false --set=isolation=false --set=recheck_frontend_transformations=true tests/fixtures/fresco-fixities-definitions.links
+stdout : @\(\) : \(\)\n\(8, 6\) : \(Int, Int\)$
+
+The contextual file frontend uses the configured preprocessor
+tests/fixtures/fresco-preprocessed.links
+filemode : true
+args : --fresco --set=typecheck_only=false "--set=preprocessor=sed s/TOKEN/42/g" --set=recheck_frontend_transformations=true
+stdout : 42 : Int
+
+Preprocessed files check and lower without evaluation
+tests/fixtures/fresco-preprocessed-check.links
+filemode : true
+args : --fresco "--set=preprocessor=sed s/TOKEN/42/g" --set=recheck_frontend_transformations=true
+stdout : @^$

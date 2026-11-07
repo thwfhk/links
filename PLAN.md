@@ -115,7 +115,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D7d3d3a | Safe explicit width upcasts in source and contextual IR | `ed822373` |
 | D7d3d3b | Extensible cases with checked row and callback contracts | `c3f1e695` |
 | D7d3e1 | Buffered channels with checked message and helper contracts | `b37fb1ce` |
-| D7e1 | Separate checked preparation and strict typed-lowering rechecks | This commit |
+| D7e1 | Separate checked preparation and strict typed-lowering rechecks | `bec9d4f9` |
+| D7e2a | Persistent fixities and file preprocessing | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -204,7 +205,8 @@ user requested on 7 November 2026. The main agent owns integration and these rec
 | D7d3d3b: extensible cases | Open-variant rows, negative patterns and upcasts check and execute |
 | D7d3e1: buffered channels | Generic queues retain FIFO order, waiting readers and payload requirements through actual execution |
 | D7e1: checked preparation | Separate checking/lowering from evaluation; contextual lowering rechecks validate annotations and result types |
-| D7e2: prelude and batch | Canonical prelude loading, custom preludes and persistent fixities work through Fresco |
+| D7e2a: persistent parsing state | Operator fixities survive successful inputs and file preprocessing matches string input |
+| D7e2b: prelude and batch | Canonical prelude loading and custom/empty preludes work through Fresco |
 | D7e3: REPL and directives | Definitions, loading, environments and type search use persistent contextual state with failure recovery |
 | D7e4: JavaScript compilation | Existing compile options consume contextual IR without evaluating the source program |
 | D7e5: default frontend and source migration | Fresco is the default; ordinary selected suites and handler examples migrate; old effect syntax rejects |
@@ -213,7 +215,7 @@ user requested on 7 November 2026. The main agent owns integration and these rec
 
 D7a (`1f7ff34e`), D7b1 (`4fad3532`) and D7b2a (`db0d3a75`) are complete.
 D7b2b (`72e47dbc`) and D7b3 (`f09237bd`) are complete. D7b4a0 (`8cfe88a3`) is complete. D7b4a collection migration (`0b2c0d3f`) is complete. D7b4b (`efc1bca2`) is complete. D7b4c (`4e009da6`) is complete. D7c1a core actors (`ef94a794`) and D7c1b actor variants are complete.
-D7c1b1 polymorphic export is complete. D7c1c actor migration is complete. D7c2a session primitives are complete. D7c2b selection/offer is complete. D7c2c1 split-end helpers are complete. D7c2c2 callback helpers are complete. D7c2d CP is complete. D7c2e1 ordinary session regression migration is complete. D7c2e2 ordinary examples are complete. D7c2e3a recursive/encoded protocol examples are complete. D7c2e3b remaining generic protocols are complete. D7d3a ordinary list, character and date helpers are complete. D7d3b ordinary helper interfaces are complete. D7d3c binary trees are complete. D7d3d0 empty switches is complete. D7d3d1 switch functions is complete. D7d3d2 Church numerals and bit lists is complete. D7d3d3a explicit upcasts is complete; D7d3d3b extensible cases is complete. D7d3e1 buffered channels is complete. D7e1 checked preparation is complete. Later boundaries may be split further when a dependency needs
+D7c1b1 polymorphic export is complete. D7c1c actor migration is complete. D7c2a session primitives are complete. D7c2b selection/offer is complete. D7c2c1 split-end helpers are complete. D7c2c2 callback helpers are complete. D7c2d CP is complete. D7c2e1 ordinary session regression migration is complete. D7c2e2 ordinary examples are complete. D7c2e3a recursive/encoded protocol examples are complete. D7c2e3b remaining generic protocols are complete. D7d3a ordinary list, character and date helpers are complete. D7d3b ordinary helper interfaces are complete. D7d3c binary trees are complete. D7d3d0 empty switches is complete. D7d3d1 switch functions is complete. D7d3d2 Church numerals and bit lists is complete. D7d3d3a explicit upcasts is complete; D7d3d3b extensible cases is complete. D7d3e1 buffered channels is complete. D7e1 checked preparation is complete. D7e2a persistent parsing state is complete. Later boundaries may be split further when a dependency needs
 its own review and checks.
 
 ### Future TODOs
@@ -251,30 +253,31 @@ and design:
 
 ## Latest task and verification
 
-7 November 2026, D7e1, base `b37fb1ce`: contextual source preparation and
-backend compilation are separate from evaluation. The `fresco-lowering`
-checkpoint validates internal IR annotations and the result against the source
-type, even when backend checks and abort-on-IR-error are disabled. The
-[design](doc/modal-effects-design.md#d7-frontend-integration-plan) records the
-checkpoint choice and API. Typecheck-only with this checkpoint lowers and checks
-without evaluation; filters and dumps retain existing settings behaviour.
+7 November 2026, D7e2a, base `bec9d4f9`: successful source inputs retain
+operator fixities; failed and check-only inputs preserve the prior table. File
+input honours the configured preprocessor while retaining source filenames and
+line positions. The shared parser keeps deterministic channel closure.
+The [design](doc/modal-effects-design.md#d7-frontend-integration-plan) records
+these boundaries.
 
-Independent review passed all ten focused unit cases and four new CLI checks;
-no findings: `/tmp/links-d7e1-review-summary.log`. Initial test setting access
-conflicted with OUnit arguments; tests now use typed setting handles and restore
-their previous values. Production checking changes no global setting.
+Independent review passed five new unit groups and three CLI cases; no findings:
+`/tmp/links-d7e2a-review-summary.log`. The first rule check found the definitions
+fixture used as an extra file argument missing from the helper-file registry.
+The reviewed one-line registration correction passed the rerun. Initial rule
+output, results and source manifest retain `-initial` suffixes. Compiler and test
+sources were unchanged by that correction.
 
-All writers finished, review was complete and the combined diff was inspected
-before integration. The build, 1,503 unit tests and 1,052 regression cases
-passed; 14 existing examples remain ignored. Logs below are in
-`/tmp/links-d7e1-verification`; `revision.txt` and `source.sha256` identify the
+All writers finished, code review was complete and the combined diff was
+inspected before integrated checks. The build, 1,508 unit tests and 1,055
+regression cases passed; 14 existing examples remain ignored. Logs below are in
+`/tmp/links-d7e2a-verification`; `revision.txt` and `source.sha256` identify the
 tested sources. Source hashes and added/new-line whitespace pass. Documentation
 was updated afterwards.
 
 | Command | Result | Log |
 |---|---|---|
 | `make no-db` | Passed | `build.log` |
-| `opam exec -- ./run-tests nodb-unit-tests` | 1,503 passed | `unit.log` |
+| `opam exec -- ./run-tests nodb-unit-tests` | 1,508 passed | `unit.log` |
 | `./test-harness tests/fresco_examples.tests` | 36 passed | `fresco_examples.log` |
 | `./test-harness tests/switch_functions.tests` | 14 passed | `switch_functions.log` |
 | `./test-harness tests/records.tests` | 30 passed | `records.log` |
@@ -283,7 +286,7 @@ was updated afterwards.
 | `./test-harness tests/handlers.tests` | 95 passed | `handlers.log` |
 | `./test-harness tests/effect_sugar.tests` | 44 passed | `effect_sugar.log` |
 | `./test-harness tests/fresco.tests` | 105 passed | `fresco.log` |
-| `./test-harness tests/fresco_typecheck.tests` | 6 passed | `fresco_typecheck.log` |
+| `./test-harness tests/fresco_typecheck.tests` | 9 passed | `fresco_typecheck.log` |
 | `./test-harness tests/fresco_modal.tests` | 20 passed | `fresco_modal.log` |
 | `./test-harness tests/fresco_prelude.tests` | 86 passed | `fresco_prelude.log` |
 | `./test-harness tests/fresco_actors.tests` | 49 passed | `fresco_actors.log` |
@@ -311,8 +314,7 @@ Documentation-only update: text and whitespace checked.
 
 ## Next action
 
-Complete D7e frontend/source migration, starting with persistent fixities
-and prelude loading. Prioritise ordinary functional-language use. Keep socket
+Complete D7e frontend/source migration, starting with contextual prelude loading. Prioritise ordinary functional-language use. Keep socket
 examples, XML/forms, FFI/function locations and their dependent migrations
 in [future work](#future-todos).
 Review, test and commit each milestone before the next. Pause after D7 is

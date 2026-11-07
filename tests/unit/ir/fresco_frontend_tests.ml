@@ -171,4 +171,59 @@ let suite = "Fresco frontend preparation" >::: [
     } in
     ignore (IrCheck.Typecheck.program state (malformed ()));
     reject (fun () -> IrCheck.Typecheck.program_strict state (malformed ()))));
+
+  "custom operator precedence and associativity persist across inputs" >:: (fun _ -> controls (fun () ->
+    let state,_,_ = FrescoFrontend.run_string (FrescoFrontend.empty ())
+      "infixr 5 +++; sig +++:(Int,Int)->Int op x +++ y { x-y } ()" in
+    let _,_,value = FrescoFrontend.run_string state "(10 +++ 3 +++ 1,10 +++ 3+1)" in
+    assert_equal ~printer:Value.string_of_value (Value.box_pair (`Int 8) (`Int 6)) value));
+
+  "successful fixity updates preserve earlier states" >:: (fun _ -> controls (fun () ->
+    let original,_,_ = FrescoFrontend.run_string (FrescoFrontend.empty ())
+      "sig +++:(Int,Int)->Int op x +++ y { x-y } ()" in
+    let right,_,_ = FrescoFrontend.run_string original "infixr 5 +++; ()" in
+    let left,_,_ = FrescoFrontend.run_string right "infixl 5 +++; ()" in
+    List.iter (fun (state,expected) ->
+      let _,_,value = FrescoFrontend.run_string state "10 +++ 3 +++ 1" in
+      assert_equal (`Int expected) value) [original,6;right,8;left,6]));
+
+  "failed and check only inputs do not publish fixity updates" >:: (fun _ -> controls (fun () ->
+    let state,_,_ = FrescoFrontend.run_string (FrescoFrontend.empty ())
+      "infixr 5 +++; sig +++:(Int,Int)->Int op x +++ y { x-y } ()" in
+    Fresco_source_tests.reject (fun () -> FrescoFrontend.run_string state
+      "infixl 9 +++; var invalid=true+1; ()");
+    ignore (FrescoFrontend.check_string state "infixl 9 +++; 42");
+    let _,_,value = FrescoFrontend.run_string state "(10 +++ 3 +++ 1,10 +++ 3+1)" in
+    assert_equal ~printer:Value.string_of_value (Value.box_pair (`Int 8) (`Int 6)) value));
+
+  "file preprocessing retains source filenames and line positions" >:: (fun _ -> controls (fun () ->
+    let filename = Filename.temp_file "links-frontend-preprocess-" ".links" in
+    let write source = let output = open_out filename in output_string output source; close_out output in
+    Fun.protect ~finally:(fun () -> Sys.remove filename) (fun () ->
+      with_value Parse.pp (Some "sed 's/TOKEN/42/g;s/BAD/true+1/g'") (fun () ->
+        write "TOKEN";
+        let _,_,value = FrescoFrontend.run_file (FrescoFrontend.empty ()) filename in
+        assert_equal (`Int 42) value;
+        write "# First line\nBAD\n";
+        match FrescoFrontend.check_file (FrescoFrontend.empty ()) filename with
+        | _ -> assert_failure "Expected a preprocessed source type error"
+        | exception Errors.Type_error (position,_) ->
+            let start = SourceCode.Position.start position in
+            assert_equal filename start.Lexing.pos_fname;
+            assert_equal 2 start.Lexing.pos_lnum))));
+
+  "string preprocessing is retained and file checking does not evaluate" >:: (fun _ -> controls (fun () ->
+    with_value Parse.pp (Some "sed s/TOKEN/42/g") (fun () ->
+      let _,_,value = FrescoFrontend.run_string (FrescoFrontend.empty ()) "TOKEN" in
+      assert_equal (`Int 42) value;
+      let filename = Filename.temp_file "links-frontend-preprocess-check-" ".links" in
+      Fun.protect ~finally:(fun () -> Sys.remove filename) (fun () ->
+        let output = open_out filename in
+        output_string output "sig absurd:(Int)->Int fun absurd(x) { switch(x) {} } absurd(TOKEN)";
+        close_out output;
+        let prepared = FrescoFrontend.prepare_file (FrescoFrontend.empty ()) filename in
+        ignore (FrescoFrontend.compile prepared);
+        Fresco_source_tests.expect_type Types.int_type
+          (FrescoFrontend.check_file (FrescoFrontend.empty ()) filename)))));
+
 ]
