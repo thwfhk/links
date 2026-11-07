@@ -808,6 +808,13 @@ Fresco removes it. Contextual row equality ignores that flag when both tails
 are closed, after comparing their fields. Open-row dual flags and legacy IR
 equality remain unchanged.
 
+Recursive offer checking must canonicalise both row roots before consistency,
+as ordinary type joins already do. Extracting continuations can retain separate
+checked copies of the same recursive declaration. Validate every declaration
+copy and require matching bodies before sharing its identity. The recursive
+`Loop = [&|Again:Loop,Done:End|&]` example exposed a conflicting-declaration
+error when row joins skipped this step. Conflicting bodies still reject.
+
 ### D7 CP integration
 
 Check CP using ordinary blocks, session operations and angel spawn. Direct
@@ -854,7 +861,7 @@ Migrate the remaining examples in bounded groups:
 | Group | Sources under `examples/sessions` | Check |
 |---|---|---|
 | Ordinary protocols | `calc`, `calc-cp`, `calc-endbang`, `end`, `fuse`, `fusegg`, `givengrab`, `linear_if` | Preserve types and run terminating examples; retain the recorded close/link failure for D8 if reproduced |
-| Recursive/generic protocols | `atm`, `choice`, `reccalc`, `sim-calc`, `state`, `forkbomb`, `pi`, `two-factor`, `chatserver/linearList`, `mind/linearList` | Sign recursion and callbacks, preserve kinds; execute terminating local programs |
+| Recursive/generic protocols | `atm`, `choice`, `reccalc`, `sim-calc`, `state`, `forkbomb`, `pi`, `two-factor`, `chatserver/frescoLinearList`, `mind/frescoLinearList` | Sign recursion and callbacks, preserve kinds; execute terminating local programs |
 | Socket models | `smtp`, `smtp-end`, `smtp-factored`, `smtp-factored-more`, `smtp-dummy`, `Elvina/SMTP_Real_CP`, `Elvina/SMTP_Real_GV`, `Elvina/IRC_Test` | Typecheck socket clients; execute the local dummy model |
 | XML/location prerequisites | `ap-multi-client`, browser calculators, bookshops, draggable examples, `gng-client`, `smtp-formlet`, `Elvina` web models and IRC, `mind/mindClient` and its `mindSessions` module | Migrate in D7d3 after XML/forms and function locations |
 | Excluded or already broken | Session-failure chatserver trio and `mind/mindServer`, `two-factor-cp`, ignored `counter` and `draggable-boring` | Preserve exclusions and recorded ignore reasons |
@@ -866,6 +873,29 @@ clients retain typecheck-only checks. They send messages to external services.
 The ordinary session examples may need modal annotations on function messages
 and explicit polymorphic/recursive signatures. Record specialised callback
 contracts separately from interfaces needing independent effect contexts.
+
+**Choice for review:** the encoded choice example sends `modal [] [|r|]`.
+A rigid open row has no absolute-payload guarantee. Wrapping the transmitted
+variant preserves its open-row interface and satisfies the existing absolute
+message rule. Closing the row would lose that generic interface; adding
+absolute row constraints would extend the language. The `off` callback remains
+contextual and its result remains unlimited with modal kind `Any`. Checks under
+a caller-installed handler cover both direct effects and returned contextual
+functions. The selector's residual row keeps its original unrestricted field
+category, including a non-session `B:Int` branch.
+
+**Choice for review:** stage `frescoLinearList.links` beside each existing
+`linearList.links`. The session-failure servers still use the legacy frontend
+and import the original module; changing it made both server checks fail.
+In-scope Fresco clients use the staged module during D7d3 migration. Migrating
+the session-failure servers would expand the current scope. Retain the two
+legacy modules until that separate feature migration.
+
+The two staged `LinList` helpers retain ordinary `Any` payloads and contextual callbacks
+over protocols with modal kind `Any`. Legacy controls accept `End` endpoints
+inside these lists; explicit parameter kinds preserve that support. A checked
+execution visits two endpoints under a caller-installed handler and then closes
+both endpoints.
 
 ### D7 prelude prerequisites
 

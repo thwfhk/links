@@ -205,6 +205,9 @@ let join s pos left right =
   let context, typ = get pos "Types are inconsistent" (FrescoConsistency.consistent (env s) (context s) left right) in
   ctx s context, typ
 let join_row s pos left right =
+  let left,right = match canonicalise s pos
+    [root ~primary_kind:PrimaryKind.Row left;root ~primary_kind:PrimaryKind.Row right] with
+    | [a;b] -> a.S.typ,b.S.typ | _ -> assert false in
   let context,typ = get pos "Session choice rows do not agree"
     (FrescoConsistency.consistent (env s) (context s) ~primary_kind:PrimaryKind.Row left right) in
   ctx s context,typ

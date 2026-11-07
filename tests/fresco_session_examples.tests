@@ -38,3 +38,37 @@ examples/sessions/linear_if.links
 filemode : true
 args : --fresco --path=lib/stdlib --set=show_quantifiers=true --set=hide_fresh_type_vars=false
 stdout : fun : forall a::(Unl,Session).modal [effect_0$Wild] ((?(Bool).!(Int).a::(Unl,Session)) -> ())
+
+Execute session example reccalc
+examples/sessions/reccalc.links
+filemode : true
+stdout : 84 : Int
+
+Execute session example sim-calc
+examples/sessions/sim-calc.links
+filemode : true
+stdout : 42 : Int
+
+Execute session example atm
+examples/sessions/atm.links
+filemode : true
+stdout : (16, 0, Just(128)) : (Int, Int, [|Just:Int|Nothing|])
+
+Encoded choice callbacks retain the caller handler
+open import Choice; effect E { Read : () => Int; } var ap = (new() : AP(Choice({A:End}))); var child = spawn { close(sel_A(request(ap))) }; handle <E> (off(accept(ap),fun(x) { switch(x) { case A(s) -> {close(s); do Read} } })) { case x -> x case <Read => k> -> k(42) }
+args : --fresco --path=examples/sessions:lib/stdlib
+stdout : 42 : Int
+
+Encoded choice callbacks retain contextual results
+open import Choice; effect E { Read : () => Int; } var ap = (new() : AP(Choice({A:End}))); var child = spawn { close(sel_A(request(ap))) }; handle <E> ({ var action=off(accept(ap),fun(x) {switch(x) {case A(s) -> {close(s);fun(){do Read}}}}); action() }) { case x -> x case <Read => k> -> k(42) }
+args : --fresco --path=examples/sessions:lib/stdlib
+stdout : 42 : Int
+
+Linear-list callbacks visit both channels under the caller handler
+open import FrescoLinearList; effect E { Step : () => (); } var ap = (new() : AP(End)); var child = spawn { close(accept(ap)); close(accept(ap)) }; var channels = (LinCons(request(ap),LinCons(request(ap),LinNil)) : LinList(End)); var channels = handle <E> (linMap(fun(c) { do Step; c },channels)) {   case channels -> channels   case <Step => k> -> {print("step");k(())} }; sig drain : modal [Wild] ((LinList(End)) -> Int) fun drain(channels) {   switch(channels) {     case LinNil -> 42     case LinCons(c,channels) -> {close(c);drain(channels)}   } } drain(channels)
+args : --fresco --path=examples/sessions/chatserver:lib/stdlib
+stdout : stepstep42 : Int
+
+Encoded selection retains non-session alternatives in its residual row
+open import Choice; fun(e:(!(modal [] [|A:End|B:Int|]).End)) { close(sel_A(e)) }
+args : --fresco --path=examples/sessions:lib/stdlib --set=typecheck_only=true

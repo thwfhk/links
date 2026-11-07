@@ -1,3 +1,5 @@
+open import FrescoPrelude;
+
 typename Card = Int;
 typename PIN = Int;
 typename Money = Int;
@@ -7,12 +9,12 @@ typename Menu = [&|Withdraw:?Int.[+|Accept:!Card.!Money.End,
                    Balance:!Int.!Card.End|&];
 typename ATM = ?Card.?PIN.[+|Accept:Menu, Reject:!Card.End|+];
 
-sig check : (Card, PIN) ~> Bool
+sig check : modal [Wild] ((Card, PIN) -> Bool)
 fun check(card, pin) {
   (card == 16777216) && (pin == 1024)
 }
 
-sig menu : (Card, Money, Menu) ~> ()
+sig menu : modal [Wild] ((Card, Money, Menu) -> ())
 fun menu(card, balance, c) {
   offer(c) {
     case Withdraw(c) ->
@@ -27,7 +29,7 @@ fun menu(card, balance, c) {
   }
 }
 
-sig atm : (Money, ATM) ~> ()
+sig atm : modal [Wild] ((Money, ATM) -> ())
 fun atm(balance, c) {
   var (card, c) = receive(c);
   var (pin, c) = receive(c);
@@ -38,7 +40,7 @@ fun atm(balance, c) {
   }
 }
 
-sig user1 : (~ATM) ~> Int
+sig user1 : modal [Wild] ((~ATM) -> Int)
 fun user1(c) {
   offer (send(1024, send(16777216, c))) {
     case Accept(c) ->
@@ -56,7 +58,7 @@ fun user1(c) {
   }
 }
 
-sig user2 : (~ATM) ~> Int
+sig user2 : modal [Wild] ((~ATM) -> Int)
 fun user2(c) {
   offer (send(1023, send(16777216, c))) {
     case Accept(c) ->
@@ -73,7 +75,7 @@ fun user2(c) {
   }
 }
 
-sig user3 : (~ATM) ~> Maybe(Int)
+sig user3 : modal [Wild] ((~ATM) -> Maybe(Int))
 fun user3(c) {
   offer (send(1024, send(16777216, c))) {
     case Accept(c) ->

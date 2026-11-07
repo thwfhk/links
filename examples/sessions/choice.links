@@ -1,11 +1,15 @@
+open import FrescoPrelude;
+
 #typename Selection(r::Row(Any,Session)) = ![|~r|].End;
-typename Choice(r::Row(Any,Session)) = ?[|r|].End;
+typename Choice(r::Row(Any,Session)) = ?(modal [] [|r|]).End;
 
 #sig sel_A : Selection({A:~s|r} ~> s
-sig sel_A : forall s::Session,r::Row,e::Row.(![|A:s|r|].End) ~e~> ~s
+sig sel_A : forall s::Type(Any,Session,Abs),r::Row.
+  modal [Wild] ((!(modal [] [|A:s|r|]).End) -> ~s)
 fun sel_A(e) {linFork (linfun (x) {close(send(A(x), e))})}
 
-sig off : forall r::Row(Any,Session),e::Row,a.(Choice({ | r}), ([|r|]) ~e~> a) ~e~> a
+sig off : forall r::Row(Any,Session),a::Type(Unl,Any,Any).
+  modal [Wild] ((Choice({ | r}), ((modal [] [|r|]) -> a)) -> a)
 fun off(e, f) {
   var (x, s) = receive(e);
   close(s);
@@ -13,4 +17,8 @@ fun off(e, f) {
 }
 
 #sel_A
-fun (c) {off(c, fun (x) {switch (x) {case A(s) -> receive(s)}})}
+sig offered : forall a::Type(Unl,Any,Abs),s::Type(Unl,Session,Any).
+  modal [Wild] ((Choice({A:?a.s})) -> (a,s))
+fun offered(c) {off(c, fun (x) {switch (x) {case A(s) -> receive(s)}})}
+
+~offered

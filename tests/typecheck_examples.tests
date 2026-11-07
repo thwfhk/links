@@ -396,6 +396,7 @@ filemode : true
 Typecheck example file examples/sessions/atm.links
 examples/sessions/atm.links
 filemode : true
+args : --fresco --path=lib/stdlib
 
 Typecheck example file examples/sessions/bookshop-cp.links
 examples/sessions/bookshop-cp.links
@@ -456,9 +457,15 @@ Typecheck example file examples/sessions/chatserver/linearList.links
 examples/sessions/chatserver/linearList.links
 filemode : true
 
+Typecheck contextual linear-list module chatserver
+examples/sessions/chatserver/frescoLinearList.links
+filemode : true
+args : --fresco
+
 Typecheck example file examples/sessions/choice.links
 examples/sessions/choice.links
 filemode : true
+args : --fresco --path=lib/stdlib
 
 Typecheck example file examples/sessions/counter.links
 examples/sessions/counter.links
@@ -580,10 +587,12 @@ filemode : true
 Typecheck example file examples/sessions/reccalc.links
 examples/sessions/reccalc.links
 filemode : true
+args : --fresco --path=lib/stdlib
 
 Typecheck example file examples/sessions/sim-calc.links
 examples/sessions/sim-calc.links
 filemode : true
+args : --fresco --path=lib/stdlib
 
 Typecheck example file examples/sessions/smtp-dummy.links
 examples/sessions/smtp-dummy.links
@@ -731,6 +740,11 @@ args : --set=session_exceptions=true --path=examples/sessions/mind
 Typecheck example file examples/sessions/mind/linearList.links
 examples/sessions/mind/linearList.links
 filemode : true
+
+Typecheck contextual linear-list module mind
+examples/sessions/mind/frescoLinearList.links
+filemode : true
+args : --fresco
 
 Typecheck example file examples/sessions/mind/mindClient.links
 examples/sessions/mind/mindClient.links

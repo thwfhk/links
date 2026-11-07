@@ -17,6 +17,56 @@ let exchange create =
   "var (x,c) = receive(request(ap)); close(c); x"
 
 let suite = "Fresco sessions" >::: [
+  "recursive offer and selection retain their continuations" >:: (fun _ ->
+    accept {|
+      typename Loop = [&|Again:Loop,Done:End|&];
+      sig loop : modal [Wild] ((Loop) -> ())
+      fun loop(c) {
+        offer(c) { case Again(c) -> loop(c) case Done(c) -> close(c) }
+      }
+    |};
+    execution (`Int 42) {|
+      typename Loop = [&|Next:?Int.Loop,Done:End|&];
+      spawnWait {
+        var parent = self();
+        var ap = (new() : AP(Loop));
+        var child = spawn {
+          sig loop : modal [Wild] ((Int,Loop) -> ())
+          fun loop(total,c) {
+            offer(c) {
+              case Next(c) -> {var (x,c) = receive(c); loop(total+x,c)}
+              case Done(c) -> {close(c); parent ! total}
+            }
+          }
+          loop(0,accept(ap))
+        };
+        var c = send(40,select Next request(ap));
+        var c = send(2,select Next c);
+        close(select Done c);
+        recv()
+      }
+    |});
+
+  "recursive offers reject incompatible branch protocols" >:: (fun _ ->
+    reject {|
+      typename Loop = [&|Again:Loop,Done:End|&];
+      sig loop : modal [Wild] ((Loop) -> ())
+      fun loop(c) {
+        offer(c) { case Again(c) -> close(c) case Done(c) -> close(c) }
+      }
+    |};
+    reject {|
+      typename Loop = [&|Again:Loop,Done:End|&];
+      typename Other = [&|Different:End|&];
+      sig loop : modal [Wild] ((Loop) -> ())
+      fun loop(c) {
+        offer(c) {
+          case Again(c:Other) -> offer(c) {case Different(c) -> close(c)}
+          case Done(c) -> close(c)
+        }
+      }
+    |});
+
   "session primitive binders retain message and protocol kinds" >:: (fun _ ->
     let state = FrescoFrontend.empty () in
     let quantifiers name = match Pure.expose (Option.get (FrescoFrontend.lookup state name)) with
