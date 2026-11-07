@@ -563,6 +563,46 @@ fun isInt (x) { x =~ /-?[0-9]+$/ }
 sig isFloat : (String) -> Bool
 fun isFloat (x) { x =~ /-?[0-9]+(\.[0-9]+)?$/ }
 
+#### SESSION TYPING STUFF ####
+sig fork : forall s::Type(Any,Session,Abs).
+  modal [Wild] ((modal [Wild] ((s) -> ())) -> ~s)
+fun fork(f) {
+  var ap = new();
+  var _ = spawnAngel { f(accept(ap)) };
+  request(ap)
+}
+
+sig linFork : forall s::Type(Any,Session,Abs).
+  modal [Wild] ((modal [Wild] ((s) -@ ())) -> ~s)
+fun linFork(f) {
+  var ap = new();
+  var _ = spawnAngel { f(accept(ap)) };
+  request(ap)
+}
+
+sig reproduce : forall s::Type(Any,Session,Abs).
+  modal [Wild] ((AP(s), modal [Wild] ((s) -> ())) -> ())
+fun reproduce(ap, f) {
+  var x = accept(ap);
+  var _ = spawn { f(x) };
+  reproduce(ap, f)
+}
+
+sig connect : forall s::Type(Any,Session,Abs), a::Type(Unl,Any,Any).
+  modal [Wild] ((modal [Wild] ((s) -> ()), (~s) -> a) -> a)
+fun connect(f, g) {
+  var ap = new();
+  var done = new();
+  var _ = spawn {
+    f(accept(ap));
+    close(send((), accept(done)))
+  };
+  var result = g(request(ap));
+  var (_, s) = receive(request(done));
+  close(s);
+  result
+}
+
 ### sessions with split ends ###
 typename EndBang = !().End;
 typename EndQuery = ?().End;
@@ -593,4 +633,37 @@ sig linkSync : forall s::Type(Any,Session,Any).
 fun linkSync(s, c) {
   link(s, c);
   makeEndBang()
+}
+
+sig forkSync : forall s::Type(Any,Session,Abs).
+  modal [Wild] ((modal [Wild] ((s) -> EndBang)) -> ~s)
+fun forkSync(f) {
+  var ap = new();
+  var _ = spawn {
+    var c = accept(ap);
+    var c = f(c);
+    closeBang(c)
+  };
+  request(ap)
+}
+
+sig linForkSync : forall s::Type(Any,Session,Abs).
+  modal [Wild] ((modal [Wild] ((s) -@ EndBang)) -> ~s)
+fun linForkSync(f) {
+  var ap = new();
+  var _ = spawn {
+    var c = accept(ap);
+    var c = f(c);
+    closeBang(c)
+  };
+  request(ap)
+}
+
+sig runSync : forall a::Type(Unl,Any,Abs).
+  modal [Wild] ((modal [Wild] ((!a.EndBang) -> EndBang)) -> a)
+fun runSync(f) {
+  var c = forkSync(f);
+  var (v, c) = receive(c);
+  wait(c);
+  v
 }

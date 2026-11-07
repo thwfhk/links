@@ -93,7 +93,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D7c1c | Full message suite and actor cases in mixed suites | `75072fad` |
 | D7c2a | Session primitives, absolute messages and generic dual consistency | `2fc7f620` |
 | D7c2b | Selection/offer inference, execution and contextual IR checks | `ceac5dce` |
-| D7c2c1 | Split-end aliases and synchronisation helpers | This commit |
+| D7c2c1 | Split-end aliases and synchronisation helpers | `45ffa14b` |
+| D7c2c2 | Callback session helpers and nested protocol skeleton duality | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -177,7 +178,7 @@ user requested on 7 November 2026. The main agent owns integration and these rec
 
 D7a (`1f7ff34e`), D7b1 (`4fad3532`) and D7b2a (`db0d3a75`) are complete.
 D7b2b (`72e47dbc`) and D7b3 (`f09237bd`) are complete. D7b4a0 (`8cfe88a3`) is complete. D7b4a collection migration (`0b2c0d3f`) is complete. D7b4b (`efc1bca2`) is complete. D7b4c (`4e009da6`) is complete. D7c1a core actors (`ef94a794`) and D7c1b actor variants are complete.
-D7c1b1 polymorphic export is complete. D7c1c actor migration is complete. D7c2a session primitives are complete. D7c2b selection/offer is complete. D7c2c1 split-end helpers are complete. D7c2c2 callback helpers are next. Later boundaries may be split further when a dependency needs
+D7c1b1 polymorphic export is complete. D7c1c actor migration is complete. D7c2a session primitives are complete. D7c2b selection/offer is complete. D7c2c1 split-end helpers are complete. D7c2c2 callback helpers are complete. D7c2d CP is next. Later boundaries may be split further when a dependency needs
 its own review and checks.
 
 ## Recorded decisions
@@ -193,33 +194,46 @@ and design:
 
 ## Latest task and verification
 
-7 November 2026, D7c2c1, base `ceac5dce`: the staged contextual prelude contains
-`EndBang`, `EndQuery`, `wait`, `closeBang`, `makeEndBang` and `linkSync`.
-The [session design](doc/modal-effects-design.md#d7-session-integration) records
-their ordinary session operations and contextual protocol parameter.
+7 November 2026, D7c2c2, base `45ffa14b`: all seven staged callback session
+helpers have explicit signatures and execute. The
+[session design](doc/modal-effects-design.md#d7-session-integration) records
+the spawned and caller-side callback contracts. Nested helper calls exposed
+`Dual Ghost` before the callback protocol was known. Pure skeleton duality
+now preserves missing structure; checked duality still rejects ghosts and
+concrete non-session types.
 
-Independent review found no issues. Its twelve focused cases cover
-synchronisation, bidirectional linking, contextual protocols, session kinds,
-directions, Wild and linear consumption. Review record:
-`/tmp/links-d7c2c1-review-summary.log`. Eight focused source-unit groups passed
-(`/tmp/links-d7c2c1-unit-focused.log`), and all 35 prelude regression cases
-passed before integrated testing.
+Independent review found no remaining issues. Five selected unit groups and
+fourteen CLI/IR cases passed, including all four nested fork variants,
+contextual results, polymorphic messages and negative controls. Review logs:
+`/tmp/links-d7c2c2-review-duality-unit.log`,
+`/tmp/links-d7c2c2-review-final-cli.log`. The writer's 126 focused cases passed
+(`/tmp/links-d7c2c2-duality-focused.log`). Initial nested-call failures are
+resolved; the inference failure and controls remain in that milestone's logs.
 
-The compiler is unchanged from `ceac5dce`; its build remains recorded under
-`/tmp/links-d7c2b-verification`. All writers finished and the combined diff was
-reviewed before testing. All checks passed, and the three source/test hashes
-still match after testing. Logs below are in `/tmp/links-d7c2c1-verification`;
-documentation was updated afterwards.
+All writers finished and the combined diff was reviewed before integrated
+testing. Source hashes still match after testing. Logs below are in
+`/tmp/links-d7c2c2-verification`; `revision.txt` and `source.sha256` identify
+the tested source. Documentation was updated afterwards.
 
 | Command | Result | Log |
 |---|---|---|
-| `opam exec -- ./run-tests nodb-unit-tests` | 1,403 passed | `unit.log` |
+| `make no-db` | Passed | `build.log` |
+| `opam exec -- ./run-tests nodb-unit-tests` | 1,425 passed | `unit.log` |
 | `./test-harness tests/fresco.tests` | 70 passed | `fresco.log` |
 | `./test-harness tests/fresco_typecheck.tests` | 2 passed | `fresco_typecheck.log` |
 | `./test-harness tests/fresco_modal.tests` | 20 passed | `fresco_modal.log` |
-| `./test-harness tests/fresco_prelude.tests` | 35 passed | `fresco_prelude.log` |
+| `./test-harness tests/fresco_prelude.tests` | 45 passed | `fresco_prelude.log` |
 | `./test-harness tests/fresco_actors.tests` | 49 passed | `fresco_actors.log` |
 | `./test-harness tests/fresco_sessions.tests` | 35 passed | `fresco_sessions.log` |
+| `./test-harness tests/messages.tests` | 11 passed | `messages.log` |
+| `./test-harness tests/sessions.tests` | 11 passed | `sessions.log` |
+| `./test-harness tests/handlers.tests` | 95 passed | `handlers.log` |
+| `./test-harness tests/effect_sugar.tests` | 44 passed | `effect_sugar.log` |
+| `./test-harness tests/typed_ir.tests` | 26 passed | `typed_ir.log` |
+| `./test-harness tests/functions.tests` | 33 passed | `functions.log` |
+| `./test-harness tests/polymorphism.tests` | 55 passed | `polymorphism.log` |
+| `./test-harness tests/typecheck_examples.tests` | 167 passed, 15 ignored | `typecheck_examples.log` |
+| `./test-harness tests/continuations.tests` | 15 passed | `continuations.log` |
 | `make rule-check` | Passed; GNU-find tab check skipped, formatter disabled | `rule-check.log` |
 | Source hashes, added-line whitespace; `git diff --check` | Passed | `source-check.log`, `diff-check.log` |
 
@@ -232,7 +246,7 @@ Documentation-only update: text and whitespace checked.
 
 ## Next action
 
-Implement D7c2c2 callback helpers,
-then continue through the recorded D7 milestones. Review, test and commit
-each milestone before the next. Pause after D7 is complete, before starting
-D8, as requested on 7 November 2026. Both D6 choices are confirmed.
+Implement D7c2d CP, then continue through the recorded D7 milestones.
+Review, test and commit each milestone before the next. Pause after D7 is
+complete, before starting D8, as requested on 7 November 2026. Both D6 choices
+are confirmed.

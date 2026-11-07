@@ -773,6 +773,17 @@ supplied endpoints and returns a fresh `EndBang`; its protocol parameter
 retains `Type(Any,Session,Any)`. These ordinary session operations require no
 session-failure annotation or control-flow-linearity construct.
 
+**Choice for review:** give spawned callbacks in `fork`, `linFork`,
+`reproduce`, `connect`, `forkSync`, `linForkSync` and `runSync` an absolute
+`modal [Wild]` type. Use linear callback arrows for the `lin` variants. Their
+protocol parameter has `Type(Any,Session,Abs)` because the access point or
+endpoint crosses a spawn lock. The caller-side callback in `connect` remains
+contextual. Preserve the legacy unlimited result parameter of `connect` and
+unlimited message parameter of `runSync`; the latter also requires `Abs`.
+These signatures cover the specialised ordinary-session uses. General
+interfaces with independently chosen callback effect contexts remain deferred.
+A spawned callback may install its own handlers.
+
 **Choice for review:** require `Wild` for session selection and offer. Legacy
 source checking omits this requirement, while the IR checker requires it.
 The contextual rule agrees with the session primitives and the recorded
@@ -1254,6 +1265,11 @@ ordinary/modal requirement, including unused parameters. Detached callers restor
 the exported variable table before checking. Session duality exchanges input and
 output and selection and choice, while message payloads keep their original type.
 Checked duality requires `Session`, including for nominal applications.
+Pure skeleton duality preserves an ordinary ghost and dualises the body of a
+universal ghost. A callback application can leave `Dual Ghost` before its
+protocol is known; rejecting that skeleton prevents the full callback check
+from supplying the protocol. Checked duality still rejects both ghost forms
+through ghost-free conversion. Concrete non-session types retain their errors.
 
 Represent a dual choice row using an empty row whose tail
 is the original copied row and whose tail-duality flag is set. This retains

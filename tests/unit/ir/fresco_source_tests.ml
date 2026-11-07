@@ -1932,6 +1932,148 @@ let split_end_suite = "staged split-end session helpers" >::: [
        "fun(c:End,d:End) { var _ = linkSync(c,d); () }"]);
 ]
 
+let session_callback_suite = "staged callback session helpers" >::: [
+  "fork executes an absolute callback" >:: (fun _ ->
+    collection_execution (`Int 42) {|
+      var c = fork(fun(c) { close(send(42,c)) });
+      { var (x,c) = receive(c); close(c); x }
+    |} |> expect_type Types.int_type);
+
+  "linFork consumes an absolute linear capture" >:: (fun _ ->
+    collection_execution (`Int 42) {|
+      var once = (linfun() { 42 } : modal [] (() -@ Int));
+      var c = linFork(linfun(c) { close(send(once(),c)) });
+      { var (x,c) = receive(c); close(c); x }
+    |} |> expect_type Types.int_type);
+
+  "reproduce serves two bounded requests from a daemon" >:: (fun _ ->
+    for _ = 1 to 3 do
+      collection_execution (Value.box [`Int 42; `Int 42]) {|
+      var ap = (new() : AP(!Int.End));
+      var daemon = spawn { reproduce(ap,fun(c) { close(send(42,c)) }) };
+      { var (x,c) = receive(request(ap)); close(c);
+        var (y,c) = receive(request(ap)); close(c); (x,y) }
+      |} |> ignore
+    done);
+
+  "connect executes its caller callback" >:: (fun _ ->
+    collection_execution (`Int 42) {|
+      connect(fun(c) { close(send(40,c)) },
+              fun(c) { var (x,c) = receive(c); close(c); x+2 })
+    |} |> expect_type Types.int_type);
+
+  "connect checks its caller callback in the caller's effect context" >:: (fun _ ->
+    ignore (collection_check {|
+      effect Extra { Value : () => Int; }
+      handle <Extra>
+        (connect(fun(c) { close(send(40,c)) },
+                 fun(c) { var (x,c) = receive(c); close(c); x+do Value }))
+      { case x -> x case <Value => k> -> k(2) }
+    |}));
+
+  "forkSync returns its callback's split-end continuation" >:: (fun _ ->
+    collection_execution (`Int 42) {|
+      var c = forkSync(fun(c) { send(42,c) });
+      { var (x,c) = receive(c); wait(c); x }
+    |} |> expect_type Types.int_type);
+
+  "linForkSync consumes an absolute linear capture" >:: (fun _ ->
+    collection_execution (`Int 42) {|
+      var once = (linfun() { 42 } : modal [] (() -@ Int));
+      var c = linForkSync(linfun(c) { send(once(),c) });
+      { var (x,c) = receive(c); wait(c); x }
+    |} |> expect_type Types.int_type);
+
+  "runSync receives the callback result and waits for its end" >:: (fun _ ->
+    collection_execution (`Int 42) {|
+      runSync(fun(c) { send(42,c) })
+    |} |> expect_type Types.int_type);
+
+  "nested receives infer callback protocols through duality" >:: (fun _ ->
+    List.iter (fun source ->
+      collection_execution (`Int 42) source |> expect_type Types.int_type)
+      [{|{ var (x,c) = receive(fork(fun(c) { close(send(42,c)) })); close(c); x }|};
+       {|{ var once = (linfun() { 42 } : modal [] (() -@ Int));
+           var (x,c) = receive(linFork(linfun(c) { close(send(once(),c)) })); close(c); x }|};
+       {|{ var (x,c) = receive(forkSync(fun(c) { send(42,c) })); wait(c); x }|};
+       {|{ var once = (linfun() { 42 } : modal [] (() -@ Int));
+           var (x,c) = receive(linForkSync(linfun(c) { send(once(),c) })); wait(c); x }|}]);
+
+  "nested receives reject incompatible concrete protocols" >:: (fun _ ->
+    List.iter (fun source -> reject (fun () -> collection_check source))
+      ["receive(forkSync(fun(c:(!Bool.EndBang)) { send(42,c) }))";
+       "receive(forkSync(fun(c:End) { close(c); makeEndBang() }))"]);
+
+  "a spawned callback can install its own handler" >:: (fun _ ->
+    ignore (collection_check {|
+      effect Local { Value : () => Int; }
+      var c = fork(fun(c) {
+        close(send(handle <Local> (do Value)
+          { case x -> x case <Value => k> -> k(42) },c))
+      });
+      { var (x,c) = receive(c); close(c); x }
+    |}));
+
+  "spawned callbacks cannot use the caller's handler" >:: (fun _ ->
+    List.iter (fun call -> reject (fun () -> collection_check
+      ("effect Caller { Value : () => Int; } " ^
+       "handle <Caller> (" ^ call ^ ") " ^
+       "{ case c -> c case <Value => k> -> k(42) }")))
+      ["fork(fun(c) { close(send(do Value,c)) })";
+       "linFork(linfun(c) { close(send(do Value,c)) })"]);
+
+  "unlimited spawned callbacks cannot capture a linear function" >:: (fun _ ->
+    List.iter (fun call -> reject (fun () -> collection_check
+      ("{ var once = (linfun() { 42 } : modal [] (() -@ Int)); " ^ call ^ " }")))
+      ["fork(fun(c) { close(send(once(),c)) })";
+       "forkSync(fun(c) { send(once(),c) })";
+       "runSync(fun(c) { send(once(),c) })"]);
+
+  "linear spawned callbacks cannot reuse a linear capture" >:: (fun _ ->
+    List.iter (fun call -> reject (fun () -> collection_check
+      ("{ var once = (linfun() { 21 } : modal [] (() -@ Int)); " ^ call ^ " }")))
+      ["linFork(linfun(c) { close(send(once()+once(),c)) })";
+       "linForkSync(linfun(c) { send(once()+once(),c) })"]);
+
+  "spawned callbacks reject contextual captures" >:: (fun _ ->
+    List.iter (fun call -> reject (fun () -> collection_check
+      ("{ var value = fun() { 42 }; " ^ call ^ " }")))
+      ["fork(fun(c) { close(send(value(),c)) })";
+       "linFork(linfun(c) { close(send(value(),c)) })";
+       "forkSync(fun(c) { send(value(),c) })";
+       "linForkSync(linfun(c) { send(value(),c) })";
+       "runSync(fun(c) { send(value(),c) })"]);
+
+  "callback helpers require absolute protocols" >:: (fun _ ->
+    List.iter (fun helper -> reject (fun () -> collection_check
+      ("~" ^ helper ^ "[!(() -> Int).End]")))
+      ["fork"; "linFork"; "reproduce"; "connect"; "forkSync"; "linForkSync"]);
+
+  "runSync requires an absolute unlimited message" >:: (fun _ ->
+    List.iter (fun source -> reject (fun () -> collection_check source))
+      ["~runSync[() -> Int]";
+       "~runSync[modal [] (() -@ Int)]"]);
+
+  "runSync transfers an absolute function message" >:: (fun _ ->
+    collection_execution (`Int 42) {|
+      typename Action = modal [] (() -> Int);
+      var action = ~runSync[Action](fun(c) {
+        ~send[Action,EndBang]((fun() { 42 } : Action),c)
+      });
+      action()
+    |} |> expect_type Types.int_type);
+
+  "connect retains contextual results in the caller" >:: (fun _ ->
+    collection_execution (`Int 42) {|
+      var action = connect(fun(c) { close(c) },
+                           fun(c) { close(c); fun() { 42 } });
+      action()
+    |} |> expect_type Types.int_type);
+
+  "connect retains its unlimited result requirement" >:: (fun _ ->
+    reject (fun () -> collection_check "~connect[End,End]"));
+]
+
 let ir_suite =
   let arrow argument result = Types.Arrow (Types.make_tuple_type [argument], result) in
   let int, bool = Types.int_type, Types.bool_type in
@@ -1964,4 +2106,4 @@ let ir_suite =
       reject_coercion (forall (fun a -> arrow a int)) (forall (fun a -> arrow a a)));
   ]
 
-let suite = "Fresco source" >::: [reference_suite; source_suite; callback_sequence_suite; primitive_suite; regex_suite; continuations_suite; comprehensions_suite; sections_patterns_updates_suite; collection_suite; foundation_suite; remaining_core_suite; split_end_suite; ir_suite]
+let suite = "Fresco source" >::: [reference_suite; source_suite; callback_sequence_suite; primitive_suite; regex_suite; continuations_suite; comprehensions_suite; sections_patterns_updates_suite; collection_suite; foundation_suite; remaining_core_suite; split_end_suite; session_callback_suite; ir_suite]

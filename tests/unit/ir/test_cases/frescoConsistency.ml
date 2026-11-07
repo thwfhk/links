@@ -326,6 +326,24 @@ let suite = "Fresco consistency" >::: [
     let ctx, _ = join ctx (S.Dual (v a)) (S.Input (int, S.End)) in
     assert_equal (S.Output (int, S.End)) (solution ctx a));
 
+  "dual session ghosts admit a supplied protocol" >:: (fun _ ->
+    List.iter (fun (target,opposite) ->
+      List.iter (fun source ->
+        let _,left = join C.empty source target in
+        let _,right = join C.empty target source in
+        assert_equal target (head left);
+        assert_equal target (head right))
+        [S.Dual S.Ghost;
+         S.UniversalGhost (S.Dual S.Ghost);
+         S.Dual (S.UniversalGhost opposite)])
+      [S.Input (int,S.End), S.Output (int,S.Ghost);
+       S.Output (int,S.End), S.Input (int,S.Ghost)];
+    List.iter (fun source ->
+      reject (J.consistent environment C.empty (S.Dual source) (S.Input (int,S.End))))
+      [int; S.UniversalGhost int; S.UniversalGhost (S.Arrow (int,int));
+       S.UniversalGhost (S.Modal (Modality.identity,S.End));
+       S.UniversalGhost (S.ForAll ([],S.End))]);
+
   "choice duality preserves open tail orientation" >:: (fun _ ->
     let r = q ~pk:PrimaryKind.Row ~restriction:Restriction.Session () in let ctx = flex C.empty r in
     let source = S.Dual (S.Select (row ~tail:(v r) ["x", S.Present (S.Input (int, S.End))])) in

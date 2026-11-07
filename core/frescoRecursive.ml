@@ -130,8 +130,8 @@ let dual_type typ =
     | Present body when not mode -> Present (child body)
     | Absent when not mode -> Absent
     | Closed when not mode -> Closed
-    | Ghost when not mode -> Ghost
-    | UniversalGhost body when not mode -> UniversalGhost (child body)
+    | Ghost -> Ghost
+    | UniversalGhost body -> UniversalGhost (walk mode scope active recursive_nodes None body)
     | ForAll _ -> fail (Unsupported_duality "ForAll")
     | Application _ -> fail (Unsupported_duality "Application")
     | Primitive _ -> fail (Unsupported_duality "Primitive")
@@ -144,8 +144,6 @@ let dual_type typ =
     | Present _ -> fail (Unsupported_duality "Present")
     | Absent -> fail (Unsupported_duality "Absent")
     | Closed -> fail (Unsupported_duality "Closed")
-    | Ghost -> fail (Unsupported_duality "Ghost")
-    | UniversalGhost _ -> fail (Unsupported_duality "UniversalGhost")
   in
   walk true [] [] [] None typ
 

@@ -300,6 +300,18 @@ let suite = "Fresco recursive operations" >::: [
     assert_equal (S.Output (S.UniversalGhost S.Ghost, S.End))
       (dual (S.Input (S.UniversalGhost S.Ghost, S.End))));
 
+  "pure session duality preserves unknown session structure" >:: (fun _ ->
+    List.iter (fun (source,expected) ->
+      let before = bytes source in
+      assert_equal expected (dual source);
+      assert_equal before (bytes source);
+      reject (R.Conversion_error S.Ghost_type) (R.dual_checked environment C.empty source))
+      [S.Ghost, S.Ghost;
+       S.UniversalGhost S.Ghost, S.UniversalGhost S.Ghost;
+       S.UniversalGhost S.End, S.UniversalGhost S.End;
+       S.Input (int,S.Ghost), S.Output (int,S.Ghost);
+       S.UniversalGhost (S.Output (int,S.Ghost)), S.UniversalGhost (S.Input (int,S.Ghost))]);
+
   "choice duality preserves open presences and row tails" >:: (fun _ ->
     let p = q ~pk:PrimaryKind.Presence ~restriction:Restriction.Session () in
     let r = q ~pk:PrimaryKind.Row ~restriction:Restriction.Session () in
@@ -387,8 +399,11 @@ let suite = "Fresco recursive operations" >::: [
       reject (R.Unsupported_duality name) (R.dual typ);
       assert_equal before (bytes typ))
       ["Primitive", int; "Arrow", S.Arrow (int, int); "Modal", absolute S.End;
-       "ForAll", S.ForAll ([], S.End); "Ghost", S.Ghost;
-       "UniversalGhost", S.UniversalGhost S.End]);
+       "ForAll", S.ForAll ([], S.End);
+       "Primitive", S.UniversalGhost int;
+       "Arrow", S.UniversalGhost (S.Arrow (int, int));
+       "Modal", S.UniversalGhost (absolute S.End);
+       "ForAll", S.UniversalGhost (S.ForAll ([], S.End))]);
 
   "checked duality requires session variables" >:: (fun _ ->
     let a = q () in

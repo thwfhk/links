@@ -40,8 +40,8 @@ val unfold_application : FrescoSkeleton.rec_appl ->
 
     A choice row's dual is represented by an empty row with the copied row as
     its tail and the tail-duality flag set. This also handles open presences
-    and recursive rows without expanding or mutating them. Ghosts are preserved
-    in message payloads; a ghost in session position has no duality rule.
+    and recursive rows without expanding or mutating them. Preserve [Ghost]
+    in either position and dualise a [UniversalGhost] body in session position.
     Top-level quantified, modal and ordinary value types have no session-duality
     rule. Free variables retain their context-owned kind requirements. *)
 val dual : FrescoSkeleton.t -> (FrescoSkeleton.t, error) result

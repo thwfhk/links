@@ -187,3 +187,55 @@ open import FrescoPrelude; fun(c:EndBang) { closeBang(c); closeBang(c) }
 args : --fresco --path=lib/stdlib
 exit : 1
 stderr : @.*Type error:.*
+
+Fork executes a session callback
+open import FrescoPrelude; { var (x,c) = receive(fork(fun(c) { close(send(42,c)) })); close(c); x }
+args : --fresco --path=lib/stdlib
+stdout : 42 : Int
+
+LinFork consumes an absolute linear capture
+open import FrescoPrelude; { var once = (linfun() { 42 } : modal [] (() -@ Int)); var (x,c) = receive(linFork(linfun(c) { close(send(once(),c)) })); close(c); x }
+args : --fresco --path=lib/stdlib
+stdout : 42 : Int
+
+ForkSync waits for the split end
+open import FrescoPrelude; { var (x,c) = receive(forkSync(fun(c) { send(42,c) })); wait(c); x }
+args : --fresco --path=lib/stdlib
+stdout : 42 : Int
+
+LinForkSync consumes an absolute linear capture
+open import FrescoPrelude; { var once = (linfun() { 42 } : modal [] (() -@ Int)); var (x,c) = receive(linForkSync(linfun(c) { send(once(),c) })); wait(c); x }
+args : --fresco --path=lib/stdlib
+stdout : 42 : Int
+
+RunSync receives the callback result
+open import FrescoPrelude; runSync(fun(c) { send(42,c) })
+args : --fresco --path=lib/stdlib
+stdout : 42 : Int
+
+Connect keeps the caller callback's handled effects
+open import FrescoPrelude; effect E { Read : () => Int; } handle <E> (connect(fun(c) { close(send(40,c)) },fun(c) { var (x,c) = receive(c); close(c); x + do Read })) { case x -> x case <Read => k> -> k(2) }
+args : --fresco --path=lib/stdlib
+stdout : 42 : Int
+
+Reproduce accepts two connections
+open import FrescoPrelude; var ap = (new() : AP(!Int.End)); var worker = spawn { reproduce(ap,fun(c) { close(send(42,c)) }) }; { var (x,c) = receive(request(ap)); close(c); var (y,c) = receive(request(ap)); close(c); (x,y) }
+args : --fresco --path=lib/stdlib
+stdout : (42, 42) : (Int, Int)
+
+Fork cannot capture the caller's handler
+open import FrescoPrelude; effect E { Read : () => Int; } handle <E> (fork(fun(c) { close(send(do Read,c)) })) { case c -> c case <Read => k> -> k(42) }
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*
+
+A fork callback can install its own handler
+open import FrescoPrelude; effect E { Read : () => Int; } { var c = fork(fun(c) { close(send(handle <E> (do Read) { case x -> x case <Read => k> -> k(42) },c)) }); var (x,c) = receive(c); close(c); x }
+args : --fresco --path=lib/stdlib
+stdout : 42 : Int
+
+An unlimited fork callback rejects a linear capture
+open import FrescoPrelude; { var once = (linfun() { 42 } : modal [] (() -@ Int)); fork(fun(c) { close(send(once(),c)) }) }
+args : --fresco --path=lib/stdlib
+exit : 1
+stderr : @.*Type error:.*
