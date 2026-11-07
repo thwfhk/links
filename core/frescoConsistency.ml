@@ -363,6 +363,8 @@ let rec join env active ctx dl dr pk left right =
   | S.Choice a, S.Choice b -> unary env active ctx dl dr PrimaryKind.Row (fun t -> S.Choice t) a b
   | S.Dual a, S.Dual b ->
      let ctx, typ = join env active ctx dl dr pk a b in ctx, S.Dual typ
+  | S.Dual _, S.UniversalGhost b -> join env active ctx dl dr pk left b
+  | S.UniversalGhost a, S.Dual _ -> join env active ctx dl dr pk a right
   | S.Dual a, _ ->
      let dual = recursive (R.dual a) in
      if same_syntax dual left then begin

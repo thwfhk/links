@@ -429,6 +429,13 @@ sig haveMail : forall a::Type(Any,Any,Abs).
   modal [Wild, Receive(a)] (() -> Bool)
 ```
 
+Session primitives require `Wild`. Message types for `send` and `receive`
+have ordinary kind `Any` and modal kind `Abs`. Remaining session protocols
+retain their `Session` restriction without an additional `Abs` requirement
+for local calls. A channel or access point captured by a spawned process or
+sent as a message must satisfy the existing absolute-value rule. Access
+points remain reusable; session endpoints retain ordinary linear usage.
+
 ## 8. Compatibility and examples
 
 ### 8.1 Required source changes

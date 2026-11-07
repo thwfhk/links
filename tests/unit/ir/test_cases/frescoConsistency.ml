@@ -310,6 +310,17 @@ let suite = "Fresco consistency" >::: [
     ignore (join ctx (S.Dual (S.Dual var)) var);
     reject (J.consistent environment ctx (S.Dual var) S.End));
 
+  "universal ghosts preserve rigid session duals" >:: (fun _ ->
+    let a = q ~restriction:Restriction.Session () in let ctx = rigid C.empty a in
+    let var = v ~freedom:`Rigid a in
+    let dual = S.Dual var in
+    let _,left = join ctx dual (S.UniversalGhost dual) in
+    let _,right = join ctx (S.UniversalGhost dual) dual in
+    assert_equal dual (head left);
+    assert_equal dual (head right);
+    reject (J.consistent environment ctx (S.UniversalGhost var) dual);
+    reject (J.consistent environment ctx dual (S.UniversalGhost var)));
+
   "dual flexible variable solves through duality" >:: (fun _ ->
     let a = q ~restriction:Restriction.Session () in let ctx = flex C.empty a in
     let ctx, _ = join ctx (S.Dual (v a)) (S.Input (int, S.End)) in

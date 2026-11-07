@@ -399,6 +399,12 @@ before transparent aliases or other wrappers can be removed; unused actual
 arguments retain their declared requirements. Session constructors also impose
 their ordinary requirements during this check.
 
+When one side is a session dual, remove a universal ghost on the other side
+before normalising the dual. Otherwise a rigid session variable can cause
+`UniversalGhost(~s)` and `~s` to fail consistency. Retain both bound-variable
+sets in this step and use the existing recursive comparison. This does not
+identify `s` with `~s` or change the unresolved row/presence duality limits.
+
 Consistency implements the thesis' two bound-variable sets. Matching quantifiers
 introduce a shared fresh binder on both sides; a one-sided quantifier extends
 only its own set. Filling a ghost checks free variables after solution expansion.
@@ -728,6 +734,36 @@ requires the diagnostic for capturing its contextual continuation across spawn.
 The former source ended with an invalid semicolon and accepted any error.
 The list-mailbox mismatch sends a list of strings before a list of integers;
 this checks shared element types without an earlier String/List mismatch.
+
+### D7 session integration
+
+Keep session endpoints and access points classified by their protocols.
+Input/output combines the message and continuation kinds; choice/selection
+combines branch kinds. Access points follow the protocol kind. Existing
+ordinary session linearity and unrestricted access-point use remain separate.
+
+**Choice for review:** require message types in `send` and `receive` to have
+`Type(Any,Any,Abs)`. A message crosses between processes whose effect contexts
+may differ, as with actor messages. Modal functions and linear values may be
+messages when their types satisfy `Abs`. Allowing arbitrary contextual
+functions would need a rule relating the two process contexts.
+
+Keep residual session parameters at `Type(Any,Session,Any)` for local primitive
+calls. Requiring `Abs` for every remaining protocol would prevent local use
+without a transfer. The existing absolute lock requires a complete protocol
+to be absolute when its endpoint or access point is captured by a spawned
+process; sending a channel as a message imposes the same requirement.
+All session primitives retain their existing `Wild` effect. Exclude `cancel`
+and session-failure support. Preserve existing runtime location restrictions
+on client access points.
+
+The first session execution audit found an existing interpreter close/link
+failure: a sender can close its incoming buffer before a relay links the two
+channels. `proc.ml`'s `close` removes that buffer, while `link` reads all four
+buffers and raises `NotFound`. The same source fails on legacy and Fresco.
+A request/acknowledgement exchange through the relay executes on both paths.
+D8 must check and resolve the close/link case; the reproducer and both results
+are in `/tmp/links-d7c2a-review-link-runtime.log`. D7c2a retains the runtime.
 
 ### D7 prelude prerequisites
 

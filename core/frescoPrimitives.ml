@@ -141,6 +141,14 @@ let signatures =
     named ["spawnAngel"; "spawnClient"] "forall a::Type(Any,Any,Abs), b. modal [Wild] ((modal [Wild, Receive(a)] (() -@ b)) -> Process(a))";
     named ["spawnWait"] "forall a::Type(Any,Any,Abs), b::Type(Any,Any,Abs). modal [Wild] ((modal [Wild, Receive(a)] (() -@ b)) -> b)";
     named ["haveMail"] "forall a::Type(Any,Any,Abs). modal [Wild, Receive(a)] (() -> Bool)";
+    named ["send"] "forall a::Type(Any,Any,Abs), s::Type(Any,Session,Any). modal [Wild] ((a, !a.s) -> s)";
+    named ["receive"] "forall a::Type(Any,Any,Abs), s::Type(Any,Session,Any). modal [Wild] ((?a.s) -> (a, s))";
+    named ["link"] "forall s::Type(Any,Session,Any). modal [Wild] ((s, ~s) -> ())";
+    named ["new"; "newClientAP"; "newServerAP"] "forall s::Type(Any,Session,Any). modal [Wild] (() -> AP(s))";
+    named ["newAP"] "forall s::Type(Any,Session,Any). modal [Wild] ((Location) -> AP(s))";
+    named ["accept"] "forall s::Type(Any,Session,Any). modal [Wild] ((AP(s)) -> s)";
+    named ["request"] "forall s::Type(Any,Session,Any). modal [Wild] ((AP(s)) -> ~s)";
+    wild ["close"] "(End) -> ()";
   ]
 
 let internal_signatures = [
@@ -150,8 +158,7 @@ let internal_signatures = [
 
 let deferred = [
   "actors", ["spawnWait'"];
-  "sessions", ["send"; "receive"; "link"; "new"; "newAP"; "newClientAP";
-    "newServerAP"; "accept"; "request"; "cancel"; "close"];
+  "session failure", ["cancel"];
   "callbacks", ["registerEventHandlers"; "unsafePickleCont"; "jsSetInterval";
     "jsRequestAnimationFrame"; "jsSetOnKeyDown"; "jsSetOnEvent";
     "jsSetWindowEvent"; "jsSetOnLoad"; "unsafeAddRoute"];

@@ -661,12 +661,14 @@ let primitive_suite = "primitive environment" >::: [
       assert_equal ~msg:name (Env.String.find name Lib.nenv) var;
       assert_equal ~msg:name (Lib.primitive_arity name) (arity typ)) bindings);
 
-  "non-actor polymorphic binders retain unlimited ordinary kinds" >:: (fun _ ->
+  "other polymorphic primitives retain unlimited ordinary kinds" >:: (fun _ ->
     let bindings = FrescoPrimitives.bindings (FrescoPrimitives.initialise (Infer.elaboration Infer.empty)) in
     List.iter (fun (name, (_, typ)) ->
       match expose typ with
       | Types.ForAll (_, _) when List.mem name ["Send"; "self"; "recv"; "spawn";
-          "spawnAt"; "spawnAngelAt"; "spawnAngel"; "spawnClient"; "spawnWait"; "haveMail"] -> ()
+          "spawnAt"; "spawnAngelAt"; "spawnAngel"; "spawnClient"; "spawnWait"; "haveMail";
+          "send"; "receive"; "link"; "new"; "newAP"; "newClientAP"; "newServerAP";
+          "accept"; "request"] -> ()
       | Types.ForAll (quantifiers, _) -> List.iter (fun q ->
           assert_equal ~msg:name (PrimaryKind.Type, (Linearity.Unl, Restriction.Any))
             (Quantifier.to_kind q);

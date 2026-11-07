@@ -1,0 +1,83 @@
+---
+config: tests/fresco_sessions.config
+args: --fresco
+---
+
+Session send and receive execute on separate processes
+var ap = new(); var p = spawn { var c = accept(ap); var (x,c) = receive(c); close(c); print(intToString(x)) }; close(send(42,request(ap)))
+stdout : 42() : ()
+
+An explicitly located access point executes
+var ap = newAP(here()); var p = spawn { var c = accept(ap); close(send(42,c)) }; { var (x,c) = receive(request(ap)); close(c); x }
+stdout : 42 : Int
+
+A server access point executes
+var ap = newServerAP(); var p = spawn { var c = accept(ap); close(send(42,c)) }; { var (x,c) = receive(request(ap)); close(c); x }
+stdout : 42 : Int
+
+Link connects two dual session endpoints
+var first = new(); var second = new(); var producer = spawn { var c = send(42,accept(first)); var (ack,c) = receive(c); close(c) }; var relay = spawn { link(request(first),accept(second)) }; { var (x,c) = receive(request(second)); close(send((),c)); x }
+stdout : 42 : Int
+
+Session payloads must match the protocol
+var ap = (new() : AP(?(Int).End)); var p = spawn { var (x,c) = receive(accept(ap)); close(c) }; close(send("42",request(ap)))
+exit : 1
+stderr : @.*Type error:.*
+
+Session endpoints cannot be duplicated
+fun(c:End) { (c,c) }
+exit : 1
+stderr : @.*Type error:.*
+
+Session endpoints cannot be discarded
+fun(c:End) { () }
+exit : 1
+stderr : @.*Type error:.*
+
+Access points require a session protocol
+(new() : AP(Int))
+exit : 1
+stderr : @.*Type error:.*
+
+Session primitives require Wild
+(fun() { new() } : modal [] (() -> AP(End)))
+exit : 1
+stderr : @.*Type error:.*
+
+Client access point creation lowers with checked IR
+sig makeClient : modal [Wild] (() -> AP(End)) fun makeClient() { newClientAP() } ()
+stdout : () : ()
+
+Local send retains a contextual residual protocol
+sig forward : forall s::Type(Any,Session,Any). modal [Wild] ((Int, !(Int).s) -> s) fun forward(x,c) { send(x,c) } ()
+stdout : () : ()
+
+An absolute linear function transfers through a session
+typename Message = modal [] (() -@ Int); var ap = (new() : AP(?(Message).End)); var p = spawn { var (f,c) = freeze(receive)[Message,End](accept(ap)); close(c); print(intToString(f())) }; close(~send[Message,End]((linfun() { 42 } : Message),request(ap)))
+stdout : 42() : ()
+
+A contextual function cannot be sent through a session
+var ap = new(); var c = request(ap); send(fun() { 42 },c)
+exit : 1
+stderr : @.*Type error:.*
+
+An absolute polymorphic function transfers through a session
+typename Message = modal [] (forall a. (a) -> a); var msg = (fun(x) { x } : Message); var ap = (new() : AP(?(Message).End)); var p = spawn { var (f,c) = freeze(receive)[Message,End](accept(ap)); close(c); print(intToString(f(42))); if (f(true)) print("true") else print("false") }; close(~send[Message,End](~msg,request(ap)))
+stdout : 42true() : ()
+
+A session delegates a linear channel
+var data = new(); var courier = new(); var producer = spawn { close(send(42,accept(data))) }; var delegate = spawn { close(send(request(data),accept(courier))) }; { var (c,done) = receive(request(courier)); close(done); var (x,c) = receive(c); close(c); x }
+stdout : 42 : Int
+
+An access point supports two connections
+var ap = new(); var producer = spawn { close(send(42,accept(ap))); close(send(43,accept(ap))) }; { var (x,c) = receive(request(ap)); close(c); var (y,c) = receive(request(ap)); close(c); (x,y) }
+stdout : (42, 43) : (Int, Int)
+
+Generic link retains a rigid session protocol
+sig join : forall s::Type(Any,Session,Any). modal [Wild] ((AP(s),AP(s)) -> ()) fun join(a,b) { ~link[s](~accept[s](a),~request[s](b)) } ()
+stdout : () : ()
+
+Generic link rejects two copies of the same protocol
+sig join : forall s::Type(Any,Session,Any). modal [Wild] ((s,s) -> ()) fun join(a,b) { ~link[s](a,b) } ()
+exit : 1
+stderr : @.*Type error:.*
