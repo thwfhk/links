@@ -1043,8 +1043,13 @@ The tree deletion example's existing two-child branch duplicates the left
 subtree. Preserve the recorded `remove2` result during type migration.
 Switch-function syntax already passes through `DesugarSwitchFuns` before
 Fresco inference. Its internal unsupported-node guard does not establish a
-source-language gap. Empty switches need their separate rule below before
-migrating extensible cases.
+source-language gap. The generated final case calls `error`, so every switch
+function retains `Wild`, including exhaustive matches. Preserve the default
+unlimited input binder on the polymorphic identity example. The migrated suite
+keeps `switch_functions=true` and its original seven cases; added strict-IR
+controls exercise named/anonymous polymorphism, nested bodies, filename/line
+reporting, unavailable `Wild` and rejected endpoint inputs. Empty switches use
+the separate rule below when migrating extensible cases.
 
 Keep XML/formlet/page/DOM/routes, MVU modules, socket examples and explicit
 foreign/location dependencies with the deferred features. Keep database-facing

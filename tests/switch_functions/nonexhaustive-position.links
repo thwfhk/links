@@ -1,0 +1,6 @@
+sig choose : modal [Wild] ((Int) -> Int)
+# The switch function starts on the next line.
+fun choose(_) switch {
+  case 1 -> 42
+}
+choose(0)

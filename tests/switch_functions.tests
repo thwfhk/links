@@ -1,34 +1,76 @@
 ---
 config: tests/switch_functions.config
+args: --fresco
 ---
 
 Switch fun (syntax check)
-fun foo(_) switch { case x -> x } foo
-stdout : fun : (a) ~> a
+sig foo : forall a. modal [Wild] ((a) -> a) fun foo(_) switch { case x -> x } ~foo
+args : --fresco --set=show_quantifiers=true --set=hide_fresh_type_vars=false
+stdout : fun : forall a.modal [effect_0$Wild] ((a) -> a)
 
 Ackermann switch fun (1)
-fun ack(_,_) switch { case (0, n) -> n + 1 case (m, 0) -> ack(m - 1, 1) case (m, n) -> ack(m - 1, ack(m, n - 1)) } ack
-stdout : fun : (Int, Int) ~> Int
+sig ack : modal [Wild] ((Int,Int) -> Int) fun ack(_,_) switch { case (0, n) -> n + 1 case (m, 0) -> ack(m - 1, 1) case (m, n) -> ack(m - 1, ack(m, n - 1)) } ~ack
+stdout : fun : modal [effect_0$Wild] ((Int, Int) -> Int)
 
 Ackermann switch fun (2)
-fun ack(_,_) switch { case (0, n) -> n + 1 case (m, 0) -> ack(m - 1, 1) case (m, n) -> ack(m - 1, ack(m, n - 1)) } fun test() { print(intToString(ack(0,1))); print(intToString(ack(1,0))); print(intToString(ack(1,1))) } test()
+sig ack : modal [Wild] ((Int,Int) -> Int) fun ack(_,_) switch { case (0, n) -> n + 1 case (m, 0) -> ack(m - 1, 1) case (m, n) -> ack(m - 1, ack(m, n - 1)) } fun test() { print(intToString(ack(0,1))); print(intToString(ack(1,0))); print(intToString(ack(1,1))) } test()
 stdout : 223() : ()
 
 Curried switch fun
 fun foo(_)(_) switch { case (x, y) -> x + y } foo
-stderr : @.*Curried switch functions are not yet supported.*
+stderr : @.*<string>:1:.*Curried switch functions are not yet supported.*
 exit : 1
 
 Switch fun: runtime non-exhaustive error
-fun foo(_) switch { case 1 -> 1 } foo(0)
-stderr : @.*non-exhaustive pattern matching.*
+sig foo : modal [Wild] ((Int) -> Int) fun foo(_) switch { case 1 -> 1 } foo(0)
+stderr : @.*non-exhaustive pattern matching at File <string>, line 1,.*
 exit : 1
 
 Switch fun: matching over nullary function
 fun f() switch { case n -> 1 }
-stderr : @.*Can't match over nullary function.*
+stderr : @.*<string>:1:.*Can't match over nullary function.*
 exit : 1
 
 Anonymous switch fun
-fun(s) switch { case x -> x }
-stdout : fun : (a) ~> a
+(fun(s) switch { case x -> x } : forall a. modal [Wild] ((a) -> a))
+args : --fresco --set=show_quantifiers=true --set=hide_fresh_type_vars=false
+stdout : fun : forall a.modal [effect_0$Wild] ((a) -> a)
+
+Named switch functions retain separate polymorphic instantiations
+sig identity : forall a. modal [Wild] ((a) -> a) fun identity(_) switch { case x -> x } (identity(42),identity(true))
+args : --fresco --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : (42, true) : (Int, Bool)
+
+Anonymous switch functions execute at separate supplied instantiations
+var identity=(fun(_) switch { case x -> x } : forall a. modal [Wild] ((a) -> a)); (identity(42),identity(true))
+args : --fresco --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : (42, true) : (Int, Bool)
+
+Nested named switch functions retain their surrounding bindings
+sig outer : modal [Wild] ((Int) -> Int) fun outer(_) switch { case n -> { sig inner : modal [Wild] ((Int) -> Int) fun inner(_) switch { case m -> n+m } inner(2) } } outer(40)
+args : --fresco --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int
+
+Nested anonymous switch functions execute recursively desugared bodies
+(fun(_) switch { case x -> (fun(_) switch { case y -> x+y })(2) })(40)
+args : --fresco --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int
+
+Switch function fallback retains the source filename and line
+./tests/switch_functions/nonexhaustive-position.links
+filemode : true
+args : --fresco --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stderr : @.*non-exhaustive pattern matching at File .*tests/switch_functions/nonexhaustive-position\.links, line 3,.*
+exit : 1
+
+Even exhaustive switch functions retain the generated fallback Wild effect
+sig identity : forall a. (a) -> a fun identity(_) switch { case x -> x } ()
+args : --fresco --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stderr : @.*Type error:.*
+exit : 1
+
+Switch functions retain the legacy unrestricted input requirement
+sig identity : forall a. modal [Wild] ((a) -> a) fun identity(_) switch { case x -> x } fun(c:End) { identity(c) }
+args : --fresco --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stderr : @.*Type error:.*In expression: identity.*
+exit : 1
