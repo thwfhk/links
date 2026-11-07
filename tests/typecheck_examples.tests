@@ -425,14 +425,17 @@ args : --fresco --path=lib/stdlib
 Typecheck example file examples/sessions/calc-cp.links
 examples/sessions/calc-cp.links
 filemode : true
+args : --fresco --path=lib/stdlib
 
 Typecheck example file examples/sessions/calc-endbang.links
 examples/sessions/calc-endbang.links
 filemode : true
+args : --fresco --path=lib/stdlib
 
 Typecheck example file examples/sessions/calc.links
 examples/sessions/calc.links
 filemode : true
+args : --fresco --path=lib/stdlib
 
 Typecheck example file examples/sessions/chatserver/chatClient.links
 examples/sessions/chatserver/chatClient.links
@@ -526,6 +529,7 @@ filemode : true
 Typecheck example file examples/sessions/end.links
 examples/sessions/end.links
 filemode : true
+args : --fresco --path=lib/stdlib
 
 Typecheck example file examples/sessions/forkbomb.links
 examples/sessions/forkbomb.links
@@ -539,14 +543,17 @@ args : --fresco --path=lib/stdlib
 Typecheck example file examples/sessions/fuse.links
 examples/sessions/fuse.links
 filemode : true
+args : --fresco --path=lib/stdlib
 
 Typecheck example file examples/sessions/fusegg.links
 examples/sessions/fusegg.links
 filemode : true
+args : --fresco --path=lib/stdlib
 
 Typecheck example file examples/sessions/givengrab.links
 examples/sessions/givengrab.links
 filemode : true
+args : --fresco --path=lib/stdlib
 
 Typecheck example file examples/sessions/gng-client.links
 examples/sessions/gng-client.links
@@ -560,6 +567,7 @@ args : --fresco --path=lib/stdlib
 Typecheck example file examples/sessions/linear_if.links
 examples/sessions/linear_if.links
 filemode : true
+args : --fresco --path=lib/stdlib
 
 Typecheck example file examples/sessions/pi.links
 examples/sessions/pi.links

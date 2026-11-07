@@ -1,10 +1,13 @@
+sig main : modal [Wild] (() -> Int)
 fun main() {
+  sig giver : modal [Wild] ((Int,Int,AP(?Int.?Int.!Int.End)) -> Int)
   fun giver(x,y,a) {
     var (res, a) = receive(send(y,send(x,request(a))));
     close(a);
     res
   }
 
+  sig grabber : modal [Wild] ((AP(?Int.?Int.!Int.End)) -> ())
   fun grabber(a) {
     var s = accept(a);
     var (x,s) = receive(s);

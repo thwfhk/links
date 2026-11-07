@@ -1,4 +1,8 @@
-fun (c) {
+open import FrescoPrelude;
+
+sig choose : forall s::Type(Unl,Session,Any).
+  modal [Wild] ((?Bool.!Int.s) -> ())
+fun choose(c) {
   var (x, c) = receive(c);
   if (x) {
     ignore(send(1,c));
@@ -8,3 +12,5 @@ fun (c) {
     ()
   }
 }
+
+~choose

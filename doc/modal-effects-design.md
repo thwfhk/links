@@ -764,6 +764,9 @@ buffers and raises `NotFound`. The same source fails on legacy and Fresco.
 A request/acknowledgement exchange through the relay executes on both paths.
 D8 must check and resolve the close/link case; the reproducer and both results
 are in `/tmp/links-d7c2a-review-link-runtime.log`. D7c2a retains the runtime.
+Migrating `examples/sessions/fusegg.links` reproduces the same failure after
+successful source and IR checking (`/tmp/links-d7c2e2-examples-initial.log`).
+Keep its immediate close/link order; D8 owns the runtime repair.
 
 Stage `EndBang = !().End`, `EndQuery = ?().End`, `wait`, `closeBang`,
 `makeEndBang` and `linkSync` in the contextual prelude. Their signatures require
@@ -865,6 +868,14 @@ and explicit polymorphic/recursive signatures. Record specialised callback
 contracts separately from interfaces needing independent effect contexts.
 
 ### D7 prelude prerequisites
+
+Check each remaining argument group of a curried function through ordinary
+term inference. This applies a supplied modal or quantified result type before
+checking the next lambda, as for an explicit nested lambda. Calling the lambda
+checker directly skips those introduction rules. Preserve the existing
+parameter-name checks, ordinary capture checks and ambient-effect scopes.
+Session example migration exposed this gap when a pure first stage returned
+a `modal [Wild]` function.
 
 Library migration exposed two frontend gaps. Skeleton inference checks a
 sequenced expression against a ghost; the full pass still requires unit and

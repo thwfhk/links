@@ -1489,7 +1489,8 @@ and infer_lambda support s mode pos lin groups body =
        | _ -> assert false in
      let s,parameters,lets = parameters s patterns domains [] [] in
      let s,body = if groups = [] then infer_term support s result_mode body
-       else infer_lambda support s result_mode pos lin groups body in
+       else infer_term support s result_mode (WithPos.make ~pos
+         (G.FunLit (None,lin,G.NormalFunlit (groups,body),Location.Unknown))) in
      let s = check_bound_usage support pos before s in
      let s = if support = C.Type && lin = DeclaredLinearity.Unl then
        List.fold_left (fun s v -> if count s v > count before v then unlimited s pos v.value_type else s) s before.variables else s in

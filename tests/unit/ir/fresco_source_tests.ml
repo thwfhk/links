@@ -406,6 +406,70 @@ let source_suite = "Links source" >::: [
       (f(0)(42), f(0)(true))
     |} |> int_bool);
 
+  "curried groups introduce supplied modalities and restore ambient effects" >:: (fun _ ->
+    execution (`Int 42) {|
+      sig add : (Int) -> modal [] ((Int) -> Int)
+      fun add(x)(y) { x+y }
+      add(38)(2)+strlen("ab")
+    |} |> expect_type Types.int_type;
+    execution (`Int 42) {|
+      sig add : (Int) -> modal [Wild] ((Int) -> Int)
+      fun add(x)(y) { x+y+strlen("ab") }
+      add(38)(2)
+    |} |> expect_type Types.int_type;
+    reject (fun () -> infer {|
+      effect Needed {}
+      sig add : (Int) -> modal [Needed] ((Int) -> Int)
+      fun add(x)(y) { x+y }
+      add(40)(2)
+    |}));
+
+  "curried groups introduce supplied quantifiers without escaping binders" >:: (fun _ ->
+    List.iter (fun result ->
+      execution (Value.box [`Int 42; `Bool true])
+        ("sig make : (Int) -> " ^ result ^
+         " fun make(x)(y) { y } (make(0)(42),make(0)(true))") |> int_bool)
+      ["forall a. (a) -> a"; "modal [] (forall a. (a) -> a)"];
+    List.iter (fun source -> reject (fun () -> infer source))
+      ["sig make : (Int) -> forall a. (a) -> a fun make(x)(y) { x } ()";
+       "sig make : forall a. (a) -> forall b. (b) -> a fun make(x)(y) { y } ()"]);
+
+  "curried modal closures retain capture and linearity checks" >:: (fun _ ->
+    execution (`Int 42) {|
+      sig call : (modal [] (() -@ Int)) -@ modal [] (() -@ Int)
+      linfun call(f)() { f() }
+      var once = call((linfun() { 42 } : modal [] (() -@ Int)));
+      once()
+    |} |> expect_type Types.int_type;
+    List.iter (fun source -> reject (fun () -> infer source))
+      ["sig call : (() -> Int) -> modal [] (() -> Int) fun call(f)() { f() } ()";
+       "sig call : (modal [] (() -@ Int)) -@ modal [] (() -@ Int) linfun call(f)() { f()+f() } ()";
+       "sig call : (modal [] (() -@ Int)) -> modal [] (() -> Int) fun call(f)() { f() } ()";
+       "fun(x)(x) { x }"]);
+
+  "the split-end example retains generic payloads and residual protocols" >:: (fun _ ->
+    with_checked_ir (fun () ->
+      let state,_,value = FrescoFrontend.run_file (FrescoFrontend.empty ())
+        "examples/sessions/end.links" in
+      assert_equal ~printer:Value.string_of_value (Value.box [`Int 1;`Int 2]) value;
+      let _,typ,value = FrescoFrontend.run_string state {|
+        var ap = (new() : AP(?Int.!Int.End));
+        var child = spawn {
+          var (x,c) = receive(accept(ap)); close(send(x,c))
+        };
+        { var (x,c) = receive(oneA(42)(request(ap))); close(c); x }
+      |} in
+      expect_type Types.int_type typ;
+      assert_equal (`Int 42) value;
+      ignore (FrescoFrontend.check_string state {|
+        fun(c:(!Int.!(() -> Int).End)) { ~oneA[Int,!(() -> Int).End](42)(c) }
+      |});
+      let _,_,value = FrescoFrontend.run_string state {|
+        (oneB(forkSync(oneA(true))),
+         runSync(fun(return) { <|nu c.({twoA("value")(c)}|{twoB(c,return)})|> }))
+      |} in
+      assert_equal ~printer:Value.string_of_value (Value.box [`Bool true;`String "value"]) value));
+
   "a quantified value can be specialised under a quantifier" >:: (fun _ ->
     let typ = execution (`List [`Int 42]) {|
       {

@@ -1,0 +1,40 @@
+---
+config: tests/fresco_sessions.config
+args: --fresco --path=lib/stdlib
+---
+
+Execute session example calc
+examples/sessions/calc.links
+filemode : true
+stdout : 42 : Int
+
+Execute session example calc-cp
+examples/sessions/calc-cp.links
+filemode : true
+stdout : 42 : Int
+
+Execute session example calc-endbang
+examples/sessions/calc-endbang.links
+filemode : true
+stdout : 42 : Int
+
+Execute session example end
+examples/sessions/end.links
+filemode : true
+stdout : (1, 2) : (Int, Int)
+
+Execute session example fuse
+examples/sessions/fuse.links
+filemode : true
+stdout : (42, 42) : (Int, Int)
+
+Execute session example givengrab
+examples/sessions/givengrab.links
+filemode : true
+stdout : 13 : Int
+
+Session branching retains an unlimited session continuation
+examples/sessions/linear_if.links
+filemode : true
+args : --fresco --path=lib/stdlib --set=show_quantifiers=true --set=hide_fresh_type_vars=false
+stdout : fun : forall a::(Unl,Session).modal [effect_0$Wild] ((?(Bool).!(Int).a::(Unl,Session)) -> ())

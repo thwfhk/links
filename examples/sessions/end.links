@@ -1,17 +1,27 @@
+open import FrescoPrelude;
+
+sig oneA : forall a::Type(Unl,Any,Abs), s::Type(Any,Session,Any).
+  (a) -> modal [Wild] ((!a.s) -> s)
 fun oneA(a)(c) {
   send(a, c)
 }
 
+sig oneB : forall a::Type(Any,Any,Abs).
+  modal [Wild] ((?a.EndQuery) -> a)
 fun oneB(c) {
   var (y, c) = receive(c);
   var _ = wait(c);
   y
 }
 
+sig twoA : forall a::Type(Unl,Any,Abs).
+  (a) -> modal [Wild] ((!a.EndBang) -> EndBang)
 fun twoA(a)(c) {
   <| c[a].c[] |>
 }
 
+sig twoB : forall a::Type(Any,Any,Abs).
+  modal [Wild] ((?a.EndQuery,!a.EndBang) -> EndBang)
 fun twoB(c, return) {
   <| c(y).c().return[y].return[] |>
 }
