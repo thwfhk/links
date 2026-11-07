@@ -1,0 +1,9 @@
+open import Channels;
+typename Action = modal [] (() -> Int);
+var words=(newChannel() : Channel(String));
+var actions= ~newChannel[Action]();
+{ put(words,"first"); put(words,"second");
+  ~put[Action](actions,(fun() { 42 } : Action));
+  var action= ~get[Action](actions);
+  (get(words),get(words),action())
+}

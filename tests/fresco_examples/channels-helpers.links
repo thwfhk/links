@@ -1,0 +1,12 @@
+open import Channels;
+effect E { Read : () => Int; }
+sig relay : forall a. modal [Wild] ((Channel(a), a) -> a)
+fun relay(c,x) { put(c,x); get(c) }
+sig contextual : modal [Wild,E] ((Channel(() -> Int), () -> Int) -> Int)
+fun contextual(c,f) { var g=relay(c,f); g() }
+sig linearAlias : (Channel(End)) -> Channel(End)
+fun linearAlias(c) { c }
+typename F = () -> Int;
+var c=((fun() { fun() { 42 } } : modal [Wild] (() -> F)), (fun(f) { () } : modal [Wild] ((F) -> ()))) : Channel(F);
+handle <E> ({ put(c,fun() { do Read }); get(c)() })
+  { case x -> x case <Read => k> -> k(0) }

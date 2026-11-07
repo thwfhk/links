@@ -1,0 +1,13 @@
+open import Channels;
+spawnWait {
+var c=(newChannel() : Channel(Int));
+var parent=(self() : Process([|Started|Done:Int|]));
+var reader=spawn { parent ! Started; var x=get(c); parent ! Done(x) };
+{ receive { case Started -> () };
+  sig tick : (Int) -> ()
+  fun tick(n) { if (n==0) () else tick(n-1) }
+  tick(300);
+  put(c,42);
+  receive { case Done(x) -> x }
+}
+}

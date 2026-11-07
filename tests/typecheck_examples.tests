@@ -57,6 +57,7 @@ filemode : true
 Typecheck example file examples/channels.links
 examples/channels.links
 filemode : true
+args : --fresco
 
 Typecheck example file examples/church.links
 examples/church.links

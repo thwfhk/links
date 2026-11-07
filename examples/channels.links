@@ -1,9 +1,11 @@
-typename Channel (a) = ((() {}~> a), ((a) {}~> ()));
+typename Channel (a::Any) = (modal [Wild] (() -> a), modal [Wild] ((a) -> ()));
 
-sig newChannel : () ~> Channel (a)
+sig newChannel : forall a::Type(Unl,Any,Abs). modal [Wild] (() -> Channel(a))
 fun newChannel() {
   var p =
     spawn {
+      sig step : modal [Wild, Receive([|Value:a|Read:Process(a)|])]
+        ((List(a), List(Process(a))) -> ())
       fun step(vs, readers) {
         receive {
           case Value(v) ->
@@ -23,13 +25,15 @@ fun newChannel() {
       step([], [])
     };
 
+  sig write : modal [Wild] ((a) -> ())
   fun write(v) {
     p ! Value(v)
   }
 
+  sig read : modal [Wild] (() -> a)
   fun read() {
     spawnWait {
-      p ! Read(self());
+      p ! Read(~self[a]());
       receive { case v -> v }
     }
   }
@@ -37,8 +41,8 @@ fun newChannel() {
   (read, write)
 }
 
-sig get : (Channel (a)) ~e~> a
-fun get ((read, _)) { (read : () ~e~> a <- () {}~> (a))() }
+sig get : forall a. modal [Wild] ((Channel(a)) -> a)
+fun get ((read, _)) { read() }
 
-sig put : (Channel (a), a) ~e~> ()
-fun put((_, write), v) { (write : (a) ~e~> () <- (a) {}~> ())(v) }
+sig put : forall a. modal [Wild] ((Channel(a), a) -> ())
+fun put((_, write), v) { write(v) }

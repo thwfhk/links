@@ -146,3 +146,52 @@ args : --fresco --path=examples:lib/stdlib --set=isolation=false examples/extens
 stdout : ("A", "B", "C") : (String, String, String)
 exit : 1
 stderr : @.*Type error: Type does not satisfy its kind or usage requirement.*In expression: fun\(v\).*close\(c\)
+
+The buffered-channel example compiles and executes its definitions
+examples/channels.links
+filemode : true
+stdout : () : ()
+
+Buffered channels retain FIFO order for two writes
+open import Channels; var c=(newChannel() : Channel(Int)); { put(c,40); put(c,42); (get(c),get(c)) }
+stdout : (40, 42) : (Int, Int)
+
+A waiting channel reader resumes after a later write
+tests/fresco_examples/channels-waiting.links
+filemode : true
+stdout : 42 : Int
+
+Channels carry strings and supplied absolute function messages
+tests/fresco_examples/channels-payloads.links
+filemode : true
+stdout : ("first", "second", 42) : (String, String, Int)
+
+Channel helpers preserve contextual payloads and the alias accepts linear results
+tests/fresco_examples/channels-helpers.links
+filemode : true
+stdout : 42 : Int
+
+Channel construction requires Wild
+open import Channels; sig pure : () -> Channel(Int) fun pure() { newChannel() } ()
+exit : 1
+stderr : @.*Type error: Type does not match the required type.*In expression: newChannel\.
+
+Reading a channel requires Wild
+open import Channels; sig pure : (Channel(Int)) -> Int fun pure(c) { get(c) } ()
+exit : 1
+stderr : @.*Type error: Type does not match the required type.*In expression: get\.
+
+Writing a channel requires Wild
+open import Channels; sig pure : (Channel(Int),Int) -> () fun pure(c,x) { put(c,x) } ()
+exit : 1
+stderr : @.*Type error: Type does not match the required type.*In expression: put\.
+
+Queued channel messages require absolute payloads
+open import Channels; effect E { Read : () => Int; } typename F = () -> Int; handle <E> ({ var f=fun() { do Read }; var c= ~newChannel[F](); put(c,f); 42 }) { case x -> x case <Read => k> -> k(42) }
+exit : 1
+stderr : @.*Type error: Type does not satisfy its kind or usage requirement.*In expression: ~newChannel\[F\]\.
+
+Queued channel messages retain their unrestricted ordinary kind
+open import Channels; ~newChannel[End]()
+exit : 1
+stderr : @.*Type error: Type does not satisfy its kind or usage requirement.*In expression: ~newChannel\[End\]\.

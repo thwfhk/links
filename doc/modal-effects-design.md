@@ -1088,6 +1088,26 @@ unequal padding, callback order and the finite renderer execute through the
 actual module. All 1,024 rendered cells match `(i & j) == 0`; the check is in
 `/tmp/links-d7d3d2-renderer-check.log`.
 
+The buffered-channel example keeps `Channel(a::Any)` as a pair of fixed
+`modal [Wild]` read/write functions. `newChannel` requires `a` to be unlimited
+and absolute: its queue is a list and its messages cross actor boundaries.
+Legacy checks accept the alias at `End` and reject the queue constructor at
+`End`. `get` and `put` keep unlimited, modal `Any` payload parameters; they
+invoke supplied functions and add no message restriction. Preserve queue
+ordering, reader ordering and the existing non-terminating queue actor. Bounded
+tests use the actual imported module. The waiting-reader fixture uses a bounded
+300-call loop to yield before the write; an empty `spawnWait` can return without
+yielding. The selected debug trace confirms the queue receives `Read` and the
+reply process blocks before `Value` is sent:
+`/tmp/links-d7d3e1-review-waiting-trace.log`. Replace the legacy mailbox-effect casts
+with modal function calls and supply the mailbox type to `self` explicitly.
+
+**Choice for review:** defer the remaining `TicTacToe-Console.links` migration.
+Following the user's concern about peripheral work, prioritise prelude loading,
+batch/REPL integration and the default contextual frontend. Existing ordinary
+function, polymorphism, data-structure, effect and actor checks cover the core
+language readiness needed for that transition.
+
 Keep XML/formlet/page/DOM/routes, MVU modules, socket examples and explicit
 foreign/location dependencies with the deferred features. Keep database-facing
 Serial helpers and session-failure monitoring outside this work. General
