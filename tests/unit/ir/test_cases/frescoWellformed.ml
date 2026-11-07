@@ -265,10 +265,80 @@ let suite = "Fresco well-formedness" >::: [
 
   "recursive linearity metadata" >:: (fun _ ->
     check ~kind:unl (declaration "Unrestricted" [] int []);
-    reject ~kind:unl (ordinary unl) (declaration ~linearity:(Some true) "Linear" [] int []);
+    check ~kind:unl (declaration ~linearity:(Some true) "Conservative" [] int []);
+    reject ~kind:unl (ordinary unl) (declaration "Linear" [] Types.End []);
     let t = declaration ~linearity:None "Incomplete" [] int [] in
     check t;
     reject ~kind:unl (malformed "Missing recursive linearity: Incomplete") t);
+
+  "recursive applications use actual unrestricted argument summaries" >:: (fun _ ->
+    let q, a = variable any in
+    let body = ref int in
+    let app t = raw ~linearity:(Some true) "Tree" [q]
+        (fun () -> Some ([q], !body)) [PrimaryKind.Type, t] in
+    body := record ["value", a; "next", app a];
+    let source = record ["first", app int; "second", app Types.End] in
+    let before = bytes source in
+    check ~kind:unl (app int);
+    reject ~kind:unl (ordinary unl) (app Types.End);
+    reject ~kind:unl (ordinary unl) source;
+    check ~kind:unl (app int);
+    assert_equal before (bytes source));
+
+  "recursive applications retain fixed linear fields and phantom parameters" >:: (fun _ ->
+    let q, _ = variable any in
+    reject ~kind:unl (ordinary unl)
+      (declaration "CapturedEnd" [q] (record ["channel", Types.End]) [int]);
+    check ~kind:unl (declaration ~linearity:(Some true) "Phantom" [q] int [Types.End]));
+
+  "recursive function fields keep their own ordinary linearity" >:: (fun _ ->
+    let q, a = variable any in
+    check ~kind:unl (declaration ~linearity:(Some true) "Function" [q]
+      (Types.Arrow (a, a)) [Types.End]);
+    reject ~kind:unl (ordinary unl) (declaration "LinearFunction" [q]
+      (Types.LinearArrow (a, a)) [int]));
+
+  "recursive application requirements refine a free payload variable" >:: (fun _ ->
+    let q, a = variable any and payload, _ = variable any in
+    let id = Quantifier.to_var payload in
+    let argument = Types.Var (id, Quantifier.to_kind payload, `Flexible) in
+    let typ = declaration ~linearity:(Some true) "Refined" [q]
+        (record ["value", a]) [argument] in
+    let env = with_variables [id, info any] in
+    let before = bytes typ in
+    reject ~env ~kind:unl (ordinary unl) typ;
+    let requirements = FrescoKind.require env ~refinable:((=) id) ~binders:[] unl typ in
+    assert_bool "Missing payload requirement"
+      (not (FrescoKind.is_empty_requirements (IntMap.find id requirements)));
+    let classification = { env.FrescoKind.classification with
+      FrescoKind.requirements = (fun id ->
+        Option.value ~default:FrescoKind.empty_requirements (IntMap.find_opt id requirements)) } in
+    check ~env:{ env with FrescoKind.classification } ~kind:unl typ;
+    assert_equal before (bytes typ));
+
+  "mutual declarations keep distinct argument summaries" >:: (fun _ ->
+    let q, a = variable any and r, b = variable any in
+    let left_body = ref int and right_body = ref int in
+    let left t = raw ~linearity:(Some true) "Left" [q]
+        (fun () -> Some ([q], !left_body)) [PrimaryKind.Type, t]
+    and right t = raw ~linearity:(Some true) "Right" [r]
+        (fun () -> Some ([r], !right_body)) [PrimaryKind.Type, t] in
+    left_body := record ["next", right a];
+    right_body := record ["value", b; "next", left b];
+    check ~kind:unl (left int);
+    reject ~kind:unl (ordinary unl) (left Types.End));
+
+  "nonregular recursive unrestricted summaries inspect changed arguments" >:: (fun _ ->
+    let make phantom =
+      let q, a = variable any in
+      let body = ref int in
+      let app t = raw ~linearity:(Some true) "Changing" [q]
+          (fun () -> Some ([q], !body)) [PrimaryKind.Type, t] in
+      let payload = if phantom then int else a in
+      body := record ["value", payload; "next", app (Types.LinearArrow (a, a))];
+      app int in
+    reject ~kind:unl (ordinary unl) (make false);
+    check ~kind:unl (make true));
 
   "nonregular declarations terminate and check active arguments" >:: (fun _ ->
     let make parameter transform =

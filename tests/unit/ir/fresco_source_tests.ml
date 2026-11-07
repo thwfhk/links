@@ -1906,10 +1906,12 @@ let remaining_core_suite = "staged remaining core prelude" >::: [
        "minimum(1,true)"; "lookup(true,[(1,42)])";
        "assocDefault(\"a\",[(\"a\",42)],true)"; "isInt(42)"; "isFloat(42.0)"]);
 
-  "remaining helpers retain ordinary unlimited requirements" >:: (fun _ ->
+  "Maybe aliases retain ordinary linear payload types" >:: (fun _ ->
+    ignore (collection_check "Nothing : Maybe (() -@ Int)"));
+
+  "remaining helper functions retain ordinary unlimited requirements" >:: (fun _ ->
     List.iter (fun source -> reject (fun () -> collection_check source))
-      ["Nothing : Maybe (() -@ Int)";
-       "isJust(Just(linfun() { 42 }))";
+      ["isJust(Just(linfun() { 42 }))";
        "fromMaybe(Nothing,linfun() { 42 })";
        "search(linfun(x) { x },[true])"; "find(linfun(x) { x },[true])";
        "{ var once = linfun() { true }; search(fun(x) { once() },[0]) }";
@@ -2170,4 +2172,59 @@ let ir_suite =
       reject_coercion (forall (fun a -> arrow a int)) (forall (fun a -> arrow a a)));
   ]
 
-let suite = "Fresco source" >::: [reference_suite; source_suite; callback_sequence_suite; primitive_suite; regex_suite; continuations_suite; comprehensions_suite; sections_patterns_updates_suite; collection_suite; foundation_suite; remaining_core_suite; split_end_suite; session_callback_suite; ir_suite]
+let recursive_value_suite = "recursive value ordinary kinds" >::: [
+  "unrestricted generic trees can be discarded and reused" >:: (fun _ ->
+    execution (Value.box [`Int 2; `Int 2; `Int 42]) {|
+      typename Tree(a::Any) = [|Leaf | Node:(Tree(a),a,Tree(a))|];
+      sig duplicate : forall a. (Tree(a)) -> (Tree(a),Tree(a))
+      fun duplicate(t) { (t,t) }
+      sig discard : forall a. (Tree(a)) -> Int
+      fun discard(t) { 42 }
+      sig size : forall a. (Tree(a)) -> Int
+      fun size(t) {
+        switch(t) {
+          case Leaf -> 0
+          case Node(l,x,r) -> size(l)+size(r)+1
+        }
+      }
+      { var (left,right)=duplicate(Node(Node(Leaf,40,Leaf),2,Leaf) : Tree(Int));
+        (size(left),size(right),discard(Node(Leaf,true,Leaf) : Tree(Bool))) }
+    |} |> ignore);
+
+  "tree reuse refines its inferred payload parameter" >:: (fun _ ->
+    with_checked_ir (fun () ->
+      let state,_,_ = FrescoFrontend.run_string (FrescoFrontend.empty ()) {|
+        typename Tree(a::Any) = [|Leaf | Node:(Tree(a),a,Tree(a))|];
+        var duplicate=fun(x) { var t=Node(Leaf,x,Leaf) : Tree(%a::Any); (t,t) };
+        ()
+      |} in
+      let _,_,value = FrescoFrontend.run_string state {|
+        { var (left,right)=duplicate(42);
+          switch(left) { case Leaf -> 0 case Node(l,x,r) -> x } }
+      |} in
+      assert_equal (`Int 42) value;
+      reject (fun () -> FrescoFrontend.run_string state "fun(c:End) { duplicate(c) }")));
+
+  "linear tree payloads are consumed once through typed IR" >:: (fun _ ->
+    execution (`Int 42) {|
+      typename Tree(a::Any) = [|Leaf | Node:(Tree(a),a,Tree(a))|];
+      sig consume : modal [Wild] ((Tree(End)) -> ())
+      fun consume(t) {
+        switch(t) {
+          case Leaf -> ()
+          case Node(l,c,r) -> consume(l); close(c); consume(r)
+        }
+      }
+      var ap=(new() : AP(End));
+      var peer=spawn { close(accept(ap)) };
+      { consume(Node(Leaf,request(ap),Leaf)); 42 }
+    |} |> expect_type Types.int_type);
+
+  "linear tree payloads cannot be discarded or reused" >:: (fun _ ->
+    List.iter (fun body -> reject ~message:"usage requirement" (fun () ->
+      infer ("typename Tree(a::Any)=[|Leaf|Node:(Tree(a),a,Tree(a))|]; " ^ body)))
+      ["fun(t:Tree(End)) { () }";
+       "fun(t:Tree(End)) { (t,t) }"]);
+]
+
+let suite = "Fresco source" >::: [reference_suite; source_suite; callback_sequence_suite; primitive_suite; regex_suite; continuations_suite; comprehensions_suite; sections_patterns_updates_suite; collection_suite; foundation_suite; remaining_core_suite; split_end_suite; session_callback_suite; ir_suite; recursive_value_suite]

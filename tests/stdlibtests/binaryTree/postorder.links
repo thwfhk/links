@@ -1,7 +1,9 @@
 open import Comparators;
 open import BinaryTree;
 
+sig print_list : modal [Wild] ((List Int) -> String)
 fun print_list(xs) {
+  sig print_list_inner : (List Int) -> String
   fun print_list_inner(xs) {
     switch(xs) {
       case [] -> ""
@@ -12,6 +14,7 @@ fun print_list(xs) {
   "[" ^^ print_list_inner(xs) ^^ "]"
 }
 
+sig test : modal [Wild] (() -> String)
 fun test() {
   var t = empty();
   var t = add(intComparator, 2, t);

@@ -1016,6 +1016,29 @@ calls in the existing order. ASCII helpers and UTC accessors remain pure;
 local accessors retain their written `Wild` contracts, except the existing pure
 `localMilliseconds` helper.
 
+The binary-tree alias retains ordinary `Any` payloads: legacy manual nodes
+accept endpoints. Its function signatures retain their separate unlimited
+payload requirements; legacy `empty` and `invert` reject endpoint instantiations.
+
+**Choice for review:** give `leftmost_child` the same contextual comparator
+interface as the other tree helpers. The existing body never calls its
+comparator; its general legacy signature permits independent comparator and
+caller effects. A legacy control passes a `Ping` comparator without a handler
+and returns the leftmost node. The specialised interface requires the callback's
+effects in the caller. Its general interface remains deferred in the
+[independent-effect inventory](#signatures-with-independent-effect-variables).
+A whole-type parameter for the unused argument would also accept non-functions;
+a fixed modal comparator would select one callback context. Preserve the body
+and check that the callback remains uncalled. Legacy evidence is in
+`/tmp/links-d7d3c-legacy-unused-callback.log`.
+
+Supply a nominal tree annotation for direct structural `Node`/`Leaf` values
+when generic helper application cannot infer that recursive shape. Existing
+fixtures establish it through `empty()`. This follows the staged recursive-list
+constructor migration. Ordinary payload refinement is checked by subsequent
+accepted and rejected calls; a raw variable's declared kind does not expose
+its retained requirement.
+
 The tree deletion example's existing two-child branch duplicates the left
 subtree. Preserve the recorded `remove2` result during type migration.
 Switch-function syntax already passes through `DesugarSwitchFuns` before
@@ -1720,7 +1743,19 @@ Ordinary recursive summaries use a least fixed point for `Session` and
 a greatest fixed point for the other requirements. Recursive values are
 checked through their bodies: the legacy default `Unl` on a recursive
 binder does not prove its body unrestricted. Named recursive applications
-require available declaration linearity for an `Unl` check. Effect
+require available declaration linearity metadata for an `Unl` check, then
+classify the declaration body using the actual argument summaries. A generic
+`Any` parameter can make the declaration's conservative linearity flag true
+while its `Int` application is unlimited. Boolean summaries keep changing
+recursive arguments finite; phantom arguments do not make unused payloads
+linear, while concrete linear fields and used linear arguments do.
+
+Keep the exported declaration-wide linearity metadata stable across application
+substitution and detached snapshots. Existing contextual IR checks use the
+contextual kind operations; the remaining backend-era legacy predicate occurs
+only in the legacy-function fallback. No runtime conversion change is required
+for this application-kind correction. The selected consumer audit is in
+`/tmp/links-d7d3c-linearity-consumers.md`. Effect
 descriptors and explicit signature parameters must have primary kind `Type`,
 including descriptors used by relative masks. Nested quantified row and
 presence variables remain valid in signatures.
@@ -2094,6 +2129,7 @@ still migrate with fixed contexts or a changed interface.
 
 | Source | Independent effects | Migration action |
 |---|---|---|
+| `lib/stdlib/binaryTree.links`, `leftmost_child` | Unused comparator and caller have independent rows | Specialise to a shared ambient context; preserve the general contract as deferred |
 | `examples/handlers/alert.links`, JavaScript `wait` declaration | Callback uses `e1`; scheduling call uses `e2` | Preserve the general contract as deferred; inspect actual callback effects before specialising |
 | `lib/stdlib/mvu.links`, `runHandle` and wrappers | View/update/subscription callbacks share `e`; caller uses separate `f` | Audit call sites against the fixed spawned-body context and actor migration |
 | `prelude.links`, `curry`, `flip`, `uncurry`, `compose`, `lf`, `-<-`, `->-`; `tests/freezeml/a9.links` | Callbacks and returned applications share a row independent of closure construction | Migrated helpers use a shared ambient context; assess remaining helpers separately and retain the general contracts as deferred |

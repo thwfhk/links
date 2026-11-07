@@ -1,3 +1,8 @@
+---
+config: tests/binaryTrees.config
+args: --fresco --path=lib/stdlib
+---
+
 Tree construction and postorder traversal
 ./tests/stdlibtests/binaryTree/postorder.links
 filemode : true
@@ -22,3 +27,136 @@ Deletion (2 nodes)
 ./tests/stdlibtests/binaryTree/remove2.links
 filemode : true
 stdout : Node(Node(Node(Leaf, 1, Leaf), 2, Leaf), 4, Node(Node(Leaf, 1, Leaf), 2, Leaf)) : BinaryTree.BinaryTree (Int)
+
+
+Tree modules retain qualified identity and payload polymorphism
+./tests/stdlibtests/binaryTree/polymorphism.links
+filemode : true
+stdout : ([1, 2, 3], ["a", "b", "c"]) : (List Int, List String)
+args : --fresco --path=lib/stdlib --enable-handlers --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+
+Tree inversion and duplicate insertion retain their results
+open import Comparators; open import BinaryTree; var t=(Node(Node(Leaf,1,Leaf),2,Node(Leaf,3,Leaf)) : BinaryTree(Int)); (traverse_preorder(invert(t)),traverse_inorder(add(intComparator,2,t)))
+stdout : ([2, 3, 1], [1, 2, 3]) : (List Int, List Int)
+args : --fresco --path=lib/stdlib --enable-handlers --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+
+Deletion retains empty absent and one-sided results
+open import Comparators; open import BinaryTree; (remove(intComparator,0,(Leaf : BinaryTree(Int)))==(Leaf : BinaryTree(Int)),remove(intComparator,0,(Node(Leaf,2,Leaf) : BinaryTree(Int)))==(Node(Leaf,2,Leaf) : BinaryTree(Int)),remove(intComparator,2,(Node(Node(Leaf,1,Leaf),2,Leaf) : BinaryTree(Int)))==(Node(Leaf,1,Leaf) : BinaryTree(Int)),remove(intComparator,2,(Node(Leaf,2,Node(Leaf,3,Leaf)) : BinaryTree(Int)))==(Node(Leaf,3,Leaf) : BinaryTree(Int)))
+stdout : (true, true, true, true) : (Bool, Bool, Bool, Bool)
+args : --fresco --path=lib/stdlib --enable-handlers --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+
+Leftmost child does not invoke its comparator
+open import BinaryTree; traverse_inorder(leftmost_child(fun(x,y) { error("unused comparator called") },(Node(Node(Leaf,1,Leaf),2,Leaf) : BinaryTree(Int))))
+stdout : [1] : List Int
+args : --fresco --path=lib/stdlib --enable-handlers --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+
+Tree comparators retain caller effects and evaluation order
+open import BinaryTree; effect Compare { Difference : (Int,Int) => Int; } handle <Compare> ({var cmp=fun(x,y) { do Difference(x,y) }; var t=add(cmp,2,empty()); var t=add(cmp,1,t); var t=add(cmp,3,t); var left=leftmost_child(cmp,t); var t=remove(cmp,3,t); (traverse_inorder(t),traverse_inorder(left))}) { case xs -> xs case <Difference(x,y) => k> -> print("c"); k(x-y) }
+stdout : cccc([1, 2], [1]) : (List Int, List Int)
+args : --fresco --path=lib/stdlib --enable-handlers --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+
+Tree comparators reject an unavailable caller effect
+open import BinaryTree; effect Compare { Difference : (Int,Int) => Int; } add(fun(x,y) { do Difference(x,y) },1,(Node(Leaf,2,Leaf) : BinaryTree(Int)))
+exit : 1
+stderr : @.*Type error:.*In expression:.*Difference.*
+args : --fresco --path=lib/stdlib --enable-handlers --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+
+Leftmost contextual comparator accepts a handled effect without invoking it
+open import BinaryTree; effect Compare { Difference : (Int,Int) => Int; } sig cmp : modal [Compare] ((Int,Int) -> Int) fun cmp(x,y) { do Difference(x,y) } handle <Compare> (traverse_inorder(leftmost_child(cmp,(Node(Leaf,42,Leaf) : BinaryTree(Int))))) { case xs -> xs case <Difference(x,y) => k> -> error("unused comparator called") }
+stdout : [42] : List Int
+args : --fresco --path=lib/stdlib --enable-handlers --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+
+Leftmost shared ambient specialisation rejects an unavailable callback context
+open import BinaryTree; effect Compare { Difference : (Int,Int) => Int; } sig cmp : modal [Compare] ((Int,Int) -> Int) fun cmp(x,y) { do Difference(x,y) } leftmost_child(cmp,(Node(Leaf,42,Leaf) : BinaryTree(Int)))
+exit : 1
+stderr : @.*Type error:.*In expression: cmp.*
+args : --fresco --path=lib/stdlib --enable-handlers --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+
+Comparator module remains pure
+open import Comparators; sig answer : () -> Int fun answer() { Comparators.intComparator(44,2) } answer()
+stdout : 42 : Int
+args : --fresco --path=lib/stdlib --enable-handlers --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+
+Tree aliases permit a linear endpoint consumed once
+./tests/stdlibtests/binaryTree/linear-payload.links
+filemode : true
+stdout : 42 : Int
+args : --fresco --path=lib/stdlib --enable-handlers --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+
+Tree aliases retain linear payload usage
+open import BinaryTree; fun(c:End) { var t=(Node(Leaf,c,Leaf) : BinaryTree.BinaryTree(End)); (t,t) }
+exit : 1
+stderr : @.*Type error:.*usage requirement.*
+args : --fresco --path=lib/stdlib --enable-handlers --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+
+Tree aliases with linear payloads cannot enter unrestricted lists
+open import BinaryTree; fun(c:End) { [Node(Leaf,c,Leaf) : BinaryTree(End)] }
+exit : 1
+stderr : @.*Type error:.*
+args : --fresco --path=lib/stdlib --enable-handlers --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+
+Empty retains its unrestricted payload parameter
+open import BinaryTree; empty() : BinaryTree(End)
+exit : 1
+stderr : @.*Type error:.*
+args : --fresco --path=lib/stdlib --enable-handlers --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+
+Invert retains its unrestricted payload parameter
+open import BinaryTree; fun(t:BinaryTree(End)) { invert(t) }
+exit : 1
+stderr : @.*Type error:.*In expression: invert.*
+args : --fresco --path=lib/stdlib --enable-handlers --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+
+Traversal retains its unrestricted element parameter
+open import BinaryTree; fun(t:BinaryTree(End)) { traverse_preorder(t) }
+exit : 1
+stderr : @.*Type error:.*In expression: traverse_preorder.*
+args : --fresco --path=lib/stdlib --enable-handlers --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+
+Tree comparators cannot capture a linear value
+open import BinaryTree; { var once=linfun() { 0 }; add(fun(x,y) { once() },1,(Node(Leaf,2,Leaf) : BinaryTree(Int))) }
+exit : 1
+stderr : @.*Type error:.*usage requirement.*
+args : --fresco --path=lib/stdlib --enable-handlers --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+
+Invert retains Wild
+open import Comparators; open import BinaryTree; sig pure : (BinaryTree(Int)) -> BinaryTree(Int) fun pure(t) { invert(t) } ()
+exit : 1
+stderr : @.*Type error:.*
+args : --fresco --path=lib/stdlib --enable-handlers --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+
+Preorder traversal retains Wild
+open import Comparators; open import BinaryTree; sig pure : (BinaryTree(Int)) -> List Int fun pure(t) { traverse_preorder(t) } ()
+exit : 1
+stderr : @.*Type error:.*
+args : --fresco --path=lib/stdlib --enable-handlers --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+
+Inorder traversal retains Wild
+open import Comparators; open import BinaryTree; sig pure : (BinaryTree(Int)) -> List Int fun pure(t) { traverse_inorder(t) } ()
+exit : 1
+stderr : @.*Type error:.*
+args : --fresco --path=lib/stdlib --enable-handlers --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+
+Postorder traversal retains Wild
+open import Comparators; open import BinaryTree; sig pure : (BinaryTree(Int)) -> List Int fun pure(t) { traverse_postorder(t) } ()
+exit : 1
+stderr : @.*Type error:.*
+args : --fresco --path=lib/stdlib --enable-handlers --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+
+Tree insertion retains Wild
+open import Comparators; open import BinaryTree; sig pure : (BinaryTree(Int)) -> BinaryTree(Int) fun pure(t) { add(Comparators.intComparator,42,t) } ()
+exit : 1
+stderr : @.*Type error:.*
+args : --fresco --path=lib/stdlib --enable-handlers --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+
+Leftmost child retains Wild
+open import Comparators; open import BinaryTree; sig pure : (BinaryTree(Int)) -> BinaryTree(Int) fun pure(t) { leftmost_child(Comparators.intComparator,t) } ()
+exit : 1
+stderr : @.*Type error:.*
+args : --fresco --path=lib/stdlib --enable-handlers --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+
+Tree deletion retains Wild
+open import Comparators; open import BinaryTree; sig pure : (BinaryTree(Int)) -> BinaryTree(Int) fun pure(t) { remove(Comparators.intComparator,42,t) } ()
+exit : 1
+stderr : @.*Type error:.*
+args : --fresco --path=lib/stdlib --enable-handlers --set=typecheck_ir=true --set=fail_on_ir_type_error=true

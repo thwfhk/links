@@ -1,0 +1,13 @@
+open import BinaryTree;
+
+sig consume : modal [Wild] ((BinaryTree.BinaryTree(End)) -> ())
+fun consume(t) {
+  switch(t) {
+    case Leaf -> ()
+    case Node(left,c,right) -> consume(left); close(c); consume(right)
+  }
+}
+
+var ap=(new() : AP(End));
+var peer=spawn { close(accept(ap)) };
+{ consume(Node(Leaf,request(ap),Leaf)); 42 }

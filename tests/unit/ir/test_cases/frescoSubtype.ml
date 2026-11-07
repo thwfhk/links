@@ -295,13 +295,13 @@ let suite = "Fresco subtyping and constraints" >::: [
       let unrestricted = FrescoSkeletonKind.unrestricted ~binders:[a] environment C.empty in
       assert_bool "Unrestricted binder" (unrestricted (supplied (v a)));
       assert_bool "Linear arrow" (not (unrestricted (supplied (S.LinearArrow (int, int))))));
-    "skeleton unrestrictedness uses provisional declaration linearity" >:: (fun _ ->
+    "skeleton unrestrictedness retains conservative declaration linearity" >:: (fun _ ->
       let declaration = raw "D4jLinearity" int in
       let typ = nominal declaration [] in
       let unrestricted = FrescoSkeletonKind.unrestricted in
       assert_bool "Declared unrestricted" (unrestricted environment C.empty typ);
-      assert_bool "Provisionally linear" (not (unrestricted
-          ~linearity:(fun _ -> Some true) environment C.empty typ));
+      assert_bool "Unrestricted application with conservative metadata" (unrestricted
+          ~linearity:(fun _ -> Some true) environment C.empty typ);
       assert_equal (Some false) declaration.S.linear);
     "skeleton look refines a free capture in a raw declaration" >:: (fun _ ->
       let a = q ~modal:ModalKind.Abs () and b = q () in let ctx = flex C.empty b in

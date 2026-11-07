@@ -444,14 +444,13 @@ let ordinary_satisfies syntax environment scope requirement typ =
                  ((typ, state) :: recursive) body))
        end
     | RecursiveApplication app ->
+       (if requirement = Unrestricted then
+          match app.linear () with
+          | Some _ -> ()
+          | None -> malformed ("Missing recursive linearity: " ^ app.identity));
        begin match requirement with
-       | Unrestricted ->
-          begin match app.linear () with
-          | Some linear -> not linear
-          | None -> malformed ("Missing recursive linearity: " ^ app.identity)
-          end
        | Restricted Restriction.Base -> false
-       | Restricted _ ->
+       | Unrestricted | Restricted _ ->
           let arguments = List.map (fun (_, t) -> summary bindings recursive t) app.arguments in
           let state = request (Declaration (app.identity, arguments))
               (fun _ ->

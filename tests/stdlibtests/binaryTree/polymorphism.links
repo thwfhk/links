@@ -1,0 +1,14 @@
+open import Comparators;
+open import BinaryTree;
+
+sig stringComparator : (String,String) -> Int
+fun stringComparator(x,y) {
+  if (x < y) -1 else if (x == y) 0 else 1
+}
+
+var ints=BinaryTree.add(Comparators.intComparator,2,BinaryTree.empty());
+var ints=add(intComparator,1,add(intComparator,3,ints));
+var strings=add(stringComparator,"b",empty());
+var strings=(add(stringComparator,"a",add(stringComparator,"c",strings))
+             : BinaryTree.BinaryTree(String));
+(traverse_inorder(ints),BinaryTree.traverse_inorder(strings))

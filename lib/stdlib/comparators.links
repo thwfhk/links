@@ -1,3 +1,4 @@
+sig intComparator : (Int, Int) -> Int
 fun intComparator(i1, i2) {
   i1 - i2
 }
