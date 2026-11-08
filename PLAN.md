@@ -17,7 +17,7 @@ implementation decisions, reasons, internal invariants and source comparisons.
 All in-scope D1–D7 work is complete, independently reviewed, checked and committed.
 The D7 migration inventory was checked against current source on 8 November 2026.
 D8a and D8b resumed on 8 November 2026 from `3a170073`. D8a1 and D8a2 are
-complete; D8a3 is next.
+complete; D8a3 is complete and D8b is next.
 
 Fresco is the default for batch, REPL and compilation. Handler execution uses
 `enable_handlers`. Explicit `--set=fresco=false` retains legacy compatibility;
@@ -113,7 +113,8 @@ effect variables and other excluded work remain [postponed](#postponed-work).
 | D7 migration 10 | Staged Freezeml helpers and supported typed-IR fixtures | `a80a1021` |
 | D7 migration 11 | Seven ordinary AIPL examples and final in-scope integration | `c320fd80` |
 | D8a1 | Pi recursive closure IR comparison and source migration. Binder scopes, general stream contracts and existing execution pass | `c284c2d4` |
-| D8a2 | Interpreter close/link transfer after peer closure. Both frontends, FIFO, aliases, relays and original fusegg execution pass | This milestone |
+| D8a2 | Interpreter close/link transfer after peer closure. Both frontends, FIFO, aliases, relays and original fusegg execution pass | `7dd4d2ce` |
+| D8a3 | Bundled JavaScript startup order and actual handler execution. 44 strict paired executions, shallow controls and runtime compatibility pass | This milestone |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history. The original migration inventory
@@ -133,21 +134,23 @@ passes from runtime faults. Modal types remain erased before execution.
    source, preserving general stream contracts and execution.
 2. D8a2 complete: repaired interpreter close/link transfer and checked both
    frontends, queue lifecycle and existing session execution.
-3. D8a3: execute deep handlers in the interpreter and JavaScript, covering
-   nesting, repeated identities, parameters and closures; retain interpreter
-   shallow execution and JavaScript shallow rejection.
+3. D8a3 complete: executed deep handlers on both runtimes, covering nesting,
+   repeated identities, parameters and closures; retained interpreter shallow
+   execution and JavaScript shallow rejection.
 4. D8b: review type metadata and recursive types through shared passes, complete
    migration documentation, and run frontend-selection and selected checks.
 
 Both saved failures reproduce at `3a170073`. Pi's post-closure IR comparison
 and source migration are complete; see [shared type contracts](doc/modal-effects-design.md#shared-type-and-traversal-contracts).
 The close/link repair is complete; see [session integration](doc/modal-effects-design.md#d7-session-integration).
-The next action is D8a3's interpreter/JavaScript handler execution milestone
-after committing D8a2.
+D8a3 repaired standalone JavaScript startup order and passed the actual
+interpreter/JavaScript execution matrix. The next action is D8b's shared-pass
+metadata review, migration documentation and final selected checks after
+committing D8a3.
 
 | Task | Depends on | Completion checks |
 |---|---|---|
-| D8a: backend execution | D7 | Actual interpreter and JavaScript deep-handler execution covers nesting, repeated identities, parameters and closures; interpreter shallow execution and JavaScript rejection remain checked. Pi and close/link repairs are complete. |
+| D8a: backend execution | D7 | Complete: actual interpreter and JavaScript handler matrix, Pi IR repair and close/link repair are reviewed and checked. See completed milestones above. |
 | D8b: frontend options, documentation and final review | D8a | Both frontends remain available through the existing Fresco setting, with Fresco as the default and no automatic fallback. Check frontend selection in batch, REPL and compilation; review ghosts, exported variable requirements, recursive type consumers, lowering, optimisation and both backends; the migration guide and selected suites pass. |
 
 Pi and close/link failures are resolved by D8a1/D8a2. Their causes and repairs
@@ -191,6 +194,7 @@ are outside the current D7/D8 scope and require separate scheduling.
 | Recursive-row inference and unresolved row/presence duality | Retain the current occurs check and compatibility limits. See [consistency](doc/modal-effects-design.md#consistency-guessing-and-monotype-unification). |
 | Raw-mu strict-lowering follow-up | Named recursive declarations preserve the migrated protocols; raw-mu expansion can exceed the check bound or overflow. See the [recorded evidence](doc/modal-effects-design.md#handler-migration-and-modal-examples). |
 | Solved-tail linear dot-projection follow-up | Record-pattern extraction works; selecting a linear field through a solved row tail can leave it in the discarded-row check. See [record checks](doc/modal-effects-design.md#d7-sections-patterns-and-record-updates). |
+| Legacy strict handler IR checking | Additional direct/signed legacy probes fail on operation-row entries. Existing compatibility settings retain execution; keep this checker repair separate from Fresco migration. See [frontend integration](doc/modal-effects-design.md#d7-frontend-integration-plan). |
 | Source names for later-result forall binders and inferred free-variable kind displays | Retain these annotation/display follow-ups; stored ordinary-kind requirements remain checked. See [annotation scopes](doc/modal-effects-design.md#contextual-annotation-and-declaration-elaboration). |
 
 Questions arising solely from excluded examples or unsupported contracts are
@@ -238,25 +242,26 @@ behaviour passes the completed D7 checks.
 
 ## Latest task and verification
 
-8 November 2026, D8a2: repaired `Session.link` transfer to a peer that has
-already closed. Close, forwarding and evaluator wakeups remain unchanged.
-Independent review passed: `/tmp/links-d8a2-review.md`. Source checks cover both
-frontends, both transfer directions, FIFO, chained relays and closed End peers;
-unit checks cover drained queues, aliases, wakeups and rejected buffered sends
-to a closed destination. The original `fusegg` source prints both 42 results.
-No new language decisions; the five marked D7 choices still await user review.
+8 November 2026, D8a3: repaired standalone JavaScript runtime inclusion order.
+The standard runtime initialises before handler continuation bindings; custom
+runtime order and standalone script mode remain unchanged. No runtime algorithms
+or modal runtime values were added. Independent review passed:
+`/tmp/links-d8a3-final-review.md`.
 
-Tested source: `c284c2d4` plus the patch and source hashes in
-`/tmp/links-d8a2-verification/`. Source hashes stayed unchanged during checks.
-Full commands/results and frontend counts are in `results.json` and
-`frontend-counts.json`; all logs retain complete output.
+Tested source: `7dd4d2ce` plus the patch and source hashes in
+`/tmp/links-d8a3-verification/`. Source hashes stayed unchanged during checks.
+Full commands/results are in `results.json`; full logs retain all source and
+Node commands. Core and unit sources are unchanged from D8a2's 1,539 unit checks.
 
 | Command | Result | Log |
 |---|---|---|
 | `make no-db` | Passed | `build.log` |
-| `opam exec -- ./run-tests nodb-unit-tests` | 1,539 passed | `unit.log` |
-| `./test-harness tests/<suite>.tests`: handlers, effect_sugar, fresco_modal, fresco_sessions, fresco_cp, fresco_session_examples, sessions, messages, typecheck_examples | 253 Fresco and 204 compatibility passed; 14 existing ignores | Per-suite `.log` files |
+| `python3 tests/fresco_backend.py` | 44 strict paired interpreter/Node Fresco executions; 4 interpreter shallow executions and 4 JavaScript shallow rejections; 4 separate ordinary/legacy/custom runtime controls passed | `backend.log` |
+| `python3 tests/fresco_compile.py`; `python3 tests/fresco_repl.py` | 10 compile and 11 REPL scenarios passed | `compile.log`, `repl.log` |
+| `./test-harness tests/<suite>.tests`: handlers, effect_sugar, fresco_modal, fresco_default, fresco_batch | 119 Fresco and 71 compatibility passed; 0 ignores | Per-suite `.log` files |
 | `make rule-check`; `git diff --check` | Passed; GNU-find tab check skipped, formatter disabled | `rule-check.log`, `diff-check.log` |
 
-Logs are in `/tmp/links-d8a2-verification/`. D8a3's actual JavaScript handler
-execution and D8b remain. All postponed work remains excluded.
+Logs are in `/tmp/links-d8a3-verification/`. The additional strict legacy-handler
+IR failure remains separately recorded under postponed work; the existing legacy
+compatibility setting passes actual handler execution. D8b remains. All earlier
+postponed work and the five D7 choices awaiting user review remain unchanged.

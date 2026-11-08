@@ -1388,6 +1388,34 @@ wrappers and retain two for binary wrappers. Keep the existing operation
 generation. This repair is required by the migrated prelude; the diagnostic is
 `/tmp/links-d7e4-default-diagnostic.log`.
 
+D8a3's first standalone JavaScript execution found an output-order fault:
+the handler continuation module initialises its identity using `_$List` before
+the bundled runtime defines that value. Emit the standard runtime before the
+continuation bindings. A leading empty statement preserves the standalone
+script's existing non-strict mode. Custom runtime files retain their previous
+position after the continuation bindings, and omitted runtimes remain omitted.
+No runtime algorithms or modal runtime values change. The initial failure and
+reordered execution are in `/tmp/links-d8a3-startup.md`.
+
+`tests/fresco_backend.py` executes the complete bundled runtime in Node and
+the same source programs in the interpreter. Its matrix covers default and
+explicit Fresco selection with optimisation disabled and enabled. Cases cover
+nested handlers, repeated identities with different type arguments, distinct
+effects sharing an operation name, parameters, closures, reusable resumptions,
+polymorphic effect arguments and print order. The shallow control re-handles its
+resumption as in `tests/fresco_modal/shallow11.links`; JavaScript compilation
+retains its shallow-handler rejection. Separate compatibility controls check
+ordinary legacy compilation, custom runtime startup and script mode.
+
+Additional strict legacy-handler IR probes fail on direct and signed operation
+sources: the checker reports an absent `Read` field or a non-function effect
+entry. The selected sources and full errors are in
+`/tmp/links-d8a3-probes/backend-ready.log` and
+`/tmp/links-d8a3-legacy-review/checks.log`. The legacy handler execution control
+uses the existing `tests/legacy_compatibility.config` settings and runs the
+bundled JavaScript runtime. Repairing the legacy operation IR checker remains
+a separate follow-up; the Fresco execution matrix retains strict IR checking.
+
 ### D7 polymorphism regression migration
 
 Supplied signatures retain value polymorphism, recursive contracts and ordinary

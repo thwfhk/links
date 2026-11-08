@@ -196,12 +196,14 @@ module Phases = struct
       try
         if Settings.get Basicsettings.System.link_js_runtime
         then begin
-            Js_CodeGen.output oc Compiler.primitive_bindings;
-            let runtime_files =
+            let runtime_files, runtime_first =
               match Settings.get Basicsettings.System.custom_js_runtime with
-              | [] -> [Filename.concat Linkspath.jslib "jslib.js"]
-              | files -> files
+              | [] -> [Filename.concat Linkspath.jslib "jslib.js"], true
+              | files -> files, false
             in
+            if not runtime_first then Js_CodeGen.output oc Compiler.primitive_bindings;
+            (* Preserve the standalone script's existing non-strict mode. *)
+            if runtime_first then output_string oc ";\n";
             List.iter
               (fun runtime_file ->
                 let ic =
@@ -213,6 +215,9 @@ module Phases = struct
                   close_in ic
                 with e -> close_in ic; raise e)
               runtime_files;
+            (* Handler continuations use the standard runtime's list values
+               during initialisation. Custom runtimes retain their own order. *)
+            if runtime_first then Js_CodeGen.output oc Compiler.primitive_bindings;
           end;
         (* Copy contents of FFI files. *)
         List.iter
