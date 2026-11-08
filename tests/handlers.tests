@@ -297,49 +297,49 @@ args : --enable-handlers
 Pattern-matching on handler parameter (1)
 handle(true)(_ <- 100) { case x -> x }
 stdout : true : Bool
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Pattern-matching on handler parameter (2)
 handle(true)(100 <- 100) { case x -> x}
 stdout : true : Bool
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Pattern-matching on handler parameter (2)
 handle(true)(99 <- 100) { case x -> x}
-stderr : @.
+stderr : @\*\*\*: Error: Links_core\.Evalir\.Exceptions\.Wrong\s*
 exit : 1
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Pattern-matching on handler parameter (3)
 handle(true)(Foo(s) <- Foo(42)) { case _ -> s}
 stdout : 42 : Int
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Pattern-matching on handler parameter (4)
-handle(true)(Foo(s) <- Bar(42)) { case _ -> s}
-stderr : @.
+handle(true)(Foo(s) <- (Bar(42) : [|Bar:Int|])) { case _ -> s}
+stderr : @.*Type error: Missing field Foo\nIn expression: Foo\(s\)\.
 exit : 1
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Pattern-matching on handler parameter (5)
 handle(true)((x,y) <- (2,1)) { case _ -> x + y}
 stdout : 3 : Int
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Pattern-matching on handler parameter (6)
 handle(true)("Hello" <- "Hello") { case x -> x}
 stdout : true : Bool
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Pattern-matching on handler parameter (7)
 handle(true)((a=x, b=y) <- (a=44,b=(-2))) { case _ -> x + y}
 stdout : 42 : Int
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Pattern-matching on handler parameter (8)
 handle(true)(r <- (a=44,b=(-2))) { case _ -> r.a + r.b}
 stdout : 42 : Int
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Deep Handler composition
 fun h1(m)() { handle(m()) { case <Op1 => k> -> k(1) } } fun h2(m)() { handle(m()) { case <Op2 => k> -> k(2) } } fun h3(m)() { handle(m()) { case <Op3 => k> -> k(3) } } h1(h2(h3(fun() { do Op1 + do Op2 + do Op3 })))()
@@ -417,14 +417,14 @@ stdout : 42 : Int
 args : --enable-handlers
 
 Parameterised handler with multiple parameters (1)
-handle({do A; do B; do C; do D})(a <- 0, b <- 1, c <- 2, d <- 3) { case <A => k> -> k((),a+1,b,c,d) case <B => k> -> k((),a,b+1,c,d) case <C => k> -> k((),a,b,c+1,d) case <D => k> -> k((),a,b,c,d+1) case _ -> (a,b,c,d) }
+effect Steps { A : () => (); B : () => (); C : () => (); D : () => (); } handle({do A; do B; do C; do D})(a <- 0, b <- 1, c <- 2, d <- 3) { case <A => k> -> k((),a+1,b,c,d) case <B => k> -> k((),a,b+1,c,d) case <C => k> -> k((),a,b,c+1,d) case <D => k> -> k((),a,b,c,d+1) case _ -> (a,b,c,d) }
 stdout : (1, 2, 3, 4) : (Int, Int, Int, Int)
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Parameterised handler with multiple parameters (2)
-handle({do A; do B; do C; do D})(a <- 0, b <- false, (c0, c1) as c <- (true,0), d <- "Hello") { case <A => k> -> k((),a+1,b,c,d) case <B => k> -> k((),a,not(b),c,d) case <C => k> -> k((),a,b,(not(c0), c1+1),d) case <D => k> -> k((),a,b,c,d ^^ " World") case _ -> (a,b,c,d) }
+effect Steps { A : () => (); B : () => (); C : () => (); D : () => (); } handle({do A; do B; do C; do D})(a <- 0, b <- false, (c0, c1) as c <- (true,0), d <- "Hello") { case <A => k> -> k((),a+1,b,c,d) case <B => k> -> k((),a,not(b),c,d) case <C => k> -> k((),a,b,(not(c0), c1+1),d) case <D => k> -> k((),a,b,c,d ^^ " World") case _ -> (a,b,c,d) }
 stdout : (1, true, (false, 1), "Hello World") : (Int, Bool, (Bool, Int), String)
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Effect type sugar (1)
 fun(g : (() {A:a,B:(a) => b|_}~> b)) { g }(fun(){error("N/A")})

@@ -1,4 +1,5 @@
 # The force handler; it applies the identity transformation to outputs.
+sig force : forall a::Any. (() -> a) -> a
 fun force(m) {
   handle(m()) {
     case x -> x

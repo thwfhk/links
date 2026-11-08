@@ -969,7 +969,7 @@ their switches or recursive calls. Preserve the existing `span` complete-match b
 which returns its accumulated prefix in reverse order, and the resulting
 `takeWhile` behaviour. This migration does not change those library results.
 
-**Choice for review:** the staged `curry`, `flip`, `uncurry`, `compose`, `lf`,
+**Earlier migration choice:** the staged `curry`, `flip`, `uncurry`, `compose`, `lf`,
 `-<-` and `->-` use contextual arrows sharing the caller's ambient effects
 through closure
 construction and later calls. Their general legacy contracts permit an
@@ -1020,7 +1020,7 @@ The binary-tree alias retains ordinary `Any` payloads: legacy manual nodes
 accept endpoints. Its function signatures retain their separate unlimited
 payload requirements; legacy `empty` and `invert` reject endpoint instantiations.
 
-**Choice for review:** give `leftmost_child` the same contextual comparator
+**Earlier migration choice:** give `leftmost_child` the same contextual comparator
 interface as the other tree helpers. The existing body never calls its
 comparator; its general legacy signature permits independent comparator and
 caller effects. A legacy control passes a `Ping` comparator without a handler
@@ -1069,7 +1069,7 @@ The alternative all-absolute signature and successful numeral execution are in
 `/tmp/links-d7d3d2-church-fixed.log` and
 `/tmp/links-d7d3d2-church-shared.log`.
 
-**Choice for review:** the extensible-case example's curried helpers use a
+**Earlier migration choice:** the extensible-case example's curried helpers use a
 shared ambient context for construction, callbacks and returned calls. The
 legacy signatures permit separate construction effects. Preserve those general
 contracts in the [independent-effect inventory](#signatures-with-independent-effect-variables),
@@ -2555,6 +2555,24 @@ generic operation result types with the required `Abs` kind. The two exception
 negatives still pass an `Int` to a resumption requiring `Zero`; the top-level
 invocation still rejects an absent ambient effect. Full printed types and
 runtime results remain asserted.
+
+Identity and number-game examples retain generic result types and caller
+effects. Identity's `force` result binder is ordinary `Any`, preserving linear
+results; bind the returned value before calling it. `mySecret` takes a
+computation returning `modal <Guess|> a`; the
+handler's added `<Guess>` result guard cancels that removal. Keep `a` at modal
+kind `Any`, including a returned function using an outer Reader effect.
+`logger` requires `modal [Guess]`: absolute source-row inclusion permits
+additional caller effects, and function elimination uses that caller ambient
+context. Its callback can print or use Reader while forwarding Guess to the
+outer handler. Execution tests assert both original message sequences and
+the reverse chronological log.
+
+The eleven standalone handler-parameter cases retain constant, variant,
+tuple, record and as-pattern behaviour. The constant mismatch remains a runtime
+failure. Give the variant-mismatch initialiser the closed type `[|Bar:Int|]`
+so its `Foo(s)` pattern reaches the intended static missing-field error.
+The matching Foo initialiser remains a positive control.
 
 Defer handler examples whose full interfaces need arbitrary residual effects
 at a separate closure-construction context: `choose`, `deep_state`,

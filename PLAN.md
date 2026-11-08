@@ -133,7 +133,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D7e4 | Contextual JavaScript compilation without source evaluation | `32df0483` |
 | D7e5a0 | Shared parameter annotation scopes and trusted rigid IR declarations | `debb83cc` |
 | D7e5 | Default Fresco frontend and explicit legacy compatibility | `8c8d1087` |
-| D7 migration 1 | Identity/list handlers, operation sugar, exceptions and binary choice | This commit |
+| D7 migration 1 | Identity/list handlers, operation sugar, exceptions and binary choice | `dcbb7a9d` |
+| D7 migration 2 | Identity/number games and standalone handler parameters | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -307,23 +308,24 @@ block the prioritised D7 completion checks.
 
 ## Latest task and verification
 
-8 November 2026, D7 migration milestone 1: the first 21 handler regression
-cases use Fresco. Generic operation results, exception cases and choice retain
-their types and runtime results. The intended negative causes are asserted.
-No compiler changes or new design decisions. Independent review passed:
-`/tmp/links-d7-handler-basic/review.md`.
+8 November 2026, D7 migration milestone 2: identity and number-game examples
+use Fresco, with eight execution controls. Eleven more handler-parameter cases
+migrate, including separate static and runtime negative causes. Independent
+review found and resolved an ordinary-kind restriction on `force`; its result
+binder is `a::Any` and its bound linear result executes. Review:
+`/tmp/links-d7-m2-review.md`. No new design decisions.
 
-Tested source: `755db1e1` plus the patch and hashes in
-`/tmp/links-d7-m1-verification/revision.txt`, `source.patch` and
+Tested source: `dcbb7a9d` plus the patch and hashes in
+`/tmp/links-d7-m2-verification/revision.txt`, `source.patch` and
 `source.sha256.json`. Source hashes stayed unchanged through verification.
-Logs below are in `/tmp/links-d7-m1-verification/`.
+Compiler unchanged since milestone 1's `make no-db`. Logs below are in
+`/tmp/links-d7-m2-verification/`.
 
 | Command | Result | Log |
 |---|---|---|
-| `make no-db` | Passed | `build.log` |
-| `./test-harness tests/handlers.tests` | 21 Fresco and 74 legacy compatibility passed | `handlers.log` |
-| `./test-harness tests/effect_sugar.tests` | 44 legacy compatibility passed | `effect_sugar.log` |
-| `./test-harness tests/fresco_modal.tests` | 20 Fresco passed | `fresco_modal.log` |
+| `./test-harness tests/handlers.tests` | 32 Fresco and 63 legacy compatibility passed | `handlers.log` |
+| `./test-harness tests/fresco_examples.tests` | 44 Fresco passed | `fresco_examples.log` |
+| `./test-harness tests/typecheck_examples.tests` | 27 Fresco and 143 legacy compatibility passed; 14 ignored | `typecheck_examples.log` |
 | `make rule-check` | Passed; GNU-find tab check skipped, formatter disabled | `rule-check.log` |
 | `git diff --check` and frozen source hashes | Passed | `diff-check.log`, `source-check.log` |
 
@@ -342,9 +344,8 @@ Documentation-only update: text and whitespace checked.
 
 ## Next action
 
-The basic handler regression milestone is complete. Continue with identity and
-number-game examples, then remaining handler groups and functional-language
-migration. Each milestone must be reviewed, checked and committed before the
+Continue with remaining supported handler pattern/signature cases and the U2
+search example, then functional-language migration. Each milestone must be reviewed, checked and committed before the
 next implementation begins.
 Keep D8 paused.
 D8 must test the existing backends through actual execution and address the

@@ -195,3 +195,44 @@ Queued channel messages retain their unrestricted ordinary kind
 open import Channels; ~newChannel[End]()
 exit : 1
 stderr : @.*Type error: Type does not satisfy its kind or usage requirement.*In expression: ~newChannel\[End\]\.
+
+The identity handler retains polymorphism and caller effects
+open import Identity; effect Reader { Ask : () => Int; } var i=force(fun(){42}); var b=force(fun(){true}); var r=handle (force(fun(){do Ask})) { case x -> x case <Ask => k> -> k(7) }; (i,b,r)
+stdout : (42, true, 7) : (Int, Bool, Int)
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+The number game retains its original messages and execution
+open import Number_games; example()
+stdout : @Take a guess> 64\nYour guess is too high\.\nTake a guess> 32\nYour guess is too low\.\nTake a guess> 48\nYour guess is too high\.\nTake a guess> 40\nYour guess is too low\.\nTake a guess> 44\nYour guess is too high\.\nTake a guess> 42\nCorrect!!\n\(\) : \(\)$
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+The logged number game retains its messages and reverse log order
+open import Number_games; example2()
+stdout : @Take a guess> 64\nYour guess is too high\.\nTake a guess> 32\nYour guess is too low\.\nTake a guess> 48\nYour guess is too high\.\nTake a guess> 40\nYour guess is too low\.\nTake a guess> 44\nYour guess is too high\.\nTake a guess> 42\nCorrect!!\n\[\(42, Correct\), \(44, High\), \(40, Low\), \(48, High\), \(32, Low\), \(64, High\)\] : List \(Int, Number_games\.Answer\)$
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+The secret handler retains different result types
+open import Number_games; (mySecret(42,fun(){var _=do Guess(42); 7}),mySecret(42,fun(){var _=do Guess(42); "done"}),input([],fun(){true}),isNil([1]),isNil([false]))
+stdout : (7, "done", (), false, false) : (Int, String, (), Bool, Bool)
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+The secret handler returns contextual functions using residual effects
+open import Number_games; effect Reader { Ask : () => Int; } handle ({var action=mySecret(42,fun(){var _=do Guess(42); fun(){do Ask}}); action()}) {case x -> x case <Ask => k> -> k(7)}
+stdout : 7 : Int
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+The guess logger forwards guesses and retains caller effects
+open import Number_games; effect Reader { Ask : () => Int; } handle (mySecret(42,fun(){logger(fun(){var _=do Guess(64); var _=do Ask; var _=do Guess(32); var _=do Guess(42); ()})})) {case xs -> xs case <Ask => k> -> print("read "); k(7)}
+stdout : read [(42, Correct), (32, Low), (64, High)] : List (Int, [|Correct|High|Low|])
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+The guess logger requires an outer guess handler
+open import Number_games; logger(fun(){var _=do Guess(42); ()})
+exit : 1
+stderr : @.*Type error:.*In expression: logger\.
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+The identity handler retains linear results
+open import Identity; var k=force(fun(){linfun(){42}}); k()
+stdout : 42 : Int
+args : --fresco --path=examples/handlers:examples:lib/stdlib

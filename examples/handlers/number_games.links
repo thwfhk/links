@@ -1,11 +1,15 @@
 # Classic guess a number game
-typename Comp(e::Eff,a) = () ~e~> a;
+open import FrescoPrelude;
+
 typename Answer = [|Low|Correct|High|];
 
-sig readInt : () {Read:Int|_}~> Int
+effect Read { Read : () => Int; }
+effect Guess { Guess : (Int) => Answer; }
+
+sig readInt : modal [Read, Wild] (() -> Int)
 fun readInt() {var n = do Read; print(" " ^^ intToString(n)); n}
 
-sig guess : () {Read:Int,Guess:(Int) => Answer|_}~> ()
+sig guess : modal [Read, Guess, Wild] (() -> ())
 fun guess() {
   print("Take a guess>");
   var number = readInt();
@@ -16,6 +20,7 @@ fun guess() {
   }
 }
 
+sig isNil : forall a. (List a) -> Bool
 fun isNil(xs) {
   switch (xs) {
     case [] -> true
@@ -23,7 +28,7 @@ fun isNil(xs) {
   }
 }
 
-sig input : (List Int, Comp({Read:Int |e}, a)) {Read{_} |e}~> ()
+sig input : forall a. (List Int, modal <Read> (() -> a)) -> ()
 fun input(guesses, m) {
   handle(m())(guesses <- guesses) {
     case x -> ()
@@ -35,7 +40,7 @@ fun input(guesses, m) {
   }
 }
 
-sig mySecret : (Int, Comp({Guess:(Int) => Answer|e}, a)) {Guess{_} |e}~> a
+sig mySecret : forall a. (Int, modal <Guess> (() -> modal <Guess|> a)) -> a
 fun mySecret(secret, m) {
   handle(m()) {
     case x -> x
@@ -46,7 +51,7 @@ fun mySecret(secret, m) {
   }
 }
 
-sig logger : (Comp({Guess:(Int) => Answer|e}, a)) {Guess:(Int) => Answer|e}~> List (Int,Answer)
+sig logger : forall a. modal [Guess] ((modal <Guess> (() -> a)) -> List (Int,Answer))
 fun logger(m) {
   handle(m())(log <- []) {
     case _ -> log
@@ -56,10 +61,12 @@ fun logger(m) {
   }
 }
 
+sig example : modal [Wild] (() -> ())
 fun example() {
   mySecret(42, fun() { input([64,32,48,40,44,42], guess) })
 }
 
+sig example2 : modal [Wild] (() -> List (Int,Answer))
 fun example2() {
   mySecret(42, fun() {logger(fun() { input([64,32,48,40,44,42], guess) }) })
 }
