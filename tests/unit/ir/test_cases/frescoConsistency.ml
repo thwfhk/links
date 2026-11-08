@@ -225,13 +225,63 @@ let suite = "Fresco consistency" >::: [
       (S.Record (row ~tail:(v ~freedom:`Rigid r) []))
       (S.Record (row ~tail:(v t) ["extra", S.Present bool]))));
 
-  "same row tail compares extra fields as closed" >:: (fun _ ->
+  "same flexible row tail retains missing absence" >:: (fun _ ->
     let r = q ~pk:PrimaryKind.Row () and p = q ~pk:PrimaryKind.Presence () in
     let ctx = flex (flex C.empty r) p in
     let a = S.Record (row ~tail:(v r) ["x", v p]) and b = S.Record (row ~tail:(v r) []) in
     let next, _ = join ctx a b in assert_equal S.Absent (solution next p);
-    assert_bool "Tail unchanged" (unresolved next r);
+    begin match solution next r with
+    | S.Row (fields, tail, false) ->
+       assert_equal S.Absent (StringMap.find "x" fields);
+       begin match head tail with S.Var _ -> () | _ -> assert_failure "Expected a fresh open tail" end
+    | _ -> assert_failure "Expected a finite absent-field solution" end;
+    assert_bool "Input tail remains unsolved" (unresolved ctx r);
+    reject (J.consistent environment next ~primary_kind:PrimaryKind.Row (v r) (row ["x", S.Present int]));
     reject (J.consistent environment ctx (S.Record (row ~tail:(v r) ["x", S.Present int])) b));
+
+  "closed missing fields can match explicit absence" >:: (fun _ ->
+    let plain = row [] and masked = row ["x", S.Absent] in
+    List.iter (fun (left, right) ->
+      let _, result = join ~pk:PrimaryKind.Row C.empty left right in
+      match head result with
+      | S.Row (fields, tail, false) ->
+         assert_equal S.Closed (head tail);
+         assert_equal S.Absent (StringMap.find "x" fields)
+      | _ -> assert_failure "Expected a closed absent field") [plain, masked; masked, plain]);
+
+  "a repeated rigid open tail cannot prove missing absence" >:: (fun _ ->
+    let r = q ~pk:PrimaryKind.Row () in let ctx = rigid C.empty r in
+    let plain = v ~freedom:`Rigid r in
+    let masked = row ~tail:plain ["x", S.Absent] in
+    reject_error J.Mismatch (J.consistent environment ctx ~primary_kind:PrimaryKind.Row plain masked);
+    reject_error J.Mismatch (J.consistent environment ctx ~primary_kind:PrimaryKind.Row masked plain);
+    ignore (join ~pk:PrimaryKind.Row ctx masked masked));
+
+  "outer absence masks survive a stored row solution" >:: (fun _ ->
+    let r = q ~pk:PrimaryKind.Row () in let ctx = flex C.empty r in
+    let ctx = solve ctx r (row ["x", S.Present int; "y", S.Present bool]) in
+    let masked = row ~tail:(v r) ["x", S.Absent] in
+    let before = bytes masked in
+    let _, result = join ~pk:PrimaryKind.Row ctx masked (row ["x", S.Absent; "y", S.Present bool]) in
+    begin match head result with
+    | S.Row (fields, tail, false) ->
+       assert_equal S.Closed (head tail);
+       assert_equal S.Absent (StringMap.find "x" fields);
+       assert_equal (S.Present bool) (StringMap.find "y" fields)
+    | _ -> assert_failure "Expected the retained outer mask" end;
+    assert_equal before (bytes masked));
+
+  "failed rigid absence proof retains context and points" >:: (fun _ ->
+    let a = q () and r = q ~pk:PrimaryKind.Row () in
+    let ctx = rigid (flex C.empty a) r in
+    let point = Unionfind.fresh (v a) in
+    let tail = v ~freedom:`Rigid r in
+    let left = row ~tail ["common", S.Present (S.Meta point)] in
+    let right = row ~tail ["common", S.Present int; "x", S.Absent] in
+    let before = bytes (left, right) in
+    reject_error J.Mismatch (J.consistent environment ctx ~primary_kind:PrimaryKind.Row left right);
+    assert_bool "Common-field assignment was not retained" (unresolved ctx a);
+    assert_equal before (bytes (left, right)));
 
   "modality rows exchange distinct effects and preserve repeats" >:: (fun _ ->
     let a = modal [effect_entry "E" int; effect_entry "F" bool; effect_entry "E" bool] int in

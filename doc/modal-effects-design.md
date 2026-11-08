@@ -635,6 +635,38 @@ to be unlimited. A guarded record update must check replacement access without
 allowing an immediately evaluated expression to invoke effects absent from
 the caller's ambient context.
 
+Record extension first checks the base against an absent field for every
+added label, following `typeSugar.ml`. A matching absent marker can be replaced;
+an existing present field cannot. Flatten solved row tails with outer masks
+retained before merging the new fields. Record-pattern remainders mark extracted
+labels absent, preserving the source type used by strict lowering and the
+linearity of other fields.
+
+Shared unresolved row tails require absence evidence. With a closed tail,
+missing fields are absent. With a rigid open tail, unmatched field masks cannot
+be inferred. With a flexible shared tail, retain the inferred absent fields in
+a finite solution with a fresh tail; a later conflicting field assignment must
+reject. Treating every shared tail as closed allowed a forged absence annotation
+and duplicate runtime record fields. The source comparisons and original failure
+are in `/tmp/links-d7-m7-records/absence-gap.md`. Keep present-field mismatch,
+ordinary kinds, failure immutability and existing duality/recursive-row limits.
+
+The records suite retains supplied polymorphic field/list projections, complete
+printed types and definition-level absence rejections. Its database case and
+unchanged malformed recursive-row source remain explicit compatibility checks;
+the latter asserts a parse error and establishes no recursive type property.
+The patterns suite retains its IR flag and two ignored redundancy cases, with
+supplied recursive input/open-result declarations and presence instantiations.
+Source execution covers recursive rows and linear remainder/as-pattern fields.
+
+Retain the separate solved-tail dot-projection follow-up: selecting a linear
+field through a solved row tail can leave that field in the discarded-row
+usage check. Record-pattern extraction consumes the same field successfully
+without narrowing its type. The migration uses that extraction; no projection
+or ordinary linear-function inference change is included. Evidence:
+`/tmp/links-d7-m7-patterns/contracts.md` and
+`/tmp/links-d7-m7-review.md`.
+
 ### D7 regex syntax
 
 Lower regex syntax to positioned constructors of the checked `Regex` and
@@ -2464,6 +2496,16 @@ between independent contexts. Keep these general contracts and dependent
 fixtures deferred. Do not restrict their payloads to `Abs` or share their
 contexts merely to pass. `auto'` instead receives an effect-universally callable
 identity, so a portable pure returned function remains a migration candidate.
+
+The typed-IR contract audit is `/tmp/links-d7-typed-ir-contracts.md`. Retain
+its anonymous composition/application, curry and linear-function wrapper cases
+as deferred callback-construction contracts. Its callcc case also permits a
+continuation argument with an effect row independent of the callback/caller
+row. A strict-IR legacy control supplies that continuation type and returns 42;
+the shared-context modal replacement rejects the callback. Preserve that full
+contract separately from the supported contextual escape construct. XML,
+query/database/location and web-continuation serialisation fixtures retain
+their recorded exclusions.
 
 References: thesis chapter 3 (`chapters/overview.tex`, "Effect polymorphism")
 and `chapters/metx/encoding-rows-no-effvar.tex` describe the distinction between

@@ -30,7 +30,10 @@ val guess : FrescoKind.checking_environment -> FrescoContext.t ->
     recursive pairs may close only after a structural constructor. Growing
     comparisons that cannot establish equality return
     [Cannot_establish_recursive_equality]. Required duality of an unresolved
-    presence returns [Unsupported_presence_duality]. A shared row tail that
+    presence returns [Unsupported_presence_duality]. Missing fields are absent
+    under closed tails. Matching a repeated flexible tail against extra absent
+    fields retains those masks in its solution; a repeated rigid open tail
+    cannot establish their absence. A shared row tail that
     stays unresolved after comparing common fields returns
     [Unsupported_row_duality] when the orientations differ. *)
 val consistent : FrescoKind.checking_environment -> FrescoContext.t ->

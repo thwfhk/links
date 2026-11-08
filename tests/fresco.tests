@@ -637,3 +637,41 @@ typename Queue(a::Any)=[|Nil|Cons:(a,Queue(a))|]; sig identity:forall a::Any.(Qu
 args : --fresco
 exit : 1
 stderr : @.*Type error: Type does not match the required type.*In expression: ~identity.*
+
+Record extension replaces proven absence and retains other masks
+sig extend:forall r::Row.((l-,hidden- |r))->(l:Int,hidden- |r) fun extend(base){(l=42|base)} extend((x=true))
+args : --fresco
+stdout : (l = 42, x = true) : (hidden-,l:Int,x:Bool)
+
+Record extension preserves outer masks over stored row tails
+sig extend:forall r::Row.((l- |r))->(l:Int|r) fun extend(base){(l=42|base)} ~extend[{l:String,x:Bool}]((x=true))
+args : --fresco
+stdout : (l = 42, x = true) : (l:Int,x:Bool)
+
+A rigid row cannot be extended without an absence proof
+sig extend:forall r::Row.((|r))->(l:Int|r) fun extend(base){(l=42|base)} ~extend[{l:String}]((l="x"))
+args : --fresco
+exit : 1
+stderr : @.*Type error: Record extension requires absent fields.*In expression: \(l=42\|base\)\.
+
+A rigid row cannot acquire an absent field through an annotation
+fun(base:(|r)){base:(l- |r)}
+args : --fresco
+exit : 1
+stderr : @.*Type error: Type does not match the required type.*In expression: base\.
+
+A flexible row retains its absence proof through later application
+var extend=fun(base:(|%r)){(l=42|(base:(l- |%r)))}; extend((x=true))
+args : --fresco
+stdout : (l = 42, x = true) : (l:Int,x:Bool)
+
+A refined flexible row rejects a later colliding field
+var extend=fun(base:(|%r)){(l=42|(base:(l- |%r)))}; extend((l="x"))
+args : --fresco
+exit : 1
+stderr : @.*Type error: Type does not match the required type.*In expression: extend\.
+
+Record extension preserves linear added and existing fields
+sig extend:forall a::Any,r::Row(Any,Any).((l- |r),a)->(l:a|r) fun extend(base,value){(l=value|base)} var result= ~extend[(() -@ Int),{keep:() -@ Int}]((keep=linfun(){40}),linfun(){2}); switch(result){case (l=f,keep=g) -> (g(),f())}
+args : --fresco
+stdout : (40, 2) : (Int, Int)

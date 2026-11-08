@@ -520,7 +520,16 @@ and rows env active ctx dl dr left right =
     let ctx, tail, dual =
       if same_tail then begin
         if ld <> rd then fail Unsupported_row_duality;
-        absent (absent ctx only_left true) only_right false, lt, ld
+        let ctx = absent (absent ctx only_left true) only_right false in
+        let extra = StringMap.union (fun _ _ _ -> assert false) only_left only_right in
+        if StringMap.is_empty extra then ctx, lt, ld
+        else match lt, flexible ctx lt with
+          | S.Closed, _ -> ctx, S.Closed, false
+          | _, Some id ->
+             let ctx, tail = fresh ctx (parameter PrimaryKind.Row) in
+             let fields = StringMap.map (fun _ -> S.Absent) extra in
+             solve ctx id ld fields tail false, tail, false
+          | _ -> fail Mismatch
       end
       else match flexible ctx lt, flexible ctx rt, lt, rt with
         | Some l, Some r, _, _ ->

@@ -1588,14 +1588,24 @@ and infer_record support s mode pos fields base =
   let s,base,tail = match base with
     | None -> s,None,S.Closed
     | Some base -> let s,e = infer_term support s C.Infer base in
-       (match head s pos e.typ with S.Record row -> s,Some e,row
+       let s,tail = fresh s pos PrimaryKind.Row in
+       let fields = StringMap.of_list (List.map (fun name -> name,S.Absent) names) in
+       let context,typ = get pos "Record extension requires absent fields"
+         (FrescoConsistency.consistent (env s) (context s) e.typ
+           (S.Record (S.Row (fields,tail,false)))) in
+       let s = ctx s context in
+       (match head s pos typ with S.Record row -> s,Some e,row
         | _ -> error pos "Record extension requires a record") in
   let row = StringMap.of_list (List.map (fun (label,e) -> label,S.Present e.typ) fields) in
-  let s,typ = match tail with
-    | S.Row (other,tail,dual) ->
-       if List.exists (fun n -> StringMap.mem n other) names then error pos "Record extension repeats a field";
-       s,S.Record (S.Row (StringMap.union (fun _ _ _ -> assert false) row other,tail,dual))
-    | tail -> s,S.Record (S.Row (row,tail,false)) in
+  let rec flatten fields typ = match head s pos typ with
+    | S.Row (next,tail,false) ->
+       flatten (StringMap.union (fun _ field _ -> Some field) fields next) tail
+    | S.Row (next,tail,true) ->
+       StringMap.union (fun _ field _ -> Some field) fields next,tail,true
+    | tail -> fields,tail,false in
+  let other,tail,dual = flatten StringMap.empty tail in
+  let other = List.fold_left (fun fields name -> StringMap.remove name fields) other names in
+  let typ = S.Record (S.Row (StringMap.union (fun _ _ _ -> assert false) row other,tail,dual)) in
   coerce support s pos mode (term pos typ (Record (fields,base)))
 and infer_lambda support s mode pos lin groups body =
   match groups with
@@ -1757,7 +1767,7 @@ and check_record_pattern support s pos fields rest typ =
     | Some p ->
        let row = match expose s pos typ with S.Record r -> expose s pos r | _ -> error pos "Expected a record pattern" in
        let rest_type = match row with S.Row (fs,tail,dual) -> S.Record (S.Row
-         (List.fold_left (fun fs (n,_) -> StringMap.remove n fs) fs fields,tail,dual))
+         (List.fold_left (fun fs (n,_) -> StringMap.add n S.Absent fs) fs fields,tail,dual))
          | _ -> error pos "Expected a record row" in
        let s,p = check_pattern support s p rest_type in s,Some p in
   let base = match rest with None -> typ | Some p -> p.pattern_inner_type in

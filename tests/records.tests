@@ -5,125 +5,155 @@ config: tests/legacy_compatibility.config
 Record printing
 (x=1, y="two")
 stdout : (x = 1, y = "two") : (x:Int,y:String)
+args : --fresco
 
 Quote record labels that are also keywords
 ("client"=5, "fun"=7)
 stdout : ("client" = 5, "fun" = 7) : (client:Int,fun:Int)
+args : --fresco
 
 Record comparisons
 (x=1, y="two") == (y="two", x=1)
 stdout : true : Bool
+args : --fresco
 
 Record extension
 {var z = (y="three"); (x=4|z) }
 stdout : (x = 4, y = "three") : (x:Int,y:String)
+args : --fresco
 
 Let pattern matching
 {var (x=a,y=(z=b)) = (y=(z=3),x="four"); a}
 stdout : "four" : String
+args : --fresco
 
 Lambda pattern matching
 (fun((x=a,y=(z=b))) { a }) ((y=(z=3),x="four"))
 stdout : "four" : String
+args : --fresco
 
 Projection of absent field
-(x="1").y;;
-stderr : @.
+(x="1").y
+stderr : @.*Type error: Missing field y.*In expression:.*\.y\.
 exit : 1
+args : --fresco
 
 Projections
 (y=(z=3),x="four").y.z
 stdout : 3 : Int
+args : --fresco
 
 Projection sections
 (.x)((y=(z=3),x="four"))
 stdout : "four" : String
+args : --fresco
 
 Passing two different closed rows to an open-row function arg
-fun foo(x) { x.a } (foo((a="a", b=2)), foo((a=1, c=3)))
+sig foo : forall a::Any, r::Row. ((a:a|r)) -> a fun foo(x) { x.a } (foo((a="a", b=2)), foo((a=1, c=3)))
 stdout : ("a", 1) : (String, Int)
+args : --fresco
 
 Passing two different list types to a polymorphic function
-fun foo(x) { hd(x) } (foo([1,2]), foo(['a', 'b', 'c']))
+sig foo : forall a. modal [Wild] ((List a) -> a) fun foo(x) { hd(x) } (foo([1,2]), foo(['a', 'b', 'c']))
 stdout : (1, 'a') : (Int, Char)
+args : --fresco
 
 Row types preserved across functions
 (fun (x) { var (r=r|s) = x; (r=3|s) })((r=3,s=4)).s
 stdout : 4 : Int
+args : --fresco
 
 With syntax (same type)
 ((x = 3) with x = 4)
 stdout : (x = 4) : (x:Int)
+args : --fresco
 
 With syntax (different type)
 ((x = 3) with x = "four")
 stdout : (x = "four") : (x:String)
+args : --fresco
 
 With syntax: multiple labels (a)
 ((x=3,y=4) with y="four")
 stdout : (x = 3, y = "four") : (x:Int,y:String)
+args : --fresco
 
 With syntax: multiple labels (b)
 ((z='a',x=3,y=4) with x="four",y=3)
 stdout : (x = "four", y = 3, z = 'a') : (x:String,y:Int,z:Char)
+args : --fresco
 
 With syntax (missing label)
 ((x = 3) with y=4)
-stderr : @.
+stderr : @.*Type error: Missing field y.*
 exit : 1
+args : --fresco
 
-Tables must have table type.
+Tables must have table type (legacy database compatibility)
 fun (t) { for (x <-- t) [(a=x.y)] }
 stdout : @fun : \(TemporalTable\(.*\)\) {}-> .*
+args : --set=fresco=false
 
 Duplicate fields
 (x=3,x=3)
-stderr : @.
+stderr : @.*Type error: Duplicate record field.*
 exit : 1
+args : --fresco
 
-Uninhabited recursive rows (questionable)
+Malformed recursive-row fixture (legacy parser compatibility)
 (fun (x : (|(mu b . b))) {x})(())
-stderr : @.
+stderr : @.*Parse error:.*
 exit : 1
+args : --set=fresco=false
 
 Missing absent label (1)
 fun (r : (|a)) {(l=42|r)}
-stderr : @.
+stderr : @.*Type error: Record extension requires absent fields.*In expression: \(l=42\|r\)\.
 exit : 1
+args : --fresco
 
 Missing absent label (2)
-fun (r : (|a)) {(l=42|(r : (l-|a)))}
-stderr : @.
+fun (r : (|a)) {(l=42|(r : (l- |a)))}
+stderr : @.*Type error: Type does not match the required type.*In expression: r\.
 exit : 1
+args : --fresco
 
 Possibly absent label in a closed row
 fun (x : (a{%b}|%c)) {x : ()}
-stdout : fun : (()) -> ()
+stdout : fun : ((a-)) -> ()
+args : --fresco
 
 Record field punning (1)
 var hello = "hellooo"; (=hello)
 stdout : (hello = "hellooo") : (hello:String)
+args : --fresco
 
 Record field punning (2)
 var hello = "hellooo"; (=hello, world = 5)
 stdout : (hello = "hellooo", world = 5) : (hello:String,world:Int)
+args : --fresco
 
 Record field punning (3)
 switch((hello=5, world=10)) { case (=hello, world=y) -> hello + y }
 stdout : 15 : Int
+args : --fresco
 
 Record field punning (4)
 var y = 2; (x=1, =y)
 stdout : (x = 1, y = 2) : (x:Int,y:Int)
+args : --fresco
 
 Record field punning (5)
 var y = 2; (x=1, =y, z=3)
 stdout : (x = 1, y = 2, z = 3) : (x:Int,y:Int,z:Int)
+args : --fresco
 
 Record field punning (6)
 var z = 3; (x=1, y=2, =z)
 stdout : (x = 1, y = 2, z = 3) : (x:Int,y:Int,z:Int)
+args : --fresco
 
 Record field punning (7)
 var x = 1; var y = 2; var z = 3; (=x, =y, =z)
 stdout : (x = 1, y = 2, z = 3) : (x:Int,y:Int,z:Int)
+args : --fresco

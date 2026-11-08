@@ -333,6 +333,11 @@ branch result types must satisfy Fresco's consistency rules. Existing ordinary
 linearity and session restrictions remain enforced. A modal type inherits its
 payload's ordinary linearity: `Abs` does not imply `Unl`.
 
+Record extension requires every added label to be absent from the base record.
+An explicit absent field supplies that evidence; a missing field under an
+unresolved rigid row does not. Record-pattern remainders retain absent markers
+for the extracted labels and preserve the other field types and linearity.
+
 An empty switch evaluates its scrutinee and has no successful branch. Its
 scrutinee may have any type, including an empty variant. Its result follows a
 supplied type; otherwise inference retains an unknown result type without
