@@ -2,6 +2,7 @@
 """Bounded stdin checks for the contextual REPL. Run from the repository root."""
 import os
 import select
+import shlex
 import signal
 import subprocess
 import time
@@ -10,14 +11,16 @@ PROMPT = b"links> "
 
 
 class Repl:
-    def __init__(self, prelude="tests/empty_prelude.links"):
-        self.process = subprocess.Popen(
-            ["_build/default/bin/links.exe", "--enable-handlers",
+    def __init__(self, prelude="tests/empty_prelude.links", options=()):
+        arguments = (["_build/default/bin/links.exe", "--enable-handlers",
              "--set=native_readline=false",
              "--set=optimise=false", "--set=typecheck_ir=true",
              "--set=fail_on_ir_type_error=true", "--set=recheck_frontend_transformations=true",
              "--path=tests/fixtures/fresco_repl"] +
-            (["--set=prelude=" + prelude] if prelude is not None else []),
+            (["--set=prelude=" + prelude] if prelude is not None else []) + list(options))
+        print("$ " + shlex.join(arguments), flush=True)
+        self.process = subprocess.Popen(
+            arguments,
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         )
         self.transcript = ""
@@ -188,6 +191,35 @@ def interrupt_and_eof(repl):
     repl.close(eof=True)
 
 
+def selection():
+    cases = [
+        ("default", [], True),
+        ("explicit", ["--fresco"], True),
+        ("affirmative-config", ["--config=tests/legacy_compatibility.config", "--fresco"], True),
+        ("legacy", ["--set=fresco=false"], False),
+        ("set-before-flag", ["--set=fresco=false", "--fresco"], False),
+        ("set-after-flag", ["--fresco", "--set=fresco=false"], False),
+    ]
+    for name, options, fresco in cases:
+        print("\nCASE selection-" + name, flush=True)
+        repl = Repl(options=options)
+        try:
+            repl.command("var id=fun(x){x};")
+            result = repl.command("(id(42),id(true));")
+            if fresco:
+                require(result, "Type error", "consistency")
+                assert "(42, true)" not in result, result
+            else:
+                require(result, "(42, true) : (Int, Bool)")
+                assert "Type error" not in result, result
+            require(repl.command("id(true);"), "true : Bool")
+            require(repl.command("42;"), "42 : Int")
+            repl.close()
+        finally:
+            repl.cleanup()
+    return len(cases)
+
+
 if __name__ == "__main__":
     cases = [definitions, polymorphism, alias_changes, environments, loading,
              imports, settings, printing, type_search, default_prelude, interrupt_and_eof]
@@ -201,4 +233,5 @@ if __name__ == "__main__":
             print("PASS " + case.__name__, flush=True)
         finally:
             repl.cleanup()
-    print(str(len(cases)) + " contextual REPL cases passed", flush=True)
+    selectors = selection()
+    print(str(len(cases)) + " contextual REPL cases and " + str(selectors) + " selector cases passed", flush=True)

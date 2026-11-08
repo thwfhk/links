@@ -557,13 +557,13 @@ Keep the distinction between implicit arrows and legacy annotated arrows in
 the parser. During transition, `DesugarLegacyTypes` converts implicit arrows
 before legacy type-variable/effect desugaring and rejects modal constructs.
 Run it after imported syntax is loaded. The contextual path preserves the
-new nodes. Use the temporary normaliser in legacy built-in type-string readers.
+new nodes. Retain the normaliser in legacy built-in type-string readers.
 
 Source-level tests need a contextual entry point with a small primitive
 environment before the whole prelude is migrated. Lower checked declarations,
 qualified operations and general freezing before `sugartoir.ml`, whose old
-entry points reject those nodes. Once migration is complete, Fresco is the
-default for batch, REPL and typed-frontend rechecks, with explicit legacy
+entry points reject those nodes. Fresco is the default for batch, REPL and
+typed-frontend rechecks, with explicit legacy
 selection retained. Include type-string readers used by compiler transformations
 in the final review.
 
@@ -907,7 +907,7 @@ dependent migrations.
 
 | Group | Sources under `examples/sessions` | Check |
 |---|---|---|
-| Ordinary protocols | `calc`, `calc-cp`, `calc-endbang`, `end`, `fuse`, `fusegg`, `givengrab`, `linear_if` | Preserve types and run terminating examples; retain the recorded close/link failure for D8 if reproduced |
+| Ordinary protocols | `calc`, `calc-cp`, `calc-endbang`, `end`, `fuse`, `fusegg`, `givengrab`, `linear_if` | Terminating examples execute; D8a2 repairs fusegg's immediate close/link case |
 | Recursive/generic protocols | `atm`, `choice`, `reccalc`, `sim-calc`, `state`, `forkbomb`, `pi`, `two-factor`, `chatserver/frescoLinearList`, `mind/frescoLinearList` | Sign recursion and callbacks, preserve kinds; execute terminating local programs |
 | Socket models | `smtp`, `smtp-end`, `smtp-factored`, `smtp-factored-more`, `smtp-dummy`, `Elvina/SMTP_Real_CP`, `Elvina/SMTP_Real_GV`, `Elvina/IRC_Test` | Deferred: typecheck socket clients and execute the local dummy model when resumed |
 | XML/location prerequisites | `ap-multi-client`, browser calculators, bookshops, draggable examples, `gng-client`, `smtp-formlet`, `Elvina` web models and IRC, `mind/mindClient` and its `mindSessions` module | Deferred with XML/forms and function locations |
@@ -978,10 +978,9 @@ opened-module names and shadowing.
 
 ### D7 prelude migration
 
-Stage the checked prelude in `lib/stdlib/frescoPrelude.links` while the legacy
-frontend remains the default. Tests import this module through the normal
-module loader. D7e will make the migrated definitions the default prelude and
-remove the temporary duplication.
+The default Fresco frontend loads `lib/stdlib/frescoPrelude.links` through
+the normal module loader. The retained legacy frontend loads `prelude.links`.
+Keep both preludes with their respective frontend contracts.
 
 Give collection helpers explicit polymorphic signatures. The implicit global
 `modal []` guard leaves their callback arrows contextual, so `map`, `iter`,
@@ -1229,18 +1228,14 @@ Switch the default after core functional/modal and entry-point checks pass.
 Retain explicit legacy access for compatibility, deferred and excluded fixtures;
 never fall back to legacy after a contextual type error.
 
-The annotation-scope repair and default frontend are complete. On 8 November
-2026, the user resumed remaining in-scope regression and example migration,
-starting with ordinary handlers. Check the older inventory
-`/tmp/links-d7e5-inventory.md` against current source. Preserve polymorphic
-contracts, feature settings and intended negative rejection causes. Keep legacy
-compatibility results separate from Fresco coverage. Finish, independently
-review, check and commit each small milestone before the next implementation;
-pause before D8. [PLAN.md](../PLAN.md) records current progress and checks.
+The annotation-scope repair and default frontend are complete. D7 migration
+checked `/tmp/links-d7e5-inventory.md` against current source, preserving
+polymorphic contracts, feature settings and negative rejection causes. Keep
+legacy compatibility results separate from Fresco coverage.
+[PLAN.md](../PLAN.md) records current progress and checks.
 
 The contextual frontend now checks typed lowering and retains operator
-fixities and loads the configured prelude as described below. Complete REPL
-and compilation integration before the default switch. Preserve module identities across
+fixities and loads the configured prelude as described below. Preserve module identities across
 prelude loading and later imports. JavaScript compilation needs the preceding
 prelude bindings as well as the current source's IR, without evaluating the
 source program. Existing shared backend generation remains the implementation.
@@ -1416,6 +1411,16 @@ uses the existing `tests/legacy_compatibility.config` settings and runs the
 bundled JavaScript runtime. Repairing the legacy operation IR checker remains
 a separate follow-up; the Fresco execution matrix retains strict IR checking.
 
+D8b's frontend audit checked the retained selector and error paths in batch,
+REPL and compilation. One startup selection chooses the frontend; Fresco error
+paths retain or discard contextual state without entering legacy inference.
+The source inventory and 24 bounded probes are in
+`/tmp/links-d8b-frontends.md`. Retained tests now distinguish Fresco's rejection
+of monomorphic reuse from legacy generalisation in REPL and compile mode.
+They also preserve legacy compile-mode `-e` evaluation before file compilation.
+The [migration guide](modal-effects-migration.md) gives current commands and
+contract-preserving source steps.
+
 ### D7 polymorphism regression migration
 
 Supplied signatures retain value polymorphism, recursive contracts and ordinary
@@ -1539,8 +1544,8 @@ This corrects the old `intRange` overflow at a singleton `min_int` range.
 
 ### D5/D6 source and runtime boundary
 
-Use an opt-in `--fresco` entry point with a small primitive environment while
-the default frontend awaits D7. Keep inference state persistent between
+D5 introduced an opt-in `--fresco` entry point with a small primitive
+environment; D7 made Fresco the default. Keep inference state persistent between
 interactive definitions. Publish updated type and name-resolution state only
 after checking succeeds. The source tests must exercise retained unknowns and
 failure recovery through this entry point.
@@ -1677,8 +1682,8 @@ across all clause results after typing resumptions.
 Reuse `DesugarTypeVariables` for source variable occurrences, ordinary kind
 inference and defaults. Convert resolved syntax through contextual type
 operations. Legacy `Instantiate.alias` removes leading quantifiers and cannot
-apply modal aliases. Keep contextual conversion separate from the legacy
-frontend until source inference is ready.
+apply modal aliases. Keep contextual conversion separate from the retained
+legacy frontend.
 
 `FrescoElaborate` returns persistent context, alias, typed-effect and resolution
 state. It exposes annotations, ordinary Type/Row/Presence arguments, written
@@ -1860,13 +1865,12 @@ inference rejects these constructors before mutation.
 Non-recursive IR equality uses scoped row matching, mask multiset
 equality, full modal payload comparison, and modal binder kinds.
 Within these comparisons, session input/output types include their
-continuations. The opt-in contextual IR checker uses Fresco's recursive
+continuations. The contextual IR checker uses Fresco's recursive
 comparison. Runtime copies provide structural raw-body application callbacks
 for existing type consumers. Source inference and detached export retain
 their separate contextual operations. The legacy IR path still rejects
 recursive equality involving contextual arrows or modal types; its old
-recursive equality shortcut remains confined to legacy programs. D8 audits
-the remaining recursive consumers during migration.
+recursive equality shortcut remains confined to legacy programs.
 
 At the runtime boundary, convert lexical `Recursive` binders and their bound
 `Var` references to fresh recursive point graphs. The shared runtime visitors
@@ -1886,6 +1890,16 @@ free identifiers and the source type graphs. This repairs Pi's post-closure IR
 check without changing closure conversion or execution. The reduced reproducer
 also uses a recursive function without handlers. Tests retain rejection of
 different binder kinds, free identifiers, payloads and bound/free capture.
+
+D8b reviewed metadata and recursive types from full source export through
+runtime type copies, shared type/IR traversals, optimisation, closure
+conversion, type simplification, BuildTables and both backends. The consumer
+inventory, source locations and 295 selected unit checks are in
+`/tmp/links-d8b-metadata.md`. Ghost-free conversion, detached requirement
+restoration, ordinary/modal binder copies and independent nominal scopes
+remain checked. Runtime recursive callbacks use structural raw-body
+substitution; contextual source callbacks keep their checked operations and
+context requirements. This review required no further compiler change.
 
 ### Contextual recursive type operations
 
@@ -1922,7 +1936,8 @@ Equality and consistency must interpret the deferred duality when comparing rows
 Legacy exported `r_unwind` callbacks still reject unfolding. Contextual operations
 receive the environment and restored variable requirements explicitly. Installing
 an ordinary callback would lose that metadata. Migrate consumers to the contextual
-operations in D7/D8 before removing the temporary callback rejection.
+operations for source checking. Private runtime copies supply structural
+callbacks for the shared compiler passes; source callbacks retain rejection.
 
 The user selected Links' existing equality behaviour on 6 November 2026.
 Transparent aliases compare through their bodies, including unused parameters.
@@ -2260,8 +2275,8 @@ an output binder without changing how its free variables are resolved.
 Raw declarations use their own binders and the supplied declaration callback.
 Export snapshots bodies and optional linearity, then rebuilds callbacks over
 copied data. Exported unfolding raises
-`FrescoContext.Unsupported_recursive_unfolding` until contextual unfolding
-is supplied. For point cycles,
+`FrescoContext.Unsupported_recursive_unfolding`; contextual unfolding uses the
+restored requirements through checked operations. For point cycles,
 copy non-recursive nodes separately when their lexical scope changes, and
 close an active recursive node using its captured scope. Scope exit uses the
 same cycle rule and checks closing metadata before copying any roots.

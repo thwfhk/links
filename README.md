@@ -3,6 +3,10 @@ Links: Linking Theory to Practice for the Web
 
 ![Build status](https://github.com/links-lang/links/actions/workflows/default.yml/badge.svg?branch=master)
 
+For the `modal-effects` branch, see the
+[migration guide](doc/modal-effects-migration.md) and
+[language specification](doc/modal-effects-spec.md).
+
 Links helps to build modern Ajax-style applications: those with
 significant client- and server-side components.
 

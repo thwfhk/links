@@ -486,6 +486,9 @@ their result type unless `endbang_antiquotes` requires `!().End`.
 
 ## 8. Compatibility and examples
 
+The [migration guide](modal-effects-migration.md) gives the frontend commands,
+source migration steps and execution checks.
+
 ### 8.1 Required source changes
 
 | Existing feature | Required replacement |

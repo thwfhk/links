@@ -17,13 +17,13 @@ NODE = shutil.which("node")
 assert NODE, "Node is required for JavaScript syntax checks"
 
 
-def invoke(command, success=True, error=None):
+def invoke(command, success=True, error=None, expected_output=""):
     print("$ " + shlex.join(command), flush=True)
     result = subprocess.run(command, capture_output=True, text=True, timeout=35)
     print(result.stdout, end="", flush=True)
     print(result.stderr, end="", flush=True)
     assert (result.returncode == 0) == success, result.returncode
-    assert result.stdout == "", "Compile mode evaluated source: " + result.stdout
+    assert result.stdout == expected_output, "Unexpected compile output: " + result.stdout
     if error:
         assert error in result.stderr, (error, result.stderr)
     elif success:
@@ -150,9 +150,28 @@ def legacy(directory):
                ["--config=tests/legacy_compatibility.config", "--fresco"])
 
 
+def selection_and_legacy_order(directory):
+    program = file(directory, "selection.links", "var id=fun(x){x}; (id(42),id(true))")
+    for name, options in [("default", []), ("explicit", ["--fresco"])]:
+        compile_to(directory, "no-fallback-" + name, [program], options,
+                   success=False, error="consistency")
+    compile_to(directory, "legacy-generalisation", [program], ["--set=fresco=false"])
+    source = file(directory, "legacy-order.links", '{print("FILE-MARKER");saved+2}')
+    expression = 'var saved={print("EXPRESSION-MARKER");40}; saved'
+    output = directory / "legacy-order.js"
+    invoke(BASE + ["--set=fresco=false", "--set=prelude=" + EMPTY, "--set=isolation=false",
+                   "-o", str(output), source, "-e", expression],
+           expected_output="EXPRESSION-MARKER40 : Int\n")
+    assert output.is_file(), output
+    code = output.read_text()
+    assert "FILE-MARKER" in code and "EXPRESSION-MARKER" not in code
+    invoke([NODE, "--check", str(output)])
+
+
 if __name__ == "__main__":
     cases = [ordinary,custom_and_weak,expression_order,multiple_inputs,modules,
-             handlers,runtime_and_arithmetic,check_only_and_empty,errors,legacy]
+             handlers,runtime_and_arithmetic,check_only_and_empty,errors,legacy,
+             selection_and_legacy_order]
     with tempfile.TemporaryDirectory(prefix="links-fresco-compile-") as temporary:
         directory = pathlib.Path(temporary)
         for case in cases:
