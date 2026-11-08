@@ -2652,7 +2652,30 @@ later call in an independently chosen residual context. In contrast, `coop`
 threads one ambient residual context through recursive resumptions; `lambda`
 has a closed recursive expression context; and `pi` has direct same-context
 stream handlers. Their old effect-row parameters alone establish no need for
-effect variables.
+effect variables. The later full `lambda` contract check is recorded below.
+
+Defer the full `lambda` example because `lit` captures a generic value during
+construction and returns a thunk with an independently quantified context.
+A legacy Reader control constructs `lit(f)` under one handler, calls the thunk
+outside that handler, then invokes `f` under another handler and produces 7.
+Shared-ambient and fixed-absolute replacements reject that call or capture;
+requiring an `Abs` carrier would narrow the contract. Preserve the full source.
+A result-parameterised Var effect and recursive closed Expr representation
+are expressible, including Wild, and preserve generic `var_`; those declarations
+alone do not migrate `lit`. Evidence and independent review:
+`/tmp/links-d7-m6-lambda/readiness.md` and `/tmp/links-d7-m6-review/`.
+
+The Pi migration draft preserves separate Await/Yield effects and reifies them
+with nested handlers. Its inner Await step keeps Yield in stored resumptions;
+only the Done payload removes Yield. Explicit clause-result annotations and
+fixed-callback wrappers permit whole-source checking. Strict frontend
+typed-lowering verification passes, but the later IR check after `Closures`
+rejects a closure capturing the recursive helper and an Await resumption.
+Keep the original Pi source and compatibility route while D8 is paused.
+This failure establishes no effect-variable limitation. The full draft,
+reduced reproducer, commands and failure logs are in
+`/tmp/links-d7-m6-pi/pending.md`; independent stage evidence is in
+`/tmp/links-d7-m6-review/pi-stage.json`.
 
 Coop's callback adds its named effect and removes that effect from its result,
 retaining arbitrary caller effects in returned values and queued resumptions.

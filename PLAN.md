@@ -137,7 +137,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D7 migration 2 | Identity/number games and standalone handler parameters | `234683de` |
 | D7 migration 3 | Operation/return/resumption patterns, direct state and U2 search | `b7f32a3b` |
 | D7 migration 4 | Direct handler signatures, escaped continuations and generic local state | `b43efa52` |
-| D7 migration 5 | Shared recursive declaration snapshots and generic Coop | This commit |
+| D7 migration 5 | Shared recursive declaration snapshots and generic Coop | `871cfdbc` |
+| D7 migration 6 | Remaining handler-example contracts checked; Lambda/Pi deferrals recorded | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -259,6 +260,11 @@ assignments in the design's migration inventory.
 The console example is deferred following the user's concern about time spent
 on work peripheral to modal effects.
 
+The Pi handler migration additionally waits for D8's closure-conversion/IR
+checking work, as established on 8 November. Retain its saved source draft,
+general stream contracts and original behaviour; see the
+[design](doc/modal-effects-design.md#handler-migration-and-modal-examples).
+
 The remaining in-scope legacy-suite and example conversion has resumed. Its inventory is
 `/tmp/links-d7e5-inventory.md`, independently reviewed in
 `/tmp/links-d7e5-inventory-review-summary.log`. Keep existing migrated cases on
@@ -311,6 +317,14 @@ block the prioritised D7 completion checks.
 
 ## Latest task and verification
 
+8 November 2026, milestone 6: independent contract/stage review confirms
+Lambda's `lit` needs independent contexts and Pi's source draft reaches a later
+closure-conversion/IR failure. Both original examples and compatibility routes
+remain unchanged. Preserve the Pi draft/reproducer for D8; do not resume that
+work now. See the [design](doc/modal-effects-design.md#handler-migration-and-modal-examples)
+and `/tmp/links-d7-m6-review.md`. Documentation text and whitespace checked
+against `871cfdbc` plus these record edits; log `/tmp/links-d7-m6-doc-check.log`.
+
 8 November 2026, D7 migration milestone 5: explicit and inferred type
 application jointly validate/share recursive declaration snapshots before
 substitution. Strict declaration conflict, kind and scope checks remain.
@@ -357,8 +371,9 @@ Documentation-only update: text and whitespace checked.
 
 ## Next action
 
-Finish the supported lambda/pi handler examples, then the remaining functional
-regression suites and seven ordinary AIPL examples.
+Migrate records and patterns, then the remaining functional regression suites
+and seven ordinary AIPL examples. Keep Lambda's full-contract deferral and
+Pi's D8-dependent migration recorded in the design.
 Review, check and commit each milestone before the next implementation.
 Keep D8 paused.
 D8 must test the existing backends through actual execution and address the
