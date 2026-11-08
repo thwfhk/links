@@ -135,7 +135,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D7e5 | Default Fresco frontend and explicit legacy compatibility | `8c8d1087` |
 | D7 migration 1 | Identity/list handlers, operation sugar, exceptions and binary choice | `dcbb7a9d` |
 | D7 migration 2 | Identity/number games and standalone handler parameters | `234683de` |
-| D7 migration 3 | Operation/return/resumption patterns, direct state and U2 search | This commit |
+| D7 migration 3 | Operation/return/resumption patterns, direct state and U2 search | `b7f32a3b` |
+| D7 migration 4 | Direct handler signatures, escaped continuations and generic local state | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -309,25 +310,33 @@ block the prioritised D7 completion checks.
 
 ## Latest task and verification
 
-8 November 2026, D7 migration milestone 3: 26 more original handler cases
-use Fresco, with open-row payload and duplicate-clause controls. U2 retains both
-complete solutions, their order and printed directions; eight new execution
-controls retain generic choice/failure contracts. Independent review passed:
-`/tmp/links-d7-m3-review.md`. No compiler changes or new design decisions.
+8 November 2026, D7 migration milestone 4: the remaining fifteen supported
+original handler cases migrate, with a local-state caller-effect regression.
+The suite now has 76 Fresco cases and 22 labelled compatibility cases preserving
+unsupported contracts or retired policy. Review fixes retain explicitly written
+Wild requirements and absolute guards on local generic state helpers. Review:
+`/tmp/links-d7-m4-review.md`. No compiler changes or new design decisions.
 
-Tested source: `234683de` plus the patch and hashes in
-`/tmp/links-d7-m3-verification/revision.txt`, `source.patch` and
+Tested source: `b7f32a3b` plus the patch and hashes in
+`/tmp/links-d7-m4-verification/revision.txt`, `source.patch` and
 `source.sha256.json`. Source hashes stayed unchanged through verification.
 Compiler unchanged since milestone 1's `make no-db`. Logs below are in
-`/tmp/links-d7-m3-verification/`.
+`/tmp/links-d7-m4-verification/`.
 
 | Command | Result | Log |
 |---|---|---|
-| `./test-harness tests/handlers.tests` | 60 Fresco and 37 legacy compatibility passed | `handlers.log` |
-| `./test-harness tests/fresco_examples.tests` | 52 Fresco passed | `fresco_examples.log` |
-| `./test-harness tests/typecheck_examples.tests` | 28 Fresco and 142 legacy compatibility passed; 14 ignored | `typecheck_examples.log` |
+| `./test-harness tests/handlers.tests` | 76 Fresco and 22 legacy compatibility passed | `handlers.log` |
+| `./test-harness tests/effect_sugar.tests` | 44 legacy compatibility passed | `effect_sugar.log` |
+| `./test-harness tests/fresco_modal.tests` | 20 Fresco passed | `fresco_modal.log` |
 | `make rule-check` | Passed; GNU-find tab check skipped, formatter disabled | `rule-check.log` |
 | `git diff --check` and frozen source hashes | Passed | `diff-check.log`, `source-check.log` |
+
+Coop remains pending: its generic snoc works separately, but combining its
+closed recursive input/open recursive output contract with Res/ResList fails
+source consistency or type-argument conversion. The narrower scheduler
+prototype was removed. Patches, exact failing sources and successful scheduler
+checks are in `/tmp/links-d7-m4-coop/`; investigate this implementation gap
+without narrowing the helper interface.
 
 Prior compiler verification: 1,529 unit tests, 517 contextual regression cases,
 575 compatibility cases, eleven REPL scenarios and ten compile scenarios passed
@@ -344,9 +353,9 @@ Documentation-only update: text and whitespace checked.
 
 ## Next action
 
-Continue with remaining direct handler signatures/continuations and cooperative
-concurrency, then the other supported handler examples and functional-language
-cases. Review, check and commit each milestone before the next implementation.
+Resolve the bounded Coop recursive-alias integration gap, then finish the
+supported Coop/lambda/pi examples and remaining functional-language migrations.
+Review, check and commit each milestone before the next implementation.
 Keep D8 paused.
 D8 must test the existing backends through actual execution and address the
 recorded interpreter close/link failure. Legacy inference removal depends on

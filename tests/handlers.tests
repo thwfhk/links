@@ -111,22 +111,23 @@ stdout : [42, 20, 22, 0] : List Int
 args : --fresco --enable-handlers
 
 Deep continuation escape (1)
-{ fromJust(handle({ do Escape; print("Back in action"); do Escape}) { case <Escape => k> -> Just(k) case _ -> Nothing })(()) }
-stdout : @.
+effect E { Escape : () => (); } typename Escaped = [|Just:((()) -> Escaped)|Nothing|]; { var resume = fromJust(((handle({ do Escape; print("Back in action"); do Escape}) { case <Escape => k> -> Just(k) case _ -> Nothing }) : Escaped)); resume(()) }
+stdout : Back in actionJust(Resumption) : Escaped
 exit : 0
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Deep continuation escape (2)
-fromJust(handle({ do Escape; print("Back in action"); do Escape}) { case <Escape => k> -> Just(k) case _ -> Nothing })(())
-stdout : @.
+effect E { Escape : () => (); } typename Escaped = [|Just:((()) -> Escaped)|Nothing|]; var resume = fromJust(((handle({ do Escape; print("Back in action"); do Escape}) { case <Escape => k> -> Just(k) case _ -> Nothing }) : Escaped)); resume(())
+stdout : Back in actionJust(Resumption) : Escaped
 exit : 0
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Type-and-effect signature for deep handler (1)
-sig allChoices : (Comp(a, {Choose:Bool|e})) {Choose{_}|e}~> List a fun allChoices(m) {handle(m()) {case x -> [x] case <Choose => k> -> k(true) ++ k(false) }}
+effect Choice { Choose : () => Bool; } sig allChoices : forall a. modal [Wild] ((modal <Choice> (() -> modal <Choice|> a)) -> List a) fun allChoices(m) {handle(m()) {case x -> [x] case <Choose => k> -> k(true) ++ k(false) }}
 stdout : () : ()
-args : --enable-handlers
+args : --fresco --enable-handlers
 
+# Deferred: callback/returned-thunk residual effects are independent of construction.
 Type-and-effect signature for deep handler (2)
 sig allChoices : (Comp(a, {Choose:Bool|e})) -> Comp(List a, {Choose{_}|e}) fun allChoices(m)() {handle(m()) {case x -> [x] case <Choose => k> -> k(true) ++ k(false)}}
 stdout : () : ()
@@ -138,10 +139,11 @@ stdout : () : ()
 args : --enable-handlers
 
 Type-and-effect signature for shallow handler (1)
-sig allChoices : (Comp(a, {Choose:Bool|e})) {Choose{_}|e}~> List a fun allChoices(m) {shallowhandle(m()) {case x -> [x] case <Choose -> k> -> allChoices(fun() {k(true)}) ++ allChoices(fun(){k(false)}) }}
+effect Choice { Choose : () => Bool; } sig allChoices : forall a. modal [Wild] ((modal <Choice> (() -> modal <Choice|> a)) -> List a) fun allChoices(m) {shallowhandle(m()) {case x -> [x] case <Choose -> k> -> allChoices(fun() {k(true)}) ++ allChoices(fun(){k(false)}) }}
 stdout : () : ()
-args : --enable-handlers
+args : --fresco --enable-handlers
 
+# Deferred: callback/returned-thunk residual effects are independent of construction.
 Type-and-effect signature for shallow handler (2)
 sig allChoices : (Comp(a, {Choose:Bool|e})) -> Comp(List a, {Choose{_}|e}) fun allChoices(m)() {shallowhandle(m()) {case x -> [x] case <Choose -> k> -> allChoices(fun(){k(true)})() ++ allChoices(fun(){k(false)})()}}
 stdout : () : ()
@@ -153,21 +155,28 @@ stdout : () : ()
 args : --enable-handlers
 
 Type inference for deep handler
-fun() { handle({do A; do B}) { case <A => k> -> k(()) case x -> x } }
-stdout : fun : () {A{_},B:() => b|_}~> b
-args : --enable-handlers
+effect A { A : () => (); } effect B(a::Type(Any,Any,Abs)) { B : () => a; } (fun() { handle({do A; do B}) { case <A => k> -> k(()) case x -> x } } : forall a::Type(Any,Any,Abs). modal [B(a)] (() -> a))
+stdout : fun : forall a::Type(Any,Any,Abs).modal [effect_3$B(a::Any)] (() -> a::Any)
+args : --fresco --enable-handlers --set=show_quantifiers=true --set=hide_fresh_type_vars=false
 
+# Mapping the deep resumption over p gives List (List b), while the handler returns List b.
 Soundness
-{fun mapk(m) { handle(m()) {case <Map(p) => k> -> map(k,p) case x -> [x]} } }
-stderr : @.
+effect E(a::Abs) { Map : (List a) => a; } { sig mapk : forall a::Abs,b. (modal <E(a)> (() -> modal <E|> b)) -> List b fun mapk(m) { handle <E(a)> (m()) {case <Map(p) => k> -> map(k,p) case x -> [x]} } ~mapk }
+stderr : @.*Type error: Type does not match the required type \(instantiation constraints\)\nIn expression: map\.
 exit : 1
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Deep state handling (1)
-{fun state(m) { handle(m()) { case <Get => k> -> fun(s) { k(s)(s) } case <Put(p) => k> -> fun(s) { k(())(p) } case x -> fun(s) { x } } } fun runState(s0, c) { var f = state(c); f(s0) } runState(2, fun() { var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get }) }
+effect State(s::Abs) { Get : () => s; Put : (s) => (); } {sig state : forall s::Abs,a. modal [] ((modal <State(s)> (() -> modal <State|> a)) -> (s) -> a) fun state(m) { handle <State(s)> (m()) { case <Get => k> -> fun(s) { k(s)(s) } case <Put(p) => k> -> fun(s) { k(())(p) } case x -> fun(s) { x } } } sig runState : forall s::Abs,a. modal [] ((s, modal <State(s)> (() -> modal <State|> a)) -> a) fun runState(s0, c) { var f = state(c); f(s0) } runState(2, fun() { var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get }) }
 stdout : 6 : Int
-args : --enable-handlers
+args : --fresco --enable-handlers
 
+Local state helpers retain a later caller effect
+effect State(s::Abs) { Get : () => s; Put : (s) => (); } effect Reader { Read : () => Int; } {sig state : forall s::Abs,a. modal [] ((modal <State(s)> (() -> modal <State|> a)) -> (s) -> a) fun state(m) { handle <State(s)> (m()) { case <Get => k> -> fun(s) { k(s)(s) } case <Put(p) => k> -> fun(s) { k(())(p) } case x -> fun(s) { x } } } sig runState : forall s::Abs,a. modal [] ((s, modal <State(s)> (() -> modal <State|> a)) -> a) fun runState(s0, c) { var f = state(c); f(s0) } handle <Reader> ({ var f=runState(0, fun() { do Put(2); var n=do Get; fun() { do Read+n } }); f() }) { case x -> x case <Read => k> -> k(40) } }
+stdout : 42 : Int
+args : --fresco --enable-handlers
+
+# Deferred: the returned state call has residual effects independent of construction.
 Deep state handling (2)
 {fun state(m)(s) { handle(m())(s <- s) { case <Get => k> -> k(s,s) case <Put(p) => k> -> k((),p) case x -> x } } fun runState(s0, c) { state(c)(s0) } runState(2, fun() { var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get }) }
 stdout : 6 : Int
@@ -178,6 +187,7 @@ effect State { Get : () => Int; Put : (Int) => (); } handle({ var s = do Get; do
 stdout : 6 : Int
 args : --fresco --enable-handlers
 
+# Deferred: the returned state call has residual effects independent of construction.
 Shallow state handling (1)
 {fun state(m)(s) { shallowhandle(m()) { case <Get -> k> -> state(fun(){k(s)})(s) case <Put(p) -> k> -> state(fun(){k(())})(p) case x -> x}} fun runState(s0, c) { var f = state(c); f(s0) } runState(2, fun() { var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get }) }
 stdout : 6 : Int
@@ -352,36 +362,39 @@ handle(true)(r <- (a=44,b=(-2))) { case _ -> r.a + r.b}
 stdout : 42 : Int
 args : --fresco --enable-handlers
 
+# Deferred: each curried transformer separates construction and residual effects.
 Deep Handler composition
 fun h1(m)() { handle(m()) { case <Op1 => k> -> k(1) } } fun h2(m)() { handle(m()) { case <Op2 => k> -> k(2) } } fun h3(m)() { handle(m()) { case <Op3 => k> -> k(3) } } h1(h2(h3(fun() { do Op1 + do Op2 + do Op3 })))()
 stdout : 6 : Int
 args : --enable-handlers
 
 Type annotation on deep continuation parameter
-fun h1(m) { handle(m()) { case <Op => (k : ((Int) {Op{_}|_}~> Int)) > -> k(1) } }
+effect E { Op : () => Int; } sig h1 : modal [Wild] ((modal <E> (() -> Int)) -> Int) fun h1(m) { handle(m()) { case <Op => (k : ((Int) -> Int)) > -> k(1) } }
 stdout : () : ()
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Type annotation on shallow continuation parameter
-fun h1(m) { shallowhandle(m()) { case <Op -> (k : ((Int) {Op:Int|_}~> Int))> -> h1(fun() { k(1) }) } }
+effect E { Op : () => Int; } sig h1 : modal [Wild] ((modal <E> (() -> Int)) -> Int) fun h1(m) { shallowhandle(m()) { case <Op -> (k : (modal <E> ((Int) -> Int)))> -> h1(fun() { k(1) }) } }
 stdout : () : ()
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Shallow addition with a single recursive handler
-{ fun h1(m) { shallowhandle(m()) { case <One -> k> -> h1(fun() { k(1) }) case x -> x - 1 } } h1(fun() { do One + do One }) }
+effect E { One : () => Int; } { sig h1 : (modal <E> (() -> Int)) -> Int fun h1(m) { shallowhandle(m()) { case <One -> k> -> h1(fun() { k(1) }) case x -> x - 1 } } h1(fun() { do One + do One }) }
 stdout : 1 : Int
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Shallow addition with two mutual recursive handlers
-{ fun h1(m) { shallowhandle(m()) { case <One -> k> -> h1(fun() { k(1) }) } } fun h2(m) { shallowhandle(m()) { case <One -> k> -> h1(fun() { k(2) }) } } h2(fun() { do One + do One }) }
+effect E { One : () => Int; } { sig h1 : (modal <E> (() -> Int)) -> Int fun h1(m) { shallowhandle(m()) { case <One -> k> -> h1(fun() { k(1) }) } } sig h2 : (modal <E> (() -> Int)) -> Int fun h2(m) { shallowhandle(m()) { case <One -> k> -> h1(fun() { k(2) }) } } h2(fun() { do One + do One }) }
 stdout : 3 : Int
-args : --enable-handlers
+args : --fresco --enable-handlers
 
+# Deferred: each curried transformer separates construction and residual effects.
 Shallow handler composition
 { fun h1(m)() { shallowhandle(m()) { case <Op1 -> k> -> h1(fun() { k(1) })() } } fun h2(m)() { shallowhandle(m()) { case <Op2 -> k> -> h2(fun() { k(2) })() } } h1(h2(fun() { do Op1 + do Op2 }))() }
 stdout : 3 : Int
 args : --enable-handlers
 
+# Deferred: pure argument/callback capture precedes an independently effectful thunk.
 Type ascription, parameterised handlers (1)
 { fun(a : Int)(b : Float)(c : String)(m)() { handle (m())(x <- a, y <- b, z <- c) { case <Op(p) => k> -> k(c,42,p,"Foo") case _ -> x } } }
 stdout : fun : (Int) -> (Float) -> (String) -> (() {Op:(Float) => String|d}~> _) -> () {Op{_}|d}~> Int
@@ -393,10 +406,11 @@ stdout : fun : (Float, String, Int) -> (() {Op:(Float) => Float|b}~> _) -> () {O
 args : --enable-handlers
 
 Instantiate.ArityMismatch #132 (RESOLVED)
-sig f : (() {Foo:Int|a}~> b) {Foo{_}|a}~> b fun f(m) { error("N/A") } fun g(m) { var x = f(m); x }
+effect E { Foo : () => Int; } sig f : forall b. modal [Wild] ((modal <E> (() -> modal <E|> b)) -> b) fun f(m) { error("N/A") } sig g : forall b. modal [Wild] ((modal <E> (() -> modal <E|> b)) -> b) fun g(m) { var x = f(m); x }
 stdout : () : ()
-args : --enable-handlers
+args : --fresco --enable-handlers
 
+# Deferred: forall over a whole operation signature permits per-invocation instantiation.
 Operation polymorphism (1)
 sig catch : (() {Fail:forall a.a |e}~> b) {Fail{_} |e}~> Maybe(b) fun catch(m) { handle(m()) { case <Fail => k> : (forall a. () => a) -> Nothing case x -> Just(x) } } catch(fun() { 42 })
 stdout : Just(42) : Maybe (Int)
@@ -412,6 +426,7 @@ sig h : (() {Switch:forall a,b. (a,b) => (b,a) |e}~> c) {Switch{_} |e}~> c fun h
 stdout : 42 : Int
 args : --enable-handlers
 
+# Deferred: gen0 and Comp retain effect-row abstraction contracts.
 Generalise (1)
 gen0(fun(m)() { handle(m()) { case <Foo => k> -> 42 case x -> x } }(fun(){42}))
 stdout : fun : Comp (Int,{ |_})
@@ -422,6 +437,7 @@ gen0(fun(m)() { handle(m()) { case <Foo => (k : ((()) {Foo- |_}~> Int))> -> 42 c
 stdout : fun : Comp (Int,{ |_})
 args : --enable-handlers
 
+# Deferred: h accepts a callback row independent of the handled residual row.
 Recursive nesting of deep handlers
 { fun h1(m,h) { handle(m()) { case <Foo => k> -> h(fun() { k(()) },h1) case x -> x } } fun h2(m,h) { handle(m()) { case <Foo => k> -> h(fun() { k(()) },h2) case x -> x } } h1(fun(){42},h2) }
 stdout : 42 : Int
@@ -437,16 +453,19 @@ effect Steps { A : () => (); B : () => (); C : () => (); D : () => (); } handle(
 stdout : (1, true, (false, 1), "Hello World") : (Int, Bool, (Bool, Int), String)
 args : --fresco --enable-handlers
 
+# Legacy syntax/printing: structural effect rows and operation-arrow sugar.
 Effect type sugar (1)
 fun(g : (() {A:a,B:(a) => b|_}~> b)) { g }(fun(){error("N/A")})
 stdout : fun : () {A:() => a,B:(a) => b|_}~> b
 args : --enable-handlers
 
+# Deferred: the anonymous structural operation has no declared effect identity.
 Effect type sugar (2)
 fun(g : (() {:a|_}~> a)) { g }(fun(){error("N/A")})
 stdout : fun : () {:a|_}~> a
 args : --enable-handlers
 
+# Legacy syntax/printing: Wild effect-row sugar.
 Effect type sugar (3)
 fun(g : (() {wild:()|_}-> a)) { g }(fun(){error("N/A")})
 stdout : fun : () ~> _
@@ -473,25 +492,27 @@ stdout : 6 : Int
 args : --fresco --enable-handlers
 
 Omission of resumption for nullary operations (3)
-fun(m) { handle(m()) { case <Foo> -> 5 } }
-stdout : fun : (() {Foo:() => _::Any|b}~> Int) {Foo{_}|b}~> Int
-args : --enable-handlers
+effect E(a::Type(Any,Any,Abs)) { Foo : () => a; } sig test : forall a::Type(Any,Any,Abs). (modal <E(a)> (() -> Int)) -> Int fun test(m) { handle <E(a)> (m()) { case <Foo> -> 5 } } ~test
+stdout : fun : forall a::Type(Any,Any,Abs).modal [] ((modal <effect_2$E(a::Any)> (() -> Int)) -> Int)
+args : --fresco --enable-handlers --set=show_quantifiers=true --set=hide_fresh_type_vars=false
 
 Operation annotation (1)
-fun(m) { handle(m()) { case <Foo(x) => k> : ((Int) => Int) -> k (x) } }
-stdout : fun : (() {Foo:(Int) => Int|a}~> b::Any) {Foo{_}|a}~> b::Any
-args : --enable-handlers
+effect E { Foo : (Int) => Int; } sig test : forall b::Any. (modal <E> (() -> modal <E|> b)) -> b fun test(m) { handle(m()) { case <Foo(x) => k> : ((Int) => Int) -> k (x) } } ~test
+stdout : fun : forall a::(Any,Any).modal [] ((modal <effect_2$E> (() -> modal <effect_2$E | > a::Any)) -> a::Any)
+args : --fresco --enable-handlers --set=show_quantifiers=true --set=hide_fresh_type_vars=false
 
+# Deferred: pure callback capture and later handling have independent residual effects.
 Operation annotation (2)
 fun(f)(m) { handle(m()) { case <Foo(x : Bool) => k> -> k (f (x)) } }
 stdout : fun : ((Bool) {Foo{a}|b}~> c::Any) -> (() {Foo:(Bool) => c::Any|b}~> e::Any) {Foo{a}|b}~> e::Any
 args : --enable-handlers
 
 Operation annotation (3)
-fun(m) { handle(m()) { case <Foo(x) => k> : ((a) => (() {}-> (a,a))) -> k ( fun () { (x,x) } ) } }
-stdout : fun : (() {Foo:(a) => () {}-> (a, a)|b}~> c::Any) {Foo{_}|b}~> c::Any
-args : --enable-handlers
+effect E(a::Abs) { Foo : (a) => modal [] (() -> (a,a)); } sig test : forall a::Abs,b::Any. (modal <E(a)> (() -> modal <E|> b)) -> b fun test(m) { handle <E(a)> (m()) { case <Foo(x) => k> : ((a) => (modal [] (() -> (a,a)))) -> k ( fun () { (x,x) } ) } } ~test
+stdout : fun : forall a::Abs,b::(Any,Any).modal [] ((modal <effect_2$E(a)> (() -> modal <effect_2$E | > b::Any)) -> b::Any)
+args : --fresco --enable-handlers --set=show_quantifiers=true --set=hide_fresh_type_vars=false
 
+# Deferred: imported Comp/gen interfaces and the contextual Shiftreset operation payload.
 Examples
 ./examples/handlers/tests.links
 filemode : true

@@ -2441,9 +2441,20 @@ Retain the original general cases for a future explicit-effect-variable extensio
 They require no current design decision.
 
 Several variables in a printed type do not alone establish a missing feature.
-The pure bodies of `choose` in `tests/polymorphism.tests` and the fresh collector-
-arrow tests in `tests/effect_sugar.tests` can use ambient arrows. Actor `Send` is already
+Concrete pure uses of `choose` and the fresh collector-arrow tests in
+`tests/effect_sugar.tests` can use ambient arrows. A helper that captures a
+modal-`Any` value before a call in an independent context also needs to preserve
+that value's context; pure concrete uses do not establish its full contract.
+Actor `Send` is already
 covered by the change from effect-indexed processes to `Process(a)`.
+
+The Freezeml derivation is `/tmp/links-d7-freezeml-contracts.md`. Its full
+`map`/`app`/`a9` interfaces capture arbitrary effectful callbacks before later
+execution; `choose`/`revapp`/`c8`/`e1`/`e2` transport generic modal-`Any` values
+between independent contexts. Keep these general contracts and dependent
+fixtures deferred. Do not restrict their payloads to `Abs` or share their
+contexts merely to pass. `auto'` instead receives an effect-universally callable
+identity, so a portable pure returned function remains a migration candidate.
 
 References: thesis chapter 3 (`chapters/overview.tex`, "Effect polymorphism")
 and `chapters/metx/encoding-rows-no-effvar.tex` describe the distinction between
@@ -2589,6 +2600,22 @@ ordinary kinds and the required `Abs` kind. The Move handler retains its open
 variant row and handles extra payload labels through the original fallback.
 Its clauses use one ordered switch; a separate test rejects duplicate clauses.
 The numeric resumption pattern rejects at `2` before the later unbound `f`.
+
+The remaining direct handler signatures use result-removal guards to retain
+modal-`Any` results. Preserve explicitly written `Wild` requirements on the
+choice and continuation-annotation helpers. Unsigned state/addition handlers
+retain the documented treatment of inferred control effects. Local generic
+state helpers need explicit absolute guards so they can be defined before an
+outer Reader handler and used within it; their returned closure retains Reader.
+Escaped resumptions use a nominal recursive result declaration and assert the
+original printed value. The repaired soundness test reaches the nested-list
+resumption result mismatch. Detailed contract checks and the 22 retained
+compatibility cases are in `/tmp/links-d7-m4-handlers/contracts.md`.
+
+The recursive-nesting case retains an independent callback-domain row inside
+its recursive handler value. Requiring a globally effect-universal callback
+would narrow its permitted handler arguments. Keep the original general
+contract deferred, as for the other independent-effect interfaces.
 
 The U2 search effect groups its existing Choose and Fail operations and retains
 generic choice payloads and a separate generic failure result. The two complete
