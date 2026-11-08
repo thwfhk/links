@@ -13,59 +13,24 @@ implementation decisions, reasons, internal invariants and source comparisons.
 
 ## Current status
 
-D5, D6 and all in-scope D7 regression and example migration are complete,
-independently reviewed, checked and committed in milestones. The remaining
-migration inventory was checked against current source on 8 November 2026.
-D8 remains paused.
+All in-scope D1–D7 work is complete, independently reviewed, checked and committed.
+The D7 migration inventory was checked against current source on 8 November 2026.
+D8 remains paused at the user's requested stopping point.
 
-On 7 November 2026, the user deferred socket examples, XML/forms, and
-FFI/function locations to [future work](#future-todos). Their implementation
-and dependent library/example migrations are outside the current D7 scope.
-Prioritise readiness for general-purpose functional programming: ordinary
-functions, polymorphism, data structures, modules, effects, and batch/REPL use.
+Fresco is the default for batch, REPL and compilation. Handler execution uses
+`enable_handlers`. Explicit `--set=fresco=false` retains legacy compatibility;
+type errors do not trigger fallback. Legacy results are counted separately from
+Fresco migration. Nested list element types require parentheses in the parser
+and both type printers.
 
-Fresco remains the default. Migration covered ordinary handler examples/tests,
-then functional-language cases, checking the recorded inventory against current
-source. Behaviour, polymorphic contracts, feature settings and negative rejection
-causes are retained. Explicit legacy runs remain compatibility checks.
-Interfaces needing effect variables remain deferred without specialisation or
-redesign. Ordinary linear-function inference is unchanged; migrated sources use
-annotations or intermediate bindings where needed.
-
-- D1--D3d provide row/modality operations, shared modal types, surface syntax,
-  and effect/operation resolution. D4a--D4f1 provide kind checks, persistent
-  contexts, checked assignment, shared-type scope exit/export, skeleton
-  conversion, root substitution and quantifier opening.
-- The default Fresco frontend checks and executes pure and modal source
-  programs through contextual inference and shared IR/backend passes. Batch,
-  REPL and compilation use it. Handler execution uses the existing
-  `enable_handlers` setting. Explicit `--set=fresco=false` retains legacy
-  compatibility; type errors do not trigger fallback.
-- D4f2--D4i add skeleton expansion/scope exit preserving ghosts, flexible
-  requirement refinement, contextual recursive operations, consistency,
-  guessing and monotype unification.
-- D4j adds subtyping, constraint collection/solving and `look`, with explicit
-  scoped polymorphic/modal instantiations and ordinary session comparison.
-- D4k elaborates source annotations, written function signatures, type
-  arguments, aliases and closed effect declarations through contextual kind
-  checking, with positioned errors. D5 adds pure source term inference, runtime
-  integration and persistent interactive state. D6 adds modal operations,
-  handlers, scoped IR evidence and source execution. Migration remains.
-- D3e removes higher-order effect flags, syntax and row rules. Ordinary
-  operation arguments and results must be absolute.
-- D3f implements `List A`, combined kind annotations and angle-bracket
-  handled-effect annotations, for example `handle <Reader> (...)`.
-- D4a2 implements the thesis' quantified-type classification while retaining
-  declared binder requirements. D4g adds flexible requirement refinement.
-
-Nested list element types require parentheses. The parser and both type
-printers follow this rule.
-The most recent compiler verification is recorded below. Passing legacy suites
-checks compatibility during construction; it does not complete Fresco inference.
+Migration preserves behaviour, polymorphic contracts, feature settings and
+negative rejection causes. Ordinary linear-function inference is unchanged;
+sources use annotations or intermediate bindings where needed. Interfaces needing
+effect variables and other excluded work remain [postponed](#postponed-work).
 
 ## Completed work
 
-| Task | Result | Commit |
+| Task | Result and completion checks | Commit |
 |---|---|---|
 | Design comparison | Thesis/reference comparison and initial review | `396fd639` |
 | D1 | Scoped effect rows and modalities | `af7ff947` |
@@ -95,45 +60,45 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D4k | Contextual source annotation and declaration elaboration | `8a5b5743` |
 | D5 | Pure source inference, opt-in frontend, shared IR/backend execution and persistent state | `4f12cd67` |
 | D6 | Modal source inference, complete handlers, inferred effect arguments and scoped IR/backend support | `92d48828` |
-| D7a | Contextual first-order primitives and recursive primitive aliases | `1f7ff34e` |
-| D7b1 | Sections, negative patterns and record updates | `4fad3532` |
-| D7b2a | Regex syntax, splices, matching and replacement | `db0d3a75` |
-| D7b2b | Ranges, list comprehensions, filters and ordering | `72e47dbc` |
-| D7b3 | Escape continuations and contextual capture checks | `f09237bd` |
-| D7b4a0 | Callback statement skeletons and frozen module names | `8cfe88a3` |
-| D7b4a | Signed collection prelude with contextual callbacks | `0b2c0d3f` |
-| D7b4b | Function, tuple, list and string helpers; inferred linear-call requirement | `efc1bca2` |
-| D7b4c | Maybe, numeric, association and string-check helpers | `4e009da6` |
-| D7c1a | Contextual Process, core actor primitives and ordinary spawn/receive | `ef94a794` |
-| D7c1b | Actor locations/variants, mailbox polling and spawnWait | `b6902b96` |
-| D7c1b1 | Bound type variables and argument positions in modal subtyping | `1822df37` |
-| D7c1c | Full message suite and actor cases in mixed suites | `75072fad` |
-| D7c2a | Session primitives, absolute messages and generic dual consistency | `2fc7f620` |
-| D7c2b | Selection/offer inference, execution and contextual IR checks | `ceac5dce` |
-| D7c2c1 | Split-end aliases and synchronisation helpers | `45ffa14b` |
-| D7c2c2 | Callback session helpers and nested protocol skeleton duality | `0c46c06b` |
-| D7c2d | CP checking, composition, linking and focused example migration | `568b9db3` |
-| D7c2e1 | Ordinary session suite and module/polymorphic session cases | `79c2d173` |
-| D7c2e2 | Curried modal/quantified results and ordinary session examples | `fe1586af` |
-| D7c2e3a | Recursive/encoded protocols and staged linear-list modules | `f91695f5` |
-| D7c2e3b | Generic protocol examples and raw recursive runtime bindings | `8b27a80b` |
-| D7d3a | Remaining list, ASCII and date helpers | `27a0b58f` |
-| D7d3b | Ordinary helper interfaces and linear variant aliases | `23c0b7ba` |
-| D7d3c | Binary trees and parameter-dependent recursive value kinds | `48986cb7` |
-| D7d3d0 | Empty switches with mode-directed results and existing partial-match behaviour | `160598c6` |
-| D7d3d1 | Switch-function source migration and execution controls | `7468a1e4` |
-| D7d3d2 | Church numerals and recursive bit-list examples | `d7ef09de` |
-| D7d3d3a | Safe explicit width upcasts in source and contextual IR | `ed822373` |
-| D7d3d3b | Extensible cases with checked row and callback contracts | `c3f1e695` |
-| D7d3e1 | Buffered channels with checked message and helper contracts | `b37fb1ce` |
-| D7e1 | Separate checked preparation and strict typed-lowering rechecks | `bec9d4f9` |
-| D7e2a | Persistent fixities and file preprocessing | `1f535e58` |
-| D7e2b | Canonical contextual prelude and custom batch bootstrap | `539bcd4d` |
-| D7e3a | Contextual REPL definitions, environments, loading and recovery | `605f0454` |
-| D7e3b | Contextual type search with isolated candidate checks | `b6fddccc` |
-| D7e4 | Contextual JavaScript compilation without source evaluation | `32df0483` |
-| D7e5a0 | Shared parameter annotation scopes and trusted rigid IR declarations | `debb83cc` |
-| D7e5 | Default Fresco frontend and explicit legacy compatibility | `8c8d1087` |
+| D7a | Contextual first-order primitives and recursive primitive aliases. Explicit contextual signatures cover pure/external primitives; source execution and modal rejection checks pass; remaining primitive categories are inventoried | `1f7ff34e` |
+| D7b1 | Sections, negative patterns and record updates. Projection/minus sections, negative patterns and record updates check and execute | `4fad3532` |
+| D7b2a | Regex syntax, splices, matching and replacement. Regex literals, splices and matching operations check and execute | `db0d3a75` |
+| D7b2b | Ranges, list comprehensions, filters and ordering. List generators check and execute with existing evaluation order | `72e47dbc` |
+| D7b3 | Escape continuations and contextual capture checks. Escape typing, ordinary usage and execution match existing Links behaviour | `f09237bd` |
+| D7b4a0 | Callback statement skeletons and frozen module names. Callback statement skeletons preserve effects; frozen module names resolve with scope | `8cfe88a3` |
+| D7b4a | Signed collection prelude with contextual callbacks. Signed collection helpers through `replicate` retain polymorphism, callback effects and ordinary usage | `0b2c0d3f` |
+| D7b4b | Function, tuple, list and string helpers; inferred linear-call requirement. Helpers through `unwords` migrate; specialised curry contract is recorded separately | `efc1bca2` |
+| D7b4c | Maybe, numeric, association and string-check helpers. Maybe, numeric, association and string checks migrate | `4e009da6` |
+| D7c1a | Contextual Process, core actor primitives and ordinary spawn/receive. `Process(a)`, Send/self/recv and ordinary spawn/receive check and execute with isolated mailboxes | `ef94a794` |
+| D7c1b | Actor locations/variants, mailbox polling and spawnWait. Locations, angel/client variants, haveMail and spawnWait check and execute on supported runtimes | `b6902b96` |
+| D7c1b1 | Bound type variables and argument positions in modal subtyping. Explicit modal-forall expressions passed to signed callers retain bound type variables through export | `1822df37` |
+| D7c1c | Full message suite and actor cases in mixed suites. Full messages suite and actor use sites migrate with existing feature settings | `75072fad` |
+| D7c2a | Session primitives, absolute messages and generic dual consistency. Access points, send/receive/link/close execute; payload kinds, duality and ordinary usage checks pass | `2fc7f620` |
+| D7c2b | Selection/offer inference, execution and contextual IR checks. Continuation-changing selection and offer execute with typed IR; branch/session/result checks pass | `ceac5dce` |
+| D7c2c1 | Split-end aliases and synchronisation helpers. EndBang/EndQuery, wait/closeBang/makeEndBang/linkSync have contextual signatures and execute | `45ffa14b` |
+| D7c2c2 | Callback session helpers and nested protocol skeleton duality. Fork/connection helpers execute with explicit spawned-callback contracts and no session-failure support | `0c46c06b` |
+| D7c2d | CP checking, composition, linking and focused example migration. All CP forms check/lower; composition, capture and linking examples execute | `568b9db3` |
+| D7c2e1 | Ordinary session suite and module/polymorphic session cases. Ordinary session suite and module/polymorphism cases retain their settings and intended checks | `79c2d173` |
+| D7c2e2 | Curried modal/quantified results and ordinary session examples. Curried modal/polymorphic results check; finite calculator, split-end and channel examples migrate and execute | `fe1586af` |
+| D7c2e3a | Recursive/encoded protocols and staged linear-list modules. Calculators, ATM, encoded choice and linear-list helpers typecheck; local executions and generic controls pass | `f91695f5` |
+| D7c2e3b | Generic protocol examples and raw recursive runtime bindings. State, process encoding, authentication and recursive duality examples typecheck; terminating cases execute | `8b27a80b` |
+| D7d3a | Remaining list, ASCII and date helpers. Existing ordering, callback effects and pure/Wild contracts pass source execution checks | `27a0b58f` |
+| D7d3b | Ordinary helper interfaces and linear variant aliases. Remaining list/Maybe helpers, aliases and composition interfaces have explicit contracts and source checks | `23c0b7ba` |
+| D7d3c | Binary trees and parameter-dependent recursive value kinds. Comparator and binary-tree modules migrate; existing operations and contextual callbacks execute | `48986cb7` |
+| D7d3d0 | Empty switches with mode-directed results and existing partial-match behaviour. Empty-variant uses and legacy partial-match behaviour check/lower with preserved result and usage rules | `160598c6` |
+| D7d3d1 | Switch-function source migration and execution controls. Named, anonymous and nested switch functions execute; recursion, partial matches and syntax errors retain their checks | `7468a1e4` |
+| D7d3d2 | Church numerals and recursive bit-list examples. First-class polymorphism and recursive callback examples check and execute bounded results | `d7ef09de` |
+| D7d3d3a | Safe explicit width upcasts in source and contextual IR. Explicit variant widening and record narrowing retain source checks, payload types, row requirements and typed-IR validation | `ed822373` |
+| D7d3d3b | Extensible cases with checked row and callback contracts. Open-variant rows, negative patterns and upcasts check and execute | `c3f1e695` |
+| D7d3e1 | Buffered channels with checked message and helper contracts. Generic queues retain FIFO order, waiting readers and payload requirements through actual execution | `b37fb1ce` |
+| D7e1 | Separate checked preparation and strict typed-lowering rechecks. Separate checking/lowering from evaluation; contextual lowering rechecks validate annotations and result types | `bec9d4f9` |
+| D7e2a | Persistent fixities and file preprocessing. Operator fixities survive successful inputs and file preprocessing matches string input | `1f535e58` |
+| D7e2b | Canonical contextual prelude and custom batch bootstrap. Canonical prelude loading and custom/empty preludes work through Fresco | `539bcd4d` |
+| D7e3a | Contextual REPL definitions, environments, loading and recovery. Definitions, loading and environments use persistent contextual state with failure recovery | `605f0454` |
+| D7e3b | Contextual type search with isolated candidate checks. Type queries elaborate and match through isolated contextual inference without changing live state | `b6fddccc` |
+| D7e4 | Contextual JavaScript compilation without source evaluation. Existing compile options consume contextual IR without evaluating the source program | `32df0483` |
+| D7e5a0 | Shared parameter annotation scopes and trusted rigid IR declarations. Named type, row and presence variables share the intended parameter/body scope; annotations elaborate once and preserve scope-exit checks | `debb83cc` |
+| D7e5 | Default Fresco frontend and explicit legacy compatibility. Fresco is the default; functional/modal source checks and no-selector batch/REPL/compile checks pass; old effect syntax rejects; compatibility routes are explicit | `8c8d1087` |
 | D7 migration 1 | Identity/list handlers, operation sugar, exceptions and binary choice | `dcbb7a9d` |
 | D7 migration 2 | Identity/number games and standalone handler parameters | `234683de` |
 | D7 migration 3 | Operation/return/resumption patterns, direct state and U2 search | `b7f32a3b` |
@@ -144,149 +109,74 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D7 migration 8 | Functions, closure/scope fixtures and modules | `2ab54255` |
 | D7 migration 9 | Polymorphism and recursive continuation contracts | `c71fcc6f` |
 | D7 migration 10 | Staged Freezeml helpers and supported typed-IR fixtures | `a80a1021` |
-| D7 migration 11 | Seven ordinary AIPL examples and final in-scope integration | This commit |
+| D7 migration 11 | Seven ordinary AIPL examples and final in-scope integration | `c320fd80` |
 
 Each completed change was reviewed and checked. Earlier verification logs and
-resolved review findings remain in Git history; retain the latest integrated
-results here. The D3f list-parentheses correction is complete.
+resolved review findings remain in Git history. The original migration inventory
+and its review are `/tmp/links-d7e5-inventory.md` and
+`/tmp/links-d7e5-inventory-review-summary.log`; final accounting is
+`/tmp/links-d7-m11-review.md`.
 
 ## Remaining work
 
-D8 remains. In-scope D7 migration is complete; retained compatibility cases
-have recorded deferrals or exclusions. Detailed language requirements are in the
-specification; representations and algorithms are in the design. Each task
-also requires the affected build/tests and review described in AGENTS.md.
+D8 remains paused. The next action is to wait for authorisation to start D8a.
+Complete, independently review, check and commit each milestone before starting
+the next, following [AGENTS.md](AGENTS.md). The main agent owns integration and
+progress records.
 
-| Task | Depends on | Completion check |
+| Task | Depends on | Completion checks |
 |---|---|---|
-| D8: backends, documentation and final review | D7 | Interpreter/JS deep-handler checks, migration guide and selected suites pass; in-scope legacy effect inference is removed |
+| D8a: backend execution | D7 | Actual interpreter and JavaScript deep-handler execution covers nesting, repeated identities, parameters and closures; interpreter shallow execution and JavaScript rejection remain checked. Resolve the recorded interpreter close/link failure and Pi's closure-conversion/IR failure. |
+| D8b: removal, documentation and final review | D8a | In-scope legacy inference routes are removed; ghosts, exported variable requirements, recursive type consumers, lowering, optimisation and both backends are reviewed; the migration guide and selected suites pass. Preserve explicit legacy compatibility for postponed cases. |
 
-D4k supplies the type-annotation and effect-signature elaboration APIs needed
-by D5 and D6.
+The close/link failure occurs when closing a sender removes a buffer that relay
+linking still reads; both frontends reproduce it. See the
+[session design](doc/modal-effects-design.md#d7-session-integration).
+Pi retains its saved source draft, general stream contracts and original
+behaviour for D8a's closure-conversion/IR work; see the
+[handler design](doc/modal-effects-design.md#handler-migration-and-modal-examples).
 
-D5 provides local signed recursion and the opt-in contextual source entry point.
-D6 checks global signatures with absolute modalities and supplies the scoped
-IR/backend support for its source tests. D7 makes Fresco the default frontend;
-D8 performs the final backend audit.
+Retain the design's reference Fresco pairs and `tests/freezeml.tests`. Check
+inferred type structure, higher-rank fields, zero/n-ary functions, explicit type
+operations, signed recursion, and successful and failed interactive definitions.
 
-### Coverage to retain across integration
+Retain deep/shallow handlers, handler parameters, qualified identities, repeated
+effects, omitted handler annotations/type arguments, explicit modal or
+polymorphic effect arguments, and `Any`-to-`Abs` refinement through lock access.
+Keep records/variants, patterns, lists/tuples, modules, actors and existing
+sessions covered, including `tests/messages.tests`, with their typed-IR,
+rechecking and other feature settings unchanged.
 
-- Use the design's reference Fresco pairs and `tests/freezeml.tests`. Check
-  inferred type structure as well as successful execution.
-- Cover higher-rank fields, zero/n-ary functions, explicit type operations,
-  signed recursion and both successful and failed interactive definitions.
-- Exercise deep/shallow handlers, handler parameters, qualified identities,
-  repeated effects, omitted handler annotations/type arguments, explicit modal or
-  polymorphic effect arguments, and `Any`-to-`Abs` refinement through lock access.
-- Inventory records/variants, patterns, lists/tuples, modules, actors and
-  existing sessions. Include `tests/messages.tests` for mailbox migration and
-  preserve typed-IR/recheck settings. XML/forms, FFI/function locations and
-  socket examples remain in the future-work inventory.
-- Record general signatures needing independent effect variables and audit their
-  concrete uses separately. The design lists the two-thunk test, `wait`, MVU and
-  `curry`; do not claim a specialised migration preserves the original contract.
-- D8 must resolve the existing interpreter close/link failure found in session
-  integration: closing a sender before relay linking removes a buffer still
-  read by link. Both frontends reproduce it. See the
-  [session design](doc/modal-effects-design.md#d7-session-integration).
-- Audit ghosts, exported variable requirements, recursive type consumers,
-  lowering, optimisation and both backends. Keep excluded features outside scope.
-  Retain the [deferred recursive-row inference gap and compatibility decisions](doc/modal-effects-design.md#consistency-guessing-and-monotype-unification).
+Legacy inference removal must respect retained compatibility dependencies.
+General contracts needing independent effects stay postponed; specialised uses
+do not establish preservation of those contracts. Keep all excluded features
+outside D8.
 
-### D7 and D8 milestones
+## Postponed work
 
-Complete, independently review, test and commit each milestone before starting
-implementation of the next. Continue through D7, then pause before D8 as the
-user requested on 7 November 2026. The main agent owns integration and these records.
+The user deferred sockets, XML/forms and FFI/function locations on 7 November
+2026, and separately deferred the console example. Their identifiers and checks
+are retained below. These items and their dependent library/example migrations
+are outside the current D7/D8 scope and require separate scheduling.
 
-| Milestone | Completion checks |
+| Item | Reason or completion checks when resumed |
 |---|---|
-| D7a: first-order primitives | Explicit contextual signatures cover pure/external primitives; source execution and modal rejection checks pass; remaining primitive categories are inventoried |
-| D7b1: sections, patterns and updates | Projection/minus sections, negative patterns and record updates check and execute |
-| D7b2a: regex syntax | Regex literals, splices and matching operations check and execute |
-| D7b2b: ranges and comprehensions | List generators check and execute with existing evaluation order |
-| D7b3: continuations | Escape typing, ordinary usage and execution match existing Links behaviour |
-| D7b4a0: prelude prerequisites | Callback statement skeletons preserve effects; frozen module names resolve with scope |
-| D7b4a: collection prelude | Signed collection helpers through `replicate` retain polymorphism, callback effects and ordinary usage |
-| D7b4b: function, tuple and list helpers | Helpers through `unwords` migrate; specialised curry contract is recorded separately |
-| D7b4c: remaining core helpers | Maybe, numeric, association and string checks migrate |
-| D7c1a: core actors | `Process(a)`, Send/self/recv and ordinary spawn/receive check and execute with isolated mailboxes |
-| D7c1b: actor variants | Locations, angel/client variants, haveMail and spawnWait check and execute on supported runtimes |
-| D7c1b1: polymorphic export | Explicit modal-forall expressions passed to signed callers retain bound type variables through export |
-| D7c1c: actor migration | Full messages suite and actor use sites migrate with existing feature settings |
-| D7c2a: session primitives | Access points, send/receive/link/close execute; payload kinds, duality and ordinary usage checks pass |
-| D7c2b: selection and offer | Continuation-changing selection and offer execute with typed IR; branch/session/result checks pass |
-| D7c2c1: split-end helpers | EndBang/EndQuery, wait/closeBang/makeEndBang/linkSync have contextual signatures and execute |
-| D7c2c2: callback session helpers | Fork/connection helpers execute with explicit spawned-callback contracts and no session-failure support |
-| D7c2d: CP | All CP forms check/lower; composition, capture and linking examples execute |
-| D7c2e1: session regression migration | Ordinary session suite and module/polymorphism cases retain their settings and intended checks |
-| D7c2e2: ordinary session examples | Curried modal/polymorphic results check; finite calculator, split-end and channel examples migrate and execute |
-| D7c2e3a: recursive and encoded protocols | Calculators, ATM, encoded choice and linear-list helpers typecheck; local executions and generic controls pass |
-| D7c2e3b: remaining generic protocols | State, process encoding, authentication and recursive duality examples typecheck; terminating cases execute |
-| D7d3a: remaining list, character and date helpers | Existing ordering, callback effects and pure/Wild contracts pass source execution checks |
-| D7d3b: ordinary helper interfaces | Remaining list/Maybe helpers, aliases and composition interfaces have explicit contracts and source checks |
-| D7d3c: binary trees | Comparator and binary-tree modules migrate; existing operations and contextual callbacks execute |
-| D7d3d0: empty switches | Empty-variant uses and legacy partial-match behaviour check/lower with preserved result and usage rules |
-| D7d3d1: switch functions | Named, anonymous and nested switch functions execute; recursion, partial matches and syntax errors retain their checks |
-| D7d3d2: Church numerals and bit lists | First-class polymorphism and recursive callback examples check and execute bounded results |
-| D7d3d3a: explicit upcasts | Explicit variant widening and record narrowing retain source checks, payload types, row requirements and typed-IR validation |
-| D7d3d3b: extensible cases | Open-variant rows, negative patterns and upcasts check and execute |
-| D7d3e1: buffered channels | Generic queues retain FIFO order, waiting readers and payload requirements through actual execution |
-| D7e1: checked preparation | Separate checking/lowering from evaluation; contextual lowering rechecks validate annotations and result types |
-| D7e2a: persistent parsing state | Operator fixities survive successful inputs and file preprocessing matches string input |
-| D7e2b: prelude and batch | Canonical prelude loading and custom/empty preludes work through Fresco |
-| D7e3a: REPL and ordinary directives | Definitions, loading and environments use persistent contextual state with failure recovery |
-| D7e3b: contextual type search | Type queries elaborate and match through isolated contextual inference without changing live state |
-| D7e4: JavaScript compilation | Existing compile options consume contextual IR without evaluating the source program |
-| D7e5a0: parameter annotation scopes | Named type, row and presence variables share the intended parameter/body scope; annotations elaborate once and preserve scope-exit checks |
-| D7e5: default frontend | Fresco is the default; functional/modal source checks and no-selector batch/REPL/compile checks pass; old effect syntax rejects; compatibility routes are explicit |
-| D8a: backend execution | Actual interpreter and JavaScript deep-handler execution covers nesting, repeated identities, parameters and closures; interpreter shallow execution and JavaScript rejection remain checked |
-| D8b: removal and final review | In-scope legacy inference routes are removed; recursive consumers and exports are reviewed; migration guide and final selected suites pass |
+| D7c2e3c: socket examples | SMTP/IRC models typecheck; local dummy execution passes. |
+| D7d1: XML and forms | XML, form/page constructs and their prelude dependencies check and execute. Formlet State helpers retain their existing capture contract. |
+| D7d2: FFI and function locations | Foreign declarations, locations and FFI dependencies survive checking and lowering. |
+| D7d3e2: console example | Console helpers and finite actor games retain their callback contracts and results; deferred by the user as peripheral to modal effects. |
+| General interfaces needing independent effect variables | Preserve the original contracts and compatibility routes. Do not specialise or redesign them to pass migration, or add effect-variable support. See the [contract inventory](doc/modal-effects-design.md#signatures-with-independent-effect-variables), including the two-thunk test, `wait`, MVU, `curry` and Lambda's `lit`. |
+| Database support, control-flow linearity, session failure and higher-order effects | Outside the agreed scope; retain their exclusions and dependent fixtures. See [specification scope](doc/modal-effects-spec.md#1-scope). |
+| Excluded consumers, retained protocol/list modules and existing ignored examples | Preserve recorded boundaries, ignore reasons and feature settings. See the [migration inventory](doc/modal-effects-design.md#d7-session-migration-inventory) and [final accounting](doc/modal-effects-design.md#handler-migration-and-modal-examples). |
+| Recursive-row inference and unresolved row/presence duality | Retain the current occurs check and compatibility limits. See [consistency](doc/modal-effects-design.md#consistency-guessing-and-monotype-unification). |
+| Raw-mu strict-lowering follow-up | Named recursive declarations preserve the migrated protocols; raw-mu expansion can exceed the check bound or overflow. See the [recorded evidence](doc/modal-effects-design.md#handler-migration-and-modal-examples). |
+| Solved-tail linear dot-projection follow-up | Record-pattern extraction works; selecting a linear field through a solved row tail can leave it in the discarded-row check. See [record checks](doc/modal-effects-design.md#d7-sections-patterns-and-record-updates). |
+| Source names for later-result forall binders and inferred free-variable kind displays | Retain these annotation/display follow-ups; stored ordinary-kind requirements remain checked. See [annotation scopes](doc/modal-effects-design.md#contextual-annotation-and-declaration-elaboration). |
 
-D7a (`1f7ff34e`), D7b1 (`4fad3532`) and D7b2a (`db0d3a75`) are complete.
-D7b2b (`72e47dbc`) and D7b3 (`f09237bd`) are complete. D7b4a0 (`8cfe88a3`) is complete. D7b4a collection migration (`0b2c0d3f`) is complete. D7b4b (`efc1bca2`) is complete. D7b4c (`4e009da6`) is complete. D7c1a core actors (`ef94a794`) and D7c1b actor variants are complete.
-D7c1b1 polymorphic export is complete. D7c1c actor migration is complete. D7c2a session primitives are complete. D7c2b selection/offer is complete. D7c2c1 split-end helpers are complete. D7c2c2 callback helpers are complete. D7c2d CP is complete. D7c2e1 ordinary session regression migration is complete. D7c2e2 ordinary examples are complete. D7c2e3a recursive/encoded protocol examples are complete. D7c2e3b remaining generic protocols are complete. D7d3a ordinary list, character and date helpers are complete. D7d3b ordinary helper interfaces are complete. D7d3c binary trees are complete. D7d3d0 empty switches is complete. D7d3d1 switch functions is complete. D7d3d2 Church numerals and bit lists is complete. D7d3d3a explicit upcasts is complete; D7d3d3b extensible cases is complete. D7d3e1 buffered channels is complete. D7e1 checked preparation is complete. D7e2a persistent parsing state is complete. D7e2b contextual prelude loading is complete. D7e3a contextual REPL is complete. D7e3b contextual type search is complete. D7e4 contextual JavaScript compilation is complete. D7e5a0 parameter annotation scopes are complete. The prioritised D7e5 default switch is complete. All in-scope D7 migration is complete; D8 remains paused. Later boundaries may be split further when a dependency needs
-its own review and checks.
-
-### Future TODOs
-
-Deferred by the user on 7 November 2026. These items retain their identifiers
-for reference and require separate scheduling. They are outside the current
-D7 completion checks and are not added to D8. Library and example migrations
-that require these features are deferred with them; this updates the earlier
-assignments in the design's migration inventory.
-
-| Item | Completion checks when resumed |
-|---|---|
-| D7c2e3c: socket examples | SMTP/IRC models typecheck; local dummy execution passes |
-| D7d1: XML and forms | XML, form/page constructs and their prelude dependencies check and execute |
-| D7d2: FFI and function locations | Foreign declarations, locations and FFI dependencies survive checking and lowering |
-| D7d3e2: console example | Console helpers and finite actor games retain their callback contracts and results |
-
-The console example is deferred following the user's concern about time spent
-on work peripheral to modal effects.
-
-The Pi handler migration additionally waits for D8's closure-conversion/IR
-checking work, as established on 8 November. Retain its saved source draft,
-general stream contracts and original behaviour; see the
-[design](doc/modal-effects-design.md#handler-migration-and-modal-examples).
-
-The supported legacy-suite and example inventory has migrated to Fresco.
-The original inventory is `/tmp/links-d7e5-inventory.md`; final accounting is
-`/tmp/links-d7-m11-review.md`. Retained routes cover unsupported full contracts,
-recorded exclusions, existing ignores and Pi's D8 dependency. Keep those routes
-as explicit compatibility checks. D8's legacy inference removal must respect
-these dependencies before deleting the retained route.
-
-Some general interfaces cannot be preserved by the current modal effect
-language. Assess each concrete use against the
-[independent-effect contracts](doc/modal-effects-design.md#signatures-with-independent-effect-variables).
-Uses requiring that independence remain deferred. Do not specialise their
-interfaces to make migration pass. Questions arising solely from those
-unsupported contracts are outside the current discussion.
-
-The formlet State helpers retain their existing capture contract and are deferred
-with D7d1; see the [design](doc/modal-effects-design.md#d7-ordinary-library-inventory).
+Questions arising solely from excluded examples or unsupported contracts are
+outside the current discussion. Keep all retained legacy runs as explicit
+compatibility checks. Formlet State details are in the
+[ordinary library design](doc/modal-effects-design.md#d7-ordinary-library-inventory).
 
 ## Recorded decisions
 
@@ -299,10 +189,14 @@ and design:
 - [D4 ghost kinds and instantiation checks](doc/modal-effects-design.md#subtyping-and-instantiation-information).
 - [D4k signature binders and ordinary row arguments](doc/modal-effects-design.md#contextual-annotation-and-declaration-elaboration).
 
+The user confirmed both D6 choices on 7 November 2026: handler result inference
+from return clauses and source-only modal checks. See the
+[scoped-effects design](doc/modal-effects-design.md#d6-scoped-effects-in-ir).
+
 ### D7 choices awaiting review
 
-The marked choices remain implementation decisions for review; they do not
-block the prioritised D7 completion checks.
+The marked choices remain implementation decisions for review. Their current
+behaviour passes the completed D7 checks.
 
 1. Actor and session contracts: `spawnWait` body/result kinds, absolute message
    payloads, spawned callback modalities and `Wild` for selection/offer.
@@ -315,8 +209,9 @@ block the prioritised D7 completion checks.
 4. Typed-lowering rechecks, default/custom prelude preparation, contextual type
    search and compile input/output ordering.
    See [frontend integration](doc/modal-effects-design.md#d7-frontend-integration-plan).
-5. Shared parameter annotation names and deferred names for later-result forall
-   binders. See [annotation scopes](doc/modal-effects-design.md#contextual-annotation-and-declaration-elaboration).
+5. Shared parameter annotation names. Later-result forall source names remain
+   in [postponed work](#postponed-work). See
+   [annotation scopes](doc/modal-effects-design.md#contextual-annotation-and-declaration-elaboration).
 
 ## Latest task and verification
 
@@ -352,31 +247,7 @@ Retained compatibility includes retired effect-sugar policy, unsupported full
 independent-effect contracts, recorded exclusions and Pi's D8 dependency.
 The [design](doc/modal-effects-design.md#handler-migration-and-modal-examples)
 records the raw-mu strict-lowering and solved-tail linear projection follow-ups.
-No further D7 migration or D8 implementation starts in this task.
-
-## Confirmed D6 decisions
-
-7 November 2026: the user confirmed both D6 choices. The
-[design](doc/modal-effects-design.md#d6-scoped-effects-in-ir) records handler
-result inference from return clauses and source-only modal checks.
-Documentation-only update: text and whitespace checked.
-
-## Next action
-
-Pause before D8. All supported entries in the recorded D7 migration inventory
-now use Fresco. Keep unsupported full contracts and recorded exclusions deferred;
-no current design questions arise solely from them. Pi retains its D8 closure/IR
-dependency. Ordinary linear-function inference remains unchanged.
-
-When D8 is authorised, test the existing backends through actual execution and
-address the recorded interpreter close/link failure. Legacy inference removal
-must respect the retained compatibility dependencies. The raw-mu strict-lowering
-follow-up and solved-tail linear projection follow-up remain recorded in the
-design; this migration includes no further compiler work.
-
-The inventory and its independent review remain in
-`/tmp/links-d7e5-inventory.md` and
-`/tmp/links-d7e5-inventory-review-summary.log`. Later-result forall annotation
-names and inferred free-variable kind displays remain follow-ups; the source
-checker still enforces stored ordinary-kind requirements. Marked design choices
-are collected [above](#d7-choices-awaiting-review).
+D8 remains paused. This documentation-only reorganisation was checked for work
+coverage, links and whitespace; verification is recorded in
+`/tmp/links-plan-work-lists-verification/`. No compiler build or tests ran for
+the documentation change.

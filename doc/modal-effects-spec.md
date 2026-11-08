@@ -23,7 +23,7 @@ the scope of these changes.
 
 Socket examples, XML/forms, FFI/function locations and their dependent
 library/example migrations are deferred from the current D7 work.
-[PLAN.md](../PLAN.md#future-todos) records their future completion checks.
+[PLAN.md](../PLAN.md#postponed-work) records their future completion checks.
 
 ## 2. Syntax
 

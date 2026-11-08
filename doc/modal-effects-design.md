@@ -890,7 +890,7 @@ ordinary feature settings remain unchanged.
 
 Migrate the remaining examples in bounded groups. The user deferred socket
 examples, XML/forms and FFI/function locations on 7 November 2026; the
-[future TODOs](../PLAN.md#future-todos) now govern those groups and their
+[postponed work](../PLAN.md#postponed-work) now governs those groups and their
 dependent migrations.
 
 | Group | Sources under `examples/sessions` | Check |
