@@ -1102,7 +1102,7 @@ reply process blocks before `Value` is sent:
 `/tmp/links-d7d3e1-review-waiting-trace.log`. Replace the legacy mailbox-effect casts
 with modal function calls and supply the mailbox type to `self` explicitly.
 
-**Choice for review:** defer the remaining `TicTacToe-Console.links` migration.
+**Deferred by the user:** the remaining `TicTacToe-Console.links` migration.
 Following the user's concern about peripheral work, prioritise prelude loading,
 batch/REPL integration and the default contextual frontend. Existing ordinary
 function, polymorphism, data-structure, effect and actor checks cover the core
@@ -1114,7 +1114,7 @@ Serial helpers and session-failure monitoring outside this work. General
 `Comp`/`gen0`/`gen1`/`gen2` effect-row interfaces remain in the independent-effect
 inventory.
 
-**Choice for review:** defer the root prelude's `State`, `runState`, `>>=`,
+Defer the root prelude's `State`, `runState`, `>>=`,
 `return`, `fmap` and `sequence` with the formlet library. Their current uses
 belong to that library. A legacy control captures a contextual `Get` function
 in `return`, runs the state computation, then handles and invokes the returned
@@ -1185,15 +1185,14 @@ Switch the default after core functional/modal and entry-point checks pass.
 Retain explicit legacy access for compatibility, deferred and excluded fixtures;
 never fall back to legacy after a contextual type error.
 
-**Choice for review following the user's priority instruction:** defer the
-remaining standalone examples and exhaustive legacy-suite conversion. Finish
-the annotation-scope repair and default frontend, using the dedicated contextual
-suites and actual batch/REPL/compilation checks for D7 coverage. Keep existing
-migrated cases contextual and run old assertions through an explicit compatibility
-configuration. Report those compatibility results separately. The alternative is
-to finish every old-suite conversion before switching the default. The remaining
-work and false-positive negative assertions are recorded in
-`/tmp/links-d7e5-inventory.md`; legacy removal must resolve that dependency.
+The annotation-scope repair and default frontend are complete. On 8 November
+2026, the user resumed remaining in-scope regression and example migration,
+starting with ordinary handlers. Check the older inventory
+`/tmp/links-d7e5-inventory.md` against current source. Preserve polymorphic
+contracts, feature settings and intended negative rejection causes. Keep legacy
+compatibility results separate from Fresco coverage. Finish, independently
+review, check and commit each small milestone before the next implementation;
+pause before D8. [PLAN.md](../PLAN.md) records current progress and checks.
 
 The contextual frontend now checks typed lowering and retains operator
 fixities and loads the configured prelude as described below. Complete REPL
@@ -2389,9 +2388,11 @@ type variables may carry whole modal types but cannot occur as effect-row tails.
 Some general interfaces cannot be migrated with the current language. A concrete
 use may migrate with shared or fixed contexts when those contexts meet its
 requirements. Keep an example deferred when its intended behaviour requires
-independent contexts that the current language cannot express. Record any
-specialisation explicitly and retain the original general contract as deferred;
-passing the specialised example does not establish support for that contract.
+independent contexts that the current language cannot express. The user's
+8 November instruction excludes redesigning or specialising such examples merely
+to make migration pass. Preserve earlier specialised migrations as recorded;
+their general contracts remain deferred. Questions arising solely from excluded
+examples or unsupported contracts are outside the current discussion.
 
 ### Two independently handled thunks
 
@@ -2417,8 +2418,8 @@ still migrate with fixed contexts or a changed interface.
 |---|---|---|
 | `examples/extensible-case.links`, curried case helpers | Callback and returned-call effects are independent of construction | Use shared ambient contexts; retain the general contracts as deferred |
 | `lib/stdlib/binaryTree.links`, `leftmost_child` | Unused comparator and caller have independent rows | Specialise to a shared ambient context; preserve the general contract as deferred |
-| `examples/handlers/alert.links`, JavaScript `wait` declaration | Callback uses `e1`; scheduling call uses `e2` | Preserve the general contract as deferred; inspect actual callback effects before specialising |
-| `lib/stdlib/mvu.links`, `runHandle` and wrappers | View/update/subscription callbacks share `e`; caller uses separate `f` | Audit call sites against the fixed spawned-body context and actor migration |
+| `examples/handlers/alert.links`, JavaScript `wait` declaration | Callback uses `e1`; scheduling call uses `e2` | Deferred with FFI/function locations and its general independent-effect contract |
+| `lib/stdlib/mvu.links`, `runHandle` and wrappers | View/update/subscription callbacks share `e`; caller uses separate `f` | Deferred with XML/forms and its general independent-effect contract |
 | `prelude.links`, `curry`, `flip`, `uncurry`, `compose`, `lf`, `-<-`, `->-`; `tests/freezeml/a9.links` | Callbacks and returned applications share a row independent of closure construction | Migrated helpers use a shared ambient context; assess remaining helpers separately and retain the general contracts as deferred |
 
 The prelude's `Comp(a,e::Eff)` and `gen0`/`gen1`/`gen2` also expose effect-row
@@ -2436,8 +2437,8 @@ Its JavaScript body in `examples/handlers/js/alert.js` schedules the callback wi
 `setTimeout`. A concrete callback using only `Wild` may admit an absolute type;
 this does not preserve quantification over both original rows. MVU uses
 `spawnClient`, so its concrete migration also depends on the selected actor rules.
-Keep such specialisations visible and retain the original general cases for a
-future explicit-effect-variable extension.
+Retain the original general cases for a future explicit-effect-variable extension.
+They require no current design decision.
 
 Several variables in a printed type do not alone establish a missing feature.
 The pure bodies of `choose` in `tests/polymorphism.tests` and the fresh collector-
@@ -2541,10 +2542,37 @@ Provide implementations for reference `val` helpers in runnable tests.
 
 ### Handler migration and modal examples
 
+The 8 November source audits are
+`/tmp/links-d7-handler-examples-audit.md` and
+`/tmp/links-d7-functional-audit.md`. They check the earlier migration inventory
+against `755db1e1`; the parameter-annotation and presence-pattern prerequisites
+are already resolved. Preserve each suite's feature settings and use an
+explicit Fresco selector while its remaining cases retain legacy compatibility.
+
+The first 21 `handlers.tests` cases migrate identity/list handlers, operation
+invocation sugar, exceptions and binary choice. Parameterised effects retain
+generic operation result types with the required `Abs` kind. The two exception
+negatives still pass an `Int` to a resumption requiring `Zero`; the top-level
+invocation still rejects an absent ambient effect. Full printed types and
+runtime results remain asserted.
+
+Defer handler examples whose full interfaces need arbitrary residual effects
+at a separate closure-construction context: `choose`, `deep_state`,
+`shallow_state`, `coins`, `fringe` and `nim`. Their existing curried helper
+contracts are covered by the
+[independent-effect boundary](#signatures-with-independent-effect-variables).
+`aop`/`aop2`, `concurrency`/`transaction` and `shiftreset` carry computations
+with arbitrary residual effects in operation payloads; fixed absolute payloads
+would narrow their contracts. `monadic_reflection` requires removed
+operation-level polymorphism. Keep these sources and their compatibility routes
+until the required features are in scope. XML/forms, FFI/function locations,
+sockets, the console example and other recorded exclusions remain deferred.
+
 Convert handler tests "Operation parameter pattern-matching" (7)--(9) and
-the six affected handlers in `examples/handlers/nim.links` to one clause per
-operation containing a `switch`. Preserve pattern order and resumption calls.
-Add rejection coverage for repeated operation clauses.
+use one clause per operation containing a `switch`. Preserve pattern order and
+resumption calls. Add rejection coverage for repeated operation clauses.
+The six corresponding handlers in `examples/handlers/nim.links` remain deferred
+with that example's general contracts.
 
 Retain a nested Tick example in which the inner handler produces `1` and an
 invocation under the outer handler produces `10`, giving a total of `11`.

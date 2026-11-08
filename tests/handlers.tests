@@ -5,110 +5,110 @@ config: tests/legacy_compatibility.config
 Identity handler (1)
 { handle(42) {case x -> x} }
 stdout : 42 : Int
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Identity handler (2)
 handle(42) {case x -> x}
 stdout : 42 : Int
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Listify handler (1)
 { handle(42) {case x -> [x]} }
 stdout : [42] : List Int
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Listify handler (2)
 handle(42) {case x -> [x]}
 stdout : [42] : List Int
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Listify handler (3)
 { handle([42, 41, 40, 39]) {case x -> [x]} }
 stdout : [[42, 41, 40, 39]] : List (List Int)
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Listify handler (4)
 handle([42, 41, 40, 39]) {case x -> [x]}
 stdout : [[42, 41, 40, 39]] : List (List Int)
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Top level operation invocation
-{ do Foo }
-stderr : @.
+effect E(a::Abs) { Foo : () => a; } { do Foo }
+stderr : @.*Type error: The operation's effect is absent from the ambient context.*In expression: do Foo\.
 exit : 1
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Operation invocation sugar (1)
-{ fun() { do Foo } }
-stdout : fun : () {Foo:() => a|_}-> a
-args : --enable-handlers
+effect E(a::Abs) { Foo : () => a; } { (fun() { do Foo } : forall a::Abs. modal [E(a)] (() -> a)) }
+stdout : fun : forall a::Abs.modal [effect_2$E(a)] (() -> a)
+args : --fresco --enable-handlers --set=show_quantifiers=true
 
 Operation invocation sugar (2)
-{ fun() { do Foo() } }
-stdout : fun : () {Foo:() => a|_}-> a
-args : --enable-handlers
+effect E(a::Abs) { Foo : () => a; } { (fun() { do Foo() } : forall a::Abs. modal [E(a)] (() -> a)) }
+stdout : fun : forall a::Abs.modal [effect_2$E(a)] (() -> a)
+args : --fresco --enable-handlers --set=show_quantifiers=true
 
 Operation invocation sugar (3)
-{ fun() { do Foo(()) } }
-stdout : fun : () {Foo:(()) => a|_}-> a
-args : --enable-handlers
+effect E(a::Abs) { Foo : (()) => a; } { (fun() { do Foo(()) } : forall a::Abs. modal [E(a)] (() -> a)) }
+stdout : fun : forall a::Abs.modal [effect_2$E(a)] (() -> a)
+args : --fresco --enable-handlers --set=show_quantifiers=true
 
 Operation invocation sugar (4)
-fun() { do Foo }
-stdout : fun : () {Foo:() => a|_}-> a
-args : --enable-handlers
+effect E(a::Abs) { Foo : () => a; } (fun() { do Foo } : forall a::Abs. modal [E(a)] (() -> a))
+stdout : fun : forall a::Abs.modal [effect_2$E(a)] (() -> a)
+args : --fresco --enable-handlers --set=show_quantifiers=true
 
 Operation invocation sugar (5)
-fun() { do Foo() }
-stdout : fun : () {Foo:() => a|_}-> a
-args : --enable-handlers
+effect E(a::Abs) { Foo : () => a; } (fun() { do Foo() } : forall a::Abs. modal [E(a)] (() -> a))
+stdout : fun : forall a::Abs.modal [effect_2$E(a)] (() -> a)
+args : --fresco --enable-handlers --set=show_quantifiers=true
 
 Operation invocation sugar (6)
-fun() { do Foo(()) }
-stdout : fun : () {Foo:(()) => a|_}-> a
-args : --enable-handlers
+effect E(a::Abs) { Foo : (()) => a; } (fun() { do Foo(()) } : forall a::Abs. modal [E(a)] (() -> a))
+stdout : fun : forall a::Abs.modal [effect_2$E(a)] (() -> a)
+args : --fresco --enable-handlers --set=show_quantifiers=true
 
 Exception handling (1)
-{ handle({do Fail; 42}) {case <Fail> -> Nothing : Maybe(Int) case x -> Just(x) : Maybe(Int)} }
-stdout : Nothing : Maybe (Int)
-args : --enable-handlers
+effect Exception(a::Abs) { Fail : () => a; } { handle({do Fail; 42}) {case <Fail> -> Nothing : Maybe(Int) case x -> Just(x) : Maybe(Int)} }
+stdout : Nothing : [|Just:Int|Nothing|]
+args : --fresco --enable-handlers
 
 Exception handling (2)
-{ handle(42) {case <Fail> -> Nothing : Maybe(Int) case x -> Just(x) : Maybe(Int)} }
-stdout : Just(42) : Maybe (Int)
-args : --enable-handlers
+effect Exception(a::Abs) { Fail : () => a; } { handle(42) {case <Fail> -> Nothing : Maybe(Int) case x -> Just(x) : Maybe(Int)} }
+stdout : Just(42) : [|Just:Int|Nothing|]
+args : --fresco --enable-handlers
 
 Exception handling (3)
-{ handle({var _ = do Fail : Zero; 42}) {case <Fail => k> -> k(42) : Either(String,Int) case x -> Right(x) : Either(String, Int)} }
-stderr : @.
+effect Exception(a::Abs) { Fail : () => a; } { handle({var _ = do Fail : Zero; 42}) {case <Fail => k> -> k(42) : Either(String,Int) case x -> Right(x) : Either(String, Int)} }
+stderr : @.*Type error: Type does not match the required type \(consistency\).*In expression: k\.
 exit : 1
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Exception handling (4)
-handle({do Fail; 42}) {case <Fail> -> Nothing : Maybe(Int) case x -> Just(x) : Maybe(Int)}
-stdout : Nothing : Maybe (Int)
-args : --enable-handlers
+effect Exception(a::Abs) { Fail : () => a; } handle({do Fail; 42}) {case <Fail> -> Nothing : Maybe(Int) case x -> Just(x) : Maybe(Int)}
+stdout : Nothing : [|Just:Int|Nothing|]
+args : --fresco --enable-handlers
 
 Exception handling (5)
-handle(42) {case <Fail()> -> Nothing : Maybe(Int) case x -> Just(x) : Maybe(Int)}
-stdout : Just(42) : Maybe (Int)
-args : --enable-handlers
+effect Exception(a::Abs) { Fail : () => a; } handle(42) {case <Fail()> -> Nothing : Maybe(Int) case x -> Just(x) : Maybe(Int)}
+stdout : Just(42) : [|Just:Int|Nothing|]
+args : --fresco --enable-handlers
 
 Exception handling (6)
-handle({var _ = do Fail : Zero; 42}) {case <Fail => k> -> k(42) : Either(String,Int) case x -> Right(x) : Either(String, Int)}
-stderr : @.
+effect Exception(a::Abs) { Fail : () => a; } handle({var _ = do Fail : Zero; 42}) {case <Fail => k> -> k(42) : Either(String,Int) case x -> Right(x) : Either(String, Int)}
+stderr : @.*Type error: Type does not match the required type \(consistency\).*In expression: k\.
 exit : 1
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Binary choice handling (1)
-{ handle({ var x = if (do Choose) 40 else 20; var y = if (do Choose) 2 else -20; x + y }) {case <Choose => k> -> k(true) ++ k(false) case x -> [x]} }
+effect Choice { Choose : () => Bool; } { handle({ var x = if (do Choose) 40 else 20; var y = if (do Choose) 2 else -20; x + y }) {case <Choose => k> -> k(true) ++ k(false) case x -> [x]} }
 stdout : [42, 20, 22, 0] : List Int
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Binary choice handling (2)
-handle({ var x = if (do Choose) 40 else 20; var y = if (do Choose) 2 else -20; x + y }) {case <Choose => k> -> k(true) ++ k(false) case x -> [x]}
+effect Choice { Choose : () => Bool; } handle({ var x = if (do Choose) 40 else 20; var y = if (do Choose) 2 else -20; x + y }) {case <Choose => k> -> k(true) ++ k(false) case x -> [x]}
 stdout : [42, 20, 22, 0] : List Int
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Deep continuation escape (1)
 { fromJust(handle({ do Escape; print("Back in action"); do Escape}) { case <Escape => k> -> Just(k) case _ -> Nothing })(()) }
