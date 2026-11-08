@@ -38,9 +38,9 @@ run their dedicated test suites unless the user requests it.
   should summarise findings and reference source locations or logs; copy
   only the excerpts needed to explain a finding.
 - Use Sol 6.1 High subagents by default for coding, investigation and review.
-  Use Astra High for very difficult coding tasks or design tasks. Use
-  Astra x-high only for an extremely challenging task after an earlier
-  attempt has failed; state
+  Use Sol 6.1 x-high for very difficult coding tasks or design tasks. Use
+  Astra only for an extremely challenging task after an earlier
+  attempt has failed several times; state
   the unresolved problem before escalating.
 - Give each agent a bounded task, relevant sources, allowed files and
   completion checks. Delegate independent work in parallel. Keep one
