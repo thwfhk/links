@@ -126,3 +126,57 @@ open import Pi; effect E { Read:()=>(); } handle <E> (newChannel(fun(c){do Read;
 args : --fresco --path=examples/sessions:lib/stdlib
 exit : 1
 stderr : @.*The operation's effect is absent from the ambient context.*In expression: do Read.*
+
+Execute AIPL example examples/AIPL14/LectureExamples/calc.links
+examples/AIPL14/LectureExamples/calc.links
+filemode : true
+args : --fresco --path=lib/stdlib --set=session_exceptions=false
+stdout : 42 : Int
+
+Execute AIPL example examples/AIPL14/LectureExamples/reccalc.links
+examples/AIPL14/LectureExamples/reccalc.links
+filemode : true
+args : --fresco --path=lib/stdlib --set=session_exceptions=false
+stdout : 84 : Int
+
+Execute AIPL example examples/AIPL14/LectureExamples/two-factor.links
+examples/AIPL14/LectureExamples/two-factor.links
+filemode : true
+args : --fresco --path=lib/stdlib --set=session_exceptions=false
+stdout : 42 : Int
+
+Execute AIPL example examples/AIPL14/Solutions/Problem1.links
+examples/AIPL14/Solutions/Problem1.links
+filemode : true
+args : --fresco --path=lib/stdlib --set=session_exceptions=false
+stdout : @^S: received address as FROM: starlight@domain\.com\nC: client sent MAIL, server replied: 250 OK\nS: received address as TO: pink@cloud\nC: client sent RCPT, server replied: 250 OK\nS: received message: Hello to bravest warriors!\nC: client sent DATA, server replied: 250 OK\n\(\) : \(\)$
+
+Execute AIPL example examples/AIPL14/Solutions/Problem2.links
+examples/AIPL14/Solutions/Problem2.links
+filemode : true
+args : --fresco --path=lib/stdlib --set=session_exceptions=false
+stdout : @^S: received address as FROM: starlight@domain\.com\nC: client sent MAIL, server replied: 250 OK\nS: received address as TO: pink@cloud\nC: client sent RCPT, server replied: 250 OK\nS: received message: Hello to bravest warriors!\nC: client sent DATA, server replied: 250 OK\nS: received address as FROM: jane@feathers\.com\nC: client sent MAIL, server replied: 250 OK\nS: received address as TO: cherry@blossom\nC: client sent RCPT, server replied: 250 OK\nS: received message: Are we still meeting tonight\?\nC: client sent DATA, server replied: 250 OK\n\(\) : \(\)$
+
+Execute AIPL example examples/AIPL14/Solutions/Problem3.links
+examples/AIPL14/Solutions/Problem3.links
+filemode : true
+args : --fresco --path=lib/stdlib --set=session_exceptions=false
+stdout : @^S: received address as FROM: starlight@domain\.com\nC: client sent MAIL, server replied: 250 OK\nS: received address as TO: pink@cloud\nC: client sent RCPT, server replied: 250 OK\nS: received address as TO: bitter@sweet\.com\nC: client sent RCPT, server replied: 250 OK\nS: received message: Hello to bravest warriors!\nC: client sent DATA, server replied: 250 OK\n\(\) : \(\)$
+
+Execute AIPL example examples/AIPL14/Solutions/Problem4.links
+examples/AIPL14/Solutions/Problem4.links
+filemode : true
+args : --fresco --path=lib/stdlib --set=session_exceptions=false
+stdout : @^S: received address as FROM: starlight@domain\.com\nC: client sent MAIL, server replied: 250 OK\nS: received address as TO: friend@galaxy\.com\nC: client sent RCPT, server replied: 250 OK\nS: received address as TO: pink@cloud\nC: client sent RCPT, server replied: 250 OK\nS: received message: Hello to bravest warriors!\nC: client sent DATA, server replied: 250 OK\n\(\) : \(\)$
+
+The AIPL authentication callback shares an extra caller effect
+tests/fixtures/fresco_sessions/aiplTwoFactorReader.links
+filemode : true
+args : --fresco --path=examples:lib/stdlib --set=isolation=false --set=session_exceptions=false examples/AIPL14/LectureExamples/two-factor.links
+stdout : @\A42 : Int\n49 : Int\Z
+
+AIPL sendMessage retains two independent open session rows
+tests/fixtures/fresco_sessions/aiplSmtpSendMessage.links
+filemode : true
+args : --fresco --path=lib/stdlib --set=session_exceptions=false
+stdout : @^S: received message: Hello to bravest warriors!\nC: client sent DATA, server replied: 250 OK\nS: received message: Hello to bravest warriors!\nC: client sent DATA, server replied: 250 OK\nS: received message: Hello to bravest warriors!\nC: client sent DATA, server replied: 250 OK\n\(\) : \(\)$

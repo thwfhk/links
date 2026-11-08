@@ -2679,13 +2679,29 @@ against `755db1e1`; the parameter-annotation and presence-pattern prerequisites
 are already resolved. Preserve each suite's feature settings and use an
 explicit Fresco selector while its remaining cases retain legacy compatibility.
 
-The remaining non-handler example audit is
-`/tmp/links-d7-remaining-examples-audit.md`. Seven ordinary AIPL examples remain:
-the lecture calculators/authentication and four local SMTP solutions. Those
-solutions use local sessions and have no socket dependency. The recorded
-socket-model group, original linear-list modules and pure protocol fixtures
-retained for deferred chat/mind consumers keep their existing boundaries.
-Preserve all ignored-example metadata and feature settings.
+The non-handler example audit is `/tmp/links-d7-remaining-examples-audit.md`.
+All seven ordinary AIPL examples now use Fresco: the lecture calculators and
+authentication, plus four local SMTP solutions. Complete finite execution output
+matches the saved originals, including message order and recipient counts.
+Authentication retains its calculator service and ordinary caller-context
+callback; its actual-source Reader control returns 49. reportError retains its
+generic Any message with required transmitted Abs, modal-Any session continuation
+and open session row. The nested SMTP sendMessage retains two independently
+quantified ordinary Session rows; controls extend each row separately and both
+together. Original function bodies and all accept/reject branches remain.
+
+Equivalent named recursive declarations preserve the original protocol states
+and permit strict IR/frontend checks. Raw-mu recursive protocol expansion during
+immediate lowering verification can exceed the check bound or overflow; this
+separate follow-up is recorded in `/tmp/links-d7-m11-solutions/contracts.md` and
+`/tmp/links-d7-m11-lecture/readiness.md`. No compiler change is included.
+
+These SMTP solutions use local sessions and have no socket dependency. The
+recorded socket-model group, original linear-list modules and pure protocol
+fixtures retained for deferred chat/mind consumers keep their boundaries.
+All ignored-example metadata and feature settings remain. The final independent
+scope accounting is in `/tmp/links-d7-m11-review.md`; supported inventory entries
+have migrated, and the remaining entries have recorded deferrals or exclusions.
 
 The first 21 `handlers.tests` cases migrate identity/list handlers, operation
 invocation sugar, exceptions and binary choice. Parameterised effects retain

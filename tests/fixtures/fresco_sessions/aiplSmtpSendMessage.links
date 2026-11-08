@@ -1,0 +1,74 @@
+open import FrescoPrelude;
+
+typename Message = String;
+typename Accept = String;
+
+# The nested sendMessage helper from AIPL14/Solutions/Problem3.links.
+# Both selection rows remain general, including branches the helper never selects.
+sig sendMessage : forall r::Row(Any,Session),s::Row(Any,Session).
+  modal [Wild] (([+|DATA:!Message.?Accept.[+|QUIT:EndQuery|r|+]|s|+]) -> ())
+fun sendMessage(c) {
+  var c = send("Hello to bravest warriors!", select DATA c);
+  var (reply, c) = receive(c);
+  println("C: client sent DATA, server replied: " ^^ reply);
+  var c = select QUIT c;
+  wait(c);
+  ()
+}
+
+typename Server =
+  [&|DATA:?String.!String.[&|QUIT:EndBang,EXTRA:EndBang|&],
+     SKIP:EndBang|&];
+
+sig smtpServer : modal [Wild] ((Server) -> EndBang)
+fun smtpServer(c) {
+  offer(c) {
+    case DATA(c) ->
+      var (message,c)=receive(c);
+      println("S: received message: " ^^ message);
+      var c=send("250 OK",c);
+      offer(c) {
+        case QUIT(c) -> c
+        case EXTRA(c) -> c
+      }
+    case SKIP(c) -> c
+  }
+}
+
+typename OuterOnly =
+  [&|DATA:?String.!String.[&|QUIT:EndBang|&],SKIP:EndBang|&];
+
+sig outerOnly : modal [Wild] ((OuterOnly) -> EndBang)
+fun outerOnly(c) {
+  offer(c) {
+    case DATA(c) ->
+      var (message,c)=receive(c);
+      println("S: received message: " ^^ message);
+      var c=send("250 OK",c);
+      offer(c) { case QUIT(c) -> c }
+    case SKIP(c) -> c
+  }
+}
+
+typename InnerOnly =
+  [&|DATA:?String.!String.[&|QUIT:EndBang,EXTRA:EndBang|&]|&];
+
+sig innerOnly : modal [Wild] ((InnerOnly) -> EndBang)
+fun innerOnly(c) {
+  offer(c) {
+    case DATA(c) ->
+      var (message,c)=receive(c);
+      println("S: received message: " ^^ message);
+      var c=send("250 OK",c);
+      offer(c) {
+        case QUIT(c) -> c
+        case EXTRA(c) -> c
+      }
+  }
+}
+
+{
+  ~sendMessage[{}, {SKIP:EndQuery}](forkSync(outerOnly));
+  ~sendMessage[{EXTRA:EndQuery}, {}](forkSync(innerOnly));
+  ~sendMessage[{EXTRA:EndQuery}, {SKIP:EndQuery}](forkSync(smtpServer))
+}

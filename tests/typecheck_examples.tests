@@ -5,14 +5,17 @@ config: tests/examples_default.config
 Typecheck example file examples/AIPL14/LectureExamples/calc.links
 examples/AIPL14/LectureExamples/calc.links
 filemode : true
+args : --fresco --path=lib/stdlib
 
 Typecheck example file examples/AIPL14/LectureExamples/reccalc.links
 examples/AIPL14/LectureExamples/reccalc.links
 filemode : true
+args : --fresco --path=lib/stdlib
 
 Typecheck example file examples/AIPL14/LectureExamples/two-factor.links
 examples/AIPL14/LectureExamples/two-factor.links
 filemode : true
+args : --fresco --path=lib/stdlib
 
 Typecheck example file examples/AIPL14/SMTP/Problem1.links
 examples/AIPL14/SMTP/Problem1.links
@@ -37,18 +40,22 @@ ignore : purposely incomplete
 Typecheck example file examples/AIPL14/Solutions/Problem1.links
 examples/AIPL14/Solutions/Problem1.links
 filemode : true
+args : --fresco --path=lib/stdlib
 
 Typecheck example file examples/AIPL14/Solutions/Problem2.links
 examples/AIPL14/Solutions/Problem2.links
 filemode : true
+args : --fresco --path=lib/stdlib
 
 Typecheck example file examples/AIPL14/Solutions/Problem3.links
 examples/AIPL14/Solutions/Problem3.links
 filemode : true
+args : --fresco --path=lib/stdlib
 
 Typecheck example file examples/AIPL14/Solutions/Problem4.links
 examples/AIPL14/Solutions/Problem4.links
 filemode : true
+args : --fresco --path=lib/stdlib
 
 Typecheck example file examples/buttons.links
 examples/buttons.links

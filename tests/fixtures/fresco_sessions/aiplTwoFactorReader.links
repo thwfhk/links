@@ -1,0 +1,9 @@
+effect Reader { Ask : () => Int; }
+
+handle <Reader> (serveData(fun(c) {
+  var extra = do Ask;
+  goodMe(c) + extra
+})) {
+  case x -> x
+  case <Ask => k> -> k(7)
+}

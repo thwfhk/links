@@ -1,38 +1,45 @@
 # SMTP 4 - At least one recipient
 
+open import FrescoPrelude;
+
 typename Address = String;
 typename Accept = String;
 typename Message = String;
 typename Error = String;
 
 
-typename SMTPServer =
-  mu outer.[&|MAIL:?Address.
-                   [+|REJECT:!Error.outer,
-                      ACCEPT:!Accept.
-                             mu rcptLoop.
-                               [&|RCPT:?Address.
-                                       [+|REJECT:!Error.rcptLoop,
-                                          ACCEPT:!Accept.
-                                                 mu inner.
-                                                   [&|RCPT:?Address.
-                                                           [+|REJECT:!Error.inner,
-                                                              ACCEPT:!Accept.inner|+],
-                                                      DATA:?Message.!Accept.outer|&] |+] |&] |+],
-              QUIT:EndBang |&];
+mutual {
+  typename SMTPServer =
+    [&|MAIL:?Address.
+            [+|REJECT:!Error.SMTPServer,
+               ACCEPT:!Accept.SMTPFirstRecipient|+],
+       QUIT:EndBang|&];
+
+  typename SMTPFirstRecipient =
+    [&|RCPT:?Address.
+            [+|REJECT:!Error.SMTPFirstRecipient,
+               ACCEPT:!Accept.SMTPRecipients|+]|&];
+
+  typename SMTPRecipients =
+    [&|RCPT:?Address.
+            [+|REJECT:!Error.SMTPRecipients,
+               ACCEPT:!Accept.SMTPRecipients|+],
+       DATA:?Message.!Accept.SMTPServer|&];
+}
 
 # Returns true, if the given String is a valid e-mail address.
-sig isValid : (String) ~> Bool
+sig isValid : modal [Wild] ((String) -> Bool)
 fun isValid(address) {
   address =~ /.[a-z0-9]+.@.[a-z]+.[a-z]+/ # Regex to match 1+characters/numbers @ 1+characters . 1+characters
 }
 
 mutual {
-  sig mailServer : (SMTPServer) ~> EndBang
+  sig mailServer : modal [Wild] ((SMTPServer) -> EndBang)
   fun mailServer(s) {
     outer(s)
   }
 
+  sig outer : modal [Wild] ((SMTPServer) -> EndBang)
   fun outer(s) {
     offer(s) {
       case MAIL(s) ->
@@ -51,6 +58,7 @@ mutual {
     }
   }
 
+  sig rcptLoop : modal [Wild] ((SMTPFirstRecipient) -> EndBang)
   fun rcptLoop(s) {
     offer(s) {
       case RCPT(s) ->
@@ -68,6 +76,7 @@ mutual {
   }
 
 
+  sig inner : modal [Wild] ((SMTPRecipients) -> EndBang)
   fun inner(s) {
     offer(s) {
       case RCPT(s) ->
@@ -91,12 +100,13 @@ mutual {
 }
 
 mutual {
-  sig mailClient : (~SMTPServer) ~> ()
+  sig mailClient : modal [Wild] ((~SMTPServer) -> ())
   fun mailClient(c) {
     outerClient(c)
   }
 
 
+  sig outerClient : modal [Wild] ((~SMTPServer) -> ())
   fun outerClient(c) {
     var c = send("starlight@domain.com", select MAIL c);
     offer (c) {
@@ -112,6 +122,7 @@ mutual {
     }
   }
 
+  sig innerClient : modal [Wild] ((~SMTPRecipients, Bool) -> ())
   fun innerClient(c, addRcpt) {
     # Either one more recipient or data
     if (addRcpt) {
@@ -122,6 +133,7 @@ mutual {
     }
   }
 
+  sig addData : modal [Wild] ((~SMTPRecipients) -> ())
   fun addData(c) {
     var c = send("Hello to bravest warriors!", select DATA c);
     var (reply, c) = receive(c);
@@ -131,6 +143,7 @@ mutual {
     ()
   }
 
+  sig addRecipient : modal [Wild] ((~SMTPRecipients) -> ())
   fun addRecipient(c) {
     var c = send("pink@cloud", select RCPT c);
     offer (c) {
@@ -145,6 +158,7 @@ mutual {
     }
   }
 
+  sig rcptLoopClient : modal [Wild] ((~SMTPFirstRecipient) -> ())
   fun rcptLoopClient(c) {
     var c = send("friend@galaxy.com", select RCPT c);
     offer(c) {
@@ -159,6 +173,7 @@ mutual {
   }
 }
 
+sig main : modal [Wild] (() -> ())
 fun main() {
   mailClient(forkSync(mailServer))
 }

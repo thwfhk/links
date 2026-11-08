@@ -1,6 +1,8 @@
-typename Calc = mu a.[&|Add:?Int.?Int.!Int.a, Mul:?Int.?Int.!Int.a, Stop:EndBang|&];
+open import FrescoPrelude;
 
-sig calc : (Calc) ~> EndBang
+typename Calc = [&|Add:?Int.?Int.!Int.Calc, Mul:?Int.?Int.!Int.Calc, Stop:EndBang|&];
+
+sig calc : modal [Wild] ((Calc) -> EndBang)
 fun calc(s) {
   offer (s) {
     case Add(s) ->
@@ -18,7 +20,7 @@ fun calc(s) {
   }
 }
 
-sig user : (~Calc) ~> Int
+sig user : modal [Wild] ((~Calc) -> Int)
 fun user(s) {
   var s = select Mul s;
   var (v, s) = receive(send(6,send(7,s)));

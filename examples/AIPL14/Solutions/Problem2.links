@@ -1,28 +1,30 @@
 # SMTP 2 (with MAIL recursion)
 
+open import FrescoPrelude;
+
 typename Address = String;
 typename Message = String;
 typename Error = String;
 typename Accept = String;
 
 typename SMTPServer =
-  mu send.[&|MAIL:?Address.
+  [&|MAIL:?Address.
                   [+|REJECT:!Error.EndBang,
                      ACCEPT:!Accept.
                             [&|RCPT:?Address.
                                     [+|REJECT:!Error.EndBang,
                                        ACCEPT:!Accept.
-                                              [&|DATA:?Message.!Accept.send|&] |+] |&] |+],
+                                              [&|DATA:?Message.!Accept.SMTPServer|&] |+] |&] |+],
              QUIT:EndBang|&];
 
 # Returns true, if the given String is a valid e-mail address.
 # The bit before @ has to be a single word!
-sig isValid : (String) ~> Bool
+sig isValid : modal [Wild] ((String) -> Bool)
 fun isValid(address) {
   address =~ /.[a-z0-9]+.@.[a-z]+.[a-z]+/ # Regex to match 1+characters/numbers @ 1+characters . 1+characters
 }
 
-sig mailServer : (SMTPServer) ~> EndBang
+sig mailServer : modal [Wild] ((SMTPServer) -> EndBang)
 fun mailServer(s) {
   offer(s) {
     case MAIL(s) ->
@@ -57,7 +59,7 @@ fun mailServer(s) {
   }
 }
 
-sig mailClient : (~SMTPServer) ~> ()
+sig mailClient : modal [Wild] ((~SMTPServer) -> ())
 fun mailClient(c) {
   var c = send("starlight@domain.com", select MAIL c);
   offer (c) {
@@ -124,6 +126,7 @@ fun mailClient(c) {
   }
 }
 
+sig main : modal [Wild] (() -> ())
 fun main() {
   mailClient(forkSync(mailServer))
 }

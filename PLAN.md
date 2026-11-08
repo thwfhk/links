@@ -13,9 +13,10 @@ implementation decisions, reasons, internal invariants and source comparisons.
 
 ## Current status
 
-D5, D6 and the prioritised D7 work are complete, independently reviewed,
-checked and committed in milestones. The remaining in-scope D7 regression and
-example migration resumed on 8 November 2026. Pause before D8.
+D5, D6 and all in-scope D7 regression and example migration are complete,
+independently reviewed, checked and committed in milestones. The remaining
+migration inventory was checked against current source on 8 November 2026.
+D8 remains paused.
 
 On 7 November 2026, the user deferred socket examples, XML/forms, and
 FFI/function locations to [future work](#future-todos). Their implementation
@@ -23,13 +24,13 @@ and dependent library/example migrations are outside the current D7 scope.
 Prioritise readiness for general-purpose functional programming: ordinary
 functions, polymorphism, data structures, modules, effects, and batch/REPL use.
 
-Fresco remains the default. Migrate ordinary handler examples and tests first,
-then remaining functional-language cases. Check the recorded inventory against
-current source. Preserve behaviour, polymorphic contracts, feature settings and
-negative rejection causes. Explicit legacy runs remain compatibility checks.
-Defer interfaces or required behaviour that need effect variables; do not
-specialise or redesign them to obtain a passing migration. Keep ordinary
-linear-function inference unchanged and use annotations or intermediate bindings.
+Fresco remains the default. Migration covered ordinary handler examples/tests,
+then functional-language cases, checking the recorded inventory against current
+source. Behaviour, polymorphic contracts, feature settings and negative rejection
+causes are retained. Explicit legacy runs remain compatibility checks.
+Interfaces needing effect variables remain deferred without specialisation or
+redesign. Ordinary linear-function inference is unchanged; migrated sources use
+annotations or intermediate bindings where needed.
 
 - D1--D3d provide row/modality operations, shared modal types, surface syntax,
   and effect/operation resolution. D4a--D4f1 provide kind checks, persistent
@@ -142,7 +143,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D7 migration 7 | Record absence checks, record remainders and records/patterns migration | `3e0248d8` |
 | D7 migration 8 | Functions, closure/scope fixtures and modules | `2ab54255` |
 | D7 migration 9 | Polymorphism and recursive continuation contracts | `c71fcc6f` |
-| D7 migration 10 | Staged Freezeml helpers and supported typed-IR fixtures | This commit |
+| D7 migration 10 | Staged Freezeml helpers and supported typed-IR fixtures | `a80a1021` |
+| D7 migration 11 | Seven ordinary AIPL examples and final in-scope integration | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -150,13 +152,13 @@ results here. The D3f list-parentheses correction is complete.
 
 ## Remaining work
 
-D7 migration and D8 remain. Detailed language requirements are in the
+D8 remains. In-scope D7 migration is complete; retained compatibility cases
+have recorded deferrals or exclusions. Detailed language requirements are in the
 specification; representations and algorithms are in the design. Each task
 also requires the affected build/tests and review described in AGENTS.md.
 
 | Task | Depends on | Completion check |
 |---|---|---|
-| D7 migration | D7e5 | Supported handler and functional regression/example cases use Fresco, preserving contracts and rejection causes; exclusions are recorded |
 | D8: backends, documentation and final review | D7 | Interpreter/JS deep-handler checks, migration guide and selected suites pass; in-scope legacy effect inference is removed |
 
 D4k supplies the type-annotation and effect-signature elaboration APIs needed
@@ -243,7 +245,7 @@ user requested on 7 November 2026. The main agent owns integration and these rec
 
 D7a (`1f7ff34e`), D7b1 (`4fad3532`) and D7b2a (`db0d3a75`) are complete.
 D7b2b (`72e47dbc`) and D7b3 (`f09237bd`) are complete. D7b4a0 (`8cfe88a3`) is complete. D7b4a collection migration (`0b2c0d3f`) is complete. D7b4b (`efc1bca2`) is complete. D7b4c (`4e009da6`) is complete. D7c1a core actors (`ef94a794`) and D7c1b actor variants are complete.
-D7c1b1 polymorphic export is complete. D7c1c actor migration is complete. D7c2a session primitives are complete. D7c2b selection/offer is complete. D7c2c1 split-end helpers are complete. D7c2c2 callback helpers are complete. D7c2d CP is complete. D7c2e1 ordinary session regression migration is complete. D7c2e2 ordinary examples are complete. D7c2e3a recursive/encoded protocol examples are complete. D7c2e3b remaining generic protocols are complete. D7d3a ordinary list, character and date helpers are complete. D7d3b ordinary helper interfaces are complete. D7d3c binary trees are complete. D7d3d0 empty switches is complete. D7d3d1 switch functions is complete. D7d3d2 Church numerals and bit lists is complete. D7d3d3a explicit upcasts is complete; D7d3d3b extensible cases is complete. D7d3e1 buffered channels is complete. D7e1 checked preparation is complete. D7e2a persistent parsing state is complete. D7e2b contextual prelude loading is complete. D7e3a contextual REPL is complete. D7e3b contextual type search is complete. D7e4 contextual JavaScript compilation is complete. D7e5a0 parameter annotation scopes are complete. The prioritised D7e5 default switch is complete. Remaining in-scope D7 migration has resumed; D8 remains paused. Later boundaries may be split further when a dependency needs
+D7c1b1 polymorphic export is complete. D7c1c actor migration is complete. D7c2a session primitives are complete. D7c2b selection/offer is complete. D7c2c1 split-end helpers are complete. D7c2c2 callback helpers are complete. D7c2d CP is complete. D7c2e1 ordinary session regression migration is complete. D7c2e2 ordinary examples are complete. D7c2e3a recursive/encoded protocol examples are complete. D7c2e3b remaining generic protocols are complete. D7d3a ordinary list, character and date helpers are complete. D7d3b ordinary helper interfaces are complete. D7d3c binary trees are complete. D7d3d0 empty switches is complete. D7d3d1 switch functions is complete. D7d3d2 Church numerals and bit lists is complete. D7d3d3a explicit upcasts is complete; D7d3d3b extensible cases is complete. D7d3e1 buffered channels is complete. D7e1 checked preparation is complete. D7e2a persistent parsing state is complete. D7e2b contextual prelude loading is complete. D7e3a contextual REPL is complete. D7e3b contextual type search is complete. D7e4 contextual JavaScript compilation is complete. D7e5a0 parameter annotation scopes are complete. The prioritised D7e5 default switch is complete. All in-scope D7 migration is complete; D8 remains paused. Later boundaries may be split further when a dependency needs
 its own review and checks.
 
 ### Future TODOs
@@ -269,12 +271,12 @@ checking work, as established on 8 November. Retain its saved source draft,
 general stream contracts and original behaviour; see the
 [design](doc/modal-effects-design.md#handler-migration-and-modal-examples).
 
-The remaining in-scope legacy-suite and example conversion has resumed. Its inventory is
-`/tmp/links-d7e5-inventory.md`, independently reviewed in
-`/tmp/links-d7e5-inventory-review-summary.log`. Keep existing migrated cases on
-Fresco and label the remaining suites as legacy compatibility. D8's legacy
-inference removal must resolve this compatibility dependency before deleting
-the retained route.
+The supported legacy-suite and example inventory has migrated to Fresco.
+The original inventory is `/tmp/links-d7e5-inventory.md`; final accounting is
+`/tmp/links-d7-m11-review.md`. Retained routes cover unsupported full contracts,
+recorded exclusions, existing ignores and Pi's D8 dependency. Keep those routes
+as explicit compatibility checks. D8's legacy inference removal must respect
+these dependencies before deleting the retained route.
 
 Some general interfaces cannot be preserved by the current modal effect
 language. Assess each concrete use against the
@@ -318,33 +320,39 @@ block the prioritised D7 completion checks.
 
 ## Latest task and verification
 
-8 November 2026, milestone 10: supported Freezeml and typed-IR cases migrate
-with complete polymorphic types, true negative causes and actual helper execution.
-Freezeml retains eighteen unsupported full contracts; typed-IR retains five such
-contracts and four excluded dependencies. The original Freezeml prelude/config,
-three session overrides and typed-IR settings/spawn remain unchanged.
-Independent review: `/tmp/links-d7-m10-review.md`. No compiler changes or new
-design choices; ordinary linear-function inference remains unchanged.
+8 November 2026, milestone 11: all seven ordinary AIPL examples migrate with
+preserved protocols, general helper contracts and complete original runtime
+output. Two additional controls check the actual authentication callback under
+Reader and both independently open SMTP session rows. Independent review passed:
+`/tmp/links-d7-m11-review.md`. Its accounting finds no unclassified ordinary
+example remaining in the recorded inventory. No compiler changes or new design
+choices; ordinary linear-function inference remains unchanged.
 
-Tested source: `c71fcc6f` plus the patch and hashes in
-`/tmp/links-d7-m10-final-verification/revision.txt`, `source.patch` and
+Tested source: `a80a1021` plus the patch and hashes in
+`/tmp/links-d7-m11-verification/revision.txt`, `source.patch` and
 `source.sha256.json`. Source hashes stayed unchanged through verification.
-Logs are in `/tmp/links-d7-m10-final-verification/`. The initial run in
-`/tmp/links-d7-m10-verification/` passed both suites but found comments confusing
-the fixture-registration scanner; separate comment blocks fix that check.
+Complete commands/results and per-suite frontend counts are in `results.json`
+and `frontend-counts.json` in that directory. Logs retain complete output.
 
 | Command | Result | Log |
 |---|---|---|
-| `./test-harness tests/freezeml.tests` | 58 Fresco and 18 compatibility passed | `freezeml.log` |
-| `./test-harness tests/typed_ir.tests` | 34 Fresco and 9 compatibility passed | `typed_ir.log` |
+| `./test-harness tests/<suite>.tests`, 26 selected suites listed in `results.json` | 956 Fresco and 249 compatibility passed; 16 existing ignores | Per-suite `.log` files |
+| `python3 tests/fresco_repl.py` | 11 scenarios passed | `repl.log` |
+| `python3 tests/fresco_compile.py` | 10 scenarios passed | `compile.log` |
 | `make rule-check` | Passed; GNU-find tab check skipped, formatter disabled | `rule-check.log` |
 | `git diff --check` and frozen source hashes | Passed | `diff-check.log`, `source-check.log` |
 
-Most recent compiler verification is milestone 7 (`3e0248d8`): 1,533 unit tests,
-705 Fresco cases, 436 compatibility cases, eleven REPL scenarios and ten compile
-scenarios passed; sixteen existing cases were ignored. Full commands, routing,
-source hashes and logs: `/tmp/links-d7-m7-verification/`. The solved-tail linear
-projection follow-up and remaining deferrals are recorded in the design.
+The compiler/library/unit sources (396 files) and executable are byte-identical
+to milestone 7 (`3e0248d8`). Retain its successful `make no-db` and 1,533 unit
+results; exact commands, original logs/revision and compared hashes are in
+`compiler-reuse.json`, checked by `compiler-reuse.log`. Final source suites,
+REPL and compile checks above ran on the integrated source revision.
+
+Retained compatibility includes retired effect-sugar policy, unsupported full
+independent-effect contracts, recorded exclusions and Pi's D8 dependency.
+The [design](doc/modal-effects-design.md#handler-migration-and-modal-examples)
+records the raw-mu strict-lowering and solved-tail linear projection follow-ups.
+No further D7 migration or D8 implementation starts in this task.
 
 ## Confirmed D6 decisions
 
@@ -355,14 +363,16 @@ Documentation-only update: text and whitespace checked.
 
 ## Next action
 
-Migrate the seven ordinary AIPL examples with their original finite behaviour
-and general helper contracts. Keep Lambda's full-contract deferral and
-Pi's D8-dependent migration recorded in the design.
-Review, check and commit each milestone before the next implementation.
-Keep D8 paused.
-D8 must test the existing backends through actual execution and address the
-recorded interpreter close/link failure. Legacy inference removal depends on
-resolving the deferred compatibility migration.
+Pause before D8. All supported entries in the recorded D7 migration inventory
+now use Fresco. Keep unsupported full contracts and recorded exclusions deferred;
+no current design questions arise solely from them. Pi retains its D8 closure/IR
+dependency. Ordinary linear-function inference remains unchanged.
+
+When D8 is authorised, test the existing backends through actual execution and
+address the recorded interpreter close/link failure. Legacy inference removal
+must respect the retained compatibility dependencies. The raw-mu strict-lowering
+follow-up and solved-tail linear projection follow-up remain recorded in the
+design; this migration includes no further compiler work.
 
 The inventory and its independent review remain in
 `/tmp/links-d7e5-inventory.md` and

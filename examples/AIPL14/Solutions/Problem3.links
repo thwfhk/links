@@ -1,34 +1,36 @@
 # SMTP 3 - multiple recipients.
 
+open import FrescoPrelude;
+
 typename Address = String;
 typename Accept = String;
 typename Message = String;
 typename Error = String;
 typename Response = String;
 
-typename SMTPServer =
-  mu send.
-    [&|MAIL: ?Address.
-             [+|REJECT:!Error.send,
-                ACCEPT:!Accept.
-                       mu rcpt.
-                         [&|RCPT:?Address.
-                                 [+|REJECT:!Error.rcpt,
-                                    ACCEPT:!Accept.rcpt|+],
-                            DATA:?Message.
-                                 !Accept.
-                                 send |&] |+],
-       QUIT:EndBang |&];
+mutual {
+  typename SMTPServer =
+    [&|MAIL:?Address.
+            [+|REJECT:!Error.SMTPServer,
+               ACCEPT:!Accept.SMTPRecipients|+],
+       QUIT:EndBang|&];
+
+  typename SMTPRecipients =
+    [&|RCPT:?Address.
+            [+|REJECT:!Error.SMTPRecipients,
+               ACCEPT:!Accept.SMTPRecipients|+],
+       DATA:?Message.!Accept.SMTPServer|&];
+}
 
 # Returns true, if the given String is a valid e-mail address.
 # The bit before @ has to be a single word!
-sig isValid : (String) ~> Bool
+sig isValid : modal [Wild] ((String) -> Bool)
 fun isValid(address) {
   address =~ /.[a-z0-9]+.@.[a-z]+.[a-z]+/ # Regex to match 1+characters/numbers @ 1+characters . 1+characters
 }
 
 mutual {
-  sig mailServer : (SMTPServer) ~> EndBang
+  sig mailServer : modal [Wild] ((SMTPServer) -> EndBang)
   fun mailServer(s) {
     offer(s) {
       case MAIL(s) ->
@@ -46,6 +48,7 @@ mutual {
     }
   }
 
+  sig rcpt : modal [Wild] ((SMTPRecipients) -> EndBang)
   fun rcpt(s) { offer(s) {
       case RCPT(s) ->
         var (address, s) = receive(s);
@@ -65,7 +68,7 @@ mutual {
     }
   }
 
-  sig mailClient : (~SMTPServer) ~> ()
+  sig mailClient : modal [Wild] ((~SMTPServer) -> ())
   fun mailClient(c) {
     var c = send("starlight@domain.com", select MAIL c);
     offer (c) {
@@ -79,6 +82,8 @@ mutual {
         var (reply, c) = receive(c);
         println("C: client sent MAIL, server replied: " ^^ reply);
 
+        sig sendMessage : forall r::Row(Any,Session),s::Row(Any,Session).
+          modal [Wild] (([+|DATA:!Message.?Accept.[+|QUIT:EndQuery|r|+]|s|+]) -> ())
         fun sendMessage(c) {
           var c = send("Hello to bravest warriors!", select DATA c);
           var (reply, c) = receive(c);
@@ -116,6 +121,7 @@ mutual {
   }
 }
 
+sig main : modal [Wild] (() -> ())
 fun main() {
   mailClient(forkSync(mailServer))
 }

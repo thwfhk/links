@@ -1,8 +1,11 @@
+open import FrescoPrelude;
+
 ########################################
 # (Calculator example, repeated)
 
-typename Calc = mu a.[&|Add:?Int.?Int.!Int.a, Mul:?Int.?Int.!Int.a, Stop:EndBang|&];
+typename Calc = [&|Add:?Int.?Int.!Int.Calc, Mul:?Int.?Int.!Int.Calc, Stop:EndBang|&];
 
+sig calc : modal [Wild] ((Calc) -> EndBang)
 fun calc(s) {
   offer (s) {
     case Add(s) ->
@@ -38,7 +41,7 @@ typename TwoFactor = ?User.[+|Accept:!Nonce.?Response.[+|Accept:Calc,
 
 
 
-sig validUser : (User) ~> Bool
+sig validUser : modal [Wild] ((User) -> Bool)
 fun validUser(user) {
   switch (user.name) {
     case "me" -> user.password == "pass"
@@ -46,7 +49,7 @@ fun validUser(user) {
   }
 }
 
-sig hash : (Int) ~> Int
+sig hash : modal [Wild] ((Int) -> Int)
 fun hash(i) {
   mod(i * 31,7)
 }
@@ -54,18 +57,20 @@ fun hash(i) {
 sig secret : Int
 var secret = 2;
 
-sig generateNonce : () ~> Int
+sig generateNonce : modal [Wild] (() -> Int)
 fun generateNonce() {
   floatToInt(random() *. 65536.0)
 }
 
-#sig reportError : (Error, Checker(s::Session)) ~> EndBang
+sig reportError : forall a::Type(Any,Any,Abs),
+  s::Type(Any,Session,Any), r::Row(Any,Session).
+  modal [Wild] ((a, [+|Reject:!a.s|r|+]) -> s)
 fun reportError(e, s) {
   var s = select Reject s;
   send(e, s)
 }
 
-sig serve : (TwoFactor) ~> EndBang
+sig serve : modal [Wild] ((TwoFactor) -> EndBang)
 fun serve(s) {
   var (user, s) = receive(s);
   if (validUser(user)) {
@@ -84,7 +89,7 @@ fun serve(s) {
   }
 }
 
-sig goodMe : (~TwoFactor) ~> Int
+sig goodMe : modal [Wild] ((~TwoFactor) -> Int)
 fun goodMe(c) {
   var c = send((name="me", password="pass"), c);
   offer (c) {
@@ -110,7 +115,7 @@ fun goodMe(c) {
   }
 }
 
-sig goodYou : (~TwoFactor) ~> Int
+sig goodYou : modal [Wild] ((~TwoFactor) -> Int)
 fun goodYou(c) {
   var c = send((name="you", password="bar"), c);
   offer (c) {
@@ -136,7 +141,7 @@ fun goodYou(c) {
   }
 }
 
-sig badMe : (~TwoFactor) ~> Int
+sig badMe : modal [Wild] ((~TwoFactor) -> Int)
 fun badMe(c) {
   var c = send((name="me", password="pass"), c);
   offer (c) {
@@ -164,7 +169,7 @@ fun badMe(c) {
   }
 }
 
-sig serveData : ((~TwoFactor) ~e~> Int) ~e~> Int
+sig serveData : modal [Wild] (((~TwoFactor) -> Int) -> Int)
 fun serveData(user) {
   user(forkSync(fun (s) {serve(s)}))
 }
