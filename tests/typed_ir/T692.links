@@ -1,3 +1,4 @@
+sig all : forall a. modal [Wild] (((a) -> Bool, List a) -> Bool)
 fun all(p, l) {
    switch (l) {
      case []    -> true
@@ -5,6 +6,7 @@ fun all(p, l) {
    }
 }
 
+sig and : modal [Wild] ((List Bool) -> Bool)
 fun and(l) {
   all(fun(x) { x }, l)
 }

@@ -1,0 +1,1 @@
+concatMap(fun(f:(() -@ Int)) { [f()] },[linfun(){42}])

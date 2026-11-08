@@ -1,0 +1,7 @@
+typename LinearMaybe = Maybe(End);
+{ var ap=(new():AP(End));
+  var p=spawn { close(accept(ap)) };
+  var c=fold_left(fun(c:End,x:()) {c},request(ap),[(),()]);
+  close(c);
+  var f=second((1,linfun(){42},"extra"));
+  (f(), (Nothing:LinearMaybe)) }

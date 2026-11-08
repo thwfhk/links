@@ -1,0 +1,6 @@
+effect Reader { Read : () => Int; }
+handle <Reader> ((concatMap(fun(x) { [x+do Read] },[1,2]),
+                   swap([1,2,3,2],1,2), swap([true,false],true,false))) {
+  case xs -> xs
+  case <Read => k> -> k(40)
+}

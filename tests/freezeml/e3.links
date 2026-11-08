@@ -1,4 +1,4 @@
-sig r : forall e::Row. ((forall a,f::Row. (a) -f-> forall b,g::Row. (b) -g-> b)) -e-> Int
+sig r : ((forall a. modal [] ((a) -> forall b. modal [] ((b) -> b)))) -> Int
 fun r(_) { 0 }
 
 r(fun(x:a::(Unl,Any))(y:b::(Unl,Any)) { y })

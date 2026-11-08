@@ -1,0 +1,5 @@
+effect Reader { Read : () => (); }
+handle <Reader> (close(fork(fun(c:End) { do Read; close(c) }))) {
+  case x -> x
+  case <Read => k> -> k(())
+}

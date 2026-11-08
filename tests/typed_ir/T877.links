@@ -1,6 +1,7 @@
 # from Prelude
-typename Maybe (a) = [|Nothing | Just:a|];
+typename Maybe (a::Any) = [|Nothing | Just:a|];
 
+sig fold_left : forall a,b::Any. ((b,a) -> b, b, List a) -> b
 fun fold_left(p, u, l) {
   switch (l) {
     case [] -> u
@@ -8,9 +9,10 @@ fun fold_left(p, u, l) {
   }
 }
 
+sig second : forall a::Any,r::Row. ((2:a|r)) -> a
 fun second(p)  { p.2 }
 
-sig elemIndex : (a, List a) ~> Maybe(Int)
+sig elemIndex : forall a. modal [Wild] ((a, List a) -> Maybe(Int))
 fun elemIndex(x, xs) {
   var n = fold_left(fun(acc, y) {
     switch (acc) {

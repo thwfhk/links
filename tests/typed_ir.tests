@@ -3,105 +3,142 @@ config: tests/typed_ir.config
 ---
 
 Anonymous constant function (#693)
-fun (x) {1}
-stdout : fun : forall a,b::Row.(a) -b-> Int
+(fun (x) {1} : forall a. modal [] ((a) -> Int))
+stdout : fun : forall a.modal [] ((a) -> Int)
+args : --fresco
 
 Anonymous identity function (#693)
-fun (x) {x}
-stdout : fun : forall a::(Any,Any),b::Row.(a::Any) -b-> a::Any
+(fun (x) {x} : forall a::Any. modal [] ((a) -> a))
+stdout : fun : forall a::(Any,Any).modal [] ((a::Any) -> a::Any)
+args : --fresco
+
+# Deferred: callback calls share an execution context independent of construction.
 
 Anonymous composition function (#693)
 fun (f,g) {fun (x){f (g(x))}}
 stdout : fun : forall a::(Any,Any),b::Row,c::(Any,Any),d::(Any,Any),e::Row.((a::Any) -b-> c::Any, (d::Any) -b-> a::Any) -e-> (d::Any) -b-> c::Any
+args : --set=fresco=false
+
+# Deferred: captured callback execution context is independent of construction.
 
 Anonymous application function (#693)
 fun (f) {fun (x){f (x)}}
 stdout : fun : forall a::(Any,Any),b::Row,c::(Any,Any),d::Row.((a::Any) -b-> c::Any) -d-> (a::Any) -b-> c::Any
+args : --set=fresco=false
+
+# Excluded: XML.
 
 XML typing (#693)
 fun (x) {<a>{x}</a>}
 stdout : fun : forall a::Row.(Xml) -a-> Xml
+args : --set=fresco=false
 
 ConcatMap (#368)
 tests/typed_ir/T368.links
 filemode : true
 stdout : () : ()
+args : --fresco
 
 Quantifiers on let-bound values (#620)
 tests/typed_ir/T620.links
 filemode : true
 stdout : () : ()
+args : --fresco
 
 Bound quantifiers in `and` and `all` (#692)
 tests/typed_ir/T692.links
 filemode : true
 stdout : () : ()
+args : --fresco
+
+# Excluded: database/query fixture.
 
 Bound quantifiers in a query (#694)
 tests/typed_ir/T694.links
 filemode : true
 stdout : fun : forall a::Row,b::Row(Any,Base).() -a-> List (|b::(Any,Base))
+args : --set=fresco=false
+
+# Deferred: callback, construction and partial-application contexts remain independent.
 
 Curry (#574)
 tests/typed_ir/T574.links
 filemode : true
 stdout : () : ()
+args : --set=fresco=false
 
 Unsafe type signatures #1 (#691)
 tests/typed_ir/T691a.links
 filemode : true
 exit : 0
 stdout : () : ()
+args : --fresco
 
 Unsafe type signatures #2 (#691)
 tests/typed_ir/T691b.links
 filemode : true
 exit : 0
 stdout : () : ()
+args : --fresco
 
 Wild effect compatibility #1 (#697)
 tests/typed_ir/T697a.links
 filemode : true
 stdout : () : ()
+args : --fresco
 
 Wild effect compatibility #2 (#697)
 tests/typed_ir/T697b.links
 filemode : true
 stdout : () : ()
+args : --fresco
+
+# Excluded: web continuation serialisation.
 
 Wild effect compatibility #3 (#873, 1)
 tests/typed_ir/T873.links
 filemode : true
 exit : 0
 stdout : () : ()
+args : --set=fresco=false
 
 Wild effect compatibility #4 (#873, 2)
-fun () { escape e in { (fun (esc) { esc(()) })(e) } }
+(fun () { escape e in { (fun (esc) { esc(()) })(e) } } : modal [Wild] (() -> ()))
 exit : 0
-stdout : fun : forall a::Row.() ~a~> ()
+stdout : fun : modal [effect_0$Wild] (() -> ())
+args : --fresco
 
 Wild effect compatibility #5 (#873, 3)
-sig foo : () { |e}~> () fun foo () { escape e in { (fun (esc) { esc(()) })(e) }}
+sig foo : modal [Wild] (() -> ()) fun foo () { escape e in { (fun (esc) { esc(()) })(e) }}
 exit : 0
 stdout : () : ()
+args : --fresco
+
+# Deferred: continuation argument context is independent of callback/caller context.
 
 Call/cc
 sig callcc : (((a) ~> b) ~e~> a) ~e~> a fun callcc(f) { escape k in f(k) }
 exit : 0
 stdout : () : ()
+args : --set=fresco=false
+
+# Excluded: database table and server location.
 
 asList (#698)
 tests/typed_ir/T698.links
 filemode : true
 stdout : () : ()
+args : --set=fresco=false
 
 isInt (#575)
 sig isInt : (String) -> Bool fun isInt (x) { x =~ /-?[0-9]+$/ }
 stdout : () : ()
+args : --fresco
 
 function pattern matching has right effects (#691)
-sig f : (List a) {}-> a fun f ([x]) { x }
+sig f : forall a. (List a) -> a fun f ([x]) { x }
 stdout : () : ()
+args : --fresco
 
 Generalisation obeys value restriction / Freshening of generalised type variables when turning lambda into named fun (#871)
 var foo = spawn { () }; ()
@@ -114,21 +151,145 @@ tests/typed_ir/T874.links
 filemode : true
 exit : 0
 stdout : () : ()
+args : --fresco
 
 linFork (#875)
 tests/typed_ir/T875.links
 filemode : true
 exit : 0
 stdout : () : ()
+args : --fresco
+
+# Deferred: linear callback execution context is independent of construction.
 
 lf (#876)
 tests/typed_ir/T876.links
 filemode : true
 exit : 0
 stdout : () : ()
+args : --set=fresco=false
 
 elemIndex (#877)
 tests/typed_ir/T877.links
 filemode : true
 exit : 0
 stdout : () : ()
+args : --fresco
+
+Callback effects in concatMap preserve order and polymorphism
+tests/typed_ir/runConcatMap.links
+filemode : true
+args : --fresco --set=enable_handlers=true --set=isolation=false tests/typed_ir/T368.links
+exit : 0
+stdout : @^\(\) : \(\)\n12\(\[41, 42\], \[false, true\]\) : \(List Int, List Bool\)$
+
+Callback effects in unsafe concatMap preserve order and polymorphism
+tests/typed_ir/runConcatMap.links
+filemode : true
+args : --fresco --set=enable_handlers=true --set=isolation=false tests/typed_ir/T691b.links
+exit : 0
+stdout : @^\(\) : \(\)\n12\(\[41, 42\], \[false, true\]\) : \(List Int, List Bool\)$
+
+Callback effects in unsafe map, all and mapi preserve order
+tests/typed_ir/runCollections.links
+filemode : true
+args : --fresco --set=enable_handlers=true --set=isolation=false tests/typed_ir/T691a.links tests/typed_ir/T692.links tests/typed_ir/T697a.links
+exit : 0
+stdout : @^\(\) : \(\)\n\(\) : \(\)\n\(\) : \(\)\n123456\(\[41, 42\], \[false, true\], true, true, \[45, 47\]\) : \(List Int, List Bool, Bool, Bool, List Int\)$
+
+Unsafe concatMap and swap retain polymorphism
+tests/typed_ir/runSwap.links
+filemode : true
+args : --fresco --set=enable_handlers=true --set=isolation=false tests/typed_ir/T697b.links
+exit : 0
+stdout : @^\(\) : \(\)\n\(\[41, 42\], \[2, 1, 3, 1\], \[false, true\]\) : \(List Int, List Int, List Bool\)$
+
+Pure and Wild let-bound views execute
+tests/typed_ir/runViews.links
+filemode : true
+args : --fresco --set=enable_handlers=true --set=isolation=false tests/typed_ir/T620.links
+exit : 0
+stdout : @^\(\) : \(\)\n42 : Int$
+
+elemIndex and fold_left execute with caller effects
+tests/typed_ir/runElemIndex.links
+filemode : true
+args : --fresco --set=enable_handlers=true --set=isolation=false tests/typed_ir/T877.links
+exit : 0
+stdout : @^\(\) : \(\)\n\(Just\(1\), Nothing, 43\) : \(\[\|Just:Int\|Nothing\|\], \[\|Just:Int\|Nothing\|\], Int\)$
+
+Accumulator, projection and Maybe retain ordinary Any kinds
+tests/typed_ir/runOrdinaryKinds.links
+filemode : true
+args : --fresco --set=enable_handlers=true --set=isolation=false tests/typed_ir/T877.links
+exit : 0
+stdout : @^\(\) : \(\)\n\(42, Nothing\) : \(Int, \[\|Just:End\|Nothing\|\]\)$
+
+Ordinary and linear session callbacks exchange values
+tests/typed_ir/runForks.links
+filemode : true
+args : --fresco --set=enable_handlers=true --set=isolation=false tests/typed_ir/T874.links tests/typed_ir/T875.links
+exit : 0
+stdout : @^\(\) : \(\)\n\(\) : \(\)\n42 : Int$
+
+Wild concatMap is unavailable in a pure function
+tests/typed_ir/rejectCollectionWild.links
+filemode : true
+args : --fresco --set=enable_handlers=true --set=isolation=false tests/typed_ir/T368.links
+exit : 1
+stdout : () : ()
+stderr : @^tests/typed_ir/rejectCollectionWild\.links:2: Type error: Type does not match the required type\nIn expression: concatMap\.$
+
+ConcatMap retains unrestricted List elements
+tests/typed_ir/rejectLinearList.links
+filemode : true
+args : --fresco --set=enable_handlers=true --set=isolation=false tests/typed_ir/T368.links
+exit : 1
+stdout : () : ()
+stderr : @^tests/typed_ir/rejectLinearList\.links:1: Type error: Type does not satisfy its kind or usage requirement\nIn expression: \[linfun\(\)\{42\}\]\.$
+
+Ordinary fork rejects a linear callback
+tests/typed_ir/rejectForkLinearCallback.links
+filemode : true
+args : --fresco --set=enable_handlers=true --set=isolation=false tests/typed_ir/T874.links
+exit : 1
+stdout : () : ()
+stderr : @^tests/typed_ir/rejectForkLinearCallback\.links:1: Type error: Type does not match the required type \(instantiation constraints\)\nIn expression: fork\.$
+
+Fork callback cannot use the caller Reader effect
+tests/typed_ir/rejectForkCallerEffect.links
+filemode : true
+args : --fresco --set=enable_handlers=true --set=isolation=false tests/typed_ir/T874.links
+exit : 1
+stdout : () : ()
+stderr : @^tests/typed_ir/rejectForkCallerEffect\.links:2: Type error: The operation's effect is absent from the ambient context\nIn expression: do Read\.$
+
+Anonymous functions and let-bound forall values instantiate at distinct types
+sig constant : forall a. modal [] ((a) -> Int) var constant=(fun(x){1}:forall a. modal [] ((a) -> Int)); sig id : forall a::Any. modal [] ((a) -> a) var id=(fun(x){x}:forall a::Any. modal [] ((a) -> a)); sig alias : forall a::Any. modal [] ((a) -> a) var alias= ~id; var f=alias(linfun(){42}); (constant(true),constant(42),alias(1),alias(true),f())
+args : --fresco
+exit : 0
+stdout : (1, 1, 1, true, 42) : (Int, Int, Int, Bool, Int)
+
+Regular expression function executes
+sig isInt : (String) -> Bool fun isInt(x){x =~ /-?[0-9]+$/} (isInt("42"),isInt("-7"),isInt("abc"))
+args : --fresco
+exit : 0
+stdout : (true, true, false) : (Bool, Bool, Bool)
+
+Singleton-list function executes at distinct types
+sig f : forall a. (List a) -> a fun f([x]){x} (f([42]),f([true]))
+args : --fresco
+exit : 0
+stdout : (42, true) : (Int, Bool)
+
+Singleton-list function retains partial pattern failure
+sig f : forall a. (List a) -> a fun f([x]){x} f([])
+args : --fresco
+exit : 1
+stderr : ***: Error: Links_core.Evalir.Exceptions.Wrong
+
+Anonymous and named escape functions execute
+sig foo : modal [Wild] (() -> ()) fun foo(){escape e in {(fun(esc){esc(())})(e)}} var anon=(fun(){escape e in {(fun(esc){esc(())})(e)}}:modal [Wild] (() -> ())); {anon();foo();42}
+args : --fresco
+exit : 0
+stdout : 42 : Int

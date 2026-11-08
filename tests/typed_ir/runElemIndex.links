@@ -1,0 +1,6 @@
+effect Reader { Read : () => Int; }
+handle <Reader> ((elemIndex(2,[1,2,2]), elemIndex(false,[true,true]),
+                   fold_left(fun(n,x) { n+x+do Read },0,[1,2]))) {
+  case xs -> xs
+  case <Read => k> -> k(20)
+}

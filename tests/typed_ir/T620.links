@@ -3,5 +3,5 @@ fun foo() {
   ()
 }
 
-sig bar : () ~> ()
+sig bar : modal [Wild] (() -> ())
 var bar = foo;

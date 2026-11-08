@@ -1,0 +1,3 @@
+sig pure : () -> List Int
+fun pure() { concatMap(fun(x) {[x]},[42]) }
+()

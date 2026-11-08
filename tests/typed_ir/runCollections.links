@@ -1,0 +1,9 @@
+effect Reader { Read : (Int) => Int; }
+handle <Reader> ((map(fun(x) { x+do Read(x) },[1,2]),
+                   map(fun(x) { not(x) },[true,false]),
+                   all(fun(x) { do Read(x)>0 },[3,4]),
+                   and([true,true]),
+                   mapi(fun(x,i) { x+i+do Read(x) },[5,6]))) {
+  case xs -> xs
+  case <Read(x) => k> -> print(intToString(x)); k(40)
+}

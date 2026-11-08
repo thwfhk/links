@@ -1,3 +1,4 @@
+sig concatMap : forall a,b. modal [Wild] (((a) -> List b, List a) -> List b)
 fun concatMap(f, l) {
   switch (l) {
     case [] -> []

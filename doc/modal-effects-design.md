@@ -2541,8 +2541,20 @@ The Freezeml derivation is `/tmp/links-d7-freezeml-contracts.md`. Its full
 execution; `choose`/`revapp`/`c8`/`e1`/`e2` transport generic modal-`Any` values
 between independent contexts. Keep these general contracts and dependent
 fixtures deferred. Do not restrict their payloads to `Abs` or share their
-contexts merely to pass. `auto'` instead receives an effect-universally callable
-identity, so a portable pure returned function remains a migration candidate.
+contexts merely to pass. The accepted mutual-freeze case also retains its
+function-only callback domain with effects independent of recursive g's caller.
+A whole-type parameter would broaden that domain; shared arrows would narrow it.
+
+The staged `tests/freezeml_contextual_prelude.links` preserves Identity's
+ordinary Unl binder and forall-before-modal placement. `auto'` receives that
+portable Identity and returns a pure instance for independent later contexts;
+frozen and unfrozen uses retain their different forall positions. ST's alias
+parameters remain ordinary Any, while runST/argST retain separate unlimited
+callable binders. runST opens the pure thunk through an ordinary checked
+annotation. Pair quantifier order, Any fields of first, contextual payloads and
+true non-value/monotype negatives have source controls. The original legacy
+prelude/config and three session overrides remain unchanged. Evidence:
+`/tmp/links-d7-m10-freezeml/readiness.md`.
 
 The typed-IR contract audit is `/tmp/links-d7-typed-ir-contracts.md`. Retain
 its anonymous composition/application, curry and linear-function wrapper cases
@@ -2553,6 +2565,15 @@ the shared-context modal replacement rejects the callback. Preserve that full
 contract separately from the supported contextual escape construct. XML,
 query/database/location and web-continuation serialisation fixtures retain
 their recorded exclusions.
+
+The supported typed-IR fixtures keep their own helper definitions and empty
+prelude, with all strict IR/frontend settings unchanged. Supplied signatures
+retain explicit Wild, unsafe markers, Any accumulator/projection/alias arguments
+and ordinary versus linear spawned callbacks. New multi-file controls load those
+same definitions with isolation disabled, then execute polymorphic calls,
+callback order, linear values and session communication. Additional negatives
+check Wild access, List element usage and spawned callback constraints.
+Evidence: `/tmp/links-d7-m10-typed-ir/contracts.md`.
 
 References: thesis chapter 3 (`chapters/overview.tex`, "Effect polymorphism")
 and `chapters/metx/encoding-rows-no-effvar.tex` describe the distinction between

@@ -1,0 +1,1 @@
+fork(linfun(c:End) { close(c) })

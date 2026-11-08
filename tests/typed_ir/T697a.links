@@ -1,4 +1,6 @@
+sig mapi : forall a,b. modal [Wild] (((a,Int) -> b, List a) -> List b)
 fun mapi(f, xs) {
+  sig mi : (Int, List a) -> List b
   fun mi(i, xs) {
     switch (xs) {
       case []    -> []

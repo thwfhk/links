@@ -1,0 +1,5 @@
+{ var (x,c)=receive(fork(fun(c:(!Int.End)) {close(send(40,c))}));
+  close(c);
+  var (y,c)=receive(linFork(linfun(c:(!Int.End)) {close(send(2,c))}));
+  close(c);
+  x+y }

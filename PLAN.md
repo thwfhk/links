@@ -141,7 +141,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D7 migration 6 | Remaining handler-example contracts checked; Lambda/Pi deferrals recorded | `1f4594ab` |
 | D7 migration 7 | Record absence checks, record remainders and records/patterns migration | `3e0248d8` |
 | D7 migration 8 | Functions, closure/scope fixtures and modules | `2ab54255` |
-| D7 migration 9 | Polymorphism and recursive continuation contracts | This commit |
+| D7 migration 9 | Polymorphism and recursive continuation contracts | `c71fcc6f` |
+| D7 migration 10 | Staged Freezeml helpers and supported typed-IR fixtures | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -317,21 +318,25 @@ block the prioritised D7 completion checks.
 
 ## Latest task and verification
 
-8 November 2026, milestone 9: polymorphism and continuations migrate with
-supplied polymorphism, ordinary-kind controls and open recursive continuation
-arguments. Twelve unsupported/retired polymorphism contracts retain compatibility.
-Independent review passed: `/tmp/links-d7-m9-review.md`. No compiler changes or
-new design choices; ordinary linear-function inference remains unchanged.
+8 November 2026, milestone 10: supported Freezeml and typed-IR cases migrate
+with complete polymorphic types, true negative causes and actual helper execution.
+Freezeml retains eighteen unsupported full contracts; typed-IR retains five such
+contracts and four excluded dependencies. The original Freezeml prelude/config,
+three session overrides and typed-IR settings/spawn remain unchanged.
+Independent review: `/tmp/links-d7-m10-review.md`. No compiler changes or new
+design choices; ordinary linear-function inference remains unchanged.
 
-Tested source: `2ab54255` plus the patch and hashes in
-`/tmp/links-d7-m9-verification/revision.txt`, `source.patch` and
+Tested source: `c71fcc6f` plus the patch and hashes in
+`/tmp/links-d7-m10-final-verification/revision.txt`, `source.patch` and
 `source.sha256.json`. Source hashes stayed unchanged through verification.
-Logs are in `/tmp/links-d7-m9-verification/`.
+Logs are in `/tmp/links-d7-m10-final-verification/`. The initial run in
+`/tmp/links-d7-m10-verification/` passed both suites but found comments confusing
+the fixture-registration scanner; separate comment blocks fix that check.
 
 | Command | Result | Log |
 |---|---|---|
-| `./test-harness tests/polymorphism.tests` | 53 Fresco and 12 compatibility passed | `polymorphism.log` |
-| `./test-harness tests/continuations.tests` | 18 Fresco passed | `continuations.log` |
+| `./test-harness tests/freezeml.tests` | 58 Fresco and 18 compatibility passed | `freezeml.log` |
+| `./test-harness tests/typed_ir.tests` | 34 Fresco and 9 compatibility passed | `typed_ir.log` |
 | `make rule-check` | Passed; GNU-find tab check skipped, formatter disabled | `rule-check.log` |
 | `git diff --check` and frozen source hashes | Passed | `diff-check.log`, `source-check.log` |
 
@@ -350,8 +355,8 @@ Documentation-only update: text and whitespace checked.
 
 ## Next action
 
-Migrate the supported Freezeml/typed-IR cases, then seven ordinary AIPL
-examples. Keep Lambda's full-contract deferral and
+Migrate the seven ordinary AIPL examples with their original finite behaviour
+and general helper contracts. Keep Lambda's full-contract deferral and
 Pi's D8-dependent migration recorded in the design.
 Review, check and commit each milestone before the next implementation.
 Keep D8 paused.
