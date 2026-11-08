@@ -4,150 +4,216 @@ config: tests/legacy_compatibility.config
 
 Function typing bug (see jdy's blog, 2005-10-24)
 (fun (x,y) { [x] ++ [y] }) ([1],"a")
-stderr : @..*
+stderr : @.*Type error: Type does not match the required type.*In expression:.*\[x\] \+\+ \[y\]\.
 exit : 1
+args : --fresco
 
 Type annotations on functions
 fun (x) { x } : (String) -> String
 stdout : fun : (String) -> String
+args : --fresco
 
 Incorrect type annotations rejected
 fun (x) { x + 1 } : (Float) -> String
-stderr : @..*
+stderr : @.*Type error: Type does not match the required type.*In expression: x \+ 1\.
 exit : 1
+args : --fresco
 
 Loose type annotations on functions
 fun (x) { x } : (b) -> b
-stdout : @fun : \(([a-z])\) -> \1
+stdout : fun : (a) -> a
+args : --fresco
 
 Trailing semicolon means "ignore the final value" [1]
 { 2 }
 stdout : 2 : Int
+args : --fresco
 
 Trailing semicolon means "ignore the final value" [2]
 { 2; }
-stderr : @.*
+stderr : @.*Parse error:.*
 exit : 1
+args : --fresco
 
 Trailing semicolon means "ignore the final value" [3]
 fun () { 2 }
 stdout : fun : () -> Int
+args : --fresco
 
 Trailing semicolon means "ignore the final value" [4]
 fun () { 2; }
-stderr : @.*
+stderr : @.*Parse error:.*
 exit : 1
+args : --fresco
 
 Type annotations
 fun (x:Int) {x:Int}
 stdout : fun : (Int) -> Int
+args : --fresco
 
 Identity annotation
 fun (x:a) {x:a}
-stdout : @fun : \(([a-z]+)\) -> \1
+stdout : fun : (a) -> a
+args : --fresco
 
 Type annotation scope
 fun (x:a, y:a) {(x, y)}
-stdout : @fun : \(([a-z]+), \1\) -> \(\1, \1\)
+stdout : fun : (a, a) -> (a, a)
+args : --fresco
 
 Negative recursive type
 fun (x) {x:a} : a
-stderr : @.*
+stderr : @.*Type error: Types are inconsistent.*In expression: fun.*
 exit : 1
+args : --fresco
 
-Infers effect variables
+Infers callback arguments in the ambient effect context
 fun (f, x: Int) { f(x) + 0 }
-stdout : @fun : \(\(Int\) -a-> Int, Int\) -a-> Int
+stdout : fun : ((Int) -> Int, Int) -> Int
+args : --fresco
 
 Typename [1]
 typename Foo = Int; fun f(x:Foo) {x} f(1)
-stdout : 1 : Foo
+stdout : 1 : Int
+args : --fresco
 
 Typename [2]
-typename Bar(a,b,c) = (a,b,c); fun f(x:Bar(a,b,c)) {x} f((false, 1, "two"))
-stdout : (false, 1, "two") : Bar (Bool,Int,String)
+typename Bar(a::Any,b::Any,c::Any) = (a,b,c); sig f:forall a::Any,b::Any,c::Any.(Bar(a,b,c))->Bar(a,b,c) fun f(x:Bar(a,b,c)) {x} f((false, 1, "two"))
+stdout : (false, 1, "two") : (Bool, Int, String)
+args : --fresco
 
 Typename [3]
 typename F(a,b::Type(Any,Any,Abs)) = modal [Wild,Receive(b)] ((a) -> a); sig f : F(Int,Int) fun f(x) {recv() + x} sig g : F(Int,String) fun g(x) {stringToInt(recv()) + x} g
 args : --fresco
-stdout : @fun : modal \[.*Wild, .*Receive\(String\)\] \(\(Int\) -> Int\)
+stdout : fun : modal [effect_0$Wild, effect_1$Receive(String)] ((Int) -> Int)
 
 Nested closures
 ./tests/functions/nested-closures.links
 filemode : true
 stdout : true : Bool
+args : --fresco
 
 Quantification of alien functions (#280)
 ./tests/functions/alien-quantification.links
 filemode : true
 exit : 1
 stderr : @.*
+args : --set=fresco=false
 
 Type annotation on inner function (correct, basic)
 ./tests/functions/innerfun1.links
 filemode : true
 stdout : "Hello!" : String
+args : --fresco
 
 Type annotation on inner function (incorrect, basic)
 ./tests/functions/innerfun2.links
 filemode : true
-stderr : @.*
+stderr : @.*Type error:.*In expression: "Hello!"\.
 exit : 1
+args : --fresco
 
 Type annotation on inner function (correct, recursive)
 ./tests/functions/innerfun3.links
 filemode : true
 stdout : "Hello!" : String
+args : --fresco
 
 Closure conversion: Test generalization of free type variables during hoisting
 ./tests/functions/nested-functions-polymorphic.links
 filemode : true
 stdout : 123 : Int
+args : --fresco
 
 Closure conversion: Test function with free type variables, but no free term variables
 ./tests/functions/closure-conv-type-abstr-only.links
 filemode : true
 stdout : 42 : Int
+args : --fresco
 
 Quantifiers should not escape their scopes (#687)
 ./tests/functions/escaped-quantifier.links
 filemode : true
-stderr : @.*escape their scope.*
+stderr : @.*Type error: Type does not match the required type \(consistency\).*In expression: f\.
 exit : 1
+args : --fresco
 
 Linearity (1)
 fun (x, y) {(x, y)}
 stdout : fun : (a::Any, b::Any) -> (a::Any, b::Any)
+args : --fresco
 
 Linearity (2)
 fun (x) {fun (y) {(x, y)}}
-stdout : fun : (a) -> (c::Any) -> (a, c::Any)
+stdout : fun : (a::Any) -> (b::Any) -> (a::Any, b::Any)
+args : --fresco
 
 Linearity (3) (#795)
 fun (x)(y) {(x, y)}
-stdout : fun : (a) -> (c::Any) -> (a, c::Any)
+stdout : fun : (a::Any) -> (b::Any) -> (a::Any, b::Any)
+args : --fresco
 
 Linearity (4)
 linfun (x){ linfun (y) {(x, y)}}
-stdout : fun : (a::Any) -@ (c::Any) -@ (a::Any, c::Any)
+stdout : fun : (a::Any) -@ (b::Any) -@ (a::Any, b::Any)
+args : --fresco
 
 Linearity (5)
 linfun (x)(y) {(x, y)}
-stdout : fun : (a::Any) -@ (c::Any) -@ (a::Any, c::Any)
+stdout : fun : (a::Any) -@ (b::Any) -@ (a::Any, b::Any)
+args : --fresco
 
 Linearity (6) (#797)
 fun f(x)(y) {(x, y)} f
-stdout : fun : (a) -> (c::Any) -> (a, c::Any)
+stdout : fun : (a::Any) -> (b::Any) -> (a::Any, b::Any)
+args : --fresco
 
+# Deferred: construction and returned calls have independent contexts.
 Linearity (7) (#797)
 fun f(x)(y) {f(x)(y)} f
 stdout : fun : (_) -> (_::Any) ~> _::Any
+args : --set=fresco=false
 
 Linearity (8) (#797)
 linfun f(x)(y) {(x, y)} f
-stdout : fun : (a::Any) -@ (c::Any) -@ (a::Any, c::Any)
+stdout : fun : (a::Any) -@ (b::Any) -@ (a::Any, b::Any)
+args : --fresco
 
 Linearity (9) - linear recursive functions should be disallowed
-linfun f(x) {f(x)} f
-stderr : @.*cannot be linear.*
+sig f:forall a::Any,b::Any.(a)-@b linfun f(x) {f(x)} f
+stderr : @.*Type error: Type does not satisfy its kind or usage requirement.*In expression: linfun f.*
 exit : 1
+args : --fresco
+
+A monomorphic local function can use a persistent inferred function
+{var f=id(id); sig g:(Int)->Int fun g(x){f(x)} g(42)}
+stdout : 42 : Int
+args : --fresco
+
+An ordinary nested closure cannot capture a linear argument
+(fun(x){fun(y){(x,y)}})(linfun(){42})
+exit : 1
+stderr : @.*Type error: Type does not satisfy its kind or usage requirement.*
+args : --fresco
+
+An ordinary curried closure cannot capture a linear argument
+(fun(x)(y){(x,y)})(linfun(){42})
+exit : 1
+stderr : @.*Type error: Type does not satisfy its kind or usage requirement.*
+args : --fresco
+
+An ordinary named curried closure cannot capture a linear argument
+fun pair(x)(y){(x,y)} pair(linfun(){42})
+exit : 1
+stderr : @.*Type error: Type does not match the required type \(consistency\).*In expression: pair\.
+args : --fresco
+
+A linear curried closure retains a linear captured argument
+var pair=linfun(x){linfun(y){(x,y)}}; var inner=pair(linfun(){42}); switch(inner(())){case(k,()) -> k()}
+stdout : 42 : Int
+args : --fresco
+
+Tuple aliases and identities retain linear field types
+typename Bar(a::Any,b::Any,c::Any)=(a,b,c); sig identity:forall a::Any,b::Any,c::Any.(Bar(a,b,c))->Bar(a,b,c) fun identity(x){x} var result=identity((linfun(){42},true,"two")); switch(result){case(k,b,s) -> (k(),b,s)}
+stdout : (42, true, "two") : (Int, Bool, String)
+args : --fresco

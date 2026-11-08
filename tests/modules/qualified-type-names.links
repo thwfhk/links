@@ -4,7 +4,7 @@ module One {
 
 typename Two = One.One;
 
-sig foo : (One.One) ~> One.One
+sig foo : modal [Wild] ((One.One) -> One.One)
 fun foo (a) {
   a
 }

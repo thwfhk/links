@@ -1,7 +1,10 @@
 module A {
   mutual {
+    sig foo : () -> String
     fun foo() { bar() }
+    sig bar : () -> String
     fun bar() { "Hello!" }
+    sig baz : () -> String
     fun baz() { bar() }
   }
 }

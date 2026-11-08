@@ -4,7 +4,7 @@ module A {
 
 typename Foo = [| Bar: Int |];
 
-sig f : (Foo) ~> String
+sig f : modal [Wild] ((Foo) -> String)
 fun f(x) {
   switch(x) {
     case Bar(y) -> y

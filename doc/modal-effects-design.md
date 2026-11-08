@@ -1233,6 +1233,27 @@ prelude loading and later imports. JavaScript compilation needs the preceding
 prelude bindings as well as the current source's IR, without evaluating the
 source program. Existing shared backend generation remains the implementation.
 
+Functions/modules regression migration retains supplied fixture polymorphism,
+ordinary alias/argument kinds, imported callbacks and existing Wild contracts.
+The escaped-quantifier fixture keeps its monomorphic `id(id)` before a later
+local rigid binder; colocating the definitions avoids an earlier absolute-lock
+failure. A concrete Int sibling accepts, while the quantified sibling rejects
+the earlier unknown's rigid assignment. Ordinary/linear capture controls retain
+the existing inference rules and use bindings where needed.
+
+Keep functions' recursive Linearity (7) contract deferred: its construction
+context and returned function's context are independent. A legacy Reader
+capture is accepted by a Wild-only consumer outside Reader; the shared/fixed
+modal candidates restrict that interface. Preserve the original source and
+compatibility assertion. Evidence: `/tmp/links-d7-m8-functions/linearity7-contracts.log`
+and `/tmp/links-d7-m8-review.md`.
+
+Module cycle coverage now invokes the actual source and uses explicit imports
+on the original B/C cycle. Structural-label, private-name and type-scope
+negatives reach their intended causes. Imported infix callbacks retain three
+ordinary Any parameters, caller effects and linear endpoints. FFI fixtures and
+the existing contextual session case keep their prior settings.
+
 **Choice for review:** make frontend rechecking validate the complete contextual
 IR immediately after typed lowering, including its result type. This is the
 common boundary after generated comprehensions, pattern compilation, scoped

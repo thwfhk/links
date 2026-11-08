@@ -139,7 +139,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D7 migration 4 | Direct handler signatures, escaped continuations and generic local state | `b43efa52` |
 | D7 migration 5 | Shared recursive declaration snapshots and generic Coop | `871cfdbc` |
 | D7 migration 6 | Remaining handler-example contracts checked; Lambda/Pi deferrals recorded | `1f4594ab` |
-| D7 migration 7 | Record absence checks, record remainders and records/patterns migration | This commit |
+| D7 migration 7 | Record absence checks, record remainders and records/patterns migration | `3e0248d8` |
+| D7 migration 8 | Functions, closure/scope fixtures and modules | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -318,44 +319,30 @@ block the prioritised D7 completion checks.
 
 ## Latest task and verification
 
-8 November 2026, milestone 7: records/patterns migration exposed and repaired
-record absence checks and remainder masks. Flexible rows retain absence
-constraints; rigid open rows need evidence; existing masks keep their priority.
-Negative cases again reject at their intended extension/annotation stages.
-Twenty-eight original record cases and 34 original pattern cases use Fresco;
-four new pattern controls and seven absence controls preserve generic/linear
-contracts. Independent review passed: `/tmp/links-d7-m7-review.md`.
+8 November 2026, milestone 8: functions/modules migrate through Fresco with
+full type assertions, supplied closure polymorphism, scope/linearity controls
+and actual module-cycle coverage. FFI fixtures and functions' independent-context
+recursive Linearity (7) contract remain explicit compatibility. Independent
+review passed: `/tmp/links-d7-m8-review.md`. No compiler changes or new design
+choices; ordinary linear-function inference remains unchanged.
 
-Tested source: `1f4594ab` plus the patch and hashes in
-`/tmp/links-d7-m7-verification/revision.txt`, `source.patch` and
-`source.sha256.json`. All selected integration checks passed, with unchanged
-source hashes: 705 Fresco and 436 compatibility regression cases, sixteen
-ignored cases, eleven REPL scenarios and ten compile scenarios.
-Logs are in `/tmp/links-d7-m7-verification/`; `results.json` records commands
-and exit codes, and `frontend-counts.json` records per-suite routing.
-The 1,533-test unit run is reused with matching frozen compiler/unit-source
-hashes; log `unit.log`, evidence `unit-reuse.json`.
-No new design decisions. The separate solved-tail linear-field projection
-follow-up is recorded in the [design](doc/modal-effects-design.md#d7-sections-patterns-and-record-updates).
+Tested source: `3e0248d8` plus the patch and hashes in
+`/tmp/links-d7-m8-verification/revision.txt`, `source.patch` and
+`source.sha256.json`. Source hashes stayed unchanged through verification.
+Logs are in `/tmp/links-d7-m8-verification/`.
 
 | Command | Result | Log |
 |---|---|---|
-| `make no-db` | Passed | `build.log` |
-| Full no-db unit run, command in `results.json` | 1,533 passed | `unit.log` |
-| `./test-harness tests/records.tests` | 28 Fresco and 2 compatibility passed | `records.log` |
-| `./test-harness tests/patterns.tests` | 38 Fresco passed; 2 unchanged ignored | `patterns.log` |
-| `./test-harness tests/fresco.tests` | 127 Fresco passed | `fresco.log` |
-| Other selected suites, separately as recorded in `results.json` | All passed | Corresponding suite `.log` files |
-| `python3 tests/fresco_repl.py` | 11 passed | `repl.log` |
-| `python3 tests/fresco_compile.py` | 10 groups passed | `compile.log` |
+| `./test-harness tests/functions.tests` | 37 Fresco and 2 compatibility passed | `functions.log` |
+| `./test-harness tests/modules.tests` | 43 Fresco and 1 compatibility passed | `modules.log` |
 | `make rule-check` | Passed; GNU-find tab check skipped, formatter disabled | `rule-check.log` |
 | `git diff --check` and frozen source hashes | Passed | `diff-check.log`, `source-check.log` |
 
-Prior compiler verification: 1,529 unit tests, 517 contextual regression cases,
-575 compatibility cases, eleven REPL scenarios and ten compile scenarios passed
-in `/tmp/links-d7e5-verification/`. The current migration changes source tests
-and examples; it retains ordinary linear-function inference. Fresh source
-inventories are recorded in the [design](doc/modal-effects-design.md#handler-migration-and-modal-examples).
+Most recent compiler verification is milestone 7 (`3e0248d8`): 1,533 unit tests,
+705 Fresco cases, 436 compatibility cases, eleven REPL scenarios and ten compile
+scenarios passed; sixteen existing cases were ignored. Full commands, routing,
+source hashes and logs: `/tmp/links-d7-m7-verification/`. The solved-tail linear
+projection follow-up and remaining deferrals are recorded in the design.
 
 ## Confirmed D6 decisions
 
@@ -366,8 +353,8 @@ Documentation-only update: text and whitespace checked.
 
 ## Next action
 
-Migrate functions/modules, then the remaining polymorphism, Freezeml,
-continuation/typed-IR cases and seven ordinary AIPL examples. Keep Lambda's full-contract deferral and
+Migrate polymorphism and continuations, then the supported Freezeml/typed-IR
+cases and seven ordinary AIPL examples. Keep Lambda's full-contract deferral and
 Pi's D8-dependent migration recorded in the design.
 Review, check and commit each milestone before the next implementation.
 Keep D8 paused.

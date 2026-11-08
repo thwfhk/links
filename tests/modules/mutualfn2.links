@@ -1,7 +1,10 @@
 module A {
   mutual {
+    sig foo : (Bool) -> String
     fun foo(bool_val) { if (bool_val) { baz() } else { bar() } }
+    sig bar : () -> String
     fun bar() { "Hello!" }
+    sig baz : () -> String
     fun baz() { foo(false) }
   }
 }

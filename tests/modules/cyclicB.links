@@ -1,4 +1,4 @@
-open CyclicC;
+open import CyclicC;
 
 fun foo() {
   baz()

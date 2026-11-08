@@ -1,4 +1,5 @@
 module A {
+    sig run : forall a::Any,b::Any,c::Any. (((a,b) -> c), a, b) -> c
     fun run (action, l, r) {
       l `action` r
     }

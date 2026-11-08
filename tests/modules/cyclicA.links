@@ -1,4 +1,4 @@
-open CyclicB;
+open import CyclicB;
 
 fun bar() {
   ()

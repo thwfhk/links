@@ -1,4 +1,7 @@
-var f = id(id);
+{
+  var f = id(id);
 
-sig g : forall bobsleigh. (bobsleigh) {}-> bobsleigh
-fun g(x) { f(x) }
+  sig g : forall bobsleigh. (bobsleigh) -> bobsleigh
+  fun g(x) { f(x) }
+  ()
+}
