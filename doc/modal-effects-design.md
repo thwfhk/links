@@ -1083,7 +1083,7 @@ controls exercise named/anonymous polymorphism, nested bodies, filename/line
 reporting, unavailable `Wild` and rejected endpoint inputs. Empty switches use
 the separate rule below when migrating extensible cases.
 
-**Choice for review:** the Church numeral example uses
+**Earlier migration choice:** the Church numeral example uses
 `Nat = modal [] (forall a. (a) -> (modal [] ((a) -> a)) -> a)`.
 The numeral and step function remain pure. Its intermediate function is
 contextual, so `zero` can retain its seed of ordinary unlimited, modal `Any`
@@ -1376,6 +1376,23 @@ wrappers and retain two for binary wrappers. Keep the existing operation
 generation. This repair is required by the migrated prelude; the diagnostic is
 `/tmp/links-d7e4-default-diagnostic.log`.
 
+### D7 polymorphism regression migration
+
+Supplied signatures retain value polymorphism, recursive contracts and ordinary
+kinds in the polymorphism suite. Leading forall binders scope through parameter
+and body annotations under specification section 5.2; the former scope-error
+fixtures now execute at Int and Bool. Vacuous abstraction retains a shared
+unquantified monotype, with separate accepted and mixed-type controls. Negative
+non-value abstraction and rigid escape cases reach their intended constraints.
+Both cons signatures remain pure and polymorphic; a pure caller executes them.
+
+Twelve compatibility cases retain retired effect-row policy or unsupported
+choose, zipwith and fixed-Wild Church contracts. A single outer Wild guard on
+Church changes its later-arrow contract; separate inner guards reject the
+captured generic carrier. Preserve that case without specialising its interface.
+Evidence and independent checks: `/tmp/links-d7-m9-review.md` and
+`/tmp/links-d7-m9-polymorphism/`. These deferrals add no current design question.
+
 ### D7 inferred linear results
 
 Retain the existing ordinary-arrow guess for unresolved callable types.
@@ -1436,6 +1453,15 @@ Preserve the single inferred continuation result type used by
 `TypeSugar.Check`: its comment discusses result polymorphism, but its rule
 does not implement it. Uses returning both `String` and `Bool` therefore
 reject. Capturing the continuation also requires ambient `Wild`.
+
+The migrated continuation suite supplies a nominal recursive Result type with
+separate ordinary-Any result and open-row parameters for a stored continuation.
+Both arguments remain shared unknowns in the direct escape; no implicit forall
+or fixed Int result is introduced. Extra variant payload invocations execute at
+Int and String. Preserve the two original non-unit tuple-statement rejections,
+and separately discard the tuple result to reach an incompatible String/Bool
+continuation-result rejection. The existing mailbox/modal capture test is
+unchanged. Evidence: `/tmp/links-d7-m9-continuations/`.
 
 ### D7 ranges and list comprehensions
 

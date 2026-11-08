@@ -5,37 +5,46 @@ config: tests/legacy_compatibility.config
 Escape expressions
 escape e in {2+2}
 stdout : 4 : Int
+args : --fresco
 
 Nested escapes
 escape return in {1+(escape e in {2+2})}
 stdout : 5 : Int
+args : --fresco
 
 Invoking escapes
 escape return in {1+(escape e in {return(2+2)})}
 stdout : 4 : Int
+args : --fresco
 
 Continuation typing [1]
 escape e in {if (false) 1+e else 2}
-stderr : @.*
+stderr : @.*Type error: Type does not match the required type \(consistency\)\nIn expression: 1\+e\.
 exit : 1
+args : --fresco
 
 Continuation typing [2]
 escape e in { e(1) }
 stdout : 1 : Int
+args : --fresco
 
+# Tuple statements must have unit type.
 continuation typing [3]
 { escape y in { ("" == y(1), true == y(1)); 2 } }
 exit : 1
-stderr : @.*Type error.*
+stderr : @.*Type error: Missing field 1\nIn expression: \("" == y\(1\), true == y\(1\)\)\.
+args : --fresco
 
 continuation typing [4]
 { escape y in { ("" == y(1), "asdf" == y(1)); 2 } }
 exit : 1
-stderr : @.*Type error.*
+stderr : @.*Type error: Missing field 1\nIn expression: \("" == y\(1\), "asdf" == y\(1\)\)\.
+args : --fresco
 
 continuation typing [5]
 { escape y in { var _ = ("" == y(1), "asdf" == y(1)); 2 } }
 stdout : 1 : Int
+args : --fresco
 
 continuation mailbox typing (see r321)
 spawnWait { (escape e in {spawn { e(self()) }}) ! ""; 1 + recv() }
@@ -45,24 +54,46 @@ stderr : @.*Variable e cannot cross this modal scope.*
 
 Escape body [1]
 escape k in A
-stdout : A : [|A|_::Any|]
+stdout : A : [|A|a::Any|]
+args : --fresco --set=show_quantifiers=true --set=hide_fresh_type_vars=false
 
 Escape body [2]
-escape k in A(k)
-stdout : A(Continuationpure_continuation) : [|A:(mu a.[|A:(a) ~b~> c::Any|d::Any|]) ~b~> c::Any|d::Any|]
+typename Result(c::Any,r::Row(Any,Any)) = [|A:((Result(c,{ |r})) -> c)|r|]; escape k in (A(k) : Result(%c::Any,{ |%r::Any}))
+stdout : A(Continuationpure_continuation) : Result (a::Any,{ ||b::Any})
+args : --fresco --set=show_quantifiers=true --set=hide_fresh_type_vars=false
 
 Escape body [3]
 escape k in switch (A) { case A -> 0 case B -> 1 }
 stdout : 0 : Int
+args : --fresco
 
 Escape body [4]
 escape k in ()
 stdout : () : ()
+args : --fresco
 
 Escape body [5]
 escape k in (foo="bar",quux=Just(k((foo="baz",quux=Nothing))))
-stdout : (foo = "baz", quux = Nothing) : (foo:String,quux:[|Just:_::Any|Nothing|_::Any|])
+stdout : (foo = "baz", quux = Nothing) : (foo:String,quux:[|Just:a::Any|Nothing|b::Any|])
+args : --fresco --set=show_quantifiers=true --set=hide_fresh_type_vars=false
 
 Escape body [6]
 escape k in 2 + 40
 stdout : 42 : Int
+args : --fresco
+
+Continuation calls reject incompatible result types
+{ escape y in { var _ = ("" == y(1), true == y(1)); 2 } }
+exit : 1
+stderr : @.*Type error: Type does not match the required type \(instantiation constraints\)\nIn expression: true == y\(1\)\.
+args : --fresco --set=typecheck_ir=true --set=fail_on_ir_type_error=true --set=recheck_frontend_transformations=true
+
+A recursive escape result retains an extra variant payload
+typename Result(c::Any,r::Row(Any,Any)) = [|A:((Result(c,{ |r})) -> c)|r|]; { var v=escape k in (A(k) : Result(%c::Any,{ |%r::Any})); switch(v) {case A(k) -> k(Other(42)) case Other(x) -> x} }
+stdout : 42 : Int
+args : --fresco --set=typecheck_ir=true --set=fail_on_ir_type_error=true --set=recheck_frontend_transformations=true
+
+A recursive escape result retains a String continuation result
+typename Result(c::Any,r::Row(Any,Any)) = [|A:((Result(c,{ |r})) -> c)|r|]; { var v=escape k in (A(k) : Result(%c::Any,{ |%r::Any})); switch(v) {case A(k) -> k(Other("done")) case Other(x) -> x} }
+stdout : "done" : String
+args : --fresco --set=typecheck_ir=true --set=fail_on_ir_type_error=true --set=recheck_frontend_transformations=true

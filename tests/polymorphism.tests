@@ -3,73 +3,89 @@ config: tests/legacy_compatibility.config
 ---
 
 Recursive type passed to an alias while constructing its declaration
-typename Box(a) = [|Stop | More:a|]; typename Rec = Box(Rec); Stop : Rec
+typename Box(a::Any) = [|Stop | More:a|]; typename Rec = Box(Rec); Stop : Rec
 stdout : Stop : Rec
+args : --fresco
 
 Let polymorphism [1]
-fun pair(x) { (x, x) } (pair('a'), pair(13))
-stdout : @\(\('a', 'a'\), \(13, 13\)\) : .*
+sig pair : forall a.(a) -> (a,a) fun pair(x) { (x, x) } (pair('a'), pair(13))
+stdout : (('a', 'a'), (13, 13)) : ((Char, Char), (Int, Int))
+args : --fresco
 
 Let polymorphism [2]
-{fun pair(x) { (x, x) } (pair('a'), pair(13))}
-stdout : @\(\('a', 'a'\), \(13, 13\)\) : .*
+{sig pair : forall a.(a) -> (a,a) fun pair(x) { (x, x) } (pair('a'), pair(13))}
+stdout : (('a', 'a'), (13, 13)) : ((Char, Char), (Int, Int))
+args : --fresco
 
 Monomorphic lambda bindings
 (fun (p) { (p('a'), p(13))})(fun (x) { (x,x) })
-stderr : @..*
+stderr : @.*Type error: Type does not match the required type \(consistency\).*In expression: p\.\s*$
 exit : 1
+args : --fresco
 
-No polymorphic recursion without signatures
-fun f(x) { ignore(f("a")); ignore(f(1)); 1}
-stderr : @..*
+A monomorphic recursive signature rejects incompatible recursive calls
+sig f : modal [Wild] ((%a) -> Int) fun f(x) { ignore(f("a")); ignore(f(1)); 1}
+stderr : @.*Type error: Type does not match the required type \(consistency\).*In expression: f\.\s*$
 exit : 1
+args : --fresco
 
 Polymorphic recursion with signatures
-sig f : (_) ~> Int fun f(x) { ignore(f("a")); ignore(f(1)); 1 } f
-stdout : @fun : \(_\) ~> Int
+sig f : forall a. modal [Wild] ((a) -> Int) fun f(x) { ignore(f("a")); ignore(f(1)); 1 } f
+stdout : @fun : forall a\.modal \[effect_[0-9]+\$Wild\] \(\(a\) -> Int\)$
+args : --fresco --set=show_quantifiers=true
 
 Invalid "polymorphic recursion"
-sig f : (_) ~> Int fun f(x) { x == 1; f("a"); f(1); 1 }
-stderr : @..*
+sig f : forall a. modal [Wild] ((a) -> Int) fun f(x) { var _ = x == 1; var _ = f("a"); var _ = f(1); 1 }
+stderr : @.*Type error: Type does not match the required type \(consistency\).*In expression: x == 1\.\s*$
 exit : 1
+args : --fresco
 
 Polymorphic mutual recursion [1]
-mutual { sig f : (_) ~> Int fun f(x) { ignore(g("a")); ignore(g(1)); 1 } sig g : (a) ~> Int fun g(x) { ignore(f("a")); ignore(f(1)); 1 } } f
-stdout : @fun : \(_\) ~> Int
+mutual { sig f : forall a. modal [Wild] ((a) -> Int) fun f(x) { ignore(g("a")); ignore(g(1)); 1 } sig g : forall a. modal [Wild] ((a) -> Int) fun g(x) { ignore(f("a")); ignore(f(1)); 1 } } f
+stdout : @fun : forall a\.modal \[effect_[0-9]+\$Wild\] \(\(a\) -> Int\)$
+args : --fresco --set=show_quantifiers=true
 
 Polymorphic mutual recursion [2]
-mutual { sig f : (_) ~> Int fun f(x) { ignore(f("a")); ignore(g(1)); 1 } sig g : (a) ~> Int fun g(x) { ignore(g("a")); ignore(f(1)); 1 } } f
-stdout : @fun : \(_\) ~> Int
+mutual { sig f : forall a. modal [Wild] ((a) -> Int) fun f(x) { ignore(f("a")); ignore(g(1)); 1 } sig g : forall a. modal [Wild] ((a) -> Int) fun g(x) { ignore(g("a")); ignore(f(1)); 1 } } f
+stdout : @fun : forall a\.modal \[effect_[0-9]+\$Wild\] \(\(a\) -> Int\)$
+args : --fresco --set=show_quantifiers=true
 
 Polymorphic mutual recursion [3]
-mutual { sig f : (_) ~> Int fun f(x) { ignore(f("a")); ignore(f(1)); ignore(g("a")); ignore(g(1)); 1 } sig g : (a) ~> Int fun g(x) { ignore(f("a")); ignore(f(1)); ignore(g("a")); ignore(g(1)); 1 } } f
-stdout : @fun : \(_\) ~> Int
+mutual { sig f : forall a. modal [Wild] ((a) -> Int) fun f(x) { ignore(f("a")); ignore(f(1)); ignore(g("a")); ignore(g(1)); 1 } sig g : forall a. modal [Wild] ((a) -> Int) fun g(x) { ignore(f("a")); ignore(f(1)); ignore(g("a")); ignore(g(1)); 1 } } f
+stdout : @fun : forall a\.modal \[effect_[0-9]+\$Wild\] \(\(a\) -> Int\)$
+args : --fresco --set=show_quantifiers=true
 
 Polymorphic mutual recursion [4]
-mutual { sig f : (_) ~> Int fun f(x) { ignore(g("a")); ignore(g(1)); 1 } sig g : (a) ~> Int fun g(x) { ignore(x == 1); ignore(f("a")); ignore(f(1)); 1 } } f
-stderr : @..*
+mutual { sig f : forall a. modal [Wild] ((a) -> Int) fun f(x) { ignore(g("a")); ignore(g(1)); 1 } sig g : forall a. modal [Wild] ((a) -> Int) fun g(x) { ignore(x == 1); ignore(f("a")); ignore(f(1)); 1 } } f
+stderr : @.*Type error: Type does not match the required type \(consistency\).*In expression: x == 1\.\s*$
 exit : 1
+args : --fresco
 
 Polymorphic row recursion
-sig h : ((| _)) ~> Int fun h(x) {h((x,x))} h
-stdout : @fun : \(|_\) ~> Int
+sig h : forall r::Row. modal [Wild] (((|r)) -> Int) fun h(x) {h((x,x))} h
+stdout : @fun : forall a::Row\.modal \[effect_[0-9]+\$Wild\] \(\(\(\|a\)\) -> Int\)$
+args : --fresco --set=show_quantifiers=true
 
 Polymorphic functions
-fun cons(x,l) {[x] ++ l} (cons(5, [6]), cons("a", ["b"]))
-stdout : @\(\[5, 6\], \["a", "b"\]\) : \(List Int, List String\)
+sig cons : forall a. (a, List a) -> List a fun cons(x,l) {[x] ++ l} (cons(5, [6]), cons("a", ["b"]))
+stdout : ([5, 6], ["a", "b"]) : (List Int, List String)
+args : --fresco
 
 Polymorphic functions in different function bodies
-fun cons(x,l) {[x] ++ l} fun f() { cons(5, [6]) } fun g() { cons("a", ["b"]) } (f(), g())
+sig cons : forall a. (a, List a) -> List a fun cons(x,l) {[x] ++ l} fun f() { cons(5, [6]) } fun g() { cons("a", ["b"]) } (f(), g())
 stdout : ([5, 6], ["a", "b"]) : (List Int, List String)
+args : --fresco
 
 Signatures on top-level variables
 sig x : Int var x = 3; x
 stdout : 3 : Int
+args : --fresco
 
-Value restriction [1]
-sig f : (a) -> a var f = id(id); f
-stderr : @..*
+A non-value application does not supply a required forall
+sig f : forall a.(a) -> a var f = id(id); f
+stderr : @.*Type error: Type does not match the required type \(instantiation constraints\).*In expression: id\.\s*$
 exit : 1
+args : --fresco
 
 Value restriction [2]
 sig foo : forall a::Type(Any,Any,Abs). modal [Wild,Receive(a)] (() -> a) fun foo() {var x = recv(); x} foo
@@ -78,75 +94,92 @@ stdout : @fun : modal \[.*Wild, .*Receive\(a::Any\)\] \(\(\) -> a::Any\)
 
 Overly general signatures
 sig id : (a) -> b fun id(x) {x}
-stderr : @..*
+stderr : @.*Type error: Type does not match the required type \(consistency\).*In expression: x\.\s*$
 exit : 1
+args : --fresco
 
+# Legacy compatibility: The general callback and returned-call contexts are independent of construction.
 Polymorphic effects for curried recursive functions
 fun zipwith(f)(xs)(ys) {switch ((xs, ys)) {case ((x::xs),(y::ys)) -> (f(x)(y))::(zipwith(f)(xs)(ys)) case _ -> []}} zipwith
 stdout : fun : ((a::Any) ~b~> (c::Any) ~b~> d) -> (List a::Any) -> (List c::Any) ~b~> List d
 
 Polymorphic function parameters (unannotated)
 fun (f) {(f(42), f(true))}
-stderr : @..*
+stderr : @.*Type error: Type does not match the required type \(consistency\).*In expression: f\.\s*$
 exit : 1
+args : --fresco
 
 Polymorphic function parameters (annotated)
-fun (f : (forall a,e::Row.(a) -e-> a)) {(f(42), f(true))}
-stdout : fun : (forall a,b::Row.(a) -b-> a) -> (Int, Bool)
+fun (f : (forall a. modal [] ((a) -> a))) {(f(42), f(true))}
+stdout : fun : (forall a.modal [] ((a) -> a)) -> (Int, Bool)
+args : --fresco
 
+# Legacy compatibility: The full interface captures a modal-Any value before a call in an independent context.
 Explicitly polymorphic signatures
 sig choose : forall a,d::Row,e::Row. (a) -d-> (a) -e-> a fun choose(x)(y) {x} choose
 stdout : fun : (a) -> (a) -> a
 
 Quantifiers in different orders
-fun (x:(forall a,b.(a,b)), y:(forall b,a.(a,b))) {[x,y]}
-stdout : fun : (forall a,b.(a, b), forall c,d.(d, c)) -> List (_, _)
+sig q : forall u,v. ((forall a,b.(a,b)), (forall b,a.(a,b))) -> List (u,v) fun q(x,y) {[x,y]} q
+stdout : fun : forall a,b.modal [] ((forall c,d.(c, d), forall e,f.(f, e)) -> List (a, b))
+args : --fresco --set=show_quantifiers=true
 
 Polymorphic function arguments and freeze
-fun poly(f : (forall a::Any,e::Row.(a) -e-> a)) {(f(42), f(true))} poly(~id)
+fun poly(f : (forall a::Any. modal [] ((a) -> a))) {(f(42), f(true))} poly(~id)
 stdout : (42, true) : (Int, Bool)
+args : --fresco
 
 Top-level ill-typed polymorphism
-sig foo : forall a.((a) {}~> a) {}~> (Int) {}~> Int fun foo(f){f}
-stderr : @..*
+sig foo : forall a. modal [Wild] ((modal [Wild] ((a) -> a)) -> modal [Wild] ((Int) -> Int)) fun foo(f){f}
+stderr : @.*Type error: Type does not match the required type \(consistency\).*In expression: f\.\s*$
 exit : 1
+args : --fresco
 
+# Legacy compatibility: The full fixed-Wild partial-arrow contract captures a modal-Any carrier; contextual partial arrows would narrow it.
 Polymorphic type aliases (Church numerals)
 typename Nat = forall a.(a) {}~> ((a) {}~> a) {}~> a; sig zero : Nat var zero = fun (z)(s) {z}; sig succ : (Nat) {}~> Nat fun succ(n) {fun (z)(s){s(n(z)(s))}} succ(succ(zero))(0)(fun (x) {x+1})
 stdout : 2 : Int
 
 Recursive polymorphic type aliases
-typename Foo = forall a.Foo; sig bar : (Foo) {}~> () fun bar(m) {()} bar
-stdout : fun : (Foo) {}~> ()
+typename Foo = forall a.Foo; sig bar : modal [Wild] ((Foo) -> ()) fun bar(m) {()} bar
+stdout : @fun : modal \[effect_[0-9]+\$Wild\] \(\(Foo\) -> \(\)\)$
+args : --fresco
 
 Extra quantifier with mixed kinds
-sig f : forall a, e::Row.(a) {}~> a fun f(x) {f(x)} f
-stdout : fun : (a) {}~> a
+sig f : forall a, e::Row.modal [Wild] ((a) -> a) fun f(x) {f(x)} f
+stdout : @fun : forall a,b::Row\.modal \[effect_[0-9]+\$Wild\] \(\(a\) -> a\)$
+args : --fresco --set=show_quantifiers=true
 
+# Legacy compatibility: Retired effect-row quantifier policy.
 Missing quantifier with mixed kinds (1)
 sig f : forall a.(a) ~e~> a fun f(x) {f(x)} f
 stderr : @..*
 exit : 1
 
+# Legacy compatibility: Retired effect-row quantifier policy.
 Missing quantifier with mixed kinds (2)
 sig f : forall e::Eff.(a) ~e~> a fun f(x) {f(x)} f
 stderr : @..*
 exit : 1
 
+# Legacy compatibility: Retired effect-row quantifier policy.
 Missing quantifier with mixed kinds (3)
 sig f : forall a.(a) ~e~> a fun f(x) {x} f
 stderr : @..*
 exit : 1
 
+# Legacy compatibility: Retired effect-row quantifier policy.
 Missing quantifier with mixed kinds (4)
 sig f : forall e::Eff.(a) ~e~> a fun f(x) {x} f
 stderr : @..*
 exit : 1
 
 Inner quantifier with free variable
-sig f : (a) -e-> (a, a) fun f(x) {sig g : forall b.(a, b) -e-> (a, b) fun g(x, y) {(x, y)} g(x, x)} f
-stdout : fun : (a) -> (a, a)
+sig f : (a) -> (a, a) fun f(x) {sig g : forall b.(a, b) -> (a, b) fun g(x, y) {(x, y)} g(x, x)} f
+stdout : fun : forall a.modal [] ((a) -> (a, a))
+args : --fresco --set=show_quantifiers=true
 
+# Legacy compatibility: Retired effect-row presence elimination and independent returned-call contexts.
 Flexible quantifier elimination (fix introduced in 514187b)
 sig a : (() {A:() |e}~> a) -> () {A{_} |e}~> a fun a(m)() { error("a") } sig b : (() {B:() |e}~> a) -> () {B{_} |e}~> a fun b(m)() { error("b") } sig c : (() {A:(),B:() |e}~> a) {A{_}, B{_} |e}~> a fun c(m) { a(b(m))() }
 stdout : () : ()
@@ -154,114 +187,107 @@ stdout : () : ()
 Calling non-instantiated functions
 (~id)(2)
 stdout : 2 : Int
+args : --fresco
 
 Projecting non-instantiated records
 var x = (id=id); (~x).id(2)
 stdout : 2 : Int
+args : --fresco
 
 Varying arities of foralls (1)
-(~id) : forall a::Any. forall e::Row. (a) -e-> a
-stdout : fun : (a::Any) -> a::Any
+(~id) : forall a::Any. modal [] ((a) -> a)
+stdout : fun : forall a::(Any,Any).modal [] ((a::Any) -> a::Any)
+args : --fresco --set=show_quantifiers=true
 
 Varying arities of foralls (2)
-(~id) : forall a::Any. forall e::Row. forall b. (a) -e-> a
+(~id) : forall a::Any. forall b. modal [] ((a) -> a)
+stderr : @.*Type error: Types are inconsistent.*In expression: ~id\.\s*$
 exit : 1
-stderr : @.*Type error:.*
+args : --fresco
 
 Signatures (fun): free variable on parameter without sig (1)
 fun f(x : a) {x} f
-exit : 0
 stdout : fun : (a) -> a
+args : --fresco
 
-Signatures (fun): free variable in body without sig (2)
-fun f(x) {x : a} f
-exit : 0
-stdout : fun : (a) -> a
+Signatures (fun): body annotation reuses a supplied forall (2)
+sig f : forall a.(a) -> a fun f(x) {x : a} f
+stdout : fun : forall a.modal [] ((a) -> a)
+args : --fresco --set=show_quantifiers=true
 
-Signatures (fun): free variable on parameeter with unquantified sig (3)
+Signatures (fun): free variable on parameter with unquantified sig (3)
 sig f : (a) -> a fun f(x : a) {x} f
-exit : 0
-stdout : fun : (a) -> a
+stdout : fun : forall a.modal [] ((a) -> a)
+args : --fresco --set=show_quantifiers=true
 
 Signatures (fun): free variable on parameter with quantified sig (4)
-sig f : forall a. (a) -> a fun f(x : a) {x} f
-exit : 1
-stderr : @.*Type error:.*
+sig f : forall a. (a) -> a fun f(x : a) {x} (f(42), f(true))
+stdout : (42, true) : (Int, Bool)
+args : --fresco
 
 Signatures (fun): free variable on body with quantified sig (5)
-sig f : forall a. (a) -> a fun f(x) {x : a} f
-exit : 1
-stderr : @.*Type error:.*
+sig f : forall a. (a) -> a fun f(x) {x : a} (f(42), f(true))
+stdout : (42, true) : (Int, Bool)
+args : --fresco
 
 Signatures (var): free variable in body, no sig (6)
-fun f(x) {x}     var x = f : ((a) -> a); x
-exit : 0
+sig f : forall a.(a) -> a fun f(x) {x}     var x = f : ((a) -> a); x
 stdout : fun : (a) -> a
+args : --fresco --set=show_quantifiers=true
 
 Signatures (var): free variable in body, quantified sig (7)
-fun f(x) {x}     sig x : forall a. (a) -> a var x = f : ((a) -> a); x
+sig f : forall a.(a) -> a fun f(x) {x}     sig x : forall a. (a) -> a var x = f : ((a) -> a); x
+stderr : @.*Type error: Type does not match the required type \(consistency\).*In expression: f : \(\(a\) -> a\)\.\s*$
 exit : 1
-stderr : @.*Type error:.*
-
-# Tests for type abstractions /\ [...]. { ... }
+args : --fresco
 
 Type abstraction: correct, non-polymorphic body
 /\ [a]. { 123 }
-exit : 0
 stdout : 123 : forall a.Int
-args : --set=show_quantifiers=true
+args : --fresco --set=show_quantifiers=true
 
 Type abstraction: correct, polymorphic body
-/\ [a]. { $(fun(x){x}) }
-exit : 0
-stdout : fun : forall a,b::(Any,Any),c::Row.(b::Any) -c-> b::Any
-args : --set=show_quantifiers=true
+/\ [a]. { (fun(x){x} : forall b::Any. modal [] ((b) -> b)) }
+stdout : fun : forall a.forall b::(Any,Any).modal [] ((b::Any) -> b::Any)
+args : --fresco --set=show_quantifiers=true
 
-Type abstraction: correct, use type variable in signature
-/\ [a]. { sig f : (a) {}-> a fun f(x){x : a} f }
-exit : 0
-stdout : fun : forall a.(a) {}-> a
-args : --set=show_quantifiers=true
+Type abstraction: correct, use type variable in annotation
+/\ [a]. { (fun(x){x : a} : modal [] ((a) -> a)) }
+stdout : fun : forall a.modal [] ((a) -> a)
+args : --fresco --set=show_quantifiers=true
 
 Type abstraction: correct, use type variable in body
-# Note that we need the signature to enforce a function without effects
-/\ [a]. { sig f : (%b) {}-> %b fun f (x) {x : a} ~f }
-exit : 0
-stdout : fun : forall a.(a) {}-> a
-args : --set=show_quantifiers=true
+/\ [a]. { (fun(x){x : a} : modal [] ((%b) -> %b)) }
+stdout : fun : forall a.modal [] ((a) -> a)
+args : --fresco --set=show_quantifiers=true
 
-Type abstraction: Ambigous type (1)
-# The lambda has type (%b) -%e-> %b, so we must fail
-/\ [a]. { fun(x) { x } }
+Vacuous type abstraction retains a shared monotype across instantiations
+var f = /\ [a]. { fun(x){x} }; (~f[Int](42), ~f[Bool](true))
+stderr : @.*Type error: Type does not match the required type \(consistency\).*In expression: ~f\[Bool\]\.\s*$
 exit : 1
-stderr : @.*Type error:.*The phrase under a type abstraction must have a unique type.*
+args : --fresco
 
+# Legacy compatibility: Retired unique effect-row inference requirement; the final call also has the wrong arity.
 Type abstraction: Ambigous type (2)
-# This example is somewhat tricky.
-# One may assume that calling g from the toplevel fixes its effect and we can therefore accept this program.
-# However, If we did allow this, then g wouldn't have a most general type before the call g(): Both
-# forall e :: Row. (Int) -e-> (Int) and
-# forall e :: Row. (Int) -R-> (Int) for any effect row R would be an option.
-# We would like our terms to have most general types at any point, not just at the end of type-checking.
-# Therefore, we require that the body of the /\ must have unqiue type immediately after checking
-# it. Unifying away the flexible variables afterwards doesn't save us.
 var g = /\ [e::Row]. { fun(x) { x + 1 } }; g()
 exit : 1
 stderr : @.*Type error:.*The phrase under a type abstraction must have a unique type.*
 
+# Legacy compatibility: Retired effect-row binder shadowing contract.
 Type abstraction: correct, shadowing (1)
 sig f : () -a-> (forall b.()) fun f() {  /\ [a]. {  sig g : (a) {}-> a fun g(x){x} ()   } } f
 exit : 0
 stdout : fun : forall a::Row.() -a-> forall b.()
 args : --set=show_quantifiers=true
 
+# Legacy compatibility: Retired effect-row binder shadowing contract.
 Type abstraction: correct, shadowing (2)
-# Like previous version, but this time with an explicit forall on the outer variable a!
 sig f : forall a::Row. () -a-> (forall b.()) fun f() {  /\ [a]. {  sig g : (a) {}-> a fun g(x){x} ()   } } f
 exit : 0
 stdout : fun : forall a::Row.() -a-> forall b.()
 args : --set=show_quantifiers=true
 
+# Legacy compatibility: Retired effect-row binder shadowing contract.
 Type abstraction: correct, shadowing (3)
 /\ [e::Row]. { sig f : forall e. (e) {}-> e fun f(x){x}  id : ( (Int) -e-> Int ) }
 exit : 0
@@ -269,6 +295,59 @@ stdout : fun : forall a::Row.(Int) -a-> Int
 args : --set=show_quantifiers=true
 
 Type abstraction: incorrect, violates value restriction
-/\ [e::Row]. {  id(id : ( (Int) -e-> Int )) }
+/\ [e::Row]. { id(id : modal [] ((Int) -> Int)) }
+stderr : @.*Type error: Type abstraction requires a value.*In expression: /\\ \[e::Row\]\. \{ id\(id : modal \[\] \(\(Int\) -> Int\)\) \}\.\s*$
 exit : 1
-stderr : @.*Type error:.*Because of the value restriction, the expression .*cannot be generalised.*
+args : --fresco
+
+A value supplies a required forall at Int and Bool
+sig f : forall a.(a) -> a var f=fun(x){x}; (f(42), f(true))
+stdout : (42, true) : (Int, Bool)
+args : --fresco
+
+A non-value binding retains a shared monotype
+var f=id(id); (f(42), f(true))
+stderr : @.*Type error: Type does not match the required type \(consistency\).*In expression: f\.\s*$
+exit : 1
+args : --fresco
+
+A rigid function quantifier cannot escape into an earlier monotype
+{var f=id(id); sig g : forall a.(a) -> a fun g(x){f(x)} ()}
+stderr : @.*Type error: Type does not match the required type \(consistency\).*In expression: f\.\s*$
+exit : 1
+args : --fresco
+
+An earlier monotype accepts a matching monomorphic function
+{var f=id(id); sig g : (Int) -> Int fun g(x){f(x)} g(42)}
+stdout : 42 : Int
+args : --fresco
+
+Vacuous type abstraction instantiations share the same argument type
+var f = /\ [a]. {fun(x){x}}; (~f[Int](42), ~f[Bool](13))
+stdout : (42, 13) : (Int, Int)
+args : --fresco
+
+Vacuous type abstraction leaves its argument monotype unquantified
+/\ [a]. {fun(x){x}}
+stdout : fun : forall a.(b::Any) -> b::Any
+args : --fresco --set=show_quantifiers=true
+
+A row binder is restored after an inner type binder shadows its name
+/\ [e::Row]. {fun(x:(l:Int|e)){sig f : forall e.(e) -> e fun f(x){x} x:(l:Int|e)}}
+stdout : fun : forall a::Row.((l:Int|a)) -> (l:Int|a)
+args : --fresco --set=show_quantifiers=true
+
+A type abstraction shadows an outer ordinary row binder
+sig f : forall a::Row. ((l:Int|a)) -> forall b.() fun f(x){/\ [a]. {()}} f
+stdout : fun : forall a::Row.modal [] (((l:Int|a)) -> (forall b.()))
+args : --fresco --set=show_quantifiers=true
+
+An alias parameter retains ordinary Any kind
+typename Box(a::Any)=[|Stop|More:a|]; (Stop : Box(End))
+stdout : Stop : [|More:End|Stop|]
+args : --fresco
+
+A polymorphic List constructor is callable in an empty effect context
+sig cons : forall a. (a, List a) -> List a fun cons(x,l) {[x] ++ l} sig pure : modal [] (() -> List Int) fun pure() {cons(5, [6])} pure()
+stdout : [5, 6] : List Int
+args : --fresco

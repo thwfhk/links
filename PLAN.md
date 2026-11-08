@@ -140,7 +140,8 @@ checks compatibility during construction; it does not complete Fresco inference.
 | D7 migration 5 | Shared recursive declaration snapshots and generic Coop | `871cfdbc` |
 | D7 migration 6 | Remaining handler-example contracts checked; Lambda/Pi deferrals recorded | `1f4594ab` |
 | D7 migration 7 | Record absence checks, record remainders and records/patterns migration | `3e0248d8` |
-| D7 migration 8 | Functions, closure/scope fixtures and modules | This commit |
+| D7 migration 8 | Functions, closure/scope fixtures and modules | `2ab54255` |
+| D7 migration 9 | Polymorphism and recursive continuation contracts | This commit |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history; retain the latest integrated
@@ -306,35 +307,31 @@ block the prioritised D7 completion checks.
    [sessions](doc/modal-effects-design.md#d7-session-integration).
 2. Encoded-choice message modalities and staged linear-list modules.
    See [session migration](doc/modal-effects-design.md#d7-session-migration-inventory).
-3. Supported helper interfaces, Church numerals and extensible cases.
-   See [prelude migration](doc/modal-effects-design.md#d7-prelude-migration) and
-   [ordinary libraries](doc/modal-effects-design.md#d7-ordinary-library-inventory).
-4. Continuation access across changes of effect context.
+3. Continuation access across changes of effect context.
    See [continuations](doc/modal-effects-design.md#d7-continuations).
-5. Typed-lowering rechecks, default/custom prelude preparation, contextual type
+4. Typed-lowering rechecks, default/custom prelude preparation, contextual type
    search and compile input/output ordering.
    See [frontend integration](doc/modal-effects-design.md#d7-frontend-integration-plan).
-6. Shared parameter annotation names and deferred names for later-result forall
+5. Shared parameter annotation names and deferred names for later-result forall
    binders. See [annotation scopes](doc/modal-effects-design.md#contextual-annotation-and-declaration-elaboration).
 
 ## Latest task and verification
 
-8 November 2026, milestone 8: functions/modules migrate through Fresco with
-full type assertions, supplied closure polymorphism, scope/linearity controls
-and actual module-cycle coverage. FFI fixtures and functions' independent-context
-recursive Linearity (7) contract remain explicit compatibility. Independent
-review passed: `/tmp/links-d7-m8-review.md`. No compiler changes or new design
-choices; ordinary linear-function inference remains unchanged.
+8 November 2026, milestone 9: polymorphism and continuations migrate with
+supplied polymorphism, ordinary-kind controls and open recursive continuation
+arguments. Twelve unsupported/retired polymorphism contracts retain compatibility.
+Independent review passed: `/tmp/links-d7-m9-review.md`. No compiler changes or
+new design choices; ordinary linear-function inference remains unchanged.
 
-Tested source: `3e0248d8` plus the patch and hashes in
-`/tmp/links-d7-m8-verification/revision.txt`, `source.patch` and
+Tested source: `2ab54255` plus the patch and hashes in
+`/tmp/links-d7-m9-verification/revision.txt`, `source.patch` and
 `source.sha256.json`. Source hashes stayed unchanged through verification.
-Logs are in `/tmp/links-d7-m8-verification/`.
+Logs are in `/tmp/links-d7-m9-verification/`.
 
 | Command | Result | Log |
 |---|---|---|
-| `./test-harness tests/functions.tests` | 37 Fresco and 2 compatibility passed | `functions.log` |
-| `./test-harness tests/modules.tests` | 43 Fresco and 1 compatibility passed | `modules.log` |
+| `./test-harness tests/polymorphism.tests` | 53 Fresco and 12 compatibility passed | `polymorphism.log` |
+| `./test-harness tests/continuations.tests` | 18 Fresco passed | `continuations.log` |
 | `make rule-check` | Passed; GNU-find tab check skipped, formatter disabled | `rule-check.log` |
 | `git diff --check` and frozen source hashes | Passed | `diff-check.log`, `source-check.log` |
 
@@ -353,8 +350,8 @@ Documentation-only update: text and whitespace checked.
 
 ## Next action
 
-Migrate polymorphism and continuations, then the supported Freezeml/typed-IR
-cases and seven ordinary AIPL examples. Keep Lambda's full-contract deferral and
+Migrate the supported Freezeml/typed-IR cases, then seven ordinary AIPL
+examples. Keep Lambda's full-contract deferral and
 Pi's D8-dependent migration recorded in the design.
 Review, check and commit each milestone before the next implementation.
 Keep D8 paused.
