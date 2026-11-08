@@ -236,3 +236,45 @@ The identity handler retains linear results
 open import Identity; var k=force(fun(){linfun(){42}}); k()
 stdout : 42 : Int
 args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+The U2 puzzle retains both complete solutions in order
+open import FrescoPrelude; open import U2_puzzle; var sols=solutions(); (length(sols),sols)
+stdout : (2, [[([Bono, Edge], true), ([Bono], false), ([Adam, Larry], true), ([Edge], false), ([Bono, Edge], true)], [([Bono, Edge], true), ([Edge], false), ([Adam, Larry], true), ([Bono], false), ([Bono, Edge], true)]]) : (Int, List (List (List (U2_puzzle.U2), Bool)))
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+The U2 puzzle retains printed parties and directions
+open import FrescoPrelude; open import U2_puzzle; printSolutions(solutions())
+stdout : @=== Solution ===\nforward: Bono, Edge\nback: Bono\nforward: Adam, Larry\nback: Edge\nforward: Bono, Edge\n=== Solution ===\nforward: Bono, Edge\nback: Edge\nforward: Adam, Larry\nback: Bono\nforward: Bono, Edge\n\(\) : \(\)$
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+U2 search choice retains generic integer payloads
+open import FrescoPrelude; open import U2_puzzle; handle <Search(Int)> (choose([42,7])) {case x -> [x] case <Choose(xs) => k> -> concatMap(k,xs) case <Fail> -> []}
+stdout : [42, 7] : List Int
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+U2 search choice retains generic boolean payloads
+open import FrescoPrelude; open import U2_puzzle; handle <Search(Bool)> (choose([true,false])) {case x -> [x] case <Choose(xs) => k> -> concatMap(k,xs) case <Fail> -> []}
+stdout : [true, false] : List Bool
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+U2 search failure retains results independent of choice payloads
+open import FrescoPrelude; open import U2_puzzle; var b=handle <Search(Int)> (~fail[Int,Bool]()) {case x -> x case <Choose(xs) => k> -> k(hd(xs)) case <Fail> -> true}; var s=handle <Search(Bool)> (~fail[Bool,String]()) {case x -> x case <Choose(xs) => k> -> k(hd(xs)) case <Fail> -> "failed"}; (b,s)
+stdout : (true, "failed") : (Bool, String)
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+U2 search failure retains contextual result types
+open import FrescoPrelude; open import U2_puzzle; effect Reader { Ask : () => Int; } handle ({var f=handle <Search(Int)> (~fail[Int,(() -> Int)]()) {case _ -> fun(){0} case <Choose(xs) => k> -> k(hd(xs)) case <Fail> -> fun(){do Ask}}; f()}) {case x -> x case <Ask => k> -> k(7)}
+stdout : 7 : Int
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+U2 member rendering retains its Wild requirement
+open import FrescoPrelude; open import U2_puzzle; sig pure : (List U2) -> String fun pure(xs) {showMembers(xs)} ()
+exit : 1
+stderr : @.*Type error:.*In expression: showMembers\.
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+U2 party selection retains its Wild requirement
+open import FrescoPrelude; open import U2_puzzle; sig pure : modal [Search(U2)] ((Side) -> List U2) fun pure(xs) {selectParty(xs)} ()
+exit : 1
+stderr : @.*Type error:.*In expression: selectParty\.
+args : --fresco --path=examples/handlers:examples:lib/stdlib

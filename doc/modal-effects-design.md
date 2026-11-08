@@ -2549,6 +2549,14 @@ against `755db1e1`; the parameter-annotation and presence-pattern prerequisites
 are already resolved. Preserve each suite's feature settings and use an
 explicit Fresco selector while its remaining cases retain legacy compatibility.
 
+The remaining non-handler example audit is
+`/tmp/links-d7-remaining-examples-audit.md`. Seven ordinary AIPL examples remain:
+the lecture calculators/authentication and four local SMTP solutions. Those
+solutions use local sessions and have no socket dependency. The recorded
+socket-model group, original linear-list modules and pure protocol fixtures
+retained for deferred chat/mind consumers keep their existing boundaries.
+Preserve all ignored-example metadata and feature settings.
+
 The first 21 `handlers.tests` cases migrate identity/list handlers, operation
 invocation sugar, exceptions and binary choice. Parameterised effects retain
 generic operation result types with the required `Abs` kind. The two exception
@@ -2574,6 +2582,20 @@ failure. Give the variant-mismatch initialiser the closed type `[|Bar:Int|]`
 so its `Foo(s)` pattern reaches the intended static missing-field error.
 The matching Foo initialiser remains a positive control.
 
+Direct state, operation/return/resumption pattern and implicit-return cases now
+have closed declarations and supplied generic callback contracts. Keep separate
+parameters for unconstrained operation arguments and results, with their
+ordinary kinds and the required `Abs` kind. The Move handler retains its open
+variant row and handles extra payload labels through the original fallback.
+Its clauses use one ordered switch; a separate test rejects duplicate clauses.
+The numeric resumption pattern rejects at `2` before the later unbound `f`.
+
+The U2 search effect groups its existing Choose and Fail operations and retains
+generic choice payloads and a separate generic failure result. The two complete
+solutions, their order and all printed directions match the original source.
+Integer/Boolean payloads and a contextual failure result check the generic
+contracts independently of the puzzle's U2 instantiation.
+
 Defer handler examples whose full interfaces need arbitrary residual effects
 at a separate closure-construction context: `choose`, `deep_state`,
 `shallow_state`, `coins`, `fringe` and `nim`. Their existing curried helper
@@ -2585,6 +2607,16 @@ would narrow their contracts. `monadic_reflection` requires removed
 operation-level polymorphism. Keep these sources and their compatibility routes
 until the required features are in scope. XML/forms, FFI/function locations,
 sockets, the console example and other recorded exclusions remain deferred.
+
+Further contract checks are in `/tmp/links-d7-remaining-handler-contracts.md`.
+Defer `light_switch` (`logState`), `sat` (`maybe`, `leftBiased`, `gen0`),
+`pipes` (`expoPipe1`, composition operators) and `exceptions` (curried catch
+and prompt helpers): each captures an arbitrary effectful callback before a
+later call in an independently chosen residual context. In contrast, `coop`
+threads one ambient residual context through recursive resumptions; `lambda`
+has a closed recursive expression context; and `pi` has direct same-context
+stream handlers. These three remain candidates for full migration. Their old
+effect-row parameters alone establish no need for effect variables.
 
 Convert handler tests "Operation parameter pattern-matching" (7)--(9) and
 use one clause per operation containing a `switch`. Preserve pattern order and

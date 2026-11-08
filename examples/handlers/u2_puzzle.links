@@ -21,6 +21,8 @@
 # returns with the flashlight, a total of 20 minutes have passed and you
 # have failed the mission.
 
+open import FrescoPrelude;
+
 typename U2 = [|Bono|Edge|Adam|Larry|];
 
 sig speed : (U2) -> Int
@@ -43,7 +45,7 @@ fun memberToString(member) {
   }
 }
 
-sig showMembers : (List U2) ~> String
+sig showMembers : modal [Wild] ((List U2) -> String)
 fun showMembers(members) {
   switch (members) {
     case [] -> ""
@@ -75,16 +77,21 @@ fun compareMembers(x, y) {
 # Either side of the bridge.
 typename Side = List U2;
 
+effect Search(a::Abs) {
+  Choose : (List a) => a;
+  Fail : () => Zero;
+}
+
 # Non-determinstic choice.
-sig choose : (List a) {Choose:(List a) => a|_}-> a
+sig choose : forall a::Abs. modal [Search(a)] ((List a) -> a)
 fun choose(xs) { do Choose(xs) }
 
 # Failure.
-sig fail : () {Fail:Zero|_}-> a
+sig fail : forall a::Abs, b. modal [Search(a)] (() -> b)
 fun fail() { switch (do Fail) { } }
 
 # Selects one or two to cross the bridge.
-sig selectParty : (Side) {Choose:(Side) => U2, Fail:Zero|_}~> List U2
+sig selectParty : modal [Search(U2), Wild] ((Side) -> List U2)
 fun selectParty(side) {
   var m1 = choose(side);
   var m2 = choose(side);
@@ -95,23 +102,26 @@ fun selectParty(side) {
   }
 }
 
+sig max2 : forall a. (a,a) -> a
 fun max2(a,b) {
   if (b > a) b
   else a
 }
 
 # Computes the elapsed time.
+sig elapsedTime : (Side) -> Int
 fun elapsedTime(side) {
   fold_left(fun(z, x) { max2(z, speed(x)) }, 0, side)
 }
 
 # "Subtraction" on sets.
+sig without : forall a. modal [Wild] ((List a, List a) -> List a)
 fun without(xs, ys) {
   filter(fun(y) { not(y `elem` xs) }, ys)
 }
 
 # The main loop.
-sig solve : (Bool, Int, (List U2, List U2)) {Choose:(List U2) => U2, Fail:Zero|_}~> List (List U2, Bool)
+sig solve : modal [Search(U2), Wild] ((Bool, Int, (List U2, List U2)) -> List (List U2, Bool))
 fun solve(forward, timeLeft, sides) {
   fun step(sideFrom, sideTo) {
     var party = selectParty(sideFrom);
@@ -134,6 +144,7 @@ fun solve(forward, timeLeft, sides) {
   }
 }
 
+sig solutions : modal [Wild] (() -> List (List (List U2, Bool)))
 fun solutions() {
   handle(solve(true, 17, ([Bono, Edge, Adam, Larry], []))) {
     case xs -> [xs]
@@ -143,6 +154,7 @@ fun solutions() {
   }
 }
 
+sig printSolution : modal [Wild] ((List (List U2, Bool)) -> ())
 fun printSolution(sol) {
   switch (sol) {
     case []-> ()
@@ -153,6 +165,7 @@ fun printSolution(sol) {
   }
 }
 
+sig printSolutions : modal [Wild] ((List (List (List U2, Bool))) -> ())
 fun printSolutions(sols) {
   switch (sols) {
     case [] -> ()

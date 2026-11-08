@@ -174,9 +174,9 @@ stdout : 6 : Int
 args : --enable-handlers
 
 Deep state handling (3)
-handle({ var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get })(s <- 2) { case <Get => k> -> k(s,s) case <Put(p) => k> -> k((),p) case x -> x }
+effect State { Get : () => Int; Put : (Int) => (); } handle({ var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get })(s <- 2) { case <Get => k> -> k(s,s) case <Put(p) => k> -> k((),p) case x -> x }
 stdout : 6 : Int
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Shallow state handling (1)
 {fun state(m)(s) { shallowhandle(m()) { case <Get -> k> -> state(fun(){k(s)})(s) case <Put(p) -> k> -> state(fun(){k(())})(p) case x -> x}} fun runState(s0, c) { var f = state(c); f(s0) } runState(2, fun() { var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get }) }
@@ -189,110 +189,121 @@ stdout : 0 : Int
 args : --enable-handlers
 
 Shadowing handler parameter (1)
-{ handle({ var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get })(s <- 0) { case <Get => k> -> k(s,s) case <Put(s) => k> -> k((),s) case x -> x } }
+effect State { Get : () => Int; Put : (Int) => (); } { handle({ var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get })(s <- 0) { case <Get => k> -> k(s,s) case <Put(s) => k> -> k((),s) case x -> x } }
 stdout : 2 : Int
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Shadowing handler parameter (2)
-{ handle({ var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get })(s <- 0) { case <Get => k> -> k(s,s) case <Put(p as s) => k> -> k((),s) case x -> x } }
+effect State { Get : () => Int; Put : (Int) => (); } { handle({ var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get })(s <- 0) { case <Get => k> -> k(s,s) case <Put(p as s) => k> -> k((),s) case x -> x } }
 stdout : 2 : Int
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Shadowing handler parameter (3)
-{ handle({ var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get })(s <- 0) { case <Get => k> -> k(s,s) case <Put(s as p) => k> -> k((),s) case x -> x } }
+effect State { Get : () => Int; Put : (Int) => (); } { handle({ var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get })(s <- 0) { case <Get => k> -> k(s,s) case <Put(s as p) => k> -> k((),s) case x -> x } }
 stdout : 2 : Int
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Operation parameter pattern-matching (1)
-ignore(fun (m) { handle(m()) { case <Op1> -> 1 case <Op2(_) => k> -> 2 case <Op3(_)> -> 3 case x -> x } })
+effect Patterns(r1::Type(Any,Any,Abs), a21::Type(Any,Any,Abs), r2::Type(Any,Any,Abs), a31::Type(Any,Any,Abs), r3::Type(Any,Any,Abs)) { Op1 : () => r1; Op2 : (a21) => r2; Op3 : (a31) => r3; } sig test : forall a::Abs,b::Abs,x::Type(Any,Any,Abs),y::Type(Any,Any,Abs),z::Type(Any,Any,Abs). (modal <Patterns(x,a,y,b,z)> (() -> Int)) -> Int fun test(m) { handle <Patterns(x,a,y,b,z)> (m()) { case <Op1> -> 1 case <Op2(_) => k> -> 2 case <Op3(_)> -> 3 case x -> x } } ignore(~test)
 stdout : () : ()
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Operation parameter pattern-matching (2)
-ignore(fun(m) { handle(m()) { case <Op1(p as q) => k> -> k(q) case <Op2(s,t as w) => k> -> k(t) case <Op3(a,b,c as d)> -> d case x -> x } })
+effect Patterns(a11::Type(Any,Any,Abs), r1::Type(Any,Any,Abs), a21::Type(Any,Any,Abs), a22::Type(Any,Any,Abs), r2::Type(Any,Any,Abs), a31::Type(Any,Any,Abs), a32::Type(Any,Any,Abs), a33::Type(Any,Any,Abs), r3::Type(Any,Any,Abs)) { Op1 : (a11) => r1; Op2 : (a21, a22) => r2; Op3 : (a31, a32, a33) => r3; } sig test : forall a::Abs,b::Abs,c::Abs,d::Abs,e::Abs,f::Abs,z::Type(Any,Any,Abs). (modal <Patterns(a,a,b,c,c,d,e,f,z)> (() -> f)) -> f fun test(m) { handle <Patterns(a,a,b,c,c,d,e,f,z)> (m()) { case <Op1(p as q) => k> -> k(q) case <Op2(s,t as w) => k> -> k(t) case <Op3(a,b,c as d)> -> d case x -> x } } ignore(~test)
 stdout : () : ()
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Operation parameter pattern-matching (3)
-ignore(fun(m) { handle(m()) { case <Op1(1) => k> -> k(1) case <Op2(s,2) => k> -> k(s) case <Op3(a,b,3)> -> 3 case x -> x } })
+effect Patterns(a11::Type(Any,Any,Abs), r1::Type(Any,Any,Abs), a21::Type(Any,Any,Abs), a22::Type(Any,Any,Abs), r2::Type(Any,Any,Abs), a31::Type(Any,Any,Abs), a32::Type(Any,Any,Abs), a33::Type(Any,Any,Abs), r3::Type(Any,Any,Abs)) { Op1 : (a11) => r1; Op2 : (a21, a22) => r2; Op3 : (a31, a32, a33) => r3; } sig test : forall a::Type(Any,Any,Abs),b::Abs,c::Abs,z::Type(Any,Any,Abs). (modal <Patterns(Int,Int,a,Int,a,b,c,Int,z)> (() -> Int)) -> Int fun test(m) { handle <Patterns(Int,Int,a,Int,a,b,c,Int,z)> (m()) { case <Op1(1) => k> -> k(1) case <Op2(s,2) => k> -> k(s) case <Op3(a,b,3)> -> 3 case x -> x } } ignore(~test)
 stdout : () : ()
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Operation parameter pattern-matching (4)
-ignore(fun(m) { handle(m()) { case <Op1(1.0) => k> -> k(1.0) case <Op2(s,2.0) => k> -> k(s) case <Op3(a,b,3.0)> -> 3.0 case x -> x } })
+effect Patterns(a11::Type(Any,Any,Abs), r1::Type(Any,Any,Abs), a21::Type(Any,Any,Abs), a22::Type(Any,Any,Abs), r2::Type(Any,Any,Abs), a31::Type(Any,Any,Abs), a32::Type(Any,Any,Abs), a33::Type(Any,Any,Abs), r3::Type(Any,Any,Abs)) { Op1 : (a11) => r1; Op2 : (a21, a22) => r2; Op3 : (a31, a32, a33) => r3; } sig test : forall a::Type(Any,Any,Abs),b::Abs,c::Abs,z::Type(Any,Any,Abs). (modal <Patterns(Float,Float,a,Float,a,b,c,Float,z)> (() -> Float)) -> Float fun test(m) { handle <Patterns(Float,Float,a,Float,a,b,c,Float,z)> (m()) { case <Op1(1.0) => k> -> k(1.0) case <Op2(s,2.0) => k> -> k(s) case <Op3(a,b,3.0)> -> 3.0 case x -> x } } ignore(~test)
 stdout : () : ()
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Operation parameter pattern-matching (5)
-ignore(fun(m) { handle(m()) { case <Op1(Alice) => k> -> k(1) case <Op2(s,Bob) => k> -> k(s) case <Op3(a,b,Jenny)> -> a case x -> x } })
+effect Patterns(a11::Type(Any,Any,Abs), r1::Type(Any,Any,Abs), a21::Type(Any,Any,Abs), a22::Type(Any,Any,Abs), r2::Type(Any,Any,Abs), a31::Type(Any,Any,Abs), a32::Type(Any,Any,Abs), a33::Type(Any,Any,Abs), r3::Type(Any,Any,Abs)) { Op1 : (a11) => r1; Op2 : (a21, a22) => r2; Op3 : (a31, a32, a33) => r3; } sig test : forall alice::Row(Any,Any),bob::Row(Any,Any),jenny::Row(Any,Any),s::Type(Any,Any,Abs),a::Type(Any,Any,Abs),b::Abs,z::Type(Any,Any,Abs). (modal <Patterns(modal [] [|Alice|alice|],Int,s,modal [] [|Bob|bob|],s,a,b,modal [] [|Jenny|jenny|],z)> (() -> a)) -> a fun test(m) { handle <Patterns(modal [] [|Alice|alice|],Int,s,modal [] [|Bob|bob|],s,a,b,modal [] [|Jenny|jenny|],z)> (m()) { case <Op1(Alice) => k> -> k(1) case <Op2(s,Bob) => k> -> k(s) case <Op3(a,b,Jenny)> -> a case x -> x } } ignore(~test)
 stdout : () : ()
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Operation parameter pattern-matching (6)
-ignore(fun(m) { handle(m()) { case <Op1((_,y)) => k> -> k(y) case <Op2((x,y,z)) => k> -> k(z) case <Op3(_,(a,b,c))> -> a case x -> x } })
+effect Patterns(a11::Type(Any,Any,Abs), r1::Type(Any,Any,Abs), a21::Type(Any,Any,Abs), r2::Type(Any,Any,Abs), a31::Type(Any,Any,Abs), a32::Type(Any,Any,Abs), r3::Type(Any,Any,Abs)) { Op1 : (a11) => r1; Op2 : (a21) => r2; Op3 : (a31, a32) => r3; } sig test : forall a::Abs,b::Type(Any,Any,Abs),c::Abs,d::Abs,e::Type(Any,Any,Abs),f::Abs,g::Type(Any,Any,Abs),h::Abs,i::Abs,z::Type(Any,Any,Abs). (modal <Patterns((a,b),b,(c,d,e),e,f,(g,h,i),z)> (() -> g)) -> g fun test(m) { handle <Patterns((a,b),b,(c,d,e),e,f,(g,h,i),z)> (m()) { case <Op1((_,y)) => k> -> k(y) case <Op2((x,y,z)) => k> -> k(z) case <Op3(_,(a,b,c))> -> a case x -> x } } ignore(~test)
 stdout : () : ()
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Operation parameter pattern-matching (7)
-fun(m) { handle(m()) { case <Move(Alice)> -> 'A' case <Move(Bob)> -> 'B' case <Move(_)> -> 'U' case x -> x } }
-stdout : fun : (() {Move:([|Alice|Bob|_|]) => _::Any|c}~> Char) {Move{_}|c}~> Char
-args : --enable-handlers
+effect Moving(a::Type(Any,Any,Abs), b::Type(Any,Any,Abs)) { Move : (a) => b; } sig test : forall r::Row,b::Type(Any,Any,Abs). (modal <Moving(modal [] [|Alice|Bob|r|], b)> (() -> Char)) -> Char fun test(m) { handle <Moving(modal [] [|Alice|Bob|r|], b)> (m()) { case <Move(person)> -> switch(person) { case Alice -> 'A' case Bob -> 'B' case _ -> 'U' } case x -> x } } ~test
+stdout : fun : forall a::Row,b::Type(Any,Any,Abs).modal [] ((modal <effect_2$Moving(modal [] [|Alice|Bob|a|], b::Any)> (() -> Char)) -> Char)
+args : --fresco --enable-handlers --set=show_quantifiers=true --set=hide_fresh_type_vars=false
 
 Operation parameter pattern-matching (8)
-handle(do Move(Alice)) { case <Move(Alice)> -> 'A' case <Move(Bob)> -> 'B' case <Move(_)> -> 'U' case x -> x }
+effect Moving(a::Type(Any,Any,Abs), b::Type(Any,Any,Abs)) { Move : (a) => b; } handle(do Move(Alice)) { case <Move(person)> -> switch(person) { case Alice -> 'A' case Bob -> 'B' case _ -> 'U' } case x -> x }
 stdout : 'A' : Char
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Operation parameter pattern-matching (9)
-handle(do Move(John)) { case <Move(Alice)> -> 'A' case <Move(Bob)> -> 'B' case <Move(_)> -> 'U' case x -> x }
+effect Moving(a::Type(Any,Any,Abs), b::Type(Any,Any,Abs)) { Move : (a) => b; } handle(do Move(John)) { case <Move(person)> -> switch(person) { case Alice -> 'A' case Bob -> 'B' case _ -> 'U' } case x -> x }
 stdout : 'U' : Char
-args : --enable-handlers
+args : --fresco --enable-handlers
+
+An operation pattern handler accepts an extra open-row payload
+effect Moving(a::Type(Any,Any,Abs), b::Type(Any,Any,Abs)) { Move : (a) => b; } sig test : forall r::Row,b::Type(Any,Any,Abs). (modal <Moving(modal [] [|Alice|Bob|r|], b)> (() -> Char)) -> Char fun test(m) { handle <Moving(modal [] [|Alice|Bob|r|], b)> (m()) { case <Move(person)> -> switch(person) { case Alice -> 'A' case Bob -> 'B' case _ -> 'U' } case x -> x } } ~test[{Other:Int},Int](fun() { var _ = do Move(Other(42)); 'X' })
+stdout : 'U' : Char
+args : --fresco --enable-handlers
+
+Repeated operation clauses reject
+effect Moving { Move : ([|Alice|Bob|]) => Char; } handle(do Move(Alice)) { case <Move(Alice)> -> 'A' case <Move(Bob)> -> 'B' case x -> x }
+stderr : @.*Type error: Duplicate operation clause Move\nIn expression: <Move\(Bob\)\.
+exit : 1
+args : --fresco --enable-handlers
 
 Pattern-matching on continuation parameter (1)
-ignore(fun(m) { handle(m()) { case <Op> -> 0 case x -> x } })
+effect E(a::Type(Any,Any,Abs)) { Op : () => a; } sig test : forall a::Type(Any,Any,Abs). (modal <E(a)> (() -> Int)) -> Int fun test(m) { handle <E(a)> (m()) { case <Op> -> 0 case x -> x } } ignore(~test)
 stdout : () : ()
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Pattern-matching on continuation parameter (2)
-ignore(fun(m) { handle(m()) { case <Op => (k as f)> -> f(1) case x -> x } })
+effect E(a::Type(Any,Any,Abs)) { Op : () => a; } sig test : (modal <E(Int)> (() -> Int)) -> Int fun test(m) { handle <E(Int)> (m()) { case <Op => (k as f)> -> f(1) case x -> x } } ignore(~test)
 stdout : () : ()
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Pattern-matching on continuation parameter (3)
-ignore(fun(m) { handle(m()) { case <Op => 2> -> f(1) case x -> x } })
-stderr : @.
+effect E(a::Type(Any,Any,Abs)) { Op : () => a; } ignore(fun(m) { handle(m()) { case <Op => 2> -> f(1) case x -> x } })
+stderr : @.*Type error: Types are inconsistent\nIn expression: 2\.
 exit : 1
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Value parameter pattern-matching (1)
-ignore(fun(m) { handle(m()) { case <Op1 => k> -> 1 case _ -> 0 } })
+effect E(a::Type(Any,Any,Abs)) { Op1 : () => a; } sig test : forall p::Type(Any,Any,Abs),a. (modal <E(p)> (() -> a)) -> Int fun test(m) { handle <E(p)> (m()) { case <Op1 => k> -> 1 case _ -> 0 } } ignore(~test)
 stdout : () : ()
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Value parameter pattern-matching (2)
-ignore(fun(m) { handle(m()) { case <Op1 => k> -> 1 case x as y -> y } })
+effect E(a::Type(Any,Any,Abs)) { Op1 : () => a; } sig test : forall p::Type(Any,Any,Abs). (modal <E(p)> (() -> Int)) -> Int fun test(m) { handle <E(p)> (m()) { case <Op1 => k> -> 1 case x as y -> y } } ignore(~test)
 stdout : () : ()
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Value parameter pattern-matching (3)
-ignore(fun(m) { handle(m()) { case <Op1 => k> -> 1 case 10 -> 10 } })
+effect E(a::Type(Any,Any,Abs)) { Op1 : () => a; } sig test : forall p::Type(Any,Any,Abs). (modal <E(p)> (() -> Int)) -> Int fun test(m) { handle <E(p)> (m()) { case <Op1 => k> -> 1 case 10 -> 10 } } ignore(~test)
 stdout : () : ()
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Value parameter pattern-matching (4)
-ignore(fun(m) { handle(m()) { case <Op1 => k> -> 1 case 100.0 -> 0 } })
+effect E(a::Type(Any,Any,Abs)) { Op1 : () => a; } sig test : forall p::Type(Any,Any,Abs). (modal <E(p)> (() -> Float)) -> Int fun test(m) { handle <E(p)> (m()) { case <Op1 => k> -> 1 case 100.0 -> 0 } } ignore(~test)
 stdout : () : ()
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Value parameter pattern-matching (5)
-ignore(fun(m) { handle(m()) { case <Op1 => k> -> 1 case Alice -> 0 } })
+effect E(a::Type(Any,Any,Abs)) { Op1 : () => a; } sig test : forall p::Type(Any,Any,Abs),r::Row(Any,Any). (modal <E(p)> (() -> [|Alice|r|])) -> Int fun test(m) { handle <E(p)> (m()) { case <Op1 => k> -> 1 case Alice -> 0 } } ignore(~test)
 stdout : () : ()
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Value parameter pattern-matching (6)
-ignore(fun(m) { handle(m()) { case <Op1 => k> -> 1 case (x,y) -> 0 } })
+effect E(a::Type(Any,Any,Abs)) { Op1 : () => a; } sig test : forall p::Type(Any,Any,Abs),a,b. (modal <E(p)> (() -> (a,b))) -> Int fun test(m) { handle <E(p)> (m()) { case <Op1 => k> -> 1 case (x,y) -> 0 } } ignore(~test)
 stdout : () : ()
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Pattern-matching on handler parameter (1)
 handle(true)(_ <- 100) { case x -> x }
@@ -444,22 +455,22 @@ args : --enable-handlers
 Implicit return case (1)
 handle(42) { }
 stdout : 42 : Int
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Implicit return case (2)
-handle(do Op) { case <Op => resume> -> resume(true) }
+effect E(a::Type(Any,Any,Abs)) { Op : () => a; } handle(do Op) { case <Op => resume> -> resume(true) }
 stdout : true : Bool
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Omission of resumption for nullary operations (1)
-handle(do Foo) { case <Foo> -> 5 }
+effect E(a::Type(Any,Any,Abs)) { Foo : () => a; } handle(do Foo) { case <Foo> -> 5 }
 stdout : 5 : Int
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Omission of resumption for nullary operations (2)
-handle(do Foo) { case <Foo => _> -> 6 }
+effect E(a::Type(Any,Any,Abs)) { Foo : () => a; } handle(do Foo) { case <Foo => _> -> 6 }
 stdout : 6 : Int
-args : --enable-handlers
+args : --fresco --enable-handlers
 
 Omission of resumption for nullary operations (3)
 fun(m) { handle(m()) { case <Foo> -> 5 } }

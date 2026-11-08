@@ -332,6 +332,7 @@ filemode : true
 Typecheck example file examples/handlers/u2_puzzle.links
 examples/handlers/u2_puzzle.links
 filemode : true
+args : --fresco
 
 Typecheck example file examples/href-test.links
 examples/href-test.links
