@@ -248,17 +248,31 @@ let compare_runtime_types ~erase_modal_kinds ctx source target compare =
   let declarations = Hashtbl.create 4 in
   let proof_types = object (self)
     inherit Types.Transform.visitor as super
+    val bound_variables = IntMap.empty
+    method set_bound_variables variables = {< bound_variables = variables >}
     method! quantifier q =
       self, if erase_modal_kinds then Quantifier.make (Quantifier.to_var q) (Quantifier.to_kind q) else q
     method! typ = function
       | Types.Alias (_, _, body) -> self#typ body
+      | Types.ForAll (quantifiers, body) ->
+         (* A captured polymorphic function can reuse the surrounding type
+            variable IDs. Keep its binders separate from the free IR variables. *)
+         let fresh = List.map (fun q -> Quantifier.with_var (Types.fresh_raw_variable ()) q) quantifiers in
+         let variables = List.fold_left2 (fun variables old fresh ->
+           IntMap.add (Quantifier.to_var old) (Quantifier.to_var fresh) variables)
+           bound_variables quantifiers fresh in
+         let scoped = self#set_bound_variables variables in
+         let scoped, quantifiers = scoped#list (fun self q -> self#quantifier q) fresh in
+         let scoped, body = scoped#typ body in
+         scoped#set_bound_variables bound_variables, Types.ForAll (quantifiers, body)
       | Types.RecursiveApplication app ->
          let body = match Hashtbl.find_opt declarations app.Types.r_unique_name with
            | Some body -> body
            | None ->
+              let declaration_scope = (self#set_bound_variables IntMap.empty)#set_rec_vars IntMap.empty in
               let body = lazy (Option.map (fun (formals, body) ->
-                let formals = List.map (fun q -> snd (self#quantifier q)) formals in
-                formals, snd (self#typ body)) (app.Types.r_body ())) in
+                let formals = List.map (fun q -> snd (declaration_scope#quantifier q)) formals in
+                formals, snd (declaration_scope#typ body)) (app.Types.r_body ())) in
               Hashtbl.add declarations app.Types.r_unique_name body;
               body in
          let self, r_args = self#type_args app.Types.r_args in
@@ -266,7 +280,9 @@ let compare_runtime_types ~erase_modal_kinds ctx source target compare =
       | typ -> super#typ typ
     method! meta_type_var point =
       match Unionfind.peek point with
-      | Types.Var (id, kind, _) -> self, Unionfind.fresh (Types.Var (id, kind, `Rigid))
+      | Types.Var (id, kind, _) ->
+         let id = Option.value ~default:id (IntMap.find_opt id bound_variables) in
+         self, Unionfind.fresh (Types.Var (id, kind, `Rigid))
       | _ -> super#meta_type_var point
   end in
   let context = ref (Ok FrescoContext.empty) in

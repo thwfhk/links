@@ -29,9 +29,11 @@ let reader = {
 let ask ?(selected=selected) ?(name="Reader.Ask") ?(arguments=[]) ?(result=int) () =
   [], Ir.Special (Ir.ScopedOperation (selected, name, arguments, result))
 
-let check ?(registry=[reader]) ?(ambient=[]) ?(variables=Env.Int.empty) datatype program =
+let check ?(registry=[reader]) ?(ambient=[]) ?(variables=Env.Int.empty)
+    ?(type_variables=Env.Int.empty) datatype program =
   Fresco_source_tests.with_checked_ir (fun () ->
-    let typing_context = Context.{ empty with variable_environment = variables } in
+    let typing_context = Context.{ empty with
+      variable_environment = variables; free_type_variables = type_variables } in
     let state = IrTransform.{
       context = typing_context;
       global_vars = I.empty;
@@ -88,6 +90,98 @@ let function_program ?(effects=Some []) body =
   [Ir.Fun definition], Ir.Return (variable fn)
 
 let suite = "Fresco scoped effect IR" >::: [
+  "recursive runtime equality keeps quantified and free variables separate" >:: (fun _ ->
+    let q, a = Types.fresh_type_quantifier ~modal_kind:ModalKind.Abs
+      (Linearity.Unl, Restriction.Any) in
+    let other, b = Types.fresh_type_quantifier ~modal_kind:ModalKind.Abs
+      (Linearity.Unl, Restriction.Any) in
+    (* Raw declaration formals have their own scope, even when their IDs
+       also occur in a quantified field and a free application argument. *)
+    let formal = Quantifier.make (Quantifier.to_var q) (Quantifier.to_kind q) in
+    let formal_type = a in
+    let rec chain argument = Types.RecursiveApplication {
+      Types.r_name = "Chain";
+      r_unique_name = "D8RuntimeEqualityChain";
+      r_dual = false;
+      r_quantifiers = [Quantifier.to_parameter formal];
+      r_args = [PrimaryKind.Type, argument];
+      r_body = (fun () -> Some ([formal], Types.Variant (Types.make_closed_row (M.of_list [
+        "Done", formal_type;
+        "More", chain formal_type;
+      ]))));
+      r_linear = (fun () -> Some false);
+      r_unwind = (fun _ _ -> raise FrescoContext.Unsupported_recursive_unfolding);
+    } in
+    let polymorphic q argument result = Types.ForAll ([q], arrow [argument] result) in
+    let identity = polymorphic q a a in
+    let expected = Types.make_tuple_type [identity; chain a] in
+    let type_variables = List.fold_left (fun environment q ->
+      Env.Int.bind (Quantifier.to_var q) (Quantifier.to_kind q) environment)
+      Env.Int.empty [q; other] in
+    let compare expected actual =
+      let input = binder actual in
+      let output = binder expected in
+      let variables = Env.Int.bind (Var.var_of_binder input) actual Env.Int.empty in
+      check ~variables ~type_variables int
+        ([Ir.letm (output, Ir.Return (variable input))], Ir.Return (int_value 42)) in
+    let point, descriptor = match a with
+      | Types.Meta point -> point, Unionfind.peek point
+      | _ -> assert_failure "Expected a type variable point" in
+    compare expected expected;
+    let inner, c = Types.fresh_type_quantifier ~modal_kind:ModalKind.Abs
+      (Linearity.Unl, Restriction.Any) in
+    let nested = Types.ForAll ([q], Types.ForAll ([q], arrow [a] a)) in
+    let separate = Types.ForAll ([other; inner], arrow [c] c) in
+    compare (Types.make_tuple_type [nested; chain int])
+      (Types.make_tuple_type [separate; chain int]);
+    reject "type mismatch" (fun () ->
+      compare (Types.make_tuple_type [nested; chain int])
+        (Types.make_tuple_type [Types.ForAll ([other; inner], arrow [b] b); chain int]));
+    assert_bool "Runtime comparison changed a source point" (Unionfind.peek point == descriptor);
+    assert_equal ModalKind.Abs (Quantifier.to_modal_kind q);
+    let ordinary = Quantifier.make (Quantifier.to_var q) (Quantifier.to_kind q) in
+    reject "type mismatch" (fun () -> compare expected
+      (Types.make_tuple_type [polymorphic ordinary a a; chain a]));
+    let linear = Quantifier.make ~modal_kind:ModalKind.Abs (Quantifier.to_var q)
+      (PrimaryKind.Type, (Linearity.Any, Restriction.Any)) in
+    let linear_type = Types.Meta (Unionfind.fresh
+      (Types.Var (Quantifier.to_var linear, Quantifier.to_kind linear, `Rigid))) in
+    reject "type mismatch" (fun () -> compare expected
+      (Types.make_tuple_type [polymorphic linear linear_type linear_type; chain a]));
+    reject "type mismatch" (fun () -> compare expected
+      (Types.make_tuple_type [identity; chain b]));
+    reject "type mismatch" (fun () -> compare expected
+      (Types.make_tuple_type [identity; chain bool]));
+    reject "type mismatch" (fun () -> compare expected
+      (Types.make_tuple_type [polymorphic other b a; chain a]));
+    let recursive_variable = Types.fresh_raw_variable () in
+    let recursive_kind = PrimaryKind.Type, (Linearity.Unl, Restriction.Any) in
+    let recursive_point = Unionfind.fresh
+      (Types.Var (recursive_variable, recursive_kind, `Flexible)) in
+    Unionfind.change recursive_point (Types.Recursive (recursive_variable, recursive_kind,
+      Types.ForAll ([q], arrow [a] (Types.Meta recursive_point))));
+    let recursive = Types.Meta recursive_point in
+    let descriptor = Unionfind.peek recursive_point in
+    compare recursive recursive;
+    assert_bool "Runtime comparison changed a recursive source point"
+      (Unionfind.peek recursive_point == descriptor));
+
+  "polymorphic recursive closures retain their quantified capture types" >:: (fun _ ->
+    Fresco_source_tests.with_checked_ir (fun () ->
+      let _, _, value = FrescoFrontend.run_string (FrescoFrontend.empty ()) {|
+        typename Chain(a::Any) = [|Nil|Cons:(a,Chain(a))|];
+        sig repeat : forall a::Abs. (a) -> (() -> Chain(a))
+        fun repeat(x) {
+          fun() {
+            var unused = ~repeat[a](x);
+            Cons(x,Nil)
+          }
+        }
+        var next = repeat(42);
+        switch(next()) { case Cons(x,Nil) -> x case _ -> 0 }
+      |} in
+      assert_equal (`Int 42) value));
+
   "contextual Select returns the selected continuation" >:: (fun _ ->
     let wild = { reader with Ir.effect_name = "Wild"; effect_reserved = true;
       effect_parameters = []; effect_operations = M.empty } in

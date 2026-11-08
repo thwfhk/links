@@ -1840,6 +1840,17 @@ checked IR with an unbound variable. Preserve free variables, mask quantified
 binders, and normalise nominal declaration bodies in their independent scope.
 Source types remain unchanged. The comparison rules need no relaxation.
 
+Runtime IR comparison freshens nested quantified binders before constructing
+Fresco skeletons. A closure can capture a polymorphic recursive function whose
+bound type variable identifier also occurs free in the surrounding function.
+Reconstructing the comparison context previously assigned the free variable
+modal kind `Any`, then rejected the captured `Abs` binder with the same
+identifier. Freshening keeps these scopes separate and preserves both kinds,
+free identifiers and the source type graphs. This repairs Pi's post-closure IR
+check without changing closure conversion or execution. The reduced reproducer
+also uses a recursive function without handlers. Tests retain rejection of
+different binder kinds, free identifiers, payloads and bound/free capture.
+
 ### Contextual recursive type operations
 
 Apply aliases and unfold recursive declarations with capture-avoiding structural
@@ -2795,17 +2806,23 @@ are expressible, including Wild, and preserve generic `var_`; those declarations
 alone do not migrate `lit`. Evidence and independent review:
 `/tmp/links-d7-m6-lambda/readiness.md` and `/tmp/links-d7-m6-review/`.
 
-The Pi migration draft preserves separate Await/Yield effects and reifies them
+The Pi migration preserves separate Await/Yield effects and reifies them
 with nested handlers. Its inner Await step keeps Yield in stored resumptions;
 only the Done payload removes Yield. Explicit clause-result annotations and
-fixed-callback wrappers permit whole-source checking. Strict frontend
-typed-lowering verification passes, but the later IR check after `Closures`
-rejects a closure capturing the recursive helper and an Await resumption.
-Keep the original Pi source and compatibility route while D8 is paused.
-This failure establishes no effect-variable limitation. The full draft,
-reduced reproducer, commands and failure logs are in
-`/tmp/links-d7-m6-pi/pending.md`; independent stage evidence is in
-`/tmp/links-d7-m6-review/pi-stage.json`.
+fixed-callback wrappers permit whole-source checking. Its post-closure failure
+came from the quantified-binder collision described in
+[shared type contracts](#shared-type-and-traversal-contracts). Source checks
+cover alternating resumptions, caller effects, contextual results, selective
+Await/Yield forwarding and shallow stream order. The original bounded random
+test retains five estimates in `[0,4]`. Ordinary payload/result requirements
+and the general Producer, Consumer, Step and exchange contracts remain.
+The saved draft and reduced reproducer are in
+`/tmp/links-d7-m6-pi/pending.md`; current failure classification and isolated
+before/after evidence are in `/tmp/links-d8-pi-cause/`.
+The legacy aggregate handler runner resolves Pi from
+`tests/fixtures/legacy_handlers/pi.links`, retaining the original source and
+aggregate execution. Both aggregate suite entries use that path; the excluded
+control-flow-linearity suite remains outside verification.
 
 Coop's callback adds its named effect and removes that effect from its result,
 retaining arbitrary caller effects in returned values and queued resumptions.

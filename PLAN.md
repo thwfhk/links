@@ -16,7 +16,8 @@ implementation decisions, reasons, internal invariants and source comparisons.
 
 All in-scope D1–D7 work is complete, independently reviewed, checked and committed.
 The D7 migration inventory was checked against current source on 8 November 2026.
-D8 remains paused at the user's requested stopping point.
+D8a and D8b resumed on 8 November 2026 from `3a170073`. D8a1 is complete;
+D8a2 is next.
 
 Fresco is the default for batch, REPL and compilation. Handler execution uses
 `enable_handlers`. Explicit `--set=fresco=false` retains legacy compatibility;
@@ -111,6 +112,7 @@ effect variables and other excluded work remain [postponed](#postponed-work).
 | D7 migration 9 | Polymorphism and recursive continuation contracts | `c71fcc6f` |
 | D7 migration 10 | Staged Freezeml helpers and supported typed-IR fixtures | `a80a1021` |
 | D7 migration 11 | Seven ordinary AIPL examples and final in-scope integration | `c320fd80` |
+| D8a1 | Pi recursive closure IR comparison and source migration. Binder scopes, general stream contracts and existing execution pass | This milestone |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history. The original migration inventory
@@ -120,10 +122,26 @@ and its review are `/tmp/links-d7e5-inventory.md` and
 
 ## Remaining work
 
-D8 remains paused. The next action is to wait for authorisation to start D8a.
-Complete, independently review, check and commit each milestone before starting
-the next, following [AGENTS.md](AGENTS.md). The main agent owns integration and
-progress records.
+D8 proceeds in the milestones below. Complete, independently review, check and
+commit each milestone before starting the next, following [AGENTS.md](AGENTS.md).
+The main agent owns integration and progress records. Reproduce both recorded
+failures first; separate source elaboration, lowering, annotations and shared
+passes from runtime faults. Modal types remain erased before execution.
+
+1. D8a1 complete: repaired Pi's post-closure IR comparison and migrated its
+   source, preserving general stream contracts and execution.
+2. D8a2: repair the demonstrated interpreter close/link fault and check both
+   inference frontends and existing session execution.
+3. D8a3: execute deep handlers in the interpreter and JavaScript, covering
+   nesting, repeated identities, parameters and closures; retain interpreter
+   shallow execution and JavaScript shallow rejection.
+4. D8b: review type metadata and recursive types through shared passes, complete
+   migration documentation, and run frontend-selection and selected checks.
+
+Both saved failures reproduce at `3a170073`. Pi's post-closure IR comparison
+and source migration are complete; see [shared type contracts](doc/modal-effects-design.md#shared-type-and-traversal-contracts).
+The next action is D8a2's bounded close/link repair, recorded in
+`/tmp/links-d8-close-cause/report.md`, after committing D8a1.
 
 | Task | Depends on | Completion checks |
 |---|---|---|
@@ -133,8 +151,8 @@ progress records.
 The close/link failure occurs when closing a sender removes a buffer that relay
 linking still reads; both frontends reproduce it. See the
 [session design](doc/modal-effects-design.md#d7-session-integration).
-Pi retains its saved source draft, general stream contracts and original
-behaviour for D8a's closure-conversion/IR work; see the
+Pi now retains its general stream contracts and original behaviour through
+checked closure conversion; see the
 [handler design](doc/modal-effects-design.md#handler-migration-and-modal-examples).
 
 Retain the design's reference Fresco pairs and `tests/freezeml.tests`. Check
@@ -221,43 +239,30 @@ behaviour passes the completed D7 checks.
 
 ## Latest task and verification
 
-8 November 2026, milestone 11: all seven ordinary AIPL examples migrate with
-preserved protocols, general helper contracts and complete original runtime
-output. Two additional controls check the actual authentication callback under
-Reader and both independently open SMTP session rows. Independent review passed:
-`/tmp/links-d7-m11-review.md`. Its accounting finds no unclassified ordinary
-example remaining in the recorded inventory. No compiler changes or new design
-choices; ordinary linear-function inference remains unchanged.
+8 November 2026, D8a1: repaired quantified-binder scopes in runtime IR
+comparison and migrated Pi using the saved source draft. Independent review
+passed: `/tmp/links-d8a1-review.md`. Source executions retain alternating
+resumptions, caller effects, contextual results, shallow stream order and
+selective Await/Yield forwarding. The original legacy Pi remains an imported
+fixture for the aggregate runner; its feature settings remain unchanged.
+No new language decisions. The five marked D7 choices still await user review.
 
-Tested source: `a80a1021` plus the patch and hashes in
-`/tmp/links-d7-m11-verification/revision.txt`, `source.patch` and
-`source.sha256.json`. Source hashes stayed unchanged through verification.
-Complete commands/results and per-suite frontend counts are in `results.json`
-and `frontend-counts.json` in that directory. Logs retain complete output.
+Tested source: `3a170073` plus patches and source hashes in
+`/tmp/links-d8a1-verification/` and `/tmp/links-d8a1-final-verification/`.
+The first run found the legacy aggregate import; its fixture-path repair was
+reviewed and the affected checks reran. `verification-reuse.json` records the
+source comparison for unchanged compiler/unit and other suite results. Full
+commands/results and frontend counts are in the final directory's
+`results.json` and `frontend-counts.json`.
 
 | Command | Result | Log |
 |---|---|---|
-| `./test-harness tests/<suite>.tests`, 26 selected suites listed in `results.json` | 956 Fresco and 249 compatibility passed; 16 existing ignores | Per-suite `.log` files |
-| `python3 tests/fresco_repl.py` | 11 scenarios passed | `repl.log` |
-| `python3 tests/fresco_compile.py` | 10 scenarios passed | `compile.log` |
-| `make rule-check` | Passed; GNU-find tab check skipped, formatter disabled | `rule-check.log` |
-| `git diff --check` and frozen source hashes | Passed | `diff-check.log`, `source-check.log` |
+| `make no-db` | Passed | `/tmp/links-d8a1-verification/build.log` |
+| `opam exec -- ./run-tests nodb-unit-tests` | 1,535 passed | `/tmp/links-d8a1-verification/unit.log` |
+| `./test-harness tests/<suite>.tests`: handlers, effect_sugar, fresco, fresco_modal, fresco_examples, polymorphism, typecheck_examples, typed_ir, functions, modules, freezeml | 564 Fresco and 241 compatibility passed; 14 existing ignores | Per-suite logs in the final directory |
+| `make rule-check`; `git diff --check` | Passed; GNU-find tab check skipped, formatter disabled | `rule-check.log`, `diff-check.log` in the final directory |
 
-The compiler/library/unit sources (396 files) and executable are byte-identical
-to milestone 7 (`3e0248d8`). Retain its successful `make no-db` and 1,533 unit
-results; exact commands, original logs/revision and compared hashes are in
-`compiler-reuse.json`, checked by `compiler-reuse.log`. Final source suites,
-REPL and compile checks above ran on the integrated source revision.
-
-Retained compatibility includes retired effect-sugar policy, unsupported full
-independent-effect contracts, recorded exclusions and Pi's D8 dependency.
-The [design](doc/modal-effects-design.md#handler-migration-and-modal-examples)
-records the raw-mu strict-lowering and solved-tail linear projection follow-ups.
-D8 remains paused. This documentation-only reorganisation was checked for work
-coverage, links and whitespace; verification is recorded in
-`/tmp/links-plan-work-lists-verification/`. No compiler build or tests ran for
-the documentation change.
-
-The documentation-only D8 frontend-retention update was reviewed and checked
-for text and whitespace. Its verification is in
-`/tmp/links-d8-retain-frontends-verification/`; no compiler build or tests ran.
+The rule checker creates an untracked `debug` file; verification retained it
+with the logs and confirmed that source hashes stayed unchanged. The dedicated
+control-flow-linearity suite was not run. Close/link remains reproduced on both
+frontends and is the next milestone. All postponed work remains excluded.

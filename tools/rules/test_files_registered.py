@@ -23,6 +23,8 @@ BLACKLIST = {
   "tests/fixtures/fresco_repl/replShared.links",
   # Imported by tests/fresco_compile.py.
   "tests/fixtures/fresco_compile/compileShared.links",
+  # Imported by the legacy aggregate handler runner.
+  "tests/fixtures/legacy_handlers/pi.links",
   "tests/presence_type_arg_typename.links",
   "tests/modules/alien_blocks_dependency.links",
   "tests/modules/cyclicA.links",

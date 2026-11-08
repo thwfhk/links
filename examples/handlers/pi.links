@@ -1,13 +1,18 @@
 # Pi estimation
 
+open import FrescoPrelude;
+
 # Operations
-sig yield : (a) {Yield: (a) => () |_}-> ()
+effect Yield(a::Type(Any,Any,Abs)) { Yield : (a) => (); }
+effect Await(a::Type(Any,Any,Abs)) { Await : () => a; }
+effect Abort { Abort : () => Zero; }
+sig yield : forall a::Abs. modal [Yield(a)] ((a) -> ())
 fun yield(x) { do Yield(x) }
 
-sig await : () {Await:a |_}-> a
+sig await : forall a::Abs. modal [Await(a)] (() -> a)
 fun await() { do Await }
 
-sig abort : () {Abort:Zero |e}-> a
+sig abort : forall a. modal [Abort] (() -> a)
 fun abort() {
   switch (do Abort) { }
 }
@@ -25,7 +30,7 @@ fun insideUnitCircle(p) {
 }
 
 # Streams of random points
-sig randomPoints : () {Yield: (Point) => () |_}~> a
+sig randomPoints : forall a. modal [Yield(Point), Wild] (() -> a)
 fun randomPoints() {
   var p = makePoint(random(), random());
   yield(p);
@@ -33,9 +38,9 @@ fun randomPoints() {
 }
 
 # Synchronous take operation
-sig take : (Int, Comp(b, {Yield: (a) => () |e})) {Yield{_} |e}~> List a
+sig take : forall a::Abs,b. modal [Wild] ((Int, modal <Yield(a)> (() -> b)) -> List a)
 fun take(n, m) {
-  handle(m())(n <- n, st <- []) {
+  handle <Yield(a)> (m())(n <- n, st <- []) {
     case _ -> st
     case <Yield(x) => resume> ->
        if (n <= 0) st
@@ -45,8 +50,9 @@ fun take(n, m) {
 
 # Compute pi
 
-sig computePi : (Int) -> Comp(a, {Yield: (Float) => () |_})
+sig computePi : forall a. (Int) -> modal [Yield(Float), Wild] (() -> a)
 fun computePi(n)() {
+  sig loop : modal [Yield(Float), Wild] ((Int, Int) -> a)
   fun loop(total, count) {
      # Synchronously take `n' random points
      var points = take(n, randomPoints);
@@ -70,8 +76,11 @@ fun computePi(n)() {
 }
 
 # Display pi estimation
+sig renderEstimations : (Int) -> modal [Await(Float), Wild] (() -> ())
 fun renderEstimations(n)() {
+  sig eraser : modal [] ((Int) -> modal [Wild] (() -> ()))
   fun eraser(n)() {
+    sig loop : modal [Wild] ((Int) -> ())
     fun loop(n) {
       if (n <= 0) ()
       else { print("\b"); loop(n-1) }
@@ -79,12 +88,14 @@ fun renderEstimations(n)() {
     loop(n)
   }
 
+  sig display : modal [Wild] ((String, Int, Int) -> Int)
   fun display(pi, i, n) {
     var s = "Pi estimation (" ^^ intToString(i) ^^ "/" ^^ intToString(n) ^^ "): " ^^ pi;
     print(s);
     strlen(s)
   }
 
+  sig loop : modal [Await(Float), Wild] ((Int, Int, modal [Wild] (() -> ())) -> ())
   fun loop(i, n, erase) {
     if (i >= n) { print("\n") }
     else {
@@ -98,7 +109,9 @@ fun renderEstimations(n)() {
   loop(0, n, eraser(len))
 }
 
+sig collectEstimations : forall a::Abs. (Int) -> modal [Await(a)] (() -> List a)
 fun collectEstimations(n)() {
+  sig loop : modal [Await(a)] ((Int, List a) -> List a)
   fun loop(n, acc) {
     if (n <= 0) acc
     else loop(n-1, await() :: acc)
@@ -107,24 +120,45 @@ fun collectEstimations(n)() {
 }
 
 # Multi-handler
-typename Resumption(a, e::Eff, r) = (a) ~e~> r;
-typename Step(a, e::Eff, r) =
-                (mu b . [|Done:r
-                         |Yielded:(a, Resumption((), { |e}, b))
-                         |Awaits:Resumption(a, { |e}, b)
-                         |]);
+typename Resumption(a::Any, r::Any) = (a) -> r;
+typename Step(a::Any, r::Any) =
+  [|Done:r
+   |Yielded:(a, Resumption((), Step(a,r)))
+   |Awaits:Resumption(a, Step(a,r))|];
 
-sig step : (Comp(b, {Await:a, Yield: (a) => () |e})) {Await{q}, Yield{p} |e}~> Step(a, { Await{q}, Yield{p} |e}, b)
-fun step(f) {
-  handle(f()) {
-    case x        -> Done(x)
+# The inner handler leaves Yield to the outer handler. Its resumptions are
+# wrapped when they leave that handler, retaining both stream operations.
+typename AwaitStep(a::Any, r::Any) =
+  [|Done:modal <Yield|> r |Awaits:Resumption(a, AwaitStep(a,r))|];
+
+sig yieldStep : forall a::Abs,b. modal [Wild]
+  ((modal <Yield(a)> (() -> AwaitStep(a,b))) -> Step(a,b))
+fun yieldStep(f) {
+  handle <Yield(a)> (f()) {
+    case Done(x) -> Done(x)
+    case Awaits(resume) ->
+      var next = (fun(x) { ~yieldStep[a,b](fun() { resume(x) }) } : Resumption(a,Step(a,b)));
+      Awaits(next)
     case <Yield(x) => resume> -> Yielded(x, resume)
-    case <Await => resume>    -> Awaits(resume)
   }
 }
 
-sig exchange : (Comp(b, {Await:a, Yield: (a) => () |e}), Comp(b, {Await:a, Yield: (a) => () |e})) { Await{_}, Yield{_} |e}~> b
+sig step : forall a::Abs,b. modal [Wild]
+  ((modal <Await(a),Yield(a)> (() -> modal <Await,Yield|> b)) -> Step(a,b))
+fun step(f) {
+  ~yieldStep[a,b](fun() {
+    handle <Await(a)> (f()) {
+      case x -> (Done(x) : AwaitStep(a,b))
+      case <Await => resume> -> (Awaits(resume) : AwaitStep(a,b))
+    }
+  })
+}
+
+sig exchange : forall a::Abs,b. modal [Wild]
+  ((modal <Await(a),Yield(a)> (() -> modal <Await,Yield|> b),
+    modal <Await(a),Yield(a)> (() -> modal <Await,Yield|> b)) -> b)
 fun exchange(f, g) {
+  sig exchange_aux : (Step(a,b), Step(a,b)) -> b
   fun exchange_aux(f, g) {
     switch( (f, g) ) {
       case (Awaits(resume0), Yielded(x, resume1)) ->
@@ -137,27 +171,33 @@ fun exchange(f, g) {
 }
 
 # Shallow handler
-typename Consumer(a, e::Eff, b) = (a) {Abort:Zero, Await:a |e}~> b;
-typename Producer(a, e::Eff, b) = () {Abort:Zero, Yield:(a) => () |e}~> b;
+typename Consumer(a::Type(Any,Any,Abs), b::Any) =
+  modal <Abort|Abort,Await(a)> ((a) -> b);
+typename Producer(a::Type(Any,Any,Abs), b::Any) =
+  modal <Abort|Abort,Yield(a)> (() -> b);
 
 mutual {
-  sig copipe : (Consumer(a, { Yield{q} |e}, b), Producer(a, { Await{p} |e}, _)) {Abort:Zero, Await{p}, Yield{q} |e}~> b
+  sig copipe : forall a::Abs,b,c. modal [Abort, Wild]
+    ((Consumer(a,modal <Await|> b), Producer(a,c)) -> b)
   fun copipe(receiver, sender) {
-    shallowhandle(sender()) {
+    shallowhandle <Yield(a)> (sender()) {
       case _ -> abort()
       case <Yield(x) -> resume> -> pipe(fun() { resume(()) }, fun() { receiver(x) })
     }
   }
 
-  sig pipe : (Producer(a, { Await{p} |e}, _), Comp(b, {Abort:Zero, Await:a, Yield{q} |e})) {Abort:Zero, Await{p}, Yield{q} |e}~> b
+  sig pipe : forall a::Abs,b,c. modal [Abort, Wild]
+    ((Producer(a,c), modal <Await(a)> (() -> modal <Await|> b)) -> b)
   fun pipe(sender, receiver) {
-    shallowhandle(receiver()) {
+    shallowhandle <Await(a)> (receiver()) {
       case x -> x
       case <Await -> resume> -> copipe(resume, sender)
     }
   }
 }
 
+sig catch : forall a. modal [Wild]
+  ((modal <Abort> (() -> modal <Abort|> a)) -> a)
 fun catch(m) {
   handle(m()) {
     case x -> x
@@ -166,14 +206,22 @@ fun catch(m) {
 }
 
 
+sig example : modal [Wild] ((Int) -> ())
 fun example(n) {
   catch(fun() {
-    pipe(computePi(30000), renderEstimations(n))
+    var sender = ~computePi[()](30000);
+    var receiver = renderEstimations(n);
+    var result = ~pipe[Float,(),()](fun() { sender() }, fun() { receiver() });
+    result
   })
 }
 
+sig unitTest : modal [Wild] (() -> List Float)
 fun unitTest() {
   catch(fun() {
-    pipe(computePi(30000), collectEstimations(5))
+    var sender = ~computePi[()](30000);
+    var receiver = ~collectEstimations[Float](5);
+    var result = ~pipe[Float,List Float,()](fun() { sender() }, fun() { receiver() });
+    result
   })
 }

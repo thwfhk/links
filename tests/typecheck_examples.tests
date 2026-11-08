@@ -279,6 +279,7 @@ args : --fresco
 Typecheck example file examples/handlers/pi.links
 examples/handlers/pi.links
 filemode : true
+args : --fresco
 
 Typecheck example file examples/handlers/pipes.links
 examples/handlers/pipes.links

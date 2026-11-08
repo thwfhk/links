@@ -349,3 +349,77 @@ open import FrescoPrelude; open import Coop; ~run[End]
 exit : 1
 stderr : @.*Type error: Type does not satisfy its kind or usage requirement.*In expression: ~run\[End\]\.
 args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+Pi preserves finite producer and consumer order
+open import Pi; (catch(fun(){pipe(fun(){yield(1);yield(2);yield(3);abort()},fun(){collectEstimations(3)()})}),catch(fun(){pipe(fun(){yield(1);yield(2);yield(3);abort()},fun(){[await(),await(),await()]})}))
+stdout : ([3, 2, 1], [1, 2, 3]) : (List Int, List Int)
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+Pi preserves producer and consumer interleaving
+open import Pi; catch(fun(){pipe(fun(){print("a");yield(1);print("b");yield(2);print("c");abort()},fun(){var x=await();print("x");var y=await();print("y");x+y})})
+stdout : axby3 : Int
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+Pi resumes alternating Yield and Await steps
+open import Pi; switch(~step[Int,Int](fun(){yield(1);var x=await();yield(x+1);42})) {case Yielded(x,k)->switch(k(())){case Awaits(k)->switch(k(20)){case Yielded(y,k)->switch(k(())){case Done(r)->(x,y,r) case _->error("done")} case _->error("yield")} case _->error("await")} case _->error("first")}
+stdout : (1, 21, 42) : (Int, Int, Int)
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+Pi preserves effects in stored Await resumptions
+open import Pi; effect Reader {Ask:()=>Int;} handle <Reader> ({var st= ~step[Int,Int](fun(){yield(do Ask);var x=await();do Ask+x}); switch(st){case Yielded(x,k)->switch(k(())){case Awaits(k)->switch(k(2)){case Done(y)->(x,y) case _->error("done")} case _->error("await")} case _->error("yield")}}) {case x->x case <Ask=>k> -> k(20)}
+stdout : (20, 22) : (Int, Int)
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+Pi exchange preserves distinct payload and result types
+open import Pi; ~exchange[Bool,String](fun(){if(await()) "yes" else "no"},fun(){yield(true); "unused"})
+stdout : "yes" : String
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+Pi copipe resumes its consumer
+open import Pi; catch(fun(){~copipe[Int,Int,()](fun(x){x},fun(){yield(42);abort()})})
+stdout : 42 : Int
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+Pi steps retain contextual function results
+open import Pi; effect Reader {Ask:()=>Int;} handle <Reader> ({var st= ~step[Int,(() -> Int)](fun(){yield(1);fun(){do Ask}});switch(st){case Yielded(_,k)->switch(k(())){case Done(f)->f() case _->error("done")} case _->error("yield")}}) {case x->x case <Ask=>k> -> k(42)}
+stdout : 42 : Int
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+Pi stored resumptions cannot escape their caller effect
+open import Pi; effect Reader {Ask:()=>Int;} var st=handle <Reader> (~step[Int,(() -> Int)](fun(){yield(1);fun(){do Ask}})) {case x->x case <Ask=>k> -> k(42)}; switch(st){case Yielded(_,k)->switch(k(())){case Done(f)->f() case _->error("done")} case _->error("yield")}
+exit : 1
+stderr : @.*Type error: Type does not match the required type.*In expression: k\.
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+Pi step retains its unlimited result requirement
+open import Pi; ~step[Int,End]
+exit : 1
+stderr : @.*Type error: Type does not satisfy its kind or usage requirement.*In expression: ~step\[Int,End\]\.
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+Pi step rejects contextual operation payloads
+open import Pi; ~step[(() -> Int),Int]
+exit : 1
+stderr : @.*Type error: Type does not satisfy its kind or usage requirement.*In expression: ~step\[\(\(\) -> Int\),Int\]\.
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+Pi step retains its unlimited payload requirement
+open import Pi; ~step[End,Int]
+exit : 1
+stderr : @.*Type error: Type does not satisfy its kind or usage requirement.*In expression: ~step\[End,Int\]\.
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+Pi unitTest retains five bounded estimates
+open import FrescoPrelude; open import Pi; var xs=unitTest(); (length(xs),length(filter(fun(x) { x >= 0.0 && x <= 4.0 },xs)))
+stdout : (5, 5) : (Int, Int)
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+Pi forwards the producer's Await to the caller
+open import Pi; handle <Await(Int)> (catch(fun(){pipe(fun(){yield(await());abort()},fun(){await()})})) {case x->x case <Await=>k> -> k(42)}
+stdout : 42 : Int
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+Pi forwards the consumer's Yield to the caller
+open import Pi; handle <Yield(Int)> (catch(fun(){pipe(fun(){yield(20);abort()},fun(){var x=await();yield(x+1);x+2})})) {case x->x case <Yield(x)=>k> -> k(())+x}
+stdout : 43 : Int
+args : --fresco --path=examples/handlers:examples:lib/stdlib
