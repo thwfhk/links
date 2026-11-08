@@ -9,7 +9,7 @@ reasons and reference comparisons. Section 9 states the initial effect context.
 
 1. Add modal effect types with implicit ambient effects, following Met.
 2. Use scoped rows of named effects, each grouping declared operations.
-3. Replace Hindley--Milner inference with Fresco, including first-class
+3. Use Fresco as the default inference engine, including first-class
    polymorphism, first-class modal types and modal-kind refinement.
 4. Replace existing effect annotations and migrate affected programs.
 
@@ -500,7 +500,7 @@ their result type unless `endbang_antiquotes` requires `!().End`.
 | Several clauses for one operation | One clause with internal pattern matching |
 | Process types parameterised by effect rows | `Process(a)` parameterised by mailbox message type |
 
-Old effect annotations are rejected by the completed language. Existing
+Fresco rejects old effect annotations. Existing
 record/variant row and presence syntax remains supported. Type errors identify
 the relevant source location, including effect names, signatures and clauses.
 
@@ -596,6 +596,7 @@ Fresco is the default frontend for batch input, the REPL and JavaScript
 compilation. `--fresco` remains an explicit selector. Use
 `--set=fresco=false` for retained legacy compatibility, including web mode.
 A contextual type error does not select the legacy frontend automatically.
+Both frontends remain available through this setting after D8.
 
 Batch programs and REPL commands start with ambient effect context `Wild`.
 This permits direct calls to built-in external operations such as `print` and

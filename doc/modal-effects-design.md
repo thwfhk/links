@@ -477,10 +477,12 @@ solutions.
 
 ## Implementation in Links
 
-The final frontend uses Fresco for all in-scope constructs. Keep the
+The default frontend uses Fresco for all in-scope constructs. Keep the
 Links syntax tree, typed intermediate representation, and runtimes.
-Transitional implementations may coexist while individual changes
-build; remove the old effect inference path before completion.
+On 8 November 2026, the user confirmed retaining both inference frontends after
+D8. Keep the existing Fresco setting and its default; explicit legacy selection
+remains available without automatic fallback. The selection rules are in the
+[specification](modal-effects-spec.md#9-initial-effect-context).
 
 Add scoped rows and modal types to the shared representation and
 update maps, folds, substitution, free-variable collection,
@@ -493,7 +495,7 @@ arrows, retaining Links' tuple domain convention. Use
 `Modal of typ Modality.t * typ` for modal types. Keep scoped effect
 rows as `typ EffectRow.t` in contexts and modalities; they are neither
 value-type constructors nor row-kinded type arguments. The old
-`Function`/`Lolli` constructors remain during migration. Their latent
+`Function`/`Lolli` constructors remain for retained legacy support. Their latent
 effect rows must not be used to encode contextual arrows.
 
 Add modal kind metadata to quantifier records, with `Any` as the
@@ -507,7 +509,7 @@ metadata must also retain modal kinds.
 Contextual alias application and recursive unfolding must use structural
 substitution and preserve quantified/modal bodies. The legacy alias
 helpers also instantiate leading quantifiers and remain confined to
-the legacy frontend during migration.
+the legacy frontend.
 
 Use `TypeParameter`, containing `Kind.t` and `ModalKind.t`, with
 an `Any` default and `Abs` permitted only for primary kind `Type`.
@@ -525,7 +527,7 @@ kinds using the contextual kind checker.
 | Parsing | `lexer.mll`, `parser.mly`, `sugartypes.ml`: declarations, modalities, handler annotations, freezing |
 | Traversals | `sugarTraversals.ml`, `transformSugar.ml`, module/type-variable desugaring: visit effect arguments and binders |
 | Types | `types.ml/.mli`, utilities and printers: separate effect rows, modal types, unchanged record/variant rows |
-| Inference | `typeSugar.ml`, new Fresco modules, `unify.ml`, `generalise.ml`, `instantiate.ml`: replace effect/HM inference; adapt structural row solving |
+| Inference | `typeSugar.ml`, new Fresco modules, `unify.ml`, `generalise.ml`, `instantiate.ml`: add Fresco inference alongside legacy checking; adapt structural row solving |
 | Elaboration | `desugarEffects.ml`, `desugarDatatypes.ml`, `sugartoir.ml`, `compilePatterns.ml`: preserve identities, ambient rows, explicit type applications |
 | IR | `irCheck.ml`, `irTraversals.ml`, optimiser/closure passes: scoped effect checks and new type traversals |
 | Execution | `value.ml`, `evalir.ml`, `irtojs.ml`, `lib/js/jslib.js`: nearest handler, outer clause context, deep resumption |
@@ -560,13 +562,15 @@ new nodes. Use the temporary normaliser in legacy built-in type-string readers.
 Source-level tests need a contextual entry point with a small primitive
 environment before the whole prelude is migrated. Lower checked declarations,
 qualified operations and general freezing before `sugartoir.ml`, whose old
-entry points reject those nodes. Once migration is complete, batch, REPL and
-typed-frontend rechecks must all use Fresco. Include type-string readers used
-by compiler transformations when removing temporary legacy routing.
+entry points reject those nodes. Once migration is complete, Fresco is the
+default for batch, REPL and typed-frontend rechecks, with explicit legacy
+selection retained. Include type-string readers used by compiler transformations
+in the final review.
 
 Inventory in-scope syntax constructors, primitive signatures and old effect
-annotations before migration. Migrate built-in type strings before removing
-the old parser productions; they are parsed during initialisation. Use the
+annotations before migration. Built-in type strings are parsed during
+initialisation; retain parser productions and readers needed by the legacy
+frontend. Use the
 specification's compatibility table for source changes. Keep existing suite
 feature settings, including typed-IR and rechecking settings.
 
@@ -690,13 +694,13 @@ runtime is added.
 
 ### D7 actor integration
 
-**Transitional choice for review:** give the contextual mailbox constructor the
+**Choice for review:** give the contextual mailbox constructor the
 shared name `Types.mailbox_process`, public spelling `Process` and distinct
 identity `MailboxProcess`. Its parameter is `Type(Any,Any,Abs)`. Keep the legacy
-row-parameter constructor and its type-string environment until D7e removes
-legacy inference. Using one identity with two arities would disagree with the
-compiler's identity and structural comparisons. D7e must consolidate these
-constructors after migrating their consumers.
+row-parameter constructor and its type-string environment for the retained
+legacy frontend. Using one identity with two arities would disagree with the
+compiler's identity and structural comparisons. Preserve both identities while
+the frontends use different parameter contracts.
 
 Process identifiers remain unlimited when their absolute message type is
 linear. Contextual primitive signatures supply the IR types for their existing

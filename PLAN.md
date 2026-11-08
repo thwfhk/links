@@ -2,8 +2,9 @@
 
 ## Goal and document roles
 
-Implement modal effect types with scoped rows of named effects and replace
-Links' inference engine with Fresco on `modal-effects`.
+Implement modal effect types with scoped rows of named effects and use Fresco
+as Links' default inference engine on `modal-effects`. Retain the legacy frontend
+as an explicit option.
 
 This file owns high-level progress, dependencies, completion checks,
 verification results and the next action. [The specification](doc/modal-effects-spec.md)
@@ -127,7 +128,7 @@ progress records.
 | Task | Depends on | Completion checks |
 |---|---|---|
 | D8a: backend execution | D7 | Actual interpreter and JavaScript deep-handler execution covers nesting, repeated identities, parameters and closures; interpreter shallow execution and JavaScript rejection remain checked. Resolve the recorded interpreter close/link failure and Pi's closure-conversion/IR failure. |
-| D8b: removal, documentation and final review | D8a | In-scope legacy inference routes are removed; ghosts, exported variable requirements, recursive type consumers, lowering, optimisation and both backends are reviewed; the migration guide and selected suites pass. Preserve explicit legacy compatibility for postponed cases. |
+| D8b: frontend options, documentation and final review | D8a | Both frontends remain available through the existing Fresco setting, with Fresco as the default and no automatic fallback. Check frontend selection in batch, REPL and compilation; review ghosts, exported variable requirements, recursive type consumers, lowering, optimisation and both backends; the migration guide and selected suites pass. |
 
 The close/link failure occurs when closing a sender removes a buffer that relay
 linking still reads; both frontends reproduce it. See the
@@ -147,7 +148,9 @@ Keep records/variants, patterns, lists/tuples, modules, actors and existing
 sessions covered, including `tests/messages.tests`, with their typed-IR,
 rechecking and other feature settings unchanged.
 
-Legacy inference removal must respect retained compatibility dependencies.
+Retain both inference frontends. `--fresco` selects Fresco explicitly;
+`--set=fresco=false` selects the legacy frontend. D8 does not require deleting
+legacy inference. Keep compatibility checks separate from Fresco coverage.
 General contracts needing independent effects stay postponed; specialised uses
 do not establish preservation of those contracts. Keep all excluded features
 outside D8.
@@ -192,6 +195,9 @@ and design:
 The user confirmed both D6 choices on 7 November 2026: handler result inference
 from return clauses and source-only modal checks. See the
 [scoped-effects design](doc/modal-effects-design.md#d6-scoped-effects-in-ir).
+
+On 8 November 2026, the user confirmed retaining the legacy frontend as an
+option after D8. See [frontend selection](doc/modal-effects-spec.md#9-initial-effect-context).
 
 ### D7 choices awaiting review
 
@@ -251,3 +257,7 @@ D8 remains paused. This documentation-only reorganisation was checked for work
 coverage, links and whitespace; verification is recorded in
 `/tmp/links-plan-work-lists-verification/`. No compiler build or tests ran for
 the documentation change.
+
+The documentation-only D8 frontend-retention update was reviewed and checked
+for text and whitespace. Its verification is in
+`/tmp/links-d8-retain-frontends-verification/`; no compiler build or tests ran.
