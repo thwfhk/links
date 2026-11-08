@@ -28,6 +28,11 @@ examples/sessions/fuse.links
 filemode : true
 stdout : (42, 42) : (Int, Int)
 
+Execute session example fusegg
+examples/sessions/fusegg.links
+filemode : true
+stdout : @\A42\n42\n\(\) : \(\)\Z
+
 Execute session example givengrab
 examples/sessions/givengrab.links
 filemode : true

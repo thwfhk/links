@@ -19,6 +19,51 @@ Link connects two dual session endpoints
 var first = new(); var second = new(); var producer = spawn { var c = send(42,accept(first)); var (ack,c) = receive(c); close(c) }; var relay = spawn { link(request(first),accept(second)) }; { var (x,c) = receive(request(second)); close(send((),c)); x }
 stdout : 42 : Int
 
+Link forwards a message after the sender closes
+var first = new(); var second = new(); var producer = spawn { close(send(42,accept(first))) }; var relay = spawn { link(request(first),accept(second)) }; { var (x,c) = receive(request(second)); close(c); x }
+stdout : 42 : Int
+
+Link forwards a message after the sender closes with the legacy frontend
+var first = new(); var second = new(); var producer = spawn { close(send(42,accept(first))) }; var relay = spawn { link(request(first),accept(second)) }; { var (x,c) = receive(request(second)); close(c); x }
+args : --set=fresco=false
+stdout : 42 : Int
+
+Link forwards in the reverse direction after the sender closes
+var first = new(); var second = new(); var producer = spawn { close(send(42,request(second))) }; var relay = spawn { link(request(first),accept(second)) }; { var (x,c) = receive(accept(first)); close(c); x }
+stdout : 42 : Int
+
+Link forwards in the reverse direction after the sender closes with the legacy frontend
+var first = new(); var second = new(); var producer = spawn { close(send(42,request(second))) }; var relay = spawn { link(request(first),accept(second)) }; { var (x,c) = receive(accept(first)); close(c); x }
+args : --set=fresco=false
+stdout : 42 : Int
+
+Link retains queued message order after the sender closes
+var first = new(); var second = new(); var producer = spawn { close(send(43,send(42,accept(first)))) }; var relay = spawn { link(request(first),accept(second)) }; { var (x,c) = receive(request(second)); var (y,c) = receive(c); close(c); (x,y) }
+stdout : (42, 43) : (Int, Int)
+
+Link retains queued message order after the sender closes with the legacy frontend
+var first = new(); var second = new(); var producer = spawn { close(send(43,send(42,accept(first)))) }; var relay = spawn { link(request(first),accept(second)) }; { var (x,c) = receive(request(second)); var (y,c) = receive(c); close(c); (x,y) }
+args : --set=fresco=false
+stdout : (42, 43) : (Int, Int)
+
+Chained relays forward after the sender closes
+var first = new(); var middle = new(); var last = new(); var producer = spawn { close(send(42,accept(first))) }; var relay = spawn { link(request(first),accept(middle)) }; var relay = spawn { link(request(middle),accept(last)) }; { var (x,c) = receive(request(last)); close(c); x }
+stdout : 42 : Int
+
+Chained relays forward after the sender closes with the legacy frontend
+var first = new(); var middle = new(); var last = new(); var producer = spawn { close(send(42,accept(first))) }; var relay = spawn { link(request(first),accept(middle)) }; var relay = spawn { link(request(middle),accept(last)) }; { var (x,c) = receive(request(last)); close(c); x }
+args : --set=fresco=false
+stdout : 42 : Int
+
+Link connects End peers that have already closed
+var first = (new() : AP(End)); var second = (new() : AP(End)); var producer = spawn { close(accept(first)) }; var relay = spawn { link(request(first),accept(second)) }; close(request(second))
+stdout : () : ()
+
+Link connects End peers that have already closed with the legacy frontend
+var first = (new() : AP(End)); var second = (new() : AP(End)); var producer = spawn { close(accept(first)) }; var relay = spawn { link(request(first),accept(second)) }; close(request(second))
+args : --set=fresco=false
+stdout : () : ()
+
 Session payloads must match the protocol
 var ap = (new() : AP(?(Int).End)); var p = spawn { var (x,c) = receive(accept(ap)); close(c) }; close(send("42",request(ap)))
 exit : 1

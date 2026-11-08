@@ -798,11 +798,19 @@ failure: a sender can close its incoming buffer before a relay links the two
 channels. `proc.ml`'s `close` removes that buffer, while `link` reads all four
 buffers and raises `NotFound`. The same source fails on legacy and Fresco.
 A request/acknowledgement exchange through the relay executes on both paths.
-D8 must check and resolve the close/link case; the reproducer and both results
-are in `/tmp/links-d7c2a-review-link-runtime.log`. D7c2a retains the runtime.
+The reproducer and both results are in
+`/tmp/links-d7c2a-review-link-runtime.log`.
 Migrating `examples/sessions/fusegg.links` reproduces the same failure after
 successful source and IR checking (`/tmp/links-d7c2e2-examples-initial.log`).
-Keep its immediate close/link order; D8 owns the runtime repair.
+Keep its immediate close/link order. D8a2 repairs only `Session.link`'s queue
+transfer: a deleted destination is permitted when its source queue is empty.
+A non-empty source with a deleted destination reports an internal lifecycle
+error. Live queues retain FIFO transfer and source drainage. Forwarding retains
+the closed direction without recreating its queue, and the evaluator keeps its
+existing wakeups. Source checking, lowering, type annotations and modal erasure
+need no change. Both frontends use the same repaired runtime. Current
+reproduction and lifecycle reasoning are in
+`/tmp/links-d8-close-cause/report.md`.
 
 Stage `EndBang = !().End`, `EndQuery = ?().End`, `wait`, `closeBang`,
 `makeEndBang` and `linkSync` in the contextual prelude. Their signatures require

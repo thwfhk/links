@@ -3,6 +3,19 @@ open Links_core
 open CommonTypes
 
 module Pure = Fresco_source_tests
+module Session = Proc.Session
+
+let channel_pair () =
+  let ap = Session.new_server_access_point () in
+  let first,blocked = Proc.Proc.start (fun () -> Session.accept ap) in
+  assert_bool "First endpoint waits for its peer" blocked;
+  let second,blocked = Proc.Proc.start (fun () -> Session.request ap) in
+  assert_bool "Second endpoint connects immediately" (not blocked);
+  first,second
+
+let send channel value =
+  assert_equal Session.SendOK
+    (Proc.Proc.start (fun () -> Session.send_from_server value (fst channel)))
 
 let check source = FrescoFrontend.check_string (FrescoFrontend.empty ()) source
 let accept source = ignore (check source)
@@ -17,6 +30,68 @@ let exchange create =
   "var (x,c) = receive(request(ap)); close(c); x"
 
 let suite = "Fresco sessions" >::: [
+  "link drains queued messages after the sender closes" >:: (fun _ ->
+    let producer,left = channel_pair () in
+    let right,consumer = channel_pair () in
+    send producer (`Int 42);
+    send producer (`Int 43);
+    Session.close producer;
+    Session.link left right;
+    assert_equal (Some []) (Session.get_buffer (snd left));
+    assert_equal (Some [`Int 42; `Int 43]) (Session.get_buffer (snd consumer));
+    assert_equal None (Session.get_buffer (snd producer));
+    assert_equal (Session.ReceiveOK (`Int 42)) (Session.receive consumer);
+    assert_equal (Session.ReceiveOK (`Int 43)) (Session.receive consumer);
+    assert_equal (Some []) (Session.get_buffer (snd consumer));
+    Session.close consumer;
+    Session.close left;
+    assert_equal None (Session.get_buffer (snd consumer)));
+
+  "linked aliases retain blocked receivers and later sends" >:: (fun _ ->
+    let producer,left = channel_pair () in
+    let right,consumer = channel_pair () in
+    let pid = ProcessTypes.ProcessID.create () in
+    Session.block (snd consumer) pid;
+    Session.link left right;
+    assert_equal (Some pid) (Session.unblock (snd left));
+    assert_equal None (Session.unblock (snd consumer));
+    send producer (`Int 42);
+    assert_equal (Session.ReceiveOK (`Int 42)) (Session.receive consumer);
+    Session.close left;
+    assert_equal None (Session.get_buffer (snd consumer));
+    Session.close consumer;
+    Session.close producer);
+
+  "link accepts closed End peers without recreating buffers" >:: (fun _ ->
+    let producer,left = channel_pair () in
+    let right,consumer = channel_pair () in
+    Session.close producer;
+    Session.close consumer;
+    Session.link left right;
+    assert_equal None (Session.get_buffer (snd producer));
+    assert_equal None (Session.get_buffer (snd consumer));
+    Session.close left;
+    Session.close right);
+
+  "link rejects queued messages for a closed destination" >:: (fun _ ->
+    List.iter (fun reverse ->
+      let producer,left = channel_pair () in
+      let right,consumer = channel_pair () in
+      Session.close producer;
+      send consumer (`Int 42);
+      let first,second = if reverse then right,left else left,right in
+      begin match Session.link first second with
+        | () -> assert_failure "Expected a closed destination error"
+        | exception Errors.InternalError {filename; message} ->
+            assert_equal "proc.ml" filename;
+            assert_equal "Cannot link buffered messages to a closed endpoint" message
+      end;
+      assert_equal (Some [`Int 42]) (Session.get_buffer (snd right));
+      assert_equal None (Session.get_buffer (snd producer));
+      Session.close left;
+      Session.close right;
+      Session.close consumer) [false; true]);
+
   "recursive offer and selection retain their continuations" >:: (fun _ ->
     accept {|
       typename Loop = [&|Again:Loop,Done:End|&];

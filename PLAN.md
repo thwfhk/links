@@ -16,8 +16,8 @@ implementation decisions, reasons, internal invariants and source comparisons.
 
 All in-scope D1–D7 work is complete, independently reviewed, checked and committed.
 The D7 migration inventory was checked against current source on 8 November 2026.
-D8a and D8b resumed on 8 November 2026 from `3a170073`. D8a1 is complete;
-D8a2 is next.
+D8a and D8b resumed on 8 November 2026 from `3a170073`. D8a1 and D8a2 are
+complete; D8a3 is next.
 
 Fresco is the default for batch, REPL and compilation. Handler execution uses
 `enable_handlers`. Explicit `--set=fresco=false` retains legacy compatibility;
@@ -112,7 +112,8 @@ effect variables and other excluded work remain [postponed](#postponed-work).
 | D7 migration 9 | Polymorphism and recursive continuation contracts | `c71fcc6f` |
 | D7 migration 10 | Staged Freezeml helpers and supported typed-IR fixtures | `a80a1021` |
 | D7 migration 11 | Seven ordinary AIPL examples and final in-scope integration | `c320fd80` |
-| D8a1 | Pi recursive closure IR comparison and source migration. Binder scopes, general stream contracts and existing execution pass | This milestone |
+| D8a1 | Pi recursive closure IR comparison and source migration. Binder scopes, general stream contracts and existing execution pass | `c284c2d4` |
+| D8a2 | Interpreter close/link transfer after peer closure. Both frontends, FIFO, aliases, relays and original fusegg execution pass | This milestone |
 
 Each completed change was reviewed and checked. Earlier verification logs and
 resolved review findings remain in Git history. The original migration inventory
@@ -130,8 +131,8 @@ passes from runtime faults. Modal types remain erased before execution.
 
 1. D8a1 complete: repaired Pi's post-closure IR comparison and migrated its
    source, preserving general stream contracts and execution.
-2. D8a2: repair the demonstrated interpreter close/link fault and check both
-   inference frontends and existing session execution.
+2. D8a2 complete: repaired interpreter close/link transfer and checked both
+   frontends, queue lifecycle and existing session execution.
 3. D8a3: execute deep handlers in the interpreter and JavaScript, covering
    nesting, repeated identities, parameters and closures; retain interpreter
    shallow execution and JavaScript shallow rejection.
@@ -140,20 +141,18 @@ passes from runtime faults. Modal types remain erased before execution.
 
 Both saved failures reproduce at `3a170073`. Pi's post-closure IR comparison
 and source migration are complete; see [shared type contracts](doc/modal-effects-design.md#shared-type-and-traversal-contracts).
-The next action is D8a2's bounded close/link repair, recorded in
-`/tmp/links-d8-close-cause/report.md`, after committing D8a1.
+The close/link repair is complete; see [session integration](doc/modal-effects-design.md#d7-session-integration).
+The next action is D8a3's interpreter/JavaScript handler execution milestone
+after committing D8a2.
 
 | Task | Depends on | Completion checks |
 |---|---|---|
-| D8a: backend execution | D7 | Actual interpreter and JavaScript deep-handler execution covers nesting, repeated identities, parameters and closures; interpreter shallow execution and JavaScript rejection remain checked. Resolve the recorded interpreter close/link failure and Pi's closure-conversion/IR failure. |
+| D8a: backend execution | D7 | Actual interpreter and JavaScript deep-handler execution covers nesting, repeated identities, parameters and closures; interpreter shallow execution and JavaScript rejection remain checked. Pi and close/link repairs are complete. |
 | D8b: frontend options, documentation and final review | D8a | Both frontends remain available through the existing Fresco setting, with Fresco as the default and no automatic fallback. Check frontend selection in batch, REPL and compilation; review ghosts, exported variable requirements, recursive type consumers, lowering, optimisation and both backends; the migration guide and selected suites pass. |
 
-The close/link failure occurs when closing a sender removes a buffer that relay
-linking still reads; both frontends reproduce it. See the
-[session design](doc/modal-effects-design.md#d7-session-integration).
-Pi now retains its general stream contracts and original behaviour through
-checked closure conversion; see the
-[handler design](doc/modal-effects-design.md#handler-migration-and-modal-examples).
+Pi and close/link failures are resolved by D8a1/D8a2. Their causes and repairs
+are recorded in [shared type contracts](doc/modal-effects-design.md#shared-type-and-traversal-contracts)
+and [session integration](doc/modal-effects-design.md#d7-session-integration).
 
 Retain the design's reference Fresco pairs and `tests/freezeml.tests`. Check
 inferred type structure, higher-rank fields, zero/n-ary functions, explicit type
@@ -239,30 +238,25 @@ behaviour passes the completed D7 checks.
 
 ## Latest task and verification
 
-8 November 2026, D8a1: repaired quantified-binder scopes in runtime IR
-comparison and migrated Pi using the saved source draft. Independent review
-passed: `/tmp/links-d8a1-review.md`. Source executions retain alternating
-resumptions, caller effects, contextual results, shallow stream order and
-selective Await/Yield forwarding. The original legacy Pi remains an imported
-fixture for the aggregate runner; its feature settings remain unchanged.
-No new language decisions. The five marked D7 choices still await user review.
+8 November 2026, D8a2: repaired `Session.link` transfer to a peer that has
+already closed. Close, forwarding and evaluator wakeups remain unchanged.
+Independent review passed: `/tmp/links-d8a2-review.md`. Source checks cover both
+frontends, both transfer directions, FIFO, chained relays and closed End peers;
+unit checks cover drained queues, aliases, wakeups and rejected buffered sends
+to a closed destination. The original `fusegg` source prints both 42 results.
+No new language decisions; the five marked D7 choices still await user review.
 
-Tested source: `3a170073` plus patches and source hashes in
-`/tmp/links-d8a1-verification/` and `/tmp/links-d8a1-final-verification/`.
-The first run found the legacy aggregate import; its fixture-path repair was
-reviewed and the affected checks reran. `verification-reuse.json` records the
-source comparison for unchanged compiler/unit and other suite results. Full
-commands/results and frontend counts are in the final directory's
-`results.json` and `frontend-counts.json`.
+Tested source: `c284c2d4` plus the patch and source hashes in
+`/tmp/links-d8a2-verification/`. Source hashes stayed unchanged during checks.
+Full commands/results and frontend counts are in `results.json` and
+`frontend-counts.json`; all logs retain complete output.
 
 | Command | Result | Log |
 |---|---|---|
-| `make no-db` | Passed | `/tmp/links-d8a1-verification/build.log` |
-| `opam exec -- ./run-tests nodb-unit-tests` | 1,535 passed | `/tmp/links-d8a1-verification/unit.log` |
-| `./test-harness tests/<suite>.tests`: handlers, effect_sugar, fresco, fresco_modal, fresco_examples, polymorphism, typecheck_examples, typed_ir, functions, modules, freezeml | 564 Fresco and 241 compatibility passed; 14 existing ignores | Per-suite logs in the final directory |
-| `make rule-check`; `git diff --check` | Passed; GNU-find tab check skipped, formatter disabled | `rule-check.log`, `diff-check.log` in the final directory |
+| `make no-db` | Passed | `build.log` |
+| `opam exec -- ./run-tests nodb-unit-tests` | 1,539 passed | `unit.log` |
+| `./test-harness tests/<suite>.tests`: handlers, effect_sugar, fresco_modal, fresco_sessions, fresco_cp, fresco_session_examples, sessions, messages, typecheck_examples | 253 Fresco and 204 compatibility passed; 14 existing ignores | Per-suite `.log` files |
+| `make rule-check`; `git diff --check` | Passed; GNU-find tab check skipped, formatter disabled | `rule-check.log`, `diff-check.log` |
 
-The rule checker creates an untracked `debug` file; verification retained it
-with the logs and confirmed that source hashes stayed unchanged. The dedicated
-control-flow-linearity suite was not run. Close/link remains reproduced on both
-frontends and is the next milestone. All postponed work remains excluded.
+Logs are in `/tmp/links-d8a2-verification/`. D8a3's actual JavaScript handler
+execution and D8b remain. All postponed work remains excluded.

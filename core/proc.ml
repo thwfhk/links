@@ -1191,8 +1191,18 @@ and Session : SESSION = struct
     let in1 = find_active in1 in
     let out2 = find_active out2 in
     let in2 = find_active in2 in
-      Queue.transfer (Hashtbl.find buffers in1) (Hashtbl.find buffers out2);
-      Queue.transfer (Hashtbl.find buffers in2) (Hashtbl.find buffers out1);
+    let transfer inp outp =
+      let source = Hashtbl.find buffers inp in
+      match Hashtbl.lookup buffers outp with
+        | Some destination -> Queue.transfer source destination
+        | None ->
+            (* The peer may have closed this direction before linking. *)
+            if not (Queue.is_empty source) then
+              raise (Errors.internal_error ~filename:"proc.ml"
+                ~message:"Cannot link buffered messages to a closed endpoint")
+    in
+      transfer in1 out2;
+      transfer in2 out1;
       forward in1 out2;
       forward in2 out1
 end
