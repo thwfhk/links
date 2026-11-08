@@ -215,7 +215,7 @@ args : --set=enable_handlers=true
 Typecheck example file examples/handlers/coop.links
 examples/handlers/coop.links
 filemode : true
-args : --set=enable_handlers=true
+args : --fresco --set=enable_handlers=true
 
 Typecheck example file examples/handlers/count_web.links
 examples/handlers/count_web.links

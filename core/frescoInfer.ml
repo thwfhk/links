@@ -146,6 +146,14 @@ let canonicalise s pos roots =
     | S.Dual t -> S.Dual (copy t) | S.UniversalGhost t -> S.UniversalGhost (copy t)
     | S.Var _ | S.Primitive _ | S.Absent | S.Closed | S.End | S.Ghost -> typ in
   List.map (fun r -> { r with S.typ = copy r.S.typ }) roots
+let substitute_source_type s pos message ~replacements body =
+  let arguments = List.map (fun (_, (primary_kind, typ)) -> root ~primary_kind typ) replacements in
+  match canonicalise s pos (body :: arguments) with
+  | body :: arguments ->
+     let replacements = List.map2 (fun (id, _) argument ->
+       id, (argument.S.primary_kind, argument.S.typ)) replacements arguments in
+     get pos message (FrescoSkeletonOps.substitute_root_variables ~replacements [body])
+  | [] -> assert false
 let from_type s pos typ =
   match get pos "Invalid contextual type" (S.of_types (env s)
     [{ FrescoContext.binders = []; primary_kind = PrimaryKind.Type; typ }]) with
@@ -537,8 +545,8 @@ let coerce support s pos mode e =
              | _ -> qs,args,List.rev replacements,List.rev consumed in
            let qs,args,replacements,consumed = take qs args [] [] in
            let body = if qs = [] then body else S.ForAll (qs,body) in
-           let body = match get pos "Invalid inferred type application"
-             (FrescoSkeletonOps.substitute_root_variables ~replacements [root ~binders body]) with
+           let body = match substitute_source_type s pos "Invalid inferred type application"
+             ~replacements (root ~binders body) with
              | [r] -> r.S.typ | _ -> assert false in
            instantiate binders (term pos body (TypeApplication (e,consumed))) args
         | _ -> error pos "Inferred type application requires a quantified type") in
@@ -1026,8 +1034,8 @@ and infer_node support s mode source =
        | _ -> assert false in
      let s,qs,replacements,args = arguments s args qs [] [] in
      let body = if qs = [] then body else S.ForAll (qs,body) in
-     let typ = match get pos "Invalid explicit type substitution"
-       (FrescoSkeletonOps.substitute_root_variables ~replacements [root body]) with [r] -> r.S.typ | _ -> assert false in
+     let typ = match substitute_source_type s pos "Invalid explicit type substitution"
+       ~replacements (root body) with [r] -> r.S.typ | _ -> assert false in
      let typ = List.fold_right (fun m t -> S.Modal (m,t)) modalities typ in
      finish s typ (TypeApplication (e,args))
   | G.Instantiate body ->

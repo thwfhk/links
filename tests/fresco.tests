@@ -604,3 +604,36 @@ A nested named parameter survives the outer lambda scope
 fun(x:Int){fun(y:b){y:b}}
 args : --fresco
 stdout : @fun : \(Int\) -> \(([a-z]+)\) -> \1
+
+Explicit type arguments share nested recursive declarations
+typename Queue(a::Any)=[|Nil|Cons:(a,Queue(a))|]; sig identity:forall a::Any.(Queue(a))->Queue(a) fun identity(x){x} ~identity[Queue(Int)](Nil)
+args : --fresco
+stdout : Nil : Queue (Queue (Int))
+
+Inferred type arguments share nested recursive declarations
+typename Queue(a::Any)=[|Nil|Cons:(a,Queue(a))|]; sig identity:forall a::Any.(Queue(a))->Queue(a) fun identity(x){x} identity((Nil:Queue(Queue(Int))))
+args : --fresco
+stdout : Nil : Queue (Queue (Int))
+
+Recursive type arguments retain enclosing quantified binders
+typename Queue(a::Any)=[|Nil|Cons:(a,Queue(a))|]; sig identity:forall a::Any.(Queue(a))->Queue(a) fun identity(x){x} sig nested:forall a::Any.(Queue(Queue(a)))->Queue(Queue(a)) fun nested(xs){~identity[Queue(a)](xs)} nested((Nil:Queue(Queue(Int))))
+args : --fresco
+stdout : Nil : Queue (Queue (Int))
+
+Recursive type arguments retain ordinary kind requirements
+typename Queue(a::Any)=[|Nil|Cons:(a,Queue(a))|]; sig identity:forall a.(Queue(a))->Queue(a) fun identity(x){x} ~identity[Queue(() -@ Int)](Nil)
+args : --fresco
+exit : 1
+stderr : @.*Type error: Type does not satisfy its kind or usage requirement.*In expression: ~identity.*
+
+Recursive type arguments retain modal kind requirements
+typename Queue(a::Any)=[|Nil|Cons:(a,Queue(a))|]; sig identity:forall a::Abs.(Queue(a))->Queue(a) fun identity(x){x} ~identity[Queue(() -> Int)](Nil)
+args : --fresco
+exit : 1
+stderr : @.*Type error: Type does not satisfy its kind or usage requirement.*In expression: ~identity.*
+
+Recursive type arguments preserve rigid binder scope
+typename Queue(a::Any)=[|Nil|Cons:(a,Queue(a))|]; sig identity:forall a::Any.(Queue(a))->Queue(a) fun identity(x){x} sig wrong:forall a::Any.(Queue(Queue(a)))->Queue(Queue(Int)) fun wrong(xs){~identity[Queue(a)](xs)} ()
+args : --fresco
+exit : 1
+stderr : @.*Type error: Type does not match the required type.*In expression: ~identity.*

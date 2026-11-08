@@ -278,3 +278,74 @@ open import FrescoPrelude; open import U2_puzzle; sig pure : modal [Search(U2)] 
 exit : 1
 stderr : @.*Type error:.*In expression: selectParty\.
 args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+Cooperative scheduling retains the original complete output
+open import FrescoPrelude; open import Coop; run(test)
+stdout : @M1 A1 M2 A2 M3 B1 M4 B2 M5 \nNothing : \[\|Just:\(\(\), Coop\.ResList \(\(\)\)\)\|Nothing\|\]$
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+Cooperative handlers retain generic integer and boolean results
+open import FrescoPrelude; open import Coop; (run(fun(){42}),run(fun(){true}))
+stdout : (Just(42, Nil), Just(true, Nil)) : ([|Just:(Int, Coop.ResList (Int))|Nothing|], [|Just:(Bool, Coop.ResList (Bool))|Nothing|])
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+Cooperative handlers retain contextual returned values
+open import FrescoPrelude; open import Coop; effect Reader { Ask : () => Int; } handle ({var result=run(fun(){fun(){do Ask}}); switch(result) {case Just((f,_)) -> f() case Nothing -> 0}}) {case x -> x case <Ask => k> -> k(7)}
+stdout : 7 : Int
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+Queued cooperative resumptions retain order and caller effects
+open import FrescoPrelude; open import Coop; effect Reader { Ask : (Int) => Int; } handle ({var result=run(fun(){if(fork()) {yield(); do Ask(1)} else {yield(); do Ask(2)}}); switch(result) {case Just((value,queue)) -> switch(queue) {case Cons(next,queue) -> switch(next(queue)) {case Just((other,_)) -> [value,other] case Nothing -> [value]} case Nil -> [value]} case Nothing -> []}}) {case xs -> xs case <Ask(n) => k> -> print(intToString(n)); k(n+40)}
+stdout : 12[41, 42] : List Int
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+Cooperative execution retains its Wild requirement
+open import FrescoPrelude; open import Coop; sig pure : () -> Int fun pure() {var _=run(fun(){42}); 42} ()
+exit : 1
+stderr : @.*Type error: Type does not match the required type.*In expression: run\.
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+Cooperative operations require their effect
+open import FrescoPrelude; open import Coop; fork()
+exit : 1
+stderr : @.*Type error: Type does not match the required type.*In expression: fork\.
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+Queued resumptions retain the caller effect context
+open import FrescoPrelude; open import Coop; effect Reader { Ask : () => Int; } var result=handle (run(fun(){if(fork()) {42} else {do Ask}})) {case x -> x case <Ask => k> -> k(7)}; switch(result) {case Just((_,Cons(next,queue))) -> next(queue) case _ -> Nothing}
+exit : 1
+stderr : @.*Type error: Type does not match the required type.*In expression: next\.
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+Cooperative queue append retains ordinary elements and an open output row
+open import FrescoPrelude; open import Coop; ~snoc[Int,{Extra:Bool}]((Cons(1,Nil):Queue(Int,{})),2)
+stdout : Cons(1, Cons(2, Nil)) : Coop.Queue (Int,{ |Extra:Bool})
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+Cooperative queue append retains linear elements
+open import FrescoPrelude; open import Coop; var queue= ~snoc[(() -@ Int),{}]((Nil:Queue((() -@ Int),{})),linfun(){42}); switch(queue) {case Cons(k,Nil) -> k()}
+stdout : 42 : Int
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+Cooperative aliases retain linear result parameters
+open import FrescoPrelude; open import Coop; typename LinearComputation=Co(End); typename LinearResumption=Res(End); (Nil:ResList(End))
+stdout : Nil : Coop.ResList (End)
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+Cooperative stop retains its unrestricted result requirement
+open import FrescoPrelude; open import Coop; ~stop[End]
+exit : 1
+stderr : @.*Type error: Type does not satisfy its kind or usage requirement.*In expression: ~stop\[End\]\.
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+Cooperative handler instantiation retains its unrestricted result requirement
+open import FrescoPrelude; open import Coop; ~coop[End]
+exit : 1
+stderr : @.*Type error: Type does not satisfy its kind or usage requirement.*In expression: ~coop\[End\]\.
+args : --fresco --path=examples/handlers:examples:lib/stdlib
+
+Cooperative execution instantiation retains its unrestricted result requirement
+open import FrescoPrelude; open import Coop; ~run[End]
+exit : 1
+stderr : @.*Type error: Type does not satisfy its kind or usage requirement.*In expression: ~run\[End\]\.
+args : --fresco --path=examples/handlers:examples:lib/stdlib

@@ -2194,6 +2194,15 @@ through raw declaration captures is deferred. It would need one coordinated
 declaration snapshot across roots, context solutions and callbacks, preserving
 nominal identities while preventing old and changed bodies from being mixed.
 
+Source type application must canonicalise the function body and all replacement
+roots together immediately before substitution. Explicit type arguments and
+inferred instantiation arguments can contain separate snapshots of a declaration
+already present in the body. Validate every snapshot and share equal declaration
+graphs using the existing canonicalisation checks; retain strict rejection of
+conflicting graphs. Preserve root binders, argument primary kinds and replacement
+order. This source integration step applies to explicit and inferred calls;
+it does not substitute through raw declaration captures.
+
 `FrescoSkeletonOps` implements free-variable collection, simultaneous
 capture-avoiding root substitution and quantifier opening. It checks primary
 categories, nearest-binder categories, declaration identities and graph
@@ -2642,8 +2651,26 @@ and prompt helpers): each captures an arbitrary effectful callback before a
 later call in an independently chosen residual context. In contrast, `coop`
 threads one ambient residual context through recursive resumptions; `lambda`
 has a closed recursive expression context; and `pi` has direct same-context
-stream handlers. These three remain candidates for full migration. Their old
-effect-row parameters alone establish no need for effect variables.
+stream handlers. Their old effect-row parameters alone establish no need for
+effect variables.
+
+Coop's callback adds its named effect and removes that effect from its result,
+retaining arbitrary caller effects in returned values and queued resumptions.
+Keep the original scheduling order and explicit Wild requirements. Its generic
+`snoc` accepts closed Cons/Nil queues and returns an open recursive output row;
+ordinary `Any` elements include linear functions. A shared Queue declaration
+expresses that signature and the existing ResList shape. Co/Res/ResList alias
+parameters retain ordinary `Any`, independently of the unlimited result
+parameters in the written coop/run function signatures. The nested Queue
+type-application failure and its fix are recorded in
+`/tmp/links-d7-coop-gap.md` and the
+[root-substitution design](#skeletons-and-substitution).
+
+Legacy explicit application accepts End for stop/coop/run even though their
+inferred End calls reject. Retain their checked unlimited function result
+contract and Fresco's explicit kind checks; do not infer linear-result support
+from that legacy explicit-application hole. This difference is separate from
+the aliases' ordinary `Any` parameters.
 
 Convert handler tests "Operation parameter pattern-matching" (7)--(9) and
 use one clause per operation containing a `switch`. Preserve pattern order and

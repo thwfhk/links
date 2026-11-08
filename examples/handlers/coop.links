@@ -2,29 +2,35 @@
 # Cooperative concurrency with first-order algebraic effects
 #
 
+open import FrescoPrelude;
+
 typename Two = Bool;
 typename One = ();
 
+effect Coop {
+  Fork : () => Two;
+  Yield : () => One;
+  Stop : () => Zero;
+}
+
 # type of a concurrent computation
-typename Co(e::Eff, a) = Comp (a, {Fork  : Two,
-                                   Yield : One,
-                                   Stop  : Zero | e});
+typename Co(a::Any) = modal <Coop> (() -> modal <Coop|> a);
 
 ## cooperative concurrency interface
-sig fork : Comp(Two, {Fork:Two|_})
+sig fork : modal [Coop] (() -> Two)
 fun fork() {do Fork}
 
-sig yield : Comp(One, {Yield:One|_})
+sig yield : modal [Coop] (() -> One)
 fun yield() {do Yield}
 
-sig stop : Comp(a, {Stop:Zero|_})
+sig stop : forall a. modal [Coop] (() -> a)
 fun stop() {switch (do Stop) { }}
 
 # in fact `Yield` is redundant: we could use
 # yield() == if(fork()) {stop()} else {()}
 
 # example abstract concurrent computation
-sig test : Co({ |e}, One)
+sig test : modal [Wild] (Co(One))
 fun test() {
   print("M1 ");
   if(fork()) { print("A1 "); yield(); print ("A2 "); stop() } else {
@@ -41,12 +47,15 @@ fun test() {
  }
 }
 
+typename Queue(a::Any, r::Row(Any,Any)) =
+  [|Cons:(a, Queue(a,{ |r}))|Nil|r|];
+
 # a resumption takes an initial list of resumptions and if one of them
 # yields a value returns a pair of the value and a list of unfinished
 # resumptions
 mutual {
-  typename Res(e::Eff, a) = (ResList({ |e}, a)) ~e~> Maybe ((a, ResList({ |e}, a)));
-  typename ResList(e::Eff, a) = [|Cons:(Res({ |e}, a), ResList({ |e}, a))|Nil|];
+  typename Res(a::Any) = (ResList(a)) -> Maybe ((a, ResList(a)));
+  typename ResList(a::Any) = Queue(Res(a),{});
 }
 
 # Links (following OCaml) only infers recursive types when all
@@ -56,6 +65,8 @@ mutual {
 # list type - otherwise we would need to add a number of type
 # annotations inside the body of coop.
 
+sig snoc : forall a::Any, r::Row(Any,Any).
+  (Queue(a,{}), a) -> Queue(a,{ |r})
 fun snoc(rs, r) {
   switch (rs) {
     case Nil             -> Cons(r, Nil)
@@ -63,17 +74,20 @@ fun snoc(rs, r) {
   }
 }
 
-sig coop : (Co({ |e}, a)) {Fork{p},Yield{q},Stop{r}|e}~> Res({Fork{p},Yield{q},Stop{r}|e}, a)
+sig coop : forall a. modal [Wild] ((Co(a)) -> Res(a))
 fun coop(m) {
-  handle(m()) {
+  ((handle(m()) {
     case x            -> fun (rs) {Just ((x, rs))}
     case <Fork => k>  -> fun (rs) {
-                           k(true)(snoc(rs, fun(rs) {k(false)(rs)}))
+                           var next = fun(rs:ResList(a)) {k(false)(rs)};
+                           k(true)(snoc(rs, next))
                          }
     case <Yield => k> -> fun (rs) {
                            switch (rs) {
                              case Nil         -> k(())(Nil)
-                             case Cons(r, rs) -> r(snoc(rs, fun(rs) {k(())(rs)}))
+                             case Cons(r, rs) ->
+                               var next = fun(rs:ResList(a)) {k(())(rs)};
+                               r(snoc(rs, next))
                            }
                          }
     case <Stop>       -> fun (rs) {
@@ -82,10 +96,10 @@ fun coop(m) {
                              case Cons(r, rs) -> r(rs)
                            }
                          }
-  }
+  }) : (ResList(a)) -> Maybe ((a, ResList(a))))
 }
 
-sig run : (Co({ |e}, a)) {Fork{p},Yield{q},Stop{r}|e}~> Maybe ((a, ResList({Fork{p},Yield{q},Stop{r}|e}, a)))
+sig run : forall a. modal [Wild] ((Co(a)) -> Maybe ((a, ResList(a))))
 fun run(m) {
   coop(m)(Nil)
 }
