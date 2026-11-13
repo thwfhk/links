@@ -166,16 +166,14 @@ module Desugar = struct
                   (* Check that the quantifiers / kinds match up, then generate
                    * a `RecursiveApplication. *)
                   let r_args = match_quantifiers snd qs in
-                  let r_unwind args dual =
+                  let r_unwind args =
                     let _, body = StringMap.find tycon !tygroup_ref.type_map in
-                    let body = Instantiate.recursive_application tycon qs args body in
-                    if dual then dual_type body else body
+                    Instantiate.recursive_application tycon qs args body
                   in
                   let r_unique_name = tycon ^ string_of_int !tygroup_ref.id in
                   let r_linear () = StringMap.lookup tycon !tygroup_ref.linearity_map in
                   RecursiveApplication
                     { r_name = tycon;
-                      r_dual = false;
                       r_unique_name;
                       r_quantifiers = List.map snd qs;
                       r_args; r_unwind; r_linear
@@ -183,22 +181,6 @@ module Desugar = struct
             end
         | Primitive k -> Types.Primitive k
         | DB -> Types.Primitive Primitive.DB
-        | (Input _ | Output _ | Select _ | Choice _ | Dual _ | End) as s ->
-            session_type alias_env s t'
-
-  and session_type alias_env st (node : 'a WithPos.t) =
-    (* let lookup_type t = StringMap.find t var_env.tenv in -- used only in commented code *)
-    (* HACKY *)
-    let open Datatype in
-    match st with
-    | Input (t, s)  -> Types.Input  (datatype alias_env t, datatype alias_env s)
-    | Output (t, s) -> Types.Output (datatype alias_env t, datatype alias_env s)
-    | Select r      -> Types.Select (row alias_env r node)
-    | Choice r      -> Types.Choice (row alias_env r node)
-    | Dual s        -> Types.Dual (datatype alias_env s)
-    | End           -> Types.End
-    | _ -> assert false
-
   and fieldspec alias_env fs _ =
     match fs with
     | Datatype.Absent -> Types.Absent
@@ -264,16 +246,14 @@ module Desugar = struct
                   (* Check that the quantifiers / kinds match up, then generate
                    * a `RecursiveApplication. *)
                   let r_args = match_quantifiers snd qs in
-                  let r_unwind args dual =
+                  let r_unwind args =
                     let _, body = StringMap.find name !tygroup_ref.type_map in
-                    let body = Instantiate.recursive_application name qs args body in
-                    if dual then dual_type body else body
+                    Instantiate.recursive_application name qs args body
                   in
                   let r_unique_name = name ^ string_of_int !tygroup_ref.id in
                   let r_linear () = StringMap.lookup name !tygroup_ref.linearity_map in
                   RecursiveApplication
                     { r_name = name;
-                      r_dual = false;
                       r_unique_name;
                       r_quantifiers = List.map snd qs;
                       r_args; r_unwind; r_linear
@@ -282,7 +262,7 @@ module Desugar = struct
         | Closed -> Types.make_empty_closed_row ()
         | Open srv ->
            let rv = SugarTypeVar.get_resolved_row_exn srv in
-           Types.Row (StringMap.empty, rv, false)
+           Types.Row (StringMap.empty, rv)
         | Recursive (stv, r) ->
            let mrv = SugarTypeVar.get_resolved_row_exn stv in
 
@@ -291,7 +271,7 @@ module Desugar = struct
 
            (* Turn mrv into a proper recursive row *)
            Unionfind.change mrv (Types.Recursive (var, sk, r));
-           Types.Row (StringMap.empty, mrv, false)
+           Types.Row (StringMap.empty, mrv)
 
     in
     let fields = List.map (fun (k, p) -> (k, fieldspec alias_env p node)) fields in
@@ -329,7 +309,7 @@ module Desugar = struct
       | _ -> assert false in
     let write_row, needed_row =
       match TypeUtils.concrete_type read_type with
-      | Record (Row (fields, _, _)) ->
+      | Record (Row (fields, _)) ->
           StringMap.fold
             (fun label t (write, needed) ->
               match lookup label constraints with

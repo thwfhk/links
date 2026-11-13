@@ -69,10 +69,10 @@ reproduced; existing failures are recorded separately.
   their build and CI targets. Keep the shared database code until milestone 3.
 - [x] **2.2** (`2639b06b`) Remove the web and JavaScript entry points and foreign code.
   Keep file execution, `-e`, the REPL and type checking.
-- [x] **2.3** Remove formlets, pages and XML paths and their prelude and
+- [x] **2.3** (`68c19606`) Remove formlets, pages and XML paths and their prelude and
   primitive definitions. Delete the browser backend and library when
   their callers are gone.
-- [ ] **2.4** Remove session types, session exceptions and CP syntax.
+- [x] **2.4** Remove session types, session exceptions and CP syntax.
   Preserve value linearity and ordinary handler dispatch. Update
   session-dependent tests whose purpose still applies.
 - [ ] **2.5** Remove native processes and mailboxes. Replace the
@@ -152,8 +152,29 @@ regressions and native IR unit tests pass, and source checks pass.
 
 ## Status
 
-Milestone 2 is in progress. Items 2.1 to 2.3 are complete. Next, remove
-sessions, session exceptions and CP syntax in 2.4.
+Milestone 2 is in progress. Items 2.1 to 2.4 are complete. Next, remove
+processes, mailboxes and the remaining web runtime in 2.5.
+
+Checks for 2.4 used `68c19606` plus the item changes on OCaml 5.4.0.
+Logs are under `/private/tmp/smalllinks-m2.B3p5xp/`.
+
+| Command | Result | Log |
+| --- | --- | --- |
+| `make no-db` and `make all-ci` | Passed. | `2.4-build.log`, `2.4-ci.log` |
+| Native expression, file with imports, typecheck-only file and REPL checks | All passed. | `2.4-expr.log`, `2.4-file.log`, `2.4-typecheck.log`, `2.4-repl.log` |
+| `./test-harness tests/<suite>.tests` for the suites below | 811 passed and 8 were ignored. | One `2.4-<suite>.log` per suite |
+| `opam exec -- ./run-tests nodb-unit-tests` | 44 passed. | `2.4-unit.log` |
+| `./tests/validate_typecheck_testfile.testscript` | Passed. | `2.4-registration.log` |
+| `make rule-check` and `git diff --check` | Passed. GNU find was unavailable for the tabs rule. | `2.4-rule.log`, `2.4-diff.log` |
+
+Suites for 2.4: `annotations`, `cliArgs`, `collections`, `continuations`,
+`control_flow_linearity`, `database`, `desugar_datatypes`, `effect_sugar`,
+`effectname`, `freezeml`, `functions`, `handlers`, `lexing`, `messages`,
+`modules`, `mutual`, `native`, `parser`, `polymorphism`,
+`presence_type_arg`, `recheck_frontend_transformations`, `records`,
+`regex`, `relational_lenses`, `roundtrippable_types`, `type_print`,
+`typecheck_examples`, `typecheck_examples_with_cfl_on`, `typed_ir`,
+`variants`.
 
 Checks for 2.3 used `2639b06b` plus the item changes on OCaml 5.4.0.
 Logs are under `/private/tmp/smalllinks-m2.B3p5xp/`.

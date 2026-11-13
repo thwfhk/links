@@ -104,17 +104,13 @@ var foo = spawn { () }; ()
 exit : 0
 stdout : () : ()
 
-fork (#874)
-tests/typed_ir/T874.links
-filemode : true
-exit : 0
-stdout : () : ()
+Apply an unrestricted callback with shared effects
+sig apply : forall a,b,e::Row. ((a) ~e~> b, a) ~e~> b fun apply(f, x) { f(x) } apply(fun(x) { x + 1 }, 41)
+stdout : 42 : Int
 
-linFork (#875)
-tests/typed_ir/T875.links
-filemode : true
-exit : 0
-stdout : () : ()
+Apply a linear callback with shared effects
+sig applyLinear : forall a,b,e::Row. ((a) ~e~@ b, a) ~e~> b fun applyLinear(f, x) { f(x) } applyLinear(linfun(x) { x + 1 }, 41)
+stdout : 42 : Int
 
 lf (#876)
 tests/typed_ir/T876.links

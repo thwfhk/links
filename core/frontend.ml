@@ -79,39 +79,12 @@ type 'a result =
 module Untyped = struct
   type transformer = (module Untyped.S)
 
-  (* This functor constructs a conditional transformer from a given
-     transformer and a (side-effecting) condition. *)
-  module Conditional(T : sig
-               include Untyped.S
-               val condition : unit -> bool
-             end) = struct
-
-    module Untyped = struct
-      let name = Printf.sprintf "Conditional(%s)" T.Untyped.name
-
-      let program state program =
-        if T.condition ()
-        then T.Untyped.program state program
-        else Identity.Untyped.program state program
-
-      let sentence state sentence =
-        if T.condition ()
-        then T.Untyped.sentence state sentence
-        else Identity.Untyped.sentence state sentence
-    end
-  end
-
-  let only_if : bool Settings.setting -> (module Untyped.S) -> transformer
-    = fun setting (module T) ->
-    (module Conditional(struct include T let condition () = Settings.get setting end))
-
   (* Collection of transformers. *)
   let transformers : transformer array
     = [| (module ResolvePositions)
        ; (module DesugarSwitchFuns)
        ; (module DesugarModules)
        ; (module Shunting)
-       ; only_if Basicsettings.Sessions.exceptions_enabled (module DesugarSessionExceptions)
        ; (module LiftRecursive)
        ; (module DesugarTypeVariables)
        ; (module DesugarEffects)
@@ -151,41 +124,9 @@ end
 module Typeability_preserving = struct
   type transformer = (module Typeable.S)
 
-  (* This functor constructs a conditional transformer from a given
-       transformer and a (side-effecting) condition. *)
-  module Conditional(T : sig
-               include Typeable.S
-               val condition : unit -> bool
-             end) = struct
-
-    module Typeable = struct
-      let name = Printf.sprintf "Conditional(%s)" T.Typeable.name
-
-      let program state program =
-        if T.condition ()
-        then T.Typeable.program state program
-        else Identity.Typeable.program state program
-
-      let sentence state sentence =
-        if T.condition ()
-        then T.Typeable.sentence state sentence
-        else Identity.Typeable.sentence state sentence
-    end
-  end
-
-  let only_if : bool Settings.setting -> (module Typeable.S) -> transformer
-    = fun setting (module T) ->
-    (module Conditional(struct
-                include T
-                let condition () = Settings.get setting end))
-
   (* Collection of transformers. *)
   let transformers : transformer array
     = [| (module DesugarInners) (* this must always be done first after type inference *)
-       ; (module DesugarCP)
-       ; only_if
-           Basicsettings.Sessions.exceptions_enabled
-           (module DesugarSessionExceptions)
        ; (module DesugarProcesses)
        ; (module DesugarFors)
        ; (module DesugarRegexes)
@@ -214,9 +155,7 @@ module Typeability_preserving = struct
             [payload]. *)
          try
            let (program, datatype, tyenv') =
-             TypeSugar.Check.program
-                     { tyenv with Types.desugared = true }
-                     payload.program in
+             TypeSugar.Check.program tyenv payload.program in
                   (* TODO(dhil): Verify post-transformation invariants. *)
            let context = { payload.state.Transform.Typeable.context with
                            Context.typing_environment = Types.extend_typing_environment tyenv tyenv' } in
@@ -258,9 +197,7 @@ module Typeability_preserving = struct
             [payload]. *)
          try
            let (program, datatype, tyenv') =
-             TypeSugar.Check.sentence
-                     { tyenv with Types.desugared = true }
-                     payload.program in
+             TypeSugar.Check.sentence tyenv payload.program in
                   (* TODO(dhil): Verify post-transformation invariants. *)
            let context = { payload.state.Transform.Typeable.context with
                            Context.typing_environment = Types.extend_typing_environment tyenv tyenv' } in

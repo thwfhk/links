@@ -21,10 +21,10 @@ let type_section env =
   | Project label ->
       let ab, a = Types.fresh_type_quantifier (lin_any, res_any) in
       let rhob, row  = fresh_row_quantifier (lin_any, res_any) in
-      let (fields, rho, _) = TypeUtils.extract_row_parts row in
+      let (fields, rho) = TypeUtils.extract_row_parts row in
       let eb, e = Types.fresh_row_quantifier default_effect_subkind in
 
-      let r = Record (Row (StringMap.add label (Present a) fields, rho, false)) in
+      let r = Record (Row (StringMap.add label (Present a) fields, rho)) in
         ForAll ([ab; rhob; eb],
                 Function (Types.make_tuple_type [r], e, a))
   | Name var -> TyEnv.find var env
@@ -310,22 +310,6 @@ class transform (env : Types.typing_environment) =
           let (o, body, _) = o#phrase body in
           let o = o#restore_envs envs in
             (o, Spawn (k, spawn_loc, body, Some inner_effects), process_type)
-      | Sugartypes.Select (l, e) ->
-         let (o, e, t) = o#phrase e in
-         (o, Sugartypes.Select (l, e), TypeUtils.select_type l t)
-      | Offer (e, bs, Some t) ->
-          let (o, e, _) = o#phrase e in
-          let (o, bs) =
-            listu o
-              (fun o (p, e) ->
-                 let (o, p) = o#pattern p in
-                 let (o, e, _) = o#phrase e in (o, (p, e)))
-              bs in
-          let (o, t) = o#datatype t in
-            (o, Offer (e, bs, Some t), t)
-      | CP p ->
-         let (o, p, t) = o#cp_phrase p in
-         (o, CP p, t)
       | Query (range, policy, body, Some t) ->
           let (o, range) =
             optionu o
@@ -462,11 +446,11 @@ class transform (env : Types.typing_environment) =
           in
           let t = match Types.concrete_type t with
             | Record row ->
-               let  ( fs, rv, closed ) =
+               let  (fs, rv) =
                  Types.flatten_row row |> TypeUtils.extract_row_parts
                in
                let fs = List.fold_left2 (fun fs (name, _) t -> StringMap.add name (Present t) fs) fs fields ts in
-               Record (Row (fs, rv, closed))
+               Record (Row (fs, rv))
             | _ -> t
           in
           (o, With (e, fields), t)
@@ -533,14 +517,6 @@ class transform (env : Types.typing_environment) =
            shd_params = params}
          in
          (o, Handle { sh_expr = expr; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = descr }, output_t)
-      | TryInOtherwise (try_phr, as_pat, as_phr, otherwise_phr, (Some dt)) ->
-          let (o, try_phr, _) = o#phrase try_phr in
-          let (o, as_pat) = o#pattern as_pat in
-          let (o, as_phr, _) = o#phrase as_phr in
-          let (o, otherwise_phr, _) = o#phrase otherwise_phr in
-          let (o, dt) = o#datatype dt in
-          (o, TryInOtherwise (try_phr, as_pat, as_phr, otherwise_phr, (Some dt)), dt)
-      | Raise -> (o, Raise, Types.fresh_type_variable (lin_any, res_any))
       | Switch (v, cases, Some t) ->
           let (o, v, _) = o#phrase v in
           let (o, cases) =
@@ -865,70 +841,5 @@ class transform (env : Types.typing_environment) =
       let var_env = TyEnv.bind (Binder.to_name bndr) (Binder.to_type bndr) var_env in
       ({< var_env=var_env >}, bndr)
 
-    method cp_phrase : cp_phrase -> ('self_type * cp_phrase * Types.datatype) =
-      fun phrase ->
-      let o, node, t = WithPos.node phrase |> o#cp_phrasenode in
-      o, (WithPos.map ~f:(fun _ -> node) phrase), t
 
-    (* TODO: should really invoke o#datatype on type annotations! *)
-    method cp_phrasenode : cp_phrasenode -> ('self_type * cp_phrasenode * Types.datatype) = function
-      | CPUnquote (bs, e) ->
-         let envs = o#backup_envs in
-         let (o, bs) = listu o (fun o -> o#binding) bs in
-         let (o, e, t) = o#phrase e in
-         let o = o#restore_envs envs in
-         o, CPUnquote (bs, e), t
-      | CPGrab (cbind, None, p) ->
-         let (o, p, t) = o#cp_phrase p in
-         o, CPGrab (cbind, None, p), t
-      | CPGrab ((c, Some (Input (_a, s), _grab_tyargs) as cbind), Some b, p) -> (* FYI: a = u *)
-         let envs = o#backup_envs in
-         let (o, b) = o#binder b in
-         let venv = TyEnv.bind c s (o#get_var_env ()) in
-         let o = {< var_env = venv >} in
-         let (o, p, t) = o#cp_phrase p in
-         let o = o#restore_envs envs in
-         o, CPGrab (cbind, Some b, p), t
-      | CPGive ((c, Some (Output (_t, s), _tyargs) as cbind), e, p) ->
-         let envs = o#backup_envs in
-         let o = {< var_env = TyEnv.bind c s (o#get_var_env ()) >} in
-         let (o, e, _typ) = option o (fun o -> o#phrase) e in
-         let (o, p, t) = o#cp_phrase p in
-         let o = o#restore_envs envs in
-         o, CPGive (cbind, e, p), t
-      | CPGiveNothing c ->
-         let envs = o#backup_envs in
-         let o, c = o#binder c in
-         let o = o#restore_envs envs in
-         o, CPGiveNothing c, Types.make_endbang_type
-      | CPGrab _ -> raise (internal_error "Malformed grab in TransformSugar")
-      | CPGive _ -> raise (internal_error "Malformed give in TransformSugar")
-      | CPSelect (b, label, p) ->
-         let envs = o#backup_envs in
-         let o, b = o#binder b in
-         let (o, p, t) = o#cp_phrase p in
-         let o = o#restore_envs envs in
-         o, CPSelect (b, label, p), t
-      | CPOffer (b, cases) ->
-         let (o, cases) = List.fold_right (fun (label, p) (o, cases) ->
-                                           let envs = o#backup_envs in
-                                           let o, _ = o#binder b in
-                                           let (o, p, t) = o#cp_phrase p in
-                                           (o#restore_envs envs, ((label, p), t) :: cases)) cases (o, []) in
-         begin
-           match List.split cases with
-           | cases, t :: _ts ->
-              o, CPOffer (b, cases), t
-           | _ -> assert false
-         end
-      | CPLink (c, d) -> o, CPLink (c, d), Types.unit_type
-      | CPComp (bndr, left, right) ->
-         let c = Binder.to_name bndr in
-         let s = Binder.to_type bndr in
-         let envs = o#backup_envs in
-         let (o, left, _typ) = {< var_env = TyEnv.bind c s (o#get_var_env ()) >}#cp_phrase left in
-         let whiny_dual_type s = try Types.dual_type s with Invalid_argument _ -> raise (Invalid_argument ("Attempted to dualize non-session type " ^ Types.string_of_datatype s)) in
-         let (o, right, t) = {< var_env = TyEnv.bind c (whiny_dual_type s) (o#get_var_env ()) >}#cp_phrase right in
-         let o = o#restore_envs envs in
-         o, CPComp (bndr, left, right), t
   end

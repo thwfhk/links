@@ -370,18 +370,6 @@ struct
         | CallCC v ->
             let o, v, t = o#value v in
               o, CallCC v, deconstruct (return_type ~overstep_quantifiers:true) t
-        | Select (l, v) ->
-           let o, v, t = o#value v in
-           o, Select (l, v), t
-        | Choice (v, bs) ->
-           let o, v, _ = o#value v in
-           let o, bs, branch_types =
-             o#name_map (fun o (b, c) ->
-                         let o, b = o#binder b in
-                         let o, c, t = o#computation c in
-                         o, (b, c), t) bs in
-           let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
-           o, Choice (v, bs), t
     | Handle ({ ih_comp; ih_cases; ih_return; ih_depth }) ->
        let (o, comp, _) = o#computation ih_comp in
            (* TODO FIXME traverse parameters *)

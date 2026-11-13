@@ -68,19 +68,14 @@ let keywords = [
  "module"   , MODULE;
  "mu"       , MU;
  "mutual"   , MUTUAL;
- "nu"       , NU;
- "offer"    , OFFER;
  "on"       , ON;
  "orderby"  , ORDERBY;
  "op"       , OP;
  "open"     , OPEN;
- "otherwise", OTHERWISE;
  "query"    , QUERY;
- "raise"    , RAISE;
  "readonly" , READONLY;
  "receive"  , RECEIVE;
  "returning", RETURNING;
- "select"   , SELECT;
  "set"      , SET;
  "shallowhandle", SHALLOWHANDLE;
  "sig"      , SIG;
@@ -95,7 +90,6 @@ let keywords = [
  "TemporalTable", TEMPORALTABLE;
  "to"       , TO;
  "true"     , TRUE;
- "try"     , TRY;
  "tt_insert" , TTINSERT;
  "tt_join"   , TTJOIN;
  "typename" , TYPENAME;
@@ -162,21 +156,14 @@ rule lex ctxt nl = parse
   | ')'                                 { RPAREN }
   | '{'                                 { ctxt#push_lexer (lex ctxt nl); LBRACE }
   | '}'                                 { ctxt#pop_lexer (* fall back *); RBRACE }
-  | "<->"                               { LRARROW }
   | "<--"                               { LLARROW }
   | "<-t-"                              { LTLARROW }
   | "<-v-"                              { LVLARROW }
   | "<-"                                { LARROW }
-  | "<|"                                { LEFTTRIANGLE }
-  | "|>"                                { RIGHTTRIANGLE }
   | "[|"                                { LBRACKETBAR }
   | "|]"                                { BARRBRACKET }
   | '['                                 { LBRACKET }
   | ']'                                 { RBRACKET }
-  | "[+|"                               { LBRACKETPLUSBAR }
-  | "|+]"                               { BARPLUSRBRACKET }
-  | "[&|"                               { LBRACKETAMPBAR }
-  | "|&]"                               { BARAMPRBRACKET }
   | "||"                                { BARBAR }
   | "&&"                                { AMPAMP }
   | '|'                                 { VBAR }

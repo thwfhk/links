@@ -79,7 +79,6 @@ module SugarConstructors (Position : Pos)
     | [e] -> record ~ppos [("1", e)]
     | es  -> with_pos ppos (TupleLit es)
 
-  let cp_unit ppos = with_pos ppos (CPUnquote ([], tuple ~ppos []))
 
   let list ?(ppos=dp) ?ty elems =
     with_pos ppos (ListLit (elems, ty))

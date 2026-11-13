@@ -87,20 +87,14 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
              List.fold_left remove_shadowed_quantifier inst_map qs
            in
             ForAll (qs, inst_typ updated_inst_map rec_env t)
-        | Alias (k, (name, qs, ts, is_dual), d) ->
-            Alias (k, (name, qs, List.map instta ts, is_dual), inst d)
+        | Alias (k, (name, qs, ts), d) ->
+            Alias (k, (name, qs, List.map instta ts), inst d)
         | Application (n, elem_type) ->
             Application (n, List.map instta elem_type)
         | RecursiveApplication app ->
             RecursiveApplication { app with r_args =
               List.map instta app.r_args }
-        | Input (t, s) -> Input (inst t, inst s)
-        | Output (t, s) -> Output (inst t, inst s)
-        | Select fields -> Select (instr fields)
-        | Choice fields -> Choice (instr fields)
-        | Dual s -> Types.dual_type (inst s)
         | Lens s -> Lens s
-        | End -> End
         (* presence stuff*)
         | Present t -> Present (inst t)
         | Absent -> Absent
@@ -121,7 +115,7 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
        If we change this to unwrap_row then it sometimes leads to
        divergence during type inference. Is this the correct
        behaviour? Why does this happen? *)
-    let field_env, row_var, dual = flatten_row row |> TypeUtils.extract_row_parts in
+    let field_env, row_var = flatten_row row |> TypeUtils.extract_row_parts in
 
     let is_closed =
       match Unionfind.find row_var with
@@ -158,10 +152,10 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
            add f)
       field_env
       StringMap.empty in
-    let field_env'', row_var', dual' = inst_row_var inst_map rec_env row_var dual |> TypeUtils.extract_row_parts in
-    Row (StringMap.fold StringMap.add field_env' field_env'', row_var', dual')
+    let field_env'', row_var' = inst_row_var inst_map rec_env row_var |> TypeUtils.extract_row_parts in
+    Row (StringMap.fold StringMap.add field_env' field_env'', row_var')
         (* precondition: row_var has been flattened *)
-  and inst_row_var : instantiation_maps -> inst_env -> row_var -> bool -> row = fun inst_map rec_env row_var dual ->
+  and inst_row_var : instantiation_maps -> inst_env -> row_var -> row = fun inst_map rec_env row_var ->
     (* HACK: fix the ill-formed rows that are introduced in the
        instantiation maps *)
     (* TODO: ensure that this never happens or embrace it? *)
@@ -169,31 +163,29 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
     let rowify t =
       match t with
       | Row _ -> t
-      | Meta row_var -> Row (StringMap.empty, row_var, false)
+      | Meta row_var -> Row (StringMap.empty, row_var)
       | Alias (PrimaryKind.Row, _,row) -> row
       | _ -> assert false in
     let instr = inst_row inst_map rec_env in
-    let dual_if = if dual then dual_row else fun x -> x in
     match Unionfind.find row_var with
-    | Closed -> Row (StringMap.empty, row_var, dual)
+    | Closed -> Row (StringMap.empty, row_var)
     | Var (var, _, _) ->
         if IntMap.mem var inst_map then
-          dual_if (rowify (snd (IntMap.find var inst_map)))
+          rowify (snd (IntMap.find var inst_map))
         else
-          Row (StringMap.empty, row_var, dual)
+          Row (StringMap.empty, row_var)
     | Recursive (var, kind, rec_row) ->
         if IntMap.mem var rec_env then
-          Row (StringMap.empty, IntMap.find var rec_env, dual)
+          Row (StringMap.empty, IntMap.find var rec_env)
         else
           begin
             let var' = Types.fresh_raw_variable () in
             let point' = Unionfind.fresh (Var (var', kind, `Flexible)) in
             let rec_row' = inst_row inst_map (IntMap.add var point' rec_env) rec_row in
             let _ = Unionfind.change point' (Recursive (var', kind, rec_row')) in
-              Row (StringMap.empty, point', dual)
+              Row (StringMap.empty, point')
           end
-    | row ->
-       dual_if (instr row)
+    | row -> instr row
 
   and inst_presence : instantiation_maps -> inst_env -> datatype -> datatype =
     fun inst_map rec_env p -> inst_typ inst_map rec_env p
@@ -234,7 +226,7 @@ let instantiate_typ : bool -> datatype -> (type_arg list * datatype) = fun rigid
             let open PrimaryKind in
             match Kind.primary_kind kind with
             | (Type | Presence) as pk -> pk, Meta point
-            | Row -> Row, Row (StringMap.empty, point, false) in
+            | Row -> Row, Row (StringMap.empty, point) in
           IntMap.add var ty inst_env, ty :: tys in
 
         let inst_map, tys =
@@ -450,4 +442,4 @@ let alias name tyargs env : Types.typ =
            definition with the type arguments *and* instantiate any
            top-level quantifiers *)
         let (_, body) = typ (instantiate_datatype inst_map body) in
-          Alias (k, (name, List.map snd vars, tyargs, false), body)
+          Alias (k, (name, List.map snd vars, tyargs), body)

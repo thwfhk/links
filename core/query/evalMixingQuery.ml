@@ -56,7 +56,7 @@ and aggregator ar q =
   in
   let z = Var.fresh_raw_var () in
   let tyk, _tyv = q |> QL.type_of_expression |> Types.unwrap_map_type in
-  let fsk, _, _ = tyk |> Types.extract_row |> Types.extract_row_parts in
+  let fsk, _ = tyk |> Types.extract_row |> Types.extract_row_parts in
   let fields_k = fsk |> StringMap.to_alist |> List.map (fun (f,_) -> S.Project (z, "1@" ^ f), "1@" ^ f) in
   let fields_v = ar |> StringMap.to_alist |> List.map (fun (f_out, (aggfun, f_in)) ->
     S.Apply (aggr aggfun, [S.Project (z, "2@" ^ f_in)]), "2@" ^ f_out)
@@ -78,7 +78,7 @@ and generator locvars = function
 | (QL.Keys, v, q) ->
     let z = Var.fresh_raw_var () in
     let tyk, _ = q |> QL.type_of_expression |> Types.unwrap_map_type in
-    let fsk, _, _ = tyk |> Types.extract_row |> Types.extract_row_parts in
+    let fsk, _ = tyk |> Types.extract_row |> Types.extract_row_parts in
     let fields =
       fsk
       |> StringMap.to_alist
@@ -194,8 +194,8 @@ let compile_mixing : delateralize:QueryPolicy.t -> Value.env -> (int * int) opti
     let t_flat =
       try
         let tyk, tyv = Types.unwrap_mapentry_type t_flat in
-        let rowk, _, _ = tyk |> Types.extract_row |> Types.extract_row_parts in
-        let rowv, _, _ = tyv |> Types.extract_row |> Types.extract_row_parts in
+        let rowk, _ = tyk |> Types.extract_row |> Types.extract_row_parts in
+        let rowv, _ = tyv |> Types.extract_row |> Types.extract_row_parts in
         let row = StringMap.fold
           <| (fun k v acc -> StringMap.add ("1@" ^ k) (strip_presence v) acc)
           <| rowk

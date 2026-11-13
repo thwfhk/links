@@ -84,14 +84,6 @@ struct
         Value.Env.find var env
       | Some v -> v
 
-  let handle_session_exception raise_env frames =
-    let affected_channels =
-      ChannelVarUtils.affected_channels raise_env frames in
-    (* List.iter (fun c -> Printf.printf "%s\n" (Value.string_of_value c)) affected_channels *)
-    List.fold_left (fun acc v -> acc >>= (fun _ -> Value.unbox_channel v |> Session.cancel))
-      (Lwt.return ())
-      affected_channels
-
   (** {0 Evaluation} *)
   let rec value env : Ir.value -> Value.t Lwt.t = fun v ->
     let constant = function
@@ -156,19 +148,7 @@ struct
       value env v >>= fun v ->
       Lwt.return (`FunctionPtr (f, Some v))
     | Coerce (v, _) -> value env v
-  and apply_access_point (cont : continuation) env : Value.spawn_location -> result = function
-      | `ClientSpawnLoc cid ->
-          let apid = Session.new_client_access_point cid in
-          apply_cont cont env (`AccessPointID (`ClientAccessPoint (cid, apid)))
-      | `ServerSpawnLoc ->
-          let apid = Session.new_server_access_point () in
-          apply_cont cont env (`AccessPointID (`ServerAccessPoint apid))
-  and apply (cont : continuation) env : Value.t * Value.t list -> result =
-    let invoke_session_exception () =
-      special env cont
-        (DoOperation (Value.session_exception_operation, [], Types.Not_typed))
-    in
-    function
+  and apply (cont : continuation) env : Value.t * Value.t list -> result = function
     | `FunctionPtr (f, fvs), ps ->
       let (_finfo, (xs, body), z, _location) =
         try find_fun f
@@ -278,129 +258,6 @@ struct
            Proc.block (fun () -> apply_cont K.(recv_frame &> cont) env (`Record []))
         end
     (* end of mailbox stuff *)
-    (* start of session stuff *)
-    | `PrimitiveFunction ("new", _), [] ->
-        apply_access_point cont env `ServerSpawnLoc
-    | `PrimitiveFunction ("newAP", _), [loc] ->
-        let unboxed_loc = Value.unbox_spawn_loc loc in
-        apply_access_point cont env unboxed_loc
-    | `PrimitiveFunction ("newClientAP", _), [] ->
-        (* Really this should be desugared properly into "there"... *)
-        let client_id = RequestData.get_client_id @@ Value.Env.request_data env in
-        apply_access_point cont env (`ClientSpawnLoc client_id)
-    | `PrimitiveFunction ("newServerAP", _), [] ->
-        apply_access_point cont env `ServerSpawnLoc
-    | `PrimitiveFunction ("accept", _), [ap] ->
-      let ap = Value.unbox_access_point ap in
-      begin
-        match ap with
-          | `ClientAccessPoint _ ->
-              (* TODO: Work out the semantics of this *)
-              raise (internal_error "Cannot *yet* accept on a client AP on the server")
-          | `ServerAccessPoint apid ->
-              Session.accept apid >>= fun ((_, c) as ch, blocked) ->
-              let boxed_channel = Value.box_channel ch in
-              Debug.print ("Accepting: " ^ (Value.string_of_value boxed_channel));
-              if blocked then
-                  (* block my end of the channel *)
-                  (Session.block c (Proc.get_current_pid ());
-                   Proc.block (fun () -> apply_cont cont env boxed_channel))
-              else
-                (* other end will have been unblocked in proc *)
-                apply_cont cont env boxed_channel
-      end
-    | `PrimitiveFunction ("request", _), [ap] ->
-      let ap = Value.unbox_access_point ap in
-      begin
-        match ap with
-          | `ClientAccessPoint _ ->
-              (* TODO: Work out the semantics of this *)
-              raise (internal_error "Cannot *yet* request from a client-spawned AP on the server")
-          | `ServerAccessPoint apid ->
-              Session.request apid >>= fun ((_, c) as ch, blocked) ->
-              let boxed_channel = Value.box_channel ch in
-              if blocked then
-                (* block my end of the channel *)
-                (Session.block c (Proc.get_current_pid ());
-                Proc.block (fun () -> apply_cont cont env boxed_channel))
-              else
-                (* Otherwise, other end will have been unblocked in proc.ml,
-                 * return new channel EP *)
-                apply_cont cont env boxed_channel
-      end
-    | `PrimitiveFunction ("send", _), [v; chan] ->
-      let open Session in
-      Debug.print ("sending: " ^ Value.string_of_value v ^ " to channel: " ^ Value.string_of_value chan);
-      let unboxed_chan = Value.unbox_channel chan in
-      let outp = Session.send_port unboxed_chan in
-      Session.send_from_server v outp >>= fun res ->
-        begin
-          match res with
-            | SendOK -> apply_cont cont env chan
-            | SendPartnerCancelled ->
-                (* If send fails, we need to cancel all carried channels *)
-                let contained_channels = Value.get_contained_channels v in
-                List.fold_left
-                  (fun acc c -> acc >>= fun _ -> Session.cancel c)
-                  (Lwt.return ()) contained_channels >>= fun _ ->
-                apply_cont cont env chan
-        end
-    | `PrimitiveFunction ("receive", _), [chan] ->
-      begin
-        let open Session in
-        Debug.print("receiving from channel: " ^ Value.string_of_value chan);
-        let unboxed_chan = Value.unbox_channel chan in
-        let peer_ep = Session.send_port unboxed_chan in
-        let block () =
-          (* Here, we have to extend the environment with a fresh variable
-           * representing the channel, since we can't create an IR application
-           * involving a Value.t (only an Ir.value).
-           * This *should* be safe, but still feels a bit unsatisfactory.
-           * It would be nice to refine this further. *)
-          let fresh_var = Var.fresh_raw_var () in
-          let extended_env = Value.Env.bind fresh_var (chan, Scope.Local) env in
-          let grab_frame = K.Frame.of_expr extended_env (Lib.prim_appln "receive" [Variable fresh_var]) in
-          let inp = (snd unboxed_chan) in
-          Session.block inp (Proc.get_current_pid ());
-          Proc.block (fun () -> apply_cont K.(grab_frame &> cont) env (`Record [])) in
-
-        let throw_or_block () =
-          if Settings.get (Basicsettings.Sessions.exceptions_enabled) then
-            invoke_session_exception ()
-          else block () in
-
-        if Session.is_endpoint_cancelled peer_ep then
-          throw_or_block ()
-        else
-          match Session.receive unboxed_chan with
-            | ReceiveOK v ->
-              Debug.print ("grabbed: " ^ Value.string_of_value v);
-              apply_cont cont env (Value.box_pair v chan)
-            | ReceiveBlocked -> block ()
-            | ReceivePartnerCancelled ->
-              Session.cancel unboxed_chan >>= fun _ ->
-              throw_or_block ()
-        end
-    | `PrimitiveFunction ("link", _), [chanl; chanr] ->
-        let unblock p =
-          match Session.unblock p with
-          | Some pid -> (*Debug.print("unblocked: "^string_of_int p); *)
-                        Proc.awaken pid
-          | None     -> () in
-        Debug.print ("linking channels: " ^ Value.string_of_value chanl ^ " and: " ^ Value.string_of_value chanr);
-        let (out1, in1) = Value.unbox_channel chanl in
-        let (out2, in2) = Value.unbox_channel chanr in
-        Session.link (out1, in1) (out2, in2);
-        unblock out1;
-        unblock out2;
-        apply_cont cont env (`Record [])
-    | `PrimitiveFunction ("cancel", _), [chan] ->
-        Session.cancel (Value.unbox_channel chan) >>= fun _ ->
-        apply_cont cont env (`Record [])
-    | `PrimitiveFunction ("close", _), [chan] ->
-        Session.close (Value.unbox_channel chan);
-        apply_cont cont env (`Record [])
-    (* end of session stuff *)
     | `PrimitiveFunction (n,None), args ->
        Lib.apply_pfun n args (Value.Env.request_data env) >>= fun v ->
        apply_cont cont env v
@@ -490,9 +347,6 @@ struct
 
   and special env (cont : continuation) : Ir.special -> result =
     let unpack_lens l = match l with | `Lens l -> l | _ -> raise (internal_error "Expected a lens.") in
-    let invoke_session_exception () =
-      special env cont (DoOperation (Value.session_exception_operation,
-        [], Types.Not_typed)) in
     function
     | Wrong _                    -> raise Exceptions.Wrong
     | Database v                 ->
@@ -655,7 +509,7 @@ struct
                   | None -> computation env cont e
                   | Some (db, q, t, readback) ->
                       let q = db#string_of_query ~range q in
-                      let (fieldMap, _, _) =
+                      let (fieldMap, _) =
                         let r, _ = Types.unwrap_row (TypeUtils.extract_row t) in
                         TypeUtils.extract_row_parts r in
                       let fields =
@@ -755,7 +609,7 @@ struct
         value env source >>= fun source ->
         match source with
           | `Table { Value.Table.database = (db, _); name = table;
-                     row = (fields, _, _); temporal_fields; _ } ->
+                     row = (fields, _); temporal_fields; _ } ->
               let field_types =
                 StringMap.map
                     (function
@@ -793,7 +647,7 @@ struct
         let open Value.Table in
         begin
             match source with
-              | `Table { database = (db, _); name = table; row = (fields, _, _); temporal_fields; _ } ->
+              | `Table { database = (db, _); name = table; row = (fields, _); temporal_fields; _ } ->
                   let field_types =
                     StringMap.map
                         (function
@@ -848,7 +702,6 @@ struct
        let cont = K.set_trap_point ~handler cont in
        computation env cont m
     | DoOperation (name, vs, _) ->
-       let open Value.Trap in
        begin
          match List.map (value env) vs with
          | [v] -> v
@@ -856,63 +709,7 @@ struct
              LwtHelpers.sequence vs >>= fun vs ->
              Lwt.return (Value.box vs)
        end >>= fun v ->
-       begin
-       match K.Eval.trap cont (name, v) with
-         | Trap cont_thunk -> cont_thunk ()
-         | SessionTrap st_res ->
-             handle_session_exception env st_res.frames >>= fun _ ->
-             st_res.continuation_thunk ()
-         | UnhandledSessionException frames ->
-             Debug.print ("unhandled session exception");
-             handle_session_exception env frames >>= fun _ ->
-             Proc.finish (env, Value.box_unit())
-       end
-    (* Session stuff *)
-    | Select (name, v) ->
-      value env v >>= fun chan ->
-      Debug.print ("selecting: " ^ name ^ " from: " ^ Value.string_of_value chan);
-      let ch = Value.unbox_channel chan in
-      let (outp, _inp) = ch in
-      Session.send_from_server (Value.box_variant name (Value.box_unit ())) outp >>= fun _ ->
-      OptionUtils.opt_iter Proc.awaken (Session.unblock outp);
-      apply_cont cont env chan
-    | Choice (v, cases) ->
-      begin
-        let open Session in
-        value env v >>= fun chan ->
-        Debug.print("choosing from: " ^ Value.string_of_value chan);
-        let unboxed_chan = Value.unbox_channel chan in
-        let inp = receive_port unboxed_chan in
-        let block () =
-          let choice_frame =
-             K.Frame.of_expr env (Special (Choice (v, cases)))
-          in
-             Session.block inp (Proc.get_current_pid ());
-             Proc.block (fun () -> apply_cont K.(choice_frame &> cont) env (`Record [])) in
-
-        match Session.receive unboxed_chan with
-          | ReceiveOK v ->
-            let label = fst @@ Value.unbox_variant v in
-            Debug.print ("chose label: " ^ label);
-
-              begin
-                match StringMap.lookup label cases with
-                | Some (b, body) ->
-                   let var = Var.var_of_binder b in
-                   computation (Value.Env.bind var (chan, Scope.Local) env) cont body
-                | None -> eval_error "Choice pattern matching failed"
-              end
-          | ReceiveBlocked -> block ()
-          | ReceivePartnerCancelled ->
-              (* If session exceptions enabled, then cancel this endpoint and
-               * invoke the session exception. Otherwise, block, as per old semantics. *)
-              if (Settings.get Basicsettings.Sessions.exceptions_enabled) then
-                begin
-                  Session.cancel unboxed_chan >>= fun _ ->
-                  invoke_session_exception ()
-                end
-              else block ()
-      end
+       K.Eval.trap cont (name, v)
   and finish env v = Proc.finish (env, v)
     (*****************)
 

@@ -209,12 +209,6 @@ module Datatype = struct
     | TypeApplication of string * type_arg list
     | Primitive       of Primitive.t
     | DB
-    | Input           of with_pos * with_pos
-    | Output          of with_pos * with_pos
-    | Select          of row
-    | Choice          of row
-    | Dual            of with_pos
-    | End
   and with_pos = t WithPos.t
   and row = (string * fieldspec) list * row_var
   and row_var =
@@ -423,15 +417,6 @@ and phrasenode =
   | LensGetLit       of phrase * Types.datatype option
   | LensCheckLit     of phrase * Lens.Type.t option
   | LensPutLit       of phrase * phrase * Types.datatype option
-  (* choose *)
-  | Select           of Name.t * phrase
-  (* choice *)
-  | Offer            of phrase * (Pattern.with_pos * phrase) list *
-                          Types.datatype option
-  | CP               of cp_phrase
-  | TryInOtherwise   of phrase * Pattern.with_pos * phrase * phrase *
-                          Types.datatype option
-  | Raise
 and phrase = phrasenode WithPos.t
 and bindingnode =
   | Val     of Pattern.with_pos * (SugarQuantifier.t list * phrase) * Location.t *
@@ -448,18 +433,6 @@ and bindingnode =
   | Module  of { binder: Binder.with_pos; members: binding list }
 and binding = bindingnode WithPos.t
 and block_body = binding list * phrase
-and cp_phrasenode =
-  | CPUnquote     of binding list * phrase
-  | CPGrab        of (string * (Types.datatype * tyarg list) option) *
-                       Binder.with_pos option * cp_phrase
-  | CPGive        of (string * (Types.datatype * tyarg list) option) *
-                       phrase option * cp_phrase
-  | CPGiveNothing of Binder.with_pos
-  | CPSelect      of Binder.with_pos * string * cp_phrase
-  | CPOffer       of Binder.with_pos * (string * cp_phrase) list
-  | CPLink        of Binder.with_pos * Binder.with_pos
-  | CPComp        of Binder.with_pos * cp_phrase * cp_phrase
-and cp_phrase = cp_phrasenode WithPos.t
 and aliasnode = Name.t * SugarQuantifier.t list * aliasbody
 and alias = aliasnode WithPos.t
 and aliasbody =
@@ -579,7 +552,6 @@ struct
     | Upcast (p, _, _)
     | Instantiate p
     | Generalise p
-    | Select (_, p)
     | TypeAnnotation (p, _) -> phrase p
 
     | ListLit (ps, _)
@@ -649,9 +621,7 @@ struct
                   diff (option_map (fun params -> union_map (snd ->- phrase)
                                                     params.shp_bindings)
                           descr.shd_params) params_bound]
-    | Switch (p, cases, _)
-    | Offer (p, cases, _) -> union (phrase p) (union_map case cases)
-    | CP cp -> cp_phrase cp
+    | Switch (p, cases, _) -> union (phrase p) (union_map case cases)
     | Receive (cases, _) -> union_map case cases
     | DBDelete (del, pat, p, where) ->
         let del =
@@ -688,9 +658,6 @@ struct
     | DoOperation (_, ps, _, _) -> union_map phrase ps
     | Operation _ -> empty
     | QualifiedVar _ -> empty
-    | TryInOtherwise (p1, pat, p2, p3, _ty) ->
-       union (union_map phrase [p1; p2; p3]) (pattern pat)
-    | Raise -> empty
     | Unlet p -> phrase p
     | Linlet p -> phrase p
   and binding (binding': binding)
@@ -753,23 +720,5 @@ struct
     | Splice p -> phrase p
     | Replace (r, Literal _) -> regex r
     | Replace (r, SpliceExpr p) -> union (regex r) (phrase p)
-  and cp_phrase p = match WithPos.node p with
-    | CPUnquote (binds, expr) -> block (binds, expr)
-    | CPGrab ((c, _t), Some bndr, p) ->
-      union (singleton c) (diff (cp_phrase p) (singleton (Binder.to_name bndr)))
-    | CPGrab ((c, _t), None, p) -> union (singleton c) (cp_phrase p)
-    | CPGive ((c, _t), e, p) -> union (singleton c) (union (option_map phrase e)
-                                                           (cp_phrase p))
-    | CPGiveNothing bndr -> singleton (Binder.to_name bndr)
-    | CPSelect (bndr, _label, p) ->
-      union (singleton (Binder.to_name bndr)) (cp_phrase p)
-    | CPOffer (bndr, cases) ->
-      union (singleton (Binder.to_name bndr))
-            (union_map (fun (_label, p) -> cp_phrase p) cases)
-    | CPLink (bndr1, bndr2) ->
-      union (singleton (Binder.to_name bndr1))
-            (singleton (Binder.to_name bndr2))
-    | CPComp (bndr, left, right) ->
-       diff (union (cp_phrase left) (cp_phrase right))
-            (singleton (Binder.to_name bndr))
+
 end

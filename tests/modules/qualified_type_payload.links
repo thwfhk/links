@@ -1,0 +1,14 @@
+module A {
+  typename AInt = Int;
+}
+
+typename Payload = [|Payload: A.AInt|];
+
+sig unpack : (Payload) -> Int
+fun unpack(p) {
+  switch (p) {
+    case Payload(n) -> n
+  }
+}
+
+unpack(Payload(42))

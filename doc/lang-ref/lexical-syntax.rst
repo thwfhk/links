@@ -38,8 +38,8 @@ The following keywords are reserved and are unavailable for use as identifiers::
   determined do else escape false for forall from fun
   handle if in lens lensdrop lensget lensput lensselect lensjoin
   lenscheck import insert linfun module mu mutual
-  nu offer on orderby op open otherwise prefix query raise
-  readonly receive returning select set shallowhandle sig
+  on orderby op open prefix query
+  readonly receive returning set shallowhandle sig
   spawn spawnClient spawnAt spawnAngel spawnAngelAt spawnWait
-  switch table TableHandle true try typename update unsafe
+  switch table TableHandle true typename update unsafe
   values var where with tablekeys

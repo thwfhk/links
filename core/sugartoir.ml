@@ -204,10 +204,6 @@ sig
     (var list -> tail_computation sem) ->
     tail_computation sem
 
-
-  val select : Name.t * value sem -> tail_computation sem
-
-  val offer : env -> (value sem * (CompilePatterns.Pattern.t * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
 end
 
 module BindingListMonad : BINDINGMONAD =
@@ -525,25 +521,6 @@ struct
                         lift (Special (LensPut (lens, data, rtype)), Types.make_list_type rtype)))
 
   let wrong t = lift (Special (Wrong t), t)
-
-  let select (l, e) =
-    let t = TypeUtils.select_type l (sem_type e) in
-      bind e (fun v -> lift (Special (Select (l, v)), t))
-
-  let offer env (v, cases, t) =
-    let cases =
-      List.map
-        (fun (p, body) -> ([p], fun env -> reify (body env))) cases
-    in
-      bind v
-        (fun e ->
-           M.bind
-             (comp_binding (Var.info_of_type (sem_type v), Return e))
-             (fun var ->
-                let nenv, tenv, eff = env in
-                let tenv = TEnv.bind var (sem_type v) tenv in
-                let (bs, tc) = CompilePatterns.compile_choices (nenv, tenv, eff) (t, var, cases) in
-                  reflect (bs, (tc, t))))
 
   let db_insert _env (tmp, source, rows) =
     bind source
@@ -1120,19 +1097,6 @@ struct
               in
                 I.db_delete env (del, p, source, where)
           | DBTemporalJoin (mode, e, _) -> I.temporal_join (mode, ec e)
-          | Select (l, e) ->
-             I.select (l, ev e)
-          | Offer (e, cases, Some t) ->
-             let eff = lookup_effects env in
-             let cases =
-                List.map
-                  (fun (p, body) ->
-                     let p, penv = CompilePatterns.desugar_pattern eff p in
-                       (p, fun env ->  eval (env ++ penv) body))
-                  cases
-              in
-                I.offer env (ev e, cases, t)
-
                   (* These things should all have been desugared already *)
           | Spawn _
           | Receive _
@@ -1158,13 +1122,9 @@ struct
           | LensPutLit _
           | LensFunDepsLit _
           | LensKeysLit _
-          | Offer _
           | QualifiedVar _
           | DoOperation _
-          | TryInOtherwise _
-          | Raise
-          | Instantiate _ | Generalise _
-          | CP _ ->
+          | Instantiate _ | Generalise _ ->
               Debug.print ("oops: " ^ show_phrasenode e);
               assert false
 

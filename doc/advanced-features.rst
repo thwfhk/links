@@ -9,7 +9,6 @@ encouraged to try them out!
   :maxdepth: 2
 
   advanced/effect-handlers.rst
-  advanced/linearity-session-types.rst
   advanced/relational-lenses.rst
   advanced/shredding.rst
 

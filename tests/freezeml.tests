@@ -215,14 +215,22 @@ fun(f) { (f(42) + 1, poly(~f)) }
 exit : 1
 stderr : @.*Type error:.*
 
-Do not infer polymorphic arguments (3)
-tests/freezeml/session1.links
+Do not infer a polymorphic type for a shared flexible parameter (1)
+fun (x:%a::(Unl,Mono), y:%a::(Unl,Mono)) { var _ = first(poly, (x, ())); y(42) + 1 }
 exit : 1
 stderr : @.*Type error:.*
-ignore : Failing test case, as Mono kinds get converted to Session.
 
-Do not infer polymorphic arguments (4)
-tests/freezeml/session2.links
+Do not infer a polymorphic type for a shared flexible parameter (2)
+fun (x:%a::(Unl,Mono), y:%a::(Unl,Mono)) { var _ = y(42) + 1; first(poly, (x, ())) }
+exit : 1
+stderr : @.*Type error:.*
+
+Instantiate a monomorphic parameter with a record
+sig monoIdentity : forall a::Type(Unl,Mono),e::Row. (a) -e-> a fun monoIdentity(x) { x } monoIdentity((x=42,y=true))
+stdout : (x = 42, y = true) : (x:Int,y:Bool)
+
+Reject a frozen polymorphic function as a monomorphic argument
+sig monoIdentity : forall a::Type(Unl,Mono),e::Row. (a) -e-> a fun monoIdentity(x) { x } monoIdentity(~id)
 exit : 1
 stderr : @.*Type error:.*
 

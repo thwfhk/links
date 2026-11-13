@@ -37,11 +37,11 @@ let rec is_guarded : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
         | Application (_, ts) ->
             (* don't treat abstract type constructors as guards *)
             List.for_all (is_guarded_type_arg bound_vars expanded_apps var) ts
-        | RecursiveApplication { r_unique_name; r_args; r_unwind; r_dual; _ } ->
+        | RecursiveApplication { r_unique_name; r_args; r_unwind; _ } ->
             List.for_all
               (is_guarded_type_arg bound_vars expanded_apps var) r_args &&
             ((StringSet.mem r_unique_name expanded_apps) ||
-             let body = r_unwind r_args r_dual in
+             let body = r_unwind r_args in
              is_guarded
                bound_vars (StringSet.add r_unique_name expanded_apps) var body)
         | Meta point ->
@@ -64,7 +64,7 @@ let rec is_guarded : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
            begin
              (* HACK: silly 1-tuple test *)
              match row with
-             | Row (fields, row_var, _dual)
+             | Row (fields, row_var)
                   when
                     (FieldEnv.mem "1" fields &&
                        FieldEnv.size fields = 1 &&
@@ -90,7 +90,7 @@ let rec is_guarded : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
         | Operation (f, t, _) ->
             isg f && isg t
         (* Row *)
-        | Row (fields, row_var, _dual) ->
+        | Row (fields, row_var) ->
            let check_fields = false in
            (if check_fields then
               (StringMap.fold
@@ -104,13 +104,6 @@ let rec is_guarded : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
         (* Presence *)
         | Present t -> isg t
         | Absent -> true
-        (* Session *)
-        | Input (t, s)
-        | Output (t, s) -> isg t && isg s
-        | Select row
-        | Choice row -> isgr row
-        | Dual s -> isg s
-        | End -> true
 and is_guarded_row : bool -> TypeVarSet.t -> StringSet.t -> int -> row -> bool =
   fun _check_fields bound_vars expanded_apps var row ->
   is_guarded bound_vars expanded_apps var row
@@ -143,11 +136,11 @@ let rec is_negative : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
         | Alias (_, _, t) -> isn t
         | Application (_, ts) ->
             List.exists (is_negative_type_arg bound_vars expanded_apps var) ts
-        | RecursiveApplication { r_unique_name; r_args; r_unwind; r_dual; _ } ->
+        | RecursiveApplication { r_unique_name; r_args; r_unwind; _ } ->
             List.exists
               (is_negative_type_arg bound_vars expanded_apps var) r_args ||
             StringSet.mem r_unique_name expanded_apps ||
-            let body = r_unwind r_args r_dual in
+            let body = r_unwind r_args in
               is_negative
                 bound_vars (StringSet.add r_unique_name expanded_apps)
                 var body
@@ -179,20 +172,13 @@ let rec is_negative : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
         | Operation (f, t, _) ->
             isp f || isn t
         (* Row *)
-        | Row (field_env, row_var, _dual) ->
+        | Row (field_env, row_var) ->
            is_negative_field_env bound_vars expanded_apps var field_env
            || is_negative_row_var bound_vars expanded_apps var row_var
         | Closed -> false
         (* Presence *)
         | Present t -> isn t
         | Absent -> false
-        (* Session *)
-        | Input (t, s)
-        | Output (t, s) -> isn t && isn s
-        | Select row -> isnr row
-        | Choice row -> isnr row
-        | Dual s -> isn s
-        | End -> false
 and is_negative_row : TypeVarSet.t -> StringSet.t -> int -> row -> bool =
   fun bound_vars expanded_apps var row ->
   is_negative bound_vars expanded_apps var row
@@ -232,11 +218,11 @@ and is_positive : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
         | Alias (_, _, t) -> isp t
         | Application (_, ts) ->
             List.exists (is_positive_type_arg bound_vars expanded_apps var) ts
-        | RecursiveApplication { r_unique_name; r_args; r_unwind; r_dual; _ } ->
+        | RecursiveApplication { r_unique_name; r_args; r_unwind; _ } ->
             List.exists
               (is_positive_type_arg bound_vars expanded_apps var) r_args ||
             StringSet.mem r_unique_name expanded_apps ||
-            let body = r_unwind r_args r_dual in
+            let body = r_unwind r_args in
               is_positive
                 bound_vars (StringSet.add r_unique_name expanded_apps)
                 var body
@@ -268,20 +254,13 @@ and is_positive : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
         | Operation (f, t, _) ->
             isn f || isp t
         (* Row *)
-        | Row (field_env, row_var, _dual) ->
+        | Row (field_env, row_var) ->
            is_positive_field_env bound_vars expanded_apps var field_env
            || is_positive_row_var bound_vars expanded_apps var row_var
         | Closed -> false
         (* Presence *)
         | Present t -> isp t
         | Absent -> false
-        (* Session *)
-        | Input (t, s)
-        | Output (t, s) -> isp t && isp s
-        | Select row -> ispr row
-        | Choice row -> ispr row
-        | Dual s -> isp s
-        | End -> false
 and is_positive_row : TypeVarSet.t -> StringSet.t -> int -> row -> bool =
   fun bound_vars expanded_apps var row ->
   is_positive bound_vars expanded_apps var row

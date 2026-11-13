@@ -114,19 +114,11 @@ let rec jsonize_value' : Value.t -> Yojson.Basic.t =
   | `Record fields ->
      lit ~tag:"Record" (List.map (fun (k, v) -> (k, jsonize_value' v )) fields)
   | `List l ->  cons_listify (List.map jsonize_value' l)
-  | `AccessPointID (`ClientAccessPoint (cid, apid)) ->
-     lit ~tag:"ClientAccessPoint" [ ("_clientAPID", AccessPointID.to_json apid);
-                                     ("_clientId", ClientID.to_json cid) ]
-  | `AccessPointID (`ServerAccessPoint (apid)) ->
-     lit ~tag:"ServerAccessPoint" [ ("_serverAPID", AccessPointID.to_json apid) ]
   | `Pid (`ClientPid (client_id, process_id)) ->
      lit ~tag:"ClientPid" [ ("_clientPid", ProcessID.to_json process_id);
                             ("_clientId", ClientID.to_json client_id) ]
   | `Pid (`ServerPid (process_id)) ->
      lit ~tag:"ServerPid"[ ("_serverPid", ProcessID.to_json process_id) ]
-  | `SessionChannel (ep1, ep2) ->
-     lit ~tag:"SessionChannel" [ ("_sessEP1", ChannelID.to_json ep1);
-                                 ("_sessEP2", ChannelID.to_json ep2) ]
   | `SpawnLocation (`ClientSpawnLoc client_id) ->
      lit ~tag:"ClientSpawnLoc" [ ("_clientSpawnLoc", ClientID.to_json client_id) ]
   | `SpawnLocation (`ServerSpawnLoc) ->

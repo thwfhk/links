@@ -43,27 +43,6 @@ module CTLinearity = struct
               |> sync)
 end
 
-module Sessions = struct
-  let exceptions_enabled =
-    Settings.(flag "session_exceptions"
-              |> synopsis "Enables the session exceptions extension"
-              |> depends Handlers.enabled
-              |> privilege `System
-              |> convert parse_bool
-              |> CLI.(add (long "session-exceptions"))
-              |> sync)
-
-  let expose_session_fail =
-    Settings.(flag "expose_session_fail" ~default:false
-              |> synopsis "Exposes the SessionFail effect"
-              |> depends Handlers.enabled
-              |> depends exceptions_enabled
-              |> privilege `System
-              |> convert parse_bool
-              |> CLI.(add (long "expose-session-fail"))
-              |> sync)
-end
-
 module System = struct
   let interactive_mode =
     Settings.(flag "interactive_mode"

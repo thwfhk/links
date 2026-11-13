@@ -80,8 +80,6 @@ object ('self)
   method temporal_update : temporal_update -> ('self * temporal_update)
   method temporal_deletion : temporal_deletion -> ('self * temporal_deletion)
   method phrasenode      : phrasenode -> 'self * phrasenode * Types.datatype
-  method cp_phrase       : cp_phrase -> 'self * cp_phrase * Types.datatype
-  method cp_phrasenode   : cp_phrasenode -> 'self * cp_phrasenode * Types.datatype
   method program         : program -> 'self * program * Types.datatype option
   method regex           : regex -> 'self * regex
   method section         : Section.t -> 'self * Section.t * Types.datatype

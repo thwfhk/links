@@ -184,10 +184,10 @@ let field_types_of_spec_map =
           | _ -> assert false)
 
 let field_types_of_row r =
-        let (field_spec_map,_,_) = TypeUtils.extract_row_parts r in
+        let (field_spec_map, _) = TypeUtils.extract_row_parts r in
           field_types_of_spec_map field_spec_map
 
-let table_field_types Value.Table.{ row = (fields, _, _); temporal_fields; _ } =
+let table_field_types Value.Table.{ row = (fields, _); temporal_fields; _ } =
     (* As well as the declared fields in the table, we must also include
      * the period-stamping fields included in the temporal metadata. *)
     let dt x = (x, Types.Primitive Primitive.DateTime) in
@@ -706,7 +706,7 @@ let rec select_clause : Sql.index -> bool -> t -> Sql.select_clause =
       let (_, fields, tables, c', gbys, os) = select_clause index unit_query body in
       let c = Sql.smart_and c c' in
       (Sql.All, fields, tables, c, gbys, os)
-    | Table Value.Table.{ name = table; row = (fields, _, _); _ } ->
+    | Table Value.Table.{ name = table; row = (fields, _); _ } ->
       (* eta expand tables. We might want to do this earlier on.  *)
       (* In fact this should never be necessary as it is impossible
          to produce non-eta expanded tables. *)

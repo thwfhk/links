@@ -1,11 +1,7 @@
-# Use the linear variable `ch` in a shallow handler
+# Use the linear variable `lf` in a shallow handler
 
 fun() {
-  var ch = fork(fun(ch) {
-      xlin;
-      var ch = send(42, ch);
-      close(ch)
-  });
+  var lf = linfun() { xlin; 42 };
 
   shallowhandle({
     xlin;
@@ -13,8 +9,7 @@ fun() {
   }) {
     case <Foo =@ k> -> {
       xlin;
-      var (i, ch) = receive(ch);
-      close(ch);
+      var i = lf();
       k(i)
     }
   }

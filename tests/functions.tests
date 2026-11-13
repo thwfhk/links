@@ -144,3 +144,32 @@ exit : 1
 Deep recursion with pending function calls
 fun count(n) { if (n == 0) 0 else 1 + count(n - 1) } count(10000)
 stdout : 10000 : Int
+
+Linear function annotation
+sig h : ((a::Any) -e-@ a::Any, a::Any) -e-> a::Any fun h(f, x) {f(x)}
+stdout : () : ()
+exit : 0
+
+Non-linear use of linear function
+sig h : ((a::Any) -e-@ a::Any, a::Any) -e-> a::Any fun h(f, x) {f(f(x))}
+stderr : @..*
+exit : 1
+
+Linear identity
+fun (x) {x}
+stdout : fun : (a::Any) -> a::Any
+exit : 0
+
+Non-linear dup
+fun (x) {(x, x)}
+stdout : fun : (a) -> (a, a)
+exit : 0
+
+Linear function cannot be discarded
+ignore(linfun() { () })
+stderr : @.*Type error:.*
+exit : 1
+
+Linear function is used once in either branch
+var f = linfun(x) { x + 1 }; if (true) {f(41)} else {f(0)}
+stdout : 42 : Int

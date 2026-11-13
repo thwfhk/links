@@ -372,24 +372,6 @@ class map =
               _x in
           let _x_i1 = o#option (fun o -> o#typ) _x_i1
           in Receive (_x, _x_i1)
-      (* | Link ((_x, _x_i1)) -> *)
-      (*     let _x = o#phrase _x in *)
-      (*     let _x_i1 = o#phrase _x_i1 in Link ((_x, _x_i1)) *)
-      | Select ((_x, _x_i1)) ->
-          let _x = o#name _x in
-          let _x_i1 = o#phrase _x_i1
-          in Select (_x, _x_i1)
-      | Offer ((_x, _x_i1, _x_i2)) ->
-          let _x = o#phrase _x in
-          let _x_i1 =
-            o#list
-              (fun o (_x, _x_i1) ->
-                 let _x = o#pattern _x in
-                 let _x_i1 = o#phrase _x_i1 in (_x, _x_i1))
-              _x_i1 in
-          let _x_i2 = o#option (fun o -> o#unknown) _x_i2
-          in Offer (_x, _x_i1, _x_i2)
-      | CP p -> CP (o#cp_phrase p)
       | DatabaseLit ((_x, _x_i1)) ->
           let _x = o#phrase _x in
           let _x_i1 =
@@ -494,40 +476,10 @@ class map =
                  let _x_i1 = o#phrase _x_i1 in (_x, _x_i1))
               _x_i3
           in DBUpdate ((_upd, _x, _x_i1, _x_i2, _x_i3))
-      | TryInOtherwise (_p1, _pat, _p2, _p3, _ty) ->
-          let _p1 = o#phrase _p1 in
-          let _pat = o#pattern _pat in
-          let _p2 = o#phrase _p2 in
-          let _p3 = o#phrase _p3 in
-          let _ty = o#option (fun o -> o#typ) _ty in
-          TryInOtherwise (_p1, _pat, _p2, _p3, _ty)
-      | Raise -> Raise
-
 
     method phrase : phrase -> phrase =
       fun p ->
         WithPos.map2 ~f_pos:o#position ~f_node:o#phrasenode p
-
-    method cp_phrasenode : cp_phrasenode -> cp_phrasenode =
-      let arg_pair (o : 'self_type) =
-        o#option (fun o (dt, args) ->
-            let dt = o#typ dt in
-            let args = o#list (fun o -> o#tyarg) args in
-            (o#typ dt, args))
-      in
-      function
-      | CPUnquote (bs, e)  -> CPUnquote (o#list (fun o -> o#binding) bs, o#phrase e)
-      | CPGrab ((c, a), x, p)   -> CPGrab ((c, arg_pair o a), x, o#cp_phrase p)
-      | CPGive ((c, a), e, p)   -> CPGive ((c, arg_pair o a), o#option (fun o -> o#phrase) e, o#cp_phrase p)
-      | CPGiveNothing c    -> CPGiveNothing (o#binder c)
-      | CPSelect (c, l, p) -> CPSelect (c, l, o#cp_phrase p)
-      | CPOffer (c, bs)    -> CPOffer (c, o#list (fun o (l, p) -> (l, o#cp_phrase p)) bs)
-      | CPLink (c, d)      -> CPLink (c, d)
-      | CPComp (c, p, q)   -> CPComp (c, o#cp_phrase p, o#cp_phrase q)
-
-    method cp_phrase : cp_phrase -> cp_phrase =
-      fun p ->
-      WithPos.map2 ~f_pos:o#position ~f_node:o#cp_phrasenode p
 
     method patternnode : Pattern.t -> Pattern.t =
       let open Pattern in
@@ -671,19 +623,6 @@ class map =
           in TypeApplication (_x, _x_i1)
       | Primitive _x -> let _x = o#unknown _x in Primitive _x
       | DB -> DB
-      | Input (_x, _x_i1) ->
-        let _x = o#datatype _x in
-        let _x_i1 = o#datatype _x_i1 in Input (_x, _x_i1)
-      | Output (_x, _x_i1) ->
-        let _x = o#datatype _x in
-        let _x_i1 = o#datatype _x_i1 in Output (_x, _x_i1)
-      | Select _x ->
-        let _x = o#row _x in Select _x
-      | Choice _x ->
-        let _x = o#row _x in Choice _x
-      | Dual _x ->
-        let _x = o#datatype _x in Dual _x
-      | End -> End
 
     method datatype : Datatype.with_pos -> Datatype.with_pos =
         WithPos.map2 ~f_pos:o#position ~f_node:o#datatypenode
@@ -1145,24 +1084,6 @@ class fold =
               _x in
           let o = o#option (fun o -> o#unknown) _x_i1
           in o
-      (* | Link ((_x, _x_i1)) -> *)
-      (*     let o = o#phrase _x in *)
-      (*     let o = o#phrase _x_i1 *)
-      (*     in o *)
-      | Select ((_x, _x_i1)) ->
-          let o = o#name _x in
-          let o = o#phrase _x_i1
-          in o
-      | Offer ((_x, _x_i1, _x_i2)) ->
-          let o = o#phrase _x in
-          let o =
-            o#list
-              (fun o (_x, _x_i1) ->
-                 let o = o#pattern _x in let o = o#phrase _x_i1 in o)
-              _x_i1 in
-          let o = o#option (fun o -> o#unknown) _x_i2
-          in o
-      | CP p -> o#cp_phrase p
       | DatabaseLit ((_x, _x_i1)) ->
           let o = o#phrase _x in
           let o =
@@ -1256,36 +1177,12 @@ class fold =
                  let o = o#name _x in let o = o#phrase _x_i1 in o)
               _x_i3
           in o
-      | TryInOtherwise (_p1, _pat, _p2, _p3, _ty) ->
-          let o = o#phrase _p1 in
-          let o = o#pattern _pat in
-          let o = o#phrase _p2 in
-          let o = o#phrase _p3 in
-          o
-      | Raise -> o
 
     method phrase : phrase -> 'self_type =
       WithPos.traverse
         ~o
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#phrasenode v)
-
-    method cp_phrasenode : cp_phrasenode -> 'self_type =
-      function
-      | CPUnquote (bs, e)    -> (o#list (fun o -> o#binding) bs)#phrase e
-      | CPGrab (_c, _x, p)   -> o#cp_phrase p
-      | CPGive (_c, e, p)    -> (o#option (fun o -> o#phrase) e)#cp_phrase p
-      | CPGiveNothing c      -> o#binder c
-      | CPSelect (_c, _l, p) -> o#cp_phrase p
-      | CPOffer (_c, bs)     -> o#list (fun o (_l, b) -> o#cp_phrase b) bs
-      | CPLink (_c, _d)      -> o
-      | CPComp (_c, p, q)    -> (o#cp_phrase p)#cp_phrase q
-
-    method cp_phrase : cp_phrase -> 'self_node =
-      WithPos.traverse
-        ~o
-        ~f_pos:(fun o v -> o#position v)
-        ~f_node:(fun o v -> o#cp_phrasenode v)
 
     method patternnode : Pattern.t -> 'self_type =
       let open Pattern in
@@ -1413,19 +1310,6 @@ class fold =
           let o = o#list (fun o -> o#type_arg) _x_i1 in o
       | Primitive _x -> let o = o#unknown _x in o
       | DB -> o
-      | Input (_x, _x_i1) ->
-        let o = o#datatype _x in
-        let o = o#datatype _x_i1 in o
-      | Output (_x, _x_i1) ->
-        let o = o#datatype _x in
-        let o = o#datatype _x_i1 in o
-      | Select _x ->
-        let o = o#row _x in o
-      | Choice _x ->
-        let o = o#row _x in o
-      | Dual _x ->
-        let o = o#datatype _x in o
-      | End -> o
 
     method datatype : Datatype.with_pos -> 'self_type =
       WithPos.traverse
@@ -1939,26 +1823,6 @@ class fold_map =
               _x in
           let (o, _x_i1) = o#option (fun o -> o#typ) _x_i1
           in (o, (Receive ((_x, _x_i1))))
-      (* | Link ((_x, _x_i1)) -> *)
-      (*     let (o, _x) = o#phrase _x in *)
-      (*     let (o, _x_i1) = o#phrase _x in (o, (Link(_x, _x_i1))) *)
-      | Select ((_x, _x_i1)) ->
-          let (o, _x) = o#name _x in
-          let (o, _x_i1) = o#phrase _x_i1
-          in (o, (Select (_x, _x_i1)))
-      | Offer ((_x, _x_i1, _x_i2)) ->
-          let (o, _x) = o#phrase _x in
-          let (o, _x_i1) =
-            o#list
-              (fun o (_x, _x_i1) ->
-                 let (o, _x) = o#pattern _x in
-                 let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1)))
-              _x_i1 in
-          let (o, _x_i2) = o#option (fun o -> o#unknown) _x_i2
-          in (o, (Offer ((_x, _x_i1, _x_i2))))
-      | CP p ->
-         let (o, p) = o#cp_phrase p in
-         o, CP p
       | DatabaseLit ((_x, _x_i1)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) =
@@ -2072,67 +1936,12 @@ class fold_map =
                  let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1)))
               _x_i3
           in (o, (DBUpdate ((_upd, _x, _x_i1, _x_i2, _x_i3))))
-      | TryInOtherwise (_p1, _pat, _p2, _p3, _ty) ->
-          let (o, _p1) = o#phrase _p1 in
-          let (o, _pat) = o#pattern _pat in
-          let (o, _p2) = o#phrase _p2 in
-          let (o, _p3) = o#phrase _p3 in
-          let o, _ty = o#option (fun o -> o#typ) _ty in
-          (o, (TryInOtherwise (_p1, _pat, _p2, _p3, _ty)))
-      | Raise -> (o, Raise)
 
     method phrase : phrase -> ('self_type * phrase) =
       WithPos.traverse_map
         ~o
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#phrasenode v)
-
-    method cp_phrasenode : cp_phrasenode -> ('self_type * cp_phrasenode) =
-      let arg_pair (o : 'self_type) =
-        o#option (fun o (dt, args) ->
-            let o, dt = o#typ dt in
-            let o, args = o#list (fun o -> o#tyarg) args in
-            let o, dt = o#typ dt in
-            o, (dt, args))
-      in
-
-      function
-      | CPUnquote (bs, e) ->
-         let o, bs = o#list (fun o -> o#binding) bs in
-         let o, e = o#phrase e in
-         o, CPUnquote (bs, e)
-      | CPGrab ((c, a), x, p) ->
-         let o, a = arg_pair o a in
-         let o, p = o#cp_phrase p in
-         o, CPGrab ((c, a), x, p)
-      | CPGive ((c, a), e, p) ->
-         let o, a = arg_pair o a in
-         let o, e = o#option (fun o -> o#phrase) e in
-         let o, p = o#cp_phrase p in
-         o, CPGive ((c, a), e, p)
-      | CPGiveNothing c ->
-         let o, c = o#binder c in
-         o, CPGiveNothing c
-      | CPSelect (c, l, p) ->
-         let o, p = o#cp_phrase p in
-         o, CPSelect (c, l, p)
-      | CPOffer (c, bs) ->
-         let o, bs = o#list (fun o (l, p) ->
-                             let o, p = o#cp_phrase p in
-                             o, (l, p)) bs in
-         o, CPOffer (c, bs)
-      | CPLink (c, d) ->
-         o, CPLink (c, d)
-      | CPComp (c, p, q) ->
-         let o, p = o#cp_phrase p in
-         let o, q = o#cp_phrase q in
-         o, CPComp (c, p, q)
-
-    method cp_phrase : cp_phrase -> ('self_type * cp_phrase) =
-      WithPos.traverse_map
-        ~o
-        ~f_pos:(fun o v -> o#position v)
-        ~f_node:(fun o v -> o#cp_phrasenode v)
 
     method patternnode : Pattern.t -> ('self_type * Pattern.t) =
       let open Pattern in
@@ -2298,19 +2107,6 @@ class fold_map =
       | Primitive _x ->
           let (o, _x) = o#unknown _x in (o, (Primitive _x))
       | DB -> (o, DB)
-      | Input (_x, _x_i1) ->
-        let (o, _x) = o#datatype _x in
-        let (o, _x_i1) = o#datatype _x_i1 in (o, Input (_x, _x_i1))
-      | Output (_x, _x_i1) ->
-        let (o, _x) = o#datatype _x in
-        let (o, _x_i1) = o#datatype _x_i1 in (o, Output (_x, _x_i1))
-      | Select _x ->
-        let (o, _x) = o#row _x in (o, Select _x)
-      | Choice _x ->
-        let (o, _x) = o#row _x in (o, Choice _x)
-      | Dual _x ->
-        let (o, _x) = o#datatype _x in (o, Dual _x)
-      | End -> (o, End)
 
     method datatype : Datatype.with_pos -> ('self_type * Datatype.with_pos) =
       WithPos.traverse_map

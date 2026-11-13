@@ -13,7 +13,7 @@ let extract_row = Types.extract_row
 let extract_row_parts = Types.extract_row_parts
 
 let split_row name row =
-  let (field_env, row_var, dual) = fst (unwrap_row row) |> extract_row_parts in
+  let (field_env, row_var) = fst (unwrap_row row) |> extract_row_parts in
   let t =
     if StringMap.mem name field_env then
       match (StringMap.find name field_env) with
@@ -32,7 +32,7 @@ let split_row name row =
     else
       StringMap.add name Absent field_env
    in
-    t, Row (new_field_env, row_var, dual)
+    t, Row (new_field_env, row_var)
 
 let rec variant_at ?(overstep_quantifiers=true) name t = match (concrete_type t, overstep_quantifiers) with
   | (ForAll (_, t), true) -> variant_at name t
@@ -66,29 +66,6 @@ let rec project_type ?(overstep_quantifiers=true) name t = match (concrete_type 
   | (t, _) ->
       error ("Attempt to project non-record type "^string_of_datatype t)
 
-let rec select_type name t = match concrete_type t with
-  | ForAll (_, t) -> select_type name t
-  | Select row ->
-    let t, _ = split_row name row in t
-  | t ->
-    error ("Attempt to select from non-selection type "^string_of_datatype t)
-
-let rec split_choice_type name t = match concrete_type t with
-  | ForAll (_, t) -> split_choice_type name t
-  | Choice row ->
-      let t, row = split_row name row in
-        Choice (make_singleton_closed_row (name, Present t)), Choice row
-  | t ->
-      error ("Attempt to split non-choice type "^string_of_datatype t)
-
-let rec choice_at name t = match concrete_type t with
-  | ForAll (_, t) -> choice_at name t
-  | Choice row ->
-      let t, _ = split_row name row in t
-  | t ->
-      error ("Attempt to deconstruct non-choice type "^string_of_datatype t)
-
-
 (*
   This returns the type obtained by removing a set of
   fields from a record.
@@ -98,7 +75,7 @@ let rec erase_type ?(overstep_quantifiers=true) names t =
   | (ForAll (_, t), true) -> erase_type names t
   | (Record row, _) ->
     let closed = is_closed_row row in
-      let (field_env, row_var, duality) = fst (unwrap_row row) |> extract_row_parts in
+      let (field_env, row_var) = fst (unwrap_row row) |> extract_row_parts in
       let field_env =
         StringSet.fold
           (fun name field_env ->
@@ -119,7 +96,7 @@ let rec erase_type ?(overstep_quantifiers=true) names t =
           names
           field_env
       in
-        Record (Row (field_env, row_var, duality))
+        Record (Row (field_env, row_var))
   | (t, _) -> error ("Attempt to erase field from non-record type "^string_of_datatype t)
 
 let rec return_type ?(overstep_quantifiers=true) t = match (concrete_type t, overstep_quantifiers)  with
@@ -153,7 +130,7 @@ let rec effect_row ?(overstep_quantifiers=true) t = match (concrete_type t, over
 
 
 let iter_row (iter_func : string -> field_spec -> unit) row  =
-  let (field_spec_map, _, _) = fst (unwrap_row row) |> extract_row_parts in
+  let (field_spec_map, _) = fst (unwrap_row row) |> extract_row_parts in
   Utility.StringMap.iter iter_func field_spec_map
 
 let is_function_type t = match concrete_type t with
@@ -210,10 +187,10 @@ let split_quantified_type qt = match concrete_type qt with
 
 let record_without t names =
   match concrete_type t with
-    | Record (Row (fields, row_var, dual) as row) ->
+    | Record (Row (fields, row_var) as row) ->
         if is_closed_row row then
           let fieldm = StringSet.fold (fun name fields -> StringMap.remove name fields) names fields in
-          Record (Row (fieldm, row_var, dual))
+          Record (Row (fieldm, row_var))
         else
           let fieldm =
             StringMap.mapi
@@ -223,7 +200,7 @@ let record_without t names =
                 else
                   f)
               fields in
-          Record (Row (fieldm, row_var, dual))
+          Record (Row (fieldm, row_var))
     | _ -> assert false
 
 
@@ -250,13 +227,7 @@ let rec primary_kind_of_type t =
   | Application _
   | RecursiveApplication _
   | Operation _
-  | Input _
-  | Output _
-  | Select _
-  | Choice _
-  | Dual _
-  | Lens _
-  | End ->
+  | Lens _ ->
      pk_type
   | Present _
   | Absent ->
@@ -325,7 +296,7 @@ let check_type_wellformedness primary_kind t : unit =
     | (Var _ | Recursive _ | Closed) ->
        (* freestanding Var / Recursive / Closed not implemented yet (must be inside Meta) *)
        raise tag_expectation_mismatch
-    | Alias (_, (_name, qs, ts, _), d) ->
+    | Alias (_, (_name, qs, ts), d) ->
        List.iter2 (compare_kinds rec_env) qs ts;
        typ rec_env d
     | Application (abs_type, args) ->
@@ -368,21 +339,10 @@ let check_type_wellformedness primary_kind t : unit =
        pk_presence
     | Absent -> pk_presence
     (* Row *)
-    | Row (field_spec_map, row_var, _dual) ->
+    | Row (field_spec_map, row_var) ->
        let handle_fs _label f = ifield_spec f in
        StringMap.iter handle_fs field_spec_map;
-       meta rec_env row_var
-    (* Session *)
-    | Input (t, s)
-    | Output (t, s) ->
-       idatatype t; idatatype s;
-       pk_type
-    | Select fields
-    | Choice fields ->
-       irow fields;
-       pk_type
-    | Dual s -> typ rec_env s
-    | End -> pk_type in
+       meta rec_env row_var in
   let open PrimaryKind in
   match primary_kind with
   | Some Type -> ignore (datatype IntMap.empty t)
@@ -393,7 +353,7 @@ let check_type_wellformedness primary_kind t : unit =
 let row_present_types t =
   extract_row t
    |> extract_row_parts
-   |> fst3
+   |> fst
    |> StringMap.filter_map
       (fun _ v ->
         match v with

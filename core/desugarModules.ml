@@ -382,21 +382,6 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
       | Receive (cases, dt) ->
         let cases' = self#cases cases in
         Receive (cases', dt)
-      | Offer (expr, cases, dt) ->
-        let expr' = self#phrase expr in
-        let cases' = self#cases cases in
-        Offer (expr', cases', dt)
-      | TryInOtherwise (expr, x, body, catch, dt) ->
-        let expr' = self#phrase expr in
-        let visitor = self#clone in
-        let x' = visitor#pattern x in
-        let body' = visitor#phrase body in
-        let catch' = self#phrase catch in
-        TryInOtherwise (expr', x', body', catch', dt)
-      | CP cp_exp ->
-       (* CP introduces a new scope. *)
-         let visitor = self#clone in
-         CP (visitor#cp_phrase cp_exp)
       | p -> super#phrasenode p
 
     method! datatypenode = let open Datatype in function

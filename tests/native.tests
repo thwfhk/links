@@ -97,3 +97,59 @@ stdout : true : Bool
 Database generator still accepts a left arrow
 fun f(t) { query { for (x <-- t) [(a=x.a)] } } ()
 stdout : () : ()
+
+Session kind is rejected
+sig f : forall s::Session. (s) -> s fun f(x) { x }
+stderr : @.*Invalid kind: Session.*
+exit : 1
+
+Session input type is rejected
+typename Channel = ?Int.End; ()
+stderr : @.*Parse error:.*
+exit : 1
+
+Session output type is rejected
+typename Channel = !Int.End; ()
+stderr : @.*Parse error:.*
+exit : 1
+
+Session selection type is rejected
+typename Channel = [+|Choice:End|+]; ()
+stderr : @.*Parse error:.*
+exit : 1
+
+Dual session type is rejected
+typename Channel = ~End; ()
+stderr : @.*Parse error:.*
+exit : 1
+
+Session end type is unavailable
+sig f : (End) -> () fun f(_) { () }
+stderr : @.*Unbound type constructor End.*
+exit : 1
+
+CP expression is rejected
+<| c[] |>
+stderr : @.*
+exit : 1
+
+Session exception syntax is rejected
+try { raise } as x in x otherwise 42
+stderr : @.*
+exit : 1
+
+Session exception flag is rejected
+()
+args : --session-exceptions
+stderr : @.*Unknown option '--session-exceptions'.*
+exit : 1
+
+Session access point primitive is unavailable
+new()
+stderr : @.*new.*
+exit : 1
+
+Former session exception operation can be resumed
+handle(do SessionFail) { case <SessionFail => k> -> k(42) }
+stdout : 42 : Int
+args : --enable-handlers

@@ -1,10 +1,6 @@
-# Using the linear variable `ch` in a deep handler is invalid
+# Using the linear variable `lf` in a deep handler is invalid
 
-var ch = fork(fun(ch) {
-    xlin;
-    var ch = send(42, ch);
-    close(ch)
-});
+var lf = linfun() { xlin; 42 };
 
 handle({
   xlin;
@@ -12,8 +8,7 @@ handle({
 }) {
   case _ -> {
     xlin;
-    var (i, ch) = receive(ch);
-    close(ch);
+    var i = lf();
     i
   }
   case <Foo =@ k> -> {

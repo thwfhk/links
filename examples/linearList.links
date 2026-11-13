@@ -1,0 +1,18 @@
+typename LinList(a) = [| LinNil | LinCons: (a, LinList(a)) |];
+
+# Map over a list of linear values.
+sig linMap : ((a::Any) ~e~> a::Any, LinList(a::Any)) ~e~> LinList(a::Any)
+fun linMap(f, xs) {
+  switch(xs) {
+    case LinNil -> LinNil
+    case LinCons(x, rest) -> LinCons(f(x), linMap(f, rest))
+  }
+}
+
+
+sig inc : (() {}-@ Int) ~> () {}-@ Int
+fun inc(f) {
+  linfun() { f() + 1 }
+}
+
+linMap(inc, LinCons(linfun() { 41 }, LinNil))

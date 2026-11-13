@@ -184,7 +184,7 @@ let rec is_toplevel_rec_type = function
   | _ -> false
 
 let is_toplevel_rec_row  row =
-  let (_, row_var, _) = TypeUtils.extract_row_parts row in
+  let (_, row_var) = TypeUtils.extract_row_parts row in
   match Unionfind.find row_var with
        | T.Recursive _ -> true
        | _ -> false
@@ -218,7 +218,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
 
     let remove_absent_fields_if_closed row =
       (* assumes that row is flattened already and ignores recursive rows *)
-      let (field_env, row_var, dual) as unpacked_row =
+      let (field_env, row_var) as unpacked_row =
         row |> TypeUtils.extract_row_parts in
       if Types.is_closed_row row then
         let field_env' =
@@ -227,7 +227,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
               | T.Absent -> false
               | _ -> true )
             field_env
-        in (field_env', row_var, dual)
+        in (field_env', row_var)
       else unpacked_row in
 
     (* typevar_subst of ctx maps rigid typed/row/presence variables of t1 to corresponding ones of t2 *)
@@ -375,37 +375,6 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
          | Present rt -> eqt (context, lt, rt)
          | _ -> false
          end
-      (* Session *)
-      | Input (lt, _) ->
-         begin match t2 with
-         |  Input (rt, _) -> eqt (context, lt, rt)
-         | _ -> false
-         end
-      | Output (lt, _) ->
-         begin match t2 with
-         |  Output (rt, _) -> eqt (context, lt, rt)
-         | _ -> false
-         end
-      | Select lr ->
-         begin match t2 with
-         |  Select (rr) -> eq_rows (context, lr, rr)
-         | _ -> false
-         end
-      | Choice lr ->
-         begin match t2 with
-         |  Choice rr -> eq_rows (context, lr, rr)
-         | _ -> false
-         end
-      | Dual lt ->
-         begin match t2 with
-         |  Dual rt -> eqt (context, lt, rt)
-         | _ -> false
-         end
-      | End ->
-         begin match t2 with
-         |  End -> true
-         | _ -> false
-         end
       end
 
     and eq_rows (context, r1, r2) =
@@ -413,11 +382,11 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
         (Debug.print "IR typechecker encountered recursive type";
         true)
       else
-        let (lfield_env, lrow_var, ldual) = remove_absent_fields_if_closed (Types.flatten_row r1) in
-        let (rfield_env, rrow_var, rdual) = remove_absent_fields_if_closed (Types.flatten_row r2) in
+        let (lfield_env, lrow_var) = remove_absent_fields_if_closed (Types.flatten_row r1) in
+        let (rfield_env, rrow_var) = remove_absent_fields_if_closed (Types.flatten_row r2) in
         let r1 = eq_field_envs (context, lfield_env, rfield_env) in
         let r2 = eq_row_vars (context, lrow_var, rrow_var) in
-          r1 && r2 && ldual=rdual
+          r1 && r2
     and eq_presence (context, l, r) =
       match Types.concrete_field_spec l, Types.concrete_field_spec r with
       | Absent, Absent -> true
@@ -476,7 +445,7 @@ let check_eq_type_lists = fun (ctx : type_eq_context) exptl actl occurrence ->
 
 
 let ensure_effect_present_in_row ctx allowed_effects required_effect_name required_effect_type occurrence =
-  let (map, _, _) = fst (Types.unwrap_row allowed_effects) |> TypeUtils.extract_row_parts in
+  let (map, _) = fst (Types.unwrap_row allowed_effects) |> TypeUtils.extract_row_parts in
   match StringMap.find_opt required_effect_name map with
     | Some (T.Present et) -> check_eq_types ctx et required_effect_type occurrence
     | _ -> raise_ir_type_error ("Required effect " ^ required_effect_name ^ " not present in effect row " ^ Types.string_of_row allowed_effects) occurrence
@@ -732,7 +701,7 @@ struct
                                            | Meta _ -> fields, StringMap.mem field cases
                                            | Absent -> fields, poly
                                            | _ -> raise Types.tag_expectation_mismatch)
-                   (fst3 unwrapped_row) (StringSet.empty, false) in
+                   (fst unwrapped_row) (StringSet.empty, false) in
                let is_closed = is_closed_row row in
                let has_default = OptionUtils.is_some default in
                let case_fields = StringMap.fold (fun field _ fields -> StringSet.add field fields) cases StringSet.empty in
@@ -972,20 +941,6 @@ struct
             let o, v, t = o#value v in
             (* TODO: What is the correct argument type for v, since it expects a continuation? *)
               o, CallCC v, return_type ~overstep_quantifiers:false t
-        | Select (l, v) -> (* TODO perform checks specific to this constructor *)
-           o#impose_presence_of_effect Types.wild_present (SSpec special);
-           let o, v, t = o#value v in
-           o, Select (l, v), t
-        | Choice (v, bs) -> (* TODO perform checks specific to this constructor *)
-           o#impose_presence_of_effect Types.wild_present (SSpec special);
-           let o, v, _ = o#value v in
-           let o, bs, branch_types =
-             o#name_map (fun o (b, c) ->
-                         let o, b = o#binder b in
-                         let o, c, t = o#computation c in
-                         o, (b, c), t) bs in
-           let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
-           o, Choice (v, bs), t
         | Handle ({ ih_comp; ih_cases; ih_return; ih_depth }) ->
           (* outer effects is R_d in the IR formalization *)
           let outer_effects = Types.flatten_row allowed_effects  in
@@ -1041,7 +996,7 @@ struct
 
 
           (* We now construct the inner effects from the outer effects and branch_presence_spec_types *)
-          let (outer_effects_map, outer_effects_var, outer_effects_dualized) = outer_effects_parts in
+          let (outer_effects_map, outer_effects_var) = outer_effects_parts in
           (* For each case branch, the corresponding entry goes directly into the field spec map of the inner effect row *)
           let inner_effects_map_from_branches = StringMap.map (fun x -> Present x) branch_presence_spec_types in
           (* We now add all entries from the outer effects that were not touched by the handler to the inner effects *)
@@ -1051,7 +1006,7 @@ struct
               else
                 StringMap.add effect_ outer_presence_spec map
             )  inner_effects_map_from_branches outer_effects_map in
-          let inner_effects = Row (inner_effects_map, outer_effects_var, outer_effects_dualized) in
+          let inner_effects = Row (inner_effects_map, outer_effects_var) in
 
         (if not (Types.is_closed_row outer_effects) then
           let outer_effects_contain e = StringMap.mem e outer_effects_map in

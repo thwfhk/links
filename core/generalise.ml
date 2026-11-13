@@ -30,7 +30,7 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
         | Not_typed -> raise (internal_error "Not_typed encountered in get_type_args")
         | (Var _ | Recursive _) ->
            failwith ("freestanding Var / Recursive not implemented yet (must be inside Meta)")
-        | Alias (_, (_, _, ts, _), t) ->
+        | Alias (_, (_, _, ts), t) ->
            concat_map (get_type_arg_type_args kind bound_vars) ts @ gt t
         | Application (_, args) ->
            Utility.concat_map (get_type_arg_type_args kind bound_vars) args
@@ -76,7 +76,7 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
             and to_gens = gt t in
               from_gens @ to_gens
         (* Row *)
-        | Row (field_env, row_var, _) ->
+        | Row (field_env, row_var) ->
            let field_vars =
              StringMap.fold
                (fun _ field_spec vars ->
@@ -89,13 +89,6 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
         (* Presence *)
         | Absent -> []
         | Present t -> gt t
-        (* Session *)
-        | Input (t, s)
-        | Output (t, s) -> gt t @ gt s
-        | Select fields -> get_row_type_args kind bound_vars fields
-        | Choice fields -> get_row_type_args kind bound_vars fields
-        | Dual s -> gt s
-        | End -> []
 
 and get_row_var_type_args : gen_kind -> TypeVarSet.t -> row_var -> type_arg list =
   fun kind bound_vars row_var -> get_type_args kind bound_vars (Meta row_var)
@@ -148,7 +141,7 @@ let rigidify_type_arg : type_arg -> unit =
   function
   | Type, Meta point -> rigidify_point point
   | Presence, Meta point -> rigidify_point point
-  | Row, Row (fields, point, _dual) ->
+  | Row, Row (fields, point) ->
      assert (StringMap.is_empty fields);
      rigidify_point point
   (* HACK: probably shouldn't happen *)
@@ -168,7 +161,7 @@ let mono_type_args : type_arg -> unit =
   function
   | Type, Meta point -> check_sk point
   | Presence, Meta point -> check_sk point
-  | Row, Row (fields, point, _dual) ->
+  | Row, Row (fields, point) ->
      assert (StringMap.is_empty fields);
      check_sk point
   (* HACK: probably shouldn't happen *)

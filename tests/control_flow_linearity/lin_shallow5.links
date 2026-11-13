@@ -1,19 +1,14 @@
-# Use the linear variable `ch` in a shallow handler with an auxiliary
+# Use the linear variable `lf` in a shallow handler with an auxiliary
 # deep handler
 
-var ch = fork(fun(ch) {
-    xlin;
-    var ch = send(42, ch);
-    close(ch)
-});
+var lf = linfun() { xlin; 42 };
 
 shallowhandle({
   lindo Foo() + 42
 }) {
   case <Foo =@ k> -> {
     xlin;
-    var (i, ch) = receive(ch);
-    close(ch);
+    var i = lf();
     handle ({xlin; k(i)}) {
       case <Foo =@ k> -> xlin; k(0)
     }

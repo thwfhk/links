@@ -187,9 +187,9 @@ let rec reduce_for_source : Q.t * (Q.t -> Q.t) -> Q.t =
                       field_types in
 
                   let table_raw_var = Var.fresh_raw_var () in
-                  let (_, row_var, dual) = row in
-                  let ty_elem = Types.(Record (Row (make_spec_map field_types, row_var, dual))) in
-                  let base_ty_elem = Types.(Record (Row (make_spec_map base_field_types, row_var, dual))) in
+                  let (_, row_var) = row in
+                  let ty_elem = Types.(Record (Row (make_spec_map field_types, row_var))) in
+                  let base_ty_elem = Types.(Record (Row (make_spec_map base_field_types, row_var))) in
                   let table_var = Q.Var (table_raw_var, ty_elem) in
 
                   (* Second, generate a fresh variable for the metadata *)

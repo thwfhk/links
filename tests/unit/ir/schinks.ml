@@ -211,7 +211,7 @@ let record_t ?row_var assoc =
   check_assoc_list_for_duplicates assoc "record type";
   helper_tuple1 assoc row_var (fun assoc row_var ->
       let map = StringMap.from_alist assoc in
-      Types.Record (Types.Row (map, row_var, false)))
+      Types.Record (Types.Row (map, row_var)))
 
 let variant ?row_var assoc =
   check_assoc_list_for_duplicates assoc "variant type";
@@ -222,7 +222,7 @@ let variant ?row_var assoc =
   in
   helper_tuple1 assoc row_var (fun assoc row_var ->
       let map = StringMap.from_alist assoc in
-      Types.Variant (Types.Row (map, row_var, false)))
+      Types.Variant (Types.Row (map, row_var)))
 
 (* Rows *)
 let closed = Unionfind.fresh Types.Closed |> State.return |> State.return
@@ -236,7 +236,7 @@ let row_var rv =
 let row assoc rv =
   let mk_row assoc rv =
     let map = StringMap.from_alist assoc in
-    Types.Row (map, rv, false)
+    Types.Row (map, rv)
   in
   check_assoc_list_for_duplicates assoc "row";
   helper_tuple1 assoc rv mk_row

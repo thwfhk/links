@@ -14,7 +14,7 @@ let to_links_map m =
 let lookup_alias context ~alias =
   match Env.String.find_opt alias context with
   | Some (`Alias (k, _, body)) ->
-      let tycon = (alias, [], [], false) in
+      let tycon = (alias, [], []) in
       T.Alias (k, tycon, body)
   | _ -> Errors.MissingBuiltinType alias |> raise
 
@@ -48,7 +48,7 @@ let rec lens_phrase_type_of_type t =
                "Unsupported primitive type %a in lens_phrase_type_of_type." T.pp
                t)
   | T.Record r -> lens_phrase_type_of_type r
-  | T.Row (fields, _, _) ->
+  | T.Row (fields, _) ->
       let fields =
         Utility.StringMap.to_alist fields
         |> String.Map.from_alist

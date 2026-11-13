@@ -55,7 +55,6 @@ module type SugarConstructorsSig = sig
   val block       : ?ppos:t -> block_body -> phrase
   val block_node  :            block_body -> phrasenode
   val datatype    : Datatype.with_pos -> Datatype.with_pos * 'a option
-  val cp_unit     : t -> cp_phrase
   val record      : ?ppos:t -> ?exp:phrase -> (Name.t * phrase) list -> phrase
   val tuple       : ?ppos:t -> phrase list -> phrase
   val orderby_tuple : ?ppos:t -> phrase list -> phrase

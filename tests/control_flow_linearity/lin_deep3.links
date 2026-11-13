@@ -1,19 +1,14 @@
-# Use the linear variable `ch` in a deep handler by passing it to the operation
+# Use the linear variable `lf` in a deep handler by passing it to the operation
 
-var ch = fork(fun(ch) {
-    xlin;
-    var ch = send(42, ch);
-    close(ch)
-});
+var lf = linfun() { xlin; 42 };
 
 handle({
   xlin;
-  lindo Foo(ch) + 42
+  lindo Foo(lf) + 42
 }) {
-  case <Foo(ch) =@ k> -> {
+  case <Foo(lf : (() { |%::Lin}-@ Int)) =@ k> -> {
     xlin;
-    var (i, ch) = receive(ch);
-    close(ch);
+    var i = lf();
     k(i)
   }
 }

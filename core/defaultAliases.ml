@@ -25,8 +25,6 @@ let alias_env : Types.tycon_environment =
     [ (* "String"  , `Alias ([], `Application (Types.list, [`Type (`Primitive Primitive.Char)])); *)
       "List"    , `Abstract Types.list;
       "Process" , `Abstract Types.process;
-      "AP"      , `Abstract Types.access_point;
-      "EndBang" , `Alias (pk_type, [], Types.make_endbang_type);
       "Socket"  , `Abstract Types.socket;
       "ValidTime", `Abstract Types.valid_time_data;
       "TransactionTime", `Abstract Types.transaction_time_data;

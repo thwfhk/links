@@ -62,11 +62,11 @@ filemode : true
 args : --path=tests/modules
 stdout : 5 : A.AInt
 
-Basic type in session type
-./tests/modules/session-type.links
+Qualified type in a variant payload
+./tests/modules/qualified_type_payload.links
 filemode : true
 args : --path=tests/modules
-stdout : () : ()
+stdout : 42 : Int
 
 Mutually-recursive functions (1)
 ./tests/modules/mutualfn.links

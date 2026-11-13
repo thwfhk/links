@@ -12,7 +12,7 @@ args : --config=tests/recheck_frontend_transformations.config
 stdout : @\(\) : \(Types\.Record \(Types\.Row .*\)\)
 stderr : @.*
 
-Session exceptions desugaring (#882)
+Recheck mutually recursive functions (#882)
 ./tests/recheck_frontend_transformations/T882.links
 filemode : true
 exit : 0

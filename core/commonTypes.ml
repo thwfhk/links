@@ -52,7 +52,6 @@ module Restriction = struct
     | Any
     | Base
     | Mono
-    | Session
     | Effect
     [@@deriving eq,show]
 
@@ -68,10 +67,6 @@ module Restriction = struct
     | Mono -> true
     | _    -> false
 
-  let is_session = function
-    | Session -> true
-    | _       -> false
-
   let is_effect = function
     | Effect -> true
     | _      -> false
@@ -80,19 +75,16 @@ module Restriction = struct
     | Any     -> "Any"
     | Base    -> "Base"
     | Mono    -> "Mono"
-    | Session -> "Session"
     | Effect  -> "Eff"
 
   let min l r =
     match l, r with
     | Any, Any         -> Some Any
     | Mono, Mono       -> Some Mono
-    | Session, Session -> Some Session
     | Effect, Effect   -> Some Effect
     | Base, Base       -> Some Base
     | x, Any | Any, x  -> Some x (* Any will narrow to anything. *)
     | Base, Mono | Mono, Base -> Some Base (* Mono can narrow to Base. *)
-    | Session, Mono | Mono, Session -> Some Session (* Super dubious, but we don't have another way*)
     | _ -> None
 end
 
@@ -100,7 +92,6 @@ end
 let res_any     = Restriction.Any
 let res_base    = Restriction.Base
 let res_mono    = Restriction.Mono
-let res_session = Restriction.Session
 let res_effect  = Restriction.Effect
 
 module Subkind = struct
@@ -115,7 +106,6 @@ module Subkind = struct
   let restriction (_, res) = res
   let linearity (lin, _) = lin
   let as_unl (_, res) = (lin_unl, res)
-  let as_session (lin, _) = (lin, res_session)
 end
 
 module PrimaryKind = struct
@@ -145,9 +135,6 @@ module Kind = struct
     Subkind.restriction (subkind kind)
   let as_unl (pk, sk) =
     (pk, Subkind.as_unl sk)
-  let as_session (pk, sk) =
-    (pk, Subkind.as_session sk)
-
   let primary_kind (pk, _) = pk
 end
 

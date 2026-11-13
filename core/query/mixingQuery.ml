@@ -543,10 +543,10 @@ struct
          StringMap.filter
            (fun x _ -> x <> from_field && x <> to_field)
            field_types in
-       let (_, row_var, dual) = row in
+       let (_, row_var) = row in
        let z = Var.fresh_raw_var () in
-       let tyz = Types.(Record (Row (make_spec_map field_types, row_var, dual))) in
-       let base_ty_elem = Types.(Record (Row (make_spec_map base_field_types, row_var, dual))) in
+       let tyz = Types.(Record (Row (make_spec_map field_types, row_var))) in
+       let base_ty_elem = Types.(Record (Row (make_spec_map base_field_types, row_var))) in
        let vz = Q.Var (z, tyz) in
 
        (* Second, generate a fresh variable for the metadata *)

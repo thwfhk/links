@@ -97,14 +97,6 @@ type dist_pid = [
 ]
   [@@deriving show]
 
-type access_point = [
-  | `ClientAccessPoint of (client_id * apid)
-  | `ServerAccessPoint of apid
-]
-  [@@deriving show]
-
-type chan = (channel_id * channel_id)
-
 module type ENV =
 sig
   type 'a t
@@ -128,18 +120,6 @@ end
 
 module Env : ENV
 
-module Trap : sig
-  type ('v, 'r) result =
-    | Trap of (unit -> 'r)
-    | SessionTrap of ('v, 'r) session_result
-    | UnhandledSessionException of (Ir.computation list)
-  and ('v, 'r) session_result = {
-    handle_env: 'v Env.t;
-    frames: Ir.computation list;
-    continuation_thunk: (unit -> 'r)
-  }
-end
-(* Continuation *)
 module type FRAME = sig
   type 'v t
 
@@ -153,7 +133,6 @@ module type CONTINUATION_EVALUATOR = sig
   type result
   type 'v t
   type 'v resumption
-  type trap_result = (v, result) Trap.result
 
   val apply : env:v Env.t ->            (* the current environment *)
               v t ->                    (* the continuation *)
@@ -169,7 +148,7 @@ module type CONTINUATION_EVALUATOR = sig
   (* trap invocation *)
   val trap : v t ->                        (* the continuation *)
              (Name.t * v) ->              (* operation name and its argument *)
-             trap_result
+             result
 end
 
 module type CONTINUATION = sig
@@ -240,8 +219,6 @@ type t = [
 | `Continuation of continuation
 | `Resumption of resumption
 | `Pid of dist_pid
-| `AccessPointID of access_point
-| `SessionChannel of chan
 | `Socket of in_channel * out_channel
 | `SpawnLocation of spawn_location
 ]
@@ -250,7 +227,6 @@ and resumption = t Continuation.resumption
 and env = t Env.t
     [@@deriving show]
 
-type delegated_chan = (chan * (t list))
 
 val project : string -> t -> t
 val untuple : t -> t list
@@ -283,10 +259,6 @@ val box_op : t list -> t -> t
 val box    : t list -> t
 val box_spawn_loc : spawn_location -> t
 val unbox_spawn_loc : t -> spawn_location
-val box_channel : chan -> t
-val unbox_channel : t -> chan
-val box_access_point : access_point -> t
-val unbox_access_point : t -> access_point
 val box_datetime : Timestamp.t -> t
 val unbox_datetime : t -> Timestamp.t
 
@@ -296,12 +268,5 @@ val string_of_value : t -> string
 val string_of_calendar_utc : Utility.CalendarShow.t -> string
 
 val p_value: Format.formatter -> t -> unit
-
-(* Given a value, retreives a list of channels that are contained inside *)
-val get_contained_channels : t -> chan list
-
-val is_channel : t -> bool
-
-val session_exception_operation : string
 
 val row_columns_values : t -> string list * t list list

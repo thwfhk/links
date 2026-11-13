@@ -87,7 +87,6 @@ end
 val process      : Abstype.t
 val list         : Abstype.t
 val mapentry     : Abstype.t
-val access_point : Abstype.t
 val socket       : Abstype.t
 val spawn_location : Abstype.t
 val transaction_time_data : Abstype.t
@@ -115,11 +114,10 @@ type tygroup = {
    See comment on pp_functions in types.ml for details *)
 and rec_appl = {
   r_name: string;
-  r_dual: bool;
   r_unique_name: string;
   r_quantifiers : Kind.t list;
   r_args: type_arg list;
-  r_unwind: type_arg list -> bool -> typ;
+  r_unwind: type_arg list -> typ;
   r_linear: unit -> bool option
   }
 and tid = int
@@ -128,7 +126,7 @@ and typ =
   | Not_typed
   | Var of (tid * Kind.t * Freedom.t)
   | Recursive of (tid * Kind.t * typ)
-  | Alias of (PrimaryKind.t * (string * Kind.t list * type_arg list * bool) * typ)
+  | Alias of (PrimaryKind.t * (string * Kind.t list * type_arg list) * typ)
   | Application of (Abstype.t * type_arg list)
   | RecursiveApplication of rec_appl
   | Meta of typ point
@@ -145,20 +143,12 @@ and typ =
   | Effect of row
   | Operation of (typ * typ * DeclaredLinearity.t)
   (* Row *)
-  | Row of (field_spec_map * row_var * bool)
+  | Row of (field_spec_map * row_var)
   | Closed
   (* Presence *)
   | Absent
   | Present of typ
-  (* Session *)
-  | Input of (typ * session_type)
-  | Output of (typ * session_type)
-  | Select of row
-  | Choice of row
-  | Dual of typ
-  | End
 and t = typ
-and session_type = typ
 and datatype = typ
 and type_arg = PrimaryKind.t * typ
 and field_spec = typ
@@ -167,7 +157,7 @@ and meta_type_var = typ point
 and meta_row_var = row point
 and meta_presence_var = typ point
 and row = typ
-and row' = field_spec_map * row_var * bool
+and row' = field_spec_map * row_var
 and row_var = meta_row_var
 
 
@@ -197,14 +187,10 @@ end
 
 module Base : Constraint
 module Unl : Constraint
-module Session : Constraint
 module Mono : Constraint
 
 (** Get a {!Constraint} for a specific subkind {!Restriction.t}. *)
 val get_restriction_constraint : Restriction.t -> (module Constraint) option
-
-val dual_row : row -> row
-val dual_type : datatype -> datatype
 
 type alias_type = PrimaryKind.t * Quantifier.t list * typ [@@deriving show]
 
@@ -220,8 +206,7 @@ type typing_environment = { var_env    : environment ;
                             rec_vars   : Utility.StringSet.t ;
                             tycon_env  : tycon_environment ;
                             effect_row : row ;
-                            cont_lin   : int ;
-                            desugared  : bool }
+                            cont_lin   : int }
 
 val empty_typing_environment : typing_environment
 
@@ -285,8 +270,6 @@ val fresh_rigid_type_variable : Subkind.t -> datatype
 
 val fresh_row_variable : Subkind.t -> row_var
 val fresh_rigid_row_variable : Subkind.t -> row_var
-
-val fresh_session_variable : Linearity.t -> datatype
 
 val fresh_presence_variable : Subkind.t -> field_spec
 val fresh_rigid_presence_variable : Subkind.t -> field_spec
@@ -383,7 +366,6 @@ val make_record_type  : datatype field_env -> datatype
 val make_variant_type : datatype field_env -> datatype
 val make_table_type : Temporality.t * datatype * datatype * datatype -> datatype
 val make_tablehandle_alias : datatype * datatype * datatype -> datatype
-val make_endbang_type : datatype
 val make_transaction_time_data_type : datatype -> datatype
 val make_valid_time_data_type : datatype -> datatype
 

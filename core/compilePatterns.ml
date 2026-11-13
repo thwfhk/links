@@ -646,15 +646,7 @@ and match_variant
                    if StringSet.mem name names then
                      (cases, cs)
                    else
-                     let case_type =
-                       if Settings.get Basicsettings.Sessions.exceptions_enabled &&
-                          not (Settings.get Basicsettings.Sessions.expose_session_fail) &&
-                          String.equal name Value.session_exception_operation
-                       then
-                         Types.empty_type
-                       else
-                         TypeUtils.variant_at name t
-                     in
+                     let case_type = TypeUtils.variant_at name t in
 (*                     let inject_type = TypeUtils.inject_type name case_type in *)
                      let (case_binder, case_variable) = Var.fresh_var_of_type case_type in
                      let match_env = bind_type case_variable case_type env in
@@ -675,18 +667,10 @@ and match_variant
 
             let default_type =
               StringSet.fold
-                (fun name t ->
-                   if Settings.get Basicsettings.Sessions.exceptions_enabled &&
-                      not (Settings.get Basicsettings.Sessions.expose_session_fail) &&
-                      String.equal name Value.session_exception_operation
-                   then
-                     t
-                   else
-                     let _, t = TypeUtils.split_variant_type name t in t) cs t in
+                (fun name t -> snd (TypeUtils.split_variant_type name t)) cs t in
               begin
                 match default_type with
-                  | Types.Variant row
-                  | Types.Choice row ->
+                  | Types.Variant row ->
                       if Types.is_empty_row row && Types.is_closed_row row then
                         ([], Case (Variable var, cases, None))
                       else
@@ -986,7 +970,7 @@ let compile_handle_cases
     else begin
         let (comp_eff, comp_ty, _, _) = Sugartypes.(desc.shd_types) in
         let variant_type =
-          let (fields,_,_) = comp_eff |> TypeUtils.extract_row_parts in
+          let (fields, _) = comp_eff |> TypeUtils.extract_row_parts in
           let fields' =
             StringMap.filter
               (fun _ ->
@@ -997,7 +981,7 @@ let compile_handle_cases
           in
           let rec extract t = match TypeUtils.concrete_type t with
             | Types.Operation (domain, _, _) ->
-              let (fields, _, _) = TypeUtils.extract_row domain |> TypeUtils.extract_row_parts in
+              let (fields, _) = TypeUtils.extract_row domain |> TypeUtils.extract_row_parts in
               let arity = StringMap.size fields in
               if arity = 1 then
                 match StringMap.find "1" fields with
@@ -1124,41 +1108,3 @@ let compile_handle_cases
       }
   in
   (outer_param_bindings, Special handle)
-
-(* Session typing choice compilation *)
-let match_choices : var -> clause list -> bound_computation =
-  fun var clauses env ->
-    let t = lookup_type var env in
-      ([], Special (Choice (Variable var,
-                              List.fold_left
-                                (fun cases -> function
-                                  | ([(annotation, pattern)], body) ->
-                                    let (name, b) =
-                                      match pattern with
-                                      | Pattern.Variant (name, Pattern.Variable b) -> (name, b)
-                                      | Pattern.Variant (name, Pattern.Any)        ->
-                                         let bt = TypeUtils.choice_at name t in
-                                         let info = Var.make_local_info (bt, "_") in
-                                         (name, Var.fresh_binder info)
-                                      | _ ->
-                                        (* TODO: give a more useful error message - including the position
-                                           (it may be necessary to detect the error earlier on) *)
-                                         failwith ("Only choice patterns are supported in choice compilation") in
-                                    let x = Var.var_of_binder b in
-                                    let body = apply_annotation (Variable x) (annotation, body) in
-                                    StringMap.add name (b, body env) cases
-                                  | _ -> assert false)
-                                StringMap.empty
-                                clauses)))
-
-let compile_choices
-    : raw_env -> (Types.datatype * var * raw_clause list) -> Ir.computation =
-  fun (nenv, tenv, eff) (_output_type, var, raw_clauses) ->
-    let clauses = List.map reduce_clause raw_clauses in
-    let initial_env = (nenv, tenv, eff, PEnv.empty) in
-    let result =
-      match_choices var clauses initial_env
-    in
-      Debug.if_set (show_pattern_compilation)
-        (fun () -> "Compiled choices: "^(string_of_computation result));
-      result

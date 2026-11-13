@@ -91,10 +91,14 @@ signatures; the `gen` helpers use effect upcasts.
    operators, including the brackets in handler patterns. The process
    runtime still contains WebSocket and serialisation code, due for
    removal in 2.5.
-3. **2.4.** Remove special cases for session exceptions in handler inference,
-   pattern compilation and trap dispatch. Delete `desugarCP`,
-   `desugarSessionExceptions` and channel utilities after their callers
-   are gone. Keep ordinary effect dispatch and variant matching.
+3. **2.4.** Remove session kinds, types, primitives, CP, and the special
+   handling of `SessionFail`. `SessionFail` can now be handled and
+   resumed as an ordinary operation. Rows store their field map and
+   tail variable. Aliases and recursive applications drop their dual
+   flags. `Mono` now checks the `Mono` restriction, which accepts a
+   record of monomorphic fields and rejects a frozen polymorphic
+   function in the new FreezeML cases. Retained linearity fixtures use
+   linear closures in place of channels.
 4. **2.5.** [`proc.ml`](../../core/proc.ml) combines the scheduler,
    mailboxes, session channels and WebSocket code. Replace the evaluator's
    calls to `Proc.start`, `Proc.finish`, `Proc.yield` and `Proc.atomically`.

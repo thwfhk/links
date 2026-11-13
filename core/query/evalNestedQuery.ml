@@ -94,7 +94,7 @@ struct
     match TypeUtils.concrete_type t with
     | Types.Primitive t -> `Primitive t
     | Types.Record row ->
-        let (fields, _, _) = TypeUtils.extract_row_parts row in
+        let (fields, _) = TypeUtils.extract_row_parts row in
         `Record (StringMap.map
           (function
              | Present t -> nested_type_of_type t

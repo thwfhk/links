@@ -845,7 +845,7 @@ module TemporalJoin = struct
                           | Present t -> StringMap.add k t acc
                           | _ -> assert false)
                       (StringMap.empty)
-                      (fst3 x.row |> StringMap.to_alist) in
+                      (fst x.row |> StringMap.to_alist) in
                   (Q.Var (v, Types.make_record_type ty), from_field, to_field)
                 ) tables
               in

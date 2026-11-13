@@ -170,8 +170,6 @@ module Compressible = struct
       | `Resumption r -> `Resumption (K.compress_r r)
       | `Pid _ -> assert false (* mmmmm *)
       | `Socket (_inc, _outc) -> assert false
-      | `SessionChannel _ -> assert false (* mmmmm *)
-      | `AccessPointID _ -> assert false (* mmmmm *)
       | `SpawnLocation _sl -> assert false (* wheeee! *)
 
     let decompress_primitive : compressed_primitive_value -> [> primitive_value] = function
@@ -400,28 +398,12 @@ module UnsafeJsonSerialiser : SERIALISER with type s := Yojson.Basic.t = struct
            Some (box_variant (unwrap_string k) (from_json v))
         | _ -> None in
 
-      let parse_client_ap xs () =
-        match (List.assoc_opt "_clientAPID" xs, List.assoc_opt "_clientId" xs) with
-        | (Some apid, Some cid) ->
-           let apid = unwrap_string apid |> AccessPointID.of_string in
-           let cid =  unwrap_string cid  |> ClientID.of_string in
-           Some (`AccessPointID (`ClientAccessPoint (cid, apid)))
-        | _ -> None in
-
       let parse_client_pid xs () =
         match (List.assoc_opt "_clientPid" xs, List.assoc_opt "_clientId" xs) with
         | (Some pid_str, Some id_str) ->
            let pid = unwrap_string pid_str |> ProcessID.of_string in
            let id =  unwrap_string id_str  |> ClientID.of_string in
            Some (`Pid (`ClientPid (id, pid)))
-        | _ -> None in
-
-      let parse_session_channel xs () =
-        match (List.assoc_opt "_sessEP1" xs, List.assoc_opt "_sessEP2" xs) with
-        | (Some ep1, Some ep2) ->
-           let ep1 = unwrap_string ep1 |> ChannelID.of_string in
-           let ep2 = unwrap_string ep2 |> ChannelID.of_string in
-           Some (`SessionChannel (ep1, ep2))
         | _ -> None in
 
       let parse_server_func xs () =
@@ -518,19 +500,15 @@ module UnsafeJsonSerialiser : SERIALISER with type s := Yojson.Basic.t = struct
       | `Assoc [("_c", nonsense)] ->
          raise (error (
                     "char payload should be a string. Got: " ^ (Yojson.Basic.to_string nonsense)))
-      | `Assoc [("_serverAPID", `String apid_str)] ->
-         let apid = AccessPointID.of_string apid_str in
-         `AccessPointID (`ServerAccessPoint (apid))
       | `Assoc [("_serverPid", `String pid_str)] ->
          `Pid (`ServerPid (ProcessID.of_string pid_str))
       | `Assoc [("_clientSpawnLoc", `String client_id_str)] ->
          let client_id = ClientID.of_string client_id_str in
          `SpawnLocation (`ClientSpawnLoc (client_id))
-      | `Assoc [("_serverAPID", nonsense)]
-        | `Assoc [("_serverPid", nonsense)]
+      | `Assoc [("_serverPid", nonsense)]
         | `Assoc [("_clientSpawnLoc", nonsense)] ->
          raise (error (
-                    "process / AP ID payload should be a string. Got: " ^ (Yojson.Basic.to_string nonsense)))
+                    "process ID payload should be a string. Got: " ^ (Yojson.Basic.to_string nonsense)))
       | `Assoc [("_serverSpawnLoc", _)] ->
          `SpawnLocation (`ServerSpawnLoc)
       | `Assoc ["_lens", `Assoc assoc] ->
@@ -565,9 +543,7 @@ module UnsafeJsonSerialiser : SERIALISER with type s := Yojson.Basic.t = struct
          let result =
            (parse_list xs)
            <|> (parse_variant xs)
-           <|> (parse_client_ap xs)
            <|> (parse_client_pid xs)
-           <|> (parse_session_channel xs)
            <|> (parse_server_func xs)
            <|> (parse_date xs)
            <|> (parse_client_closure xs)

@@ -111,8 +111,6 @@ and special =
   | Update     of temporal_update option * (binder * value) * computation option * computation
   | Delete     of temporal_deletion option * (binder * value) * computation option
   | CallCC     of value
-  | Select     of Name.t * value
-  | Choice     of value * (binder * computation) name_map
   | Handle     of handler
   | DoOperation of Name.t * value list * Types.t
 and computation = binding list * tail_computation

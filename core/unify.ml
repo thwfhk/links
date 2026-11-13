@@ -168,10 +168,10 @@ let rec eq_types : (datatype * datatype) -> bool =
           | _                            -> false
           end
       (* Row *)
-      | Row (lfield_env, lrow_var, ldual) ->
+      | Row (lfield_env, lrow_var) ->
          begin match unalias t2 with
-         | Row (rfield_env, rrow_var, rdual) ->
-            eq_field_envs (lfield_env, rfield_env) && eq_row_vars (lrow_var, rrow_var) && ldual=rdual
+         | Row (rfield_env, rrow_var) ->
+            eq_field_envs (lfield_env, rfield_env) && eq_row_vars (lrow_var, rrow_var)
          | _ -> assert false
          end
       (* Presence *)
@@ -183,38 +183,6 @@ let rec eq_types : (datatype * datatype) -> bool =
       | Absent ->
          begin match unalias t2 with
          | Absent -> true
-         | _ -> false
-         end
-      (* Session *)
-      | Input (lt, _) ->
-         begin match unalias t2 with
-         | Input (rt, _) -> eq_types (lt, rt)
-         | _             -> false
-         end
-      | Output (lt, _) ->
-         begin match unalias t2 with
-         | Output (rt, _) -> eq_types (lt, rt)
-         | _              -> false
-         end
-      | Select l ->
-         begin match unalias t2 with
-         | Select r -> eq_rows (l, r)
-         | _ -> false
-         end
-      | Choice l ->
-         begin match unalias t2 with
-         | Choice r -> eq_rows (l, r)
-         | _ -> false
-         end
-      (* TODO: do we need to actually perform any dualisation here? *)
-      | Dual l ->
-        begin match unalias t2 with
-        | Dual r -> eq_types (l, r)
-        | _ -> false
-        end
-      | End ->
-         begin match unalias t2 with
-         | End -> true
          | _ -> false
          end
 
@@ -300,8 +268,8 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
   let key_and_body unifier =
     match unifier with
     | MuBound (i, typ) -> (MuBoundId i, typ)
-    | RecAppl { r_unique_name; r_dual; r_args; r_unwind ; _ } ->
-       (NominalId r_unique_name, r_unwind r_args r_dual) in
+    | RecAppl { r_unique_name; r_args; r_unwind ; _ } ->
+       (NominalId r_unique_name, r_unwind r_args) in
 
   let is_unguarded_recursive t =
     let rec is_unguarded rec_types t =
@@ -613,9 +581,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
     | RecursiveApplication a1, RecursiveApplication a2 ->
        let (n1, args1) = (a1.r_unique_name, a1.r_args) in
        let (n2, args2) = (a2.r_unique_name, a2.r_args) in
-       if n1 = n2 && a1.r_dual = a2.r_dual then
-         (* Note that cannot eagerly reject incompatible duality flags
-          * due to the possibility of self-dual types such as `End`. *)
+       if n1 = n2 then
          List.iter2 (fun lt rt -> unify_type_args' rec_env (lt, rt)) args1 args2
        else
          unify_rec2 (RecAppl a1) (RecAppl a2)
@@ -696,29 +662,6 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
           (`Msg ("Cannot unify two operations with different linearity '" ^
           string_of_datatype (Operation (lfrom, lto, llin)) ^ "' and '"^
           string_of_datatype (Operation (rfrom, rto, rlin)) ^"'"))))
-    (* Session *)
-    | Input (t, s), Input (t', s')
-    | Output (t, s), Output (t', s') -> unify' rec_env (t, t'); ut (s, s')
-    | Select (Row row), Select (Row row')
-    | Choice (Row row), Choice (Row row') ->
-       unify_rows' ~var_sk:(lin_any, res_session) rec_env (row, row')
-    | Dual s, Dual s' -> ut (s, s')
-    (* DODGEYNESS: dual_type doesn't necessarily make the type smaller -
-       the following could potentially lead to non-termination *)
-    | Dual s, s' ->
-       begin
-         (* if dual_type yields `Dual s then s must be a type variable *)
-         match dual_type s with
-         | Dual s -> ut (s, dual_type s')
-         | s -> ut (s, s')
-       end
-    | s, Dual s' ->
-       begin
-         match dual_type s' with
-         | Dual s' -> ut (dual_type s, s')
-         | s' -> ut (s, s')
-       end
-    | End, End -> ()
     | _, _ ->
        raise (Failure (`Msg ("Couldn't match "^ string_of_datatype t1 ^" against "^ string_of_datatype t2)))
   end;
@@ -791,18 +734,18 @@ and unify_presence' : unify_env -> (field_spec * field_spec -> unit) =
      end
   | _, _ -> assert false
 
-and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
+and unify_rows' : unify_env -> ((row' * row') -> unit) =
   let unwrap_row r =
     let r', rvar = unwrap_row r in
     (* Debug.print (Printf.sprintf "Unwrapped row %s giving %s\n" (string_of_row r) (string_of_row r')); *)
     r', rvar in
 
-  fun ?(var_sk=(lin_any, res_any)) rec_env (lrow, rrow) ->
+  fun rec_env (lrow, rrow) ->
   Debug.if_set (show_row_unification) (fun () -> "Unifying row: " ^ (string_of_row (Row lrow)) ^
                                                    " with row: " ^ (string_of_row (Row rrow)));
 
   let is_unguarded_recursive row =
-    let rec is_unguarded rec_rows (field_env, row_var, _) =
+    let rec is_unguarded rec_rows (field_env, row_var) =
       StringMap.is_empty field_env &&
         (match Unionfind.find row_var with
          | Closed
@@ -852,15 +795,15 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
                 | (Absent | Meta _) as f ->
                    unify_presence' rec_env (f, Absent)
                 | _ ->
-                   raise (Failure (`Msg ("Field environments\n "^ string_of_row (Row (lenv, closed_row_var, false))
-                                         ^"\nand\n "^ string_of_row (Row (renv, closed_row_var, false))
+                   raise (Failure (`Msg ("Field environments\n "^ string_of_row (Row (lenv, closed_row_var))
+                                         ^"\nand\n "^ string_of_row (Row (renv, closed_row_var))
                                          ^"\n could not be unified because they have different fields"))))
               extras in
           kill_extras lextras lenv;
           kill_extras rextras renv
         else
-          raise (Failure (`Msg ("Field environments\n "^ string_of_row (Row (lenv, closed_row_var, false))
-                                ^"\nand\n "^ string_of_row (Row (renv, closed_row_var, false))
+          raise (Failure (`Msg ("Field environments\n "^ string_of_row (Row (lenv, closed_row_var))
+                                ^"\nand\n "^ string_of_row (Row (renv, closed_row_var))
                                 ^"\n could not be unified because they have different fields")))
       else
         ()
@@ -900,8 +843,8 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
       However, row_var may already have been instantiated, in which case
       it is unified with row.
    *)
-  let unify_row_var_with_row : unify_env -> row_var * bool * row' -> unit =
-    fun rec_env (row_var, dual, ((extension_field_env, extension_row_var, _extension_dual) as extension_row)) ->
+  let unify_row_var_with_row : unify_env -> row_var * row' -> unit =
+    fun rec_env (row_var, ((extension_field_env, extension_row_var) as extension_row)) ->
     (* unify row_var with `RowVar None *)
     let close_empty_row_var : row_var -> unit = fun point ->
       match Unionfind.find point with
@@ -912,7 +855,6 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
          raise (Failure (`Msg ("Closed row var cannot be unified with rigid row var\n")))
       | _ -> assert false in
 
-    (* TODO: do we need to do something special here for the session subkind? *)
 
     (* unify row_var with `RigidRowVar var *)
     let rigidify_empty_row_var (point, (var, (lin, rest))) : row_var -> unit = fun point' ->
@@ -976,20 +918,14 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
              end;
 
              if StringMap.is_empty extension_field_env then
-               if dual then
-                 Unionfind.change point (Row (StringMap.empty, extension_row_var, true))
-               else
-                 Unionfind.union point extension_row_var
+               Unionfind.union point extension_row_var
              else
-               if dual then
-                 Unionfind.change point (dual_row (Row extension_row))
-               else
-                 Unionfind.change point (Row extension_row)
+               Unionfind.change point (Row extension_row)
            end
       | Recursive _ ->
-         unify_rows' rec_env ((StringMap.empty, point, dual), extension_row)
+         unify_rows' rec_env ((StringMap.empty, point), extension_row)
       | row ->
-         unify_rows' rec_env (TypeUtils.extract_row_parts (if dual then dual_row row else row), extension_row) in
+         unify_rows' rec_env (TypeUtils.extract_row_parts row, extension_row) in
     extend row_var in
 
   (*
@@ -1007,11 +943,11 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
           labels) big_field_env StringSet.empty in
 
   let row_without_labels : StringSet.t -> row' -> row' =
-    fun labels (field_env, row_var, dual) ->
+    fun labels (field_env, row_var) ->
     let restricted_field_env =
       StringSet.fold (fun label field_env ->
           StringMap.remove label field_env) labels field_env in
-    (restricted_field_env, row_var, dual) in
+    (restricted_field_env, row_var) in
 
   (*
       register a recursive row in the rec_env environment
@@ -1033,7 +969,7 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
               if IntMap.mem var rec_rows then
                 IntMap.find var rec_rows
               else
-                [Row (StringMap.empty, row_var, false)] in
+                [Row (StringMap.empty, row_var)] in
             if List.exists (fun r -> eq_rows (r, Row restricted_row)) rs then
               None
             else
@@ -1053,14 +989,14 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
     | None -> None
     | Some rec_env -> register_rec_row p2 rec_env in
 
-  let unify_both_rigid_with_rec_env rec_env ((lfield_env, _, _ as lrow), (rfield_env, _, _ as rrow)) =
+  let unify_both_rigid_with_rec_env rec_env ((lfield_env, _ as lrow), (rfield_env, _ as rrow)) =
     (* FIXME: this is why we really shouldn't have row = typ! *)
     let lrow', lrec_row = unwrap_row (Row lrow) in
     let rrow', rrec_row = unwrap_row (Row rrow) in
-    let (lfield_env', lrow_var', _) as lrow' = TypeUtils.extract_row_parts lrow' in
-    let (rfield_env', rrow_var', _) as rrow' = TypeUtils.extract_row_parts rrow' in
-    (* let (lfield_env', lrow_var', _) as lrow', lrec_row = unwrap_row (Row lrow) in
-     * let (rfield_env', rrow_var', _) as rrow', rrec_row = unwrap_row (Row rrow) in *)
+    let (lfield_env', lrow_var') as lrow' = TypeUtils.extract_row_parts lrow' in
+    let (rfield_env', rrow_var') as rrow' = TypeUtils.extract_row_parts rrow' in
+    (* let (lfield_env', lrow_var') as lrow', lrec_row = unwrap_row (Row lrow) in
+     * let (rfield_env', rrow_var') as rrow', rrec_row = unwrap_row (Row rrow) in *)
 
     let closed =
       begin
@@ -1100,16 +1036,16 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
   let unify_both_rigid (lrow, rrow) =
     unify_both_rigid_with_rec_env rec_env (lrow, rrow) in
 
-  let unify_one_rigid ((rigid_field_env, _, _ as rigid_row), (flexible_field_env, _, _ as flexible_row)) =
+  let unify_one_rigid ((rigid_field_env, _ as rigid_row), (flexible_field_env, _ as flexible_row)) =
     (* FIXME: row = typ was an idiotic mistake! *)
     let rigid_row', rigid_rec_row = unwrap_row (Row rigid_row) in
-    let (rigid_field_env', rigid_row_var', rigid_dual') as rigid_row' = TypeUtils.extract_row_parts rigid_row' in
-    (* let (rigid_field_env', rigid_row_var', rigid_dual') as rigid_row', rigid_rec_row = unwrap_row (Row rigid_row) in *)
+    let (rigid_field_env', rigid_row_var') as rigid_row' = TypeUtils.extract_row_parts rigid_row' in
+    (* let (rigid_field_env', rigid_row_var') as rigid_row', rigid_rec_row = unwrap_row (Row rigid_row) in *)
     let closed = is_closed_row (Row rigid_row') in
 
     let flexible_row', flexible_rec_row = unwrap_row (Row flexible_row) in
-    let (flexible_field_env', flexible_row_var', flexible_dual) as flexible_row' = TypeUtils.extract_row_parts flexible_row' in
-    (* let (flexible_field_env', flexible_row_var', flexible_dual) as flexible_row', flexible_rec_row = unwrap_row flexible_row in *)
+    let (flexible_field_env', flexible_row_var') as flexible_row' = TypeUtils.extract_row_parts flexible_row' in
+    (* let (flexible_field_env', flexible_row_var') as flexible_row', flexible_rec_row = unwrap_row flexible_row in *)
     (* check that the flexible row contains no extra fields *)
     StringMap.iter
       (fun label f ->
@@ -1140,16 +1076,16 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
     | Some rec_env ->
        unify_field_envs ~closed:false ~rigid:false rec_env (rigid_field_env', flexible_field_env');
        let flexible_extension = StringMap.filter (fun label _ -> not (StringMap.mem label flexible_field_env')) rigid_field_env' in
-       unify_row_var_with_row rec_env (flexible_row_var', flexible_dual, (flexible_extension, rigid_row_var', rigid_dual')) in
+       unify_row_var_with_row rec_env (flexible_row_var', (flexible_extension, rigid_row_var')) in
 
-  let unify_both_flexible ((lfield_env, _, ldual as lrow), (rfield_env, _, rdual as rrow)) =
+  let unify_both_flexible ((lfield_env, _ as lrow), (rfield_env, _ as rrow)) =
     (* FIXME: more idiocy *)
     let lrow', lrec_row = unwrap_row (Row lrow) in
-    let (lfield_env', lrow_var', ldual') as lrow' = TypeUtils.extract_row_parts lrow' in
+    let (lfield_env', lrow_var') as lrow' = TypeUtils.extract_row_parts lrow' in
     let rrow', rrec_row = unwrap_row (Row rrow) in
-    let (rfield_env', rrow_var', rdual') as rrow' = TypeUtils.extract_row_parts rrow' in
-    (* let (lfield_env', lrow_var', ldual') as lrow', lrec_row = unwrap_row lrow in
-     * let (rfield_env', rrow_var', rdual') as rrow', rrec_row = unwrap_row rrow in *)
+    let (rfield_env', rrow_var') as rrow' = TypeUtils.extract_row_parts rrow' in
+    (* let (lfield_env', lrow_var') as lrow', lrec_row = unwrap_row lrow in
+     * let (rfield_env', rrow_var') as rrow', rrec_row = unwrap_row rrow in *)
     (* Debug.print ("lrow': " ^ string_of_row (Row lrow'));
      * Debug.print ("rrow': " ^ string_of_row (Row rrow')); *)
     let rec_env' =
@@ -1160,23 +1096,23 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
     match rec_env' with
     | None -> ()
     | Some rec_env ->
-       if get_row_var (Row lrow) = get_row_var (Row rrow) && ldual = rdual then
-         unify_both_rigid_with_rec_env rec_env ((lfield_env', Unionfind.fresh Closed, false),
-                                                (rfield_env', Unionfind.fresh Closed, false))
+       if get_row_var (Row lrow) = get_row_var (Row rrow) then
+         unify_both_rigid_with_rec_env rec_env ((lfield_env', Unionfind.fresh Closed),
+                                                (rfield_env', Unionfind.fresh Closed))
        else
          begin
            unify_field_envs ~closed:false ~rigid:false rec_env (lfield_env', rfield_env');
 
            (* a fresh row variable common to the left and the right *)
-           let fresh_row_var = fresh_row_variable var_sk in
+           let fresh_row_var = fresh_row_variable (lin_any, res_any) in
 
            (* each row can contain fields missing from the other *)
            let rextension = StringMap.filter (fun label _ -> not (StringMap.mem label rfield_env')) lfield_env' in
-(* Debug.print ("rext: "^string_of_row (Row (rextension, fresh_row_var, false))); *)
-           unify_row_var_with_row rec_env (rrow_var', rdual', (rextension, fresh_row_var, false));
+(* Debug.print ("rext: "^string_of_row (Row (rextension, fresh_row_var))); *)
+           unify_row_var_with_row rec_env (rrow_var', (rextension, fresh_row_var));
 
            let lextension = StringMap.filter (fun label _ -> not (StringMap.mem label lfield_env')) rfield_env' in
-           unify_row_var_with_row rec_env (lrow_var', ldual', (lextension, fresh_row_var, false))
+           unify_row_var_with_row rec_env (lrow_var', (lextension, fresh_row_var))
          end in
 
   (* report an error if an attempt is made to unify an unguarded

@@ -79,7 +79,6 @@ let restriction_of_string p =
   function
   | "Any"     -> res_any
   | "Base"    -> res_base
-  | "Session" -> res_session
   | "Mono"    -> res_mono
   | rest      ->
      raise (ConcreteSyntaxError (pos p, "Invalid kind restriction: " ^ rest))
@@ -130,11 +129,6 @@ let full_subkind_of pos lin rest =
   let r = restriction_of_string pos rest in
   Some (l, r)
 
-(* In kind and subkind abbreviations, we aim to provide the most
-common case. For everything except session types, the default
-linearity is Unl and the default restriction is Any. For session
-types the default linearity is Any. *)
-
 (* Currently "Any" means Any,Any, but it is probably advisable to
 change "Any" to something more evocative of linearity - "Lin"
 perhaps. *)
@@ -148,7 +142,6 @@ let kind_of p =
   (* subkind of type abbreviations *)
   | "Any"      -> (Some pk_type, Some (lin_any, res_any))
   | "Base"     -> (Some pk_type, Some (lin_unl, res_base))
-  | "Session"  -> (Some pk_type, Some (lin_any, res_session))
   | "Eff"      -> (Some pk_row , Some (default_effect_lin, res_effect))
   | k          -> raise (ConcreteSyntaxError (pos p, "Invalid kind: " ^ k))
 
@@ -158,7 +151,6 @@ let subkind_of p =
   | "Any"     -> Some (lin_any, res_any)
   | "Lin"     -> Some (lin_unl, res_any) (* for linear effect vars *)
   | "Base"    -> Some (lin_unl, res_base)
-  | "Session" -> Some (lin_any, res_session)
   | "Eff"     -> Some (default_effect_lin, res_effect)
   | sk        -> raise (ConcreteSyntaxError (pos p, "Invalid subkind: " ^ sk))
 
@@ -331,17 +323,12 @@ let any = any_pat dp
 %token SWITCH RECEIVE CASE
 %token HANDLE SHALLOWHANDLE
 %token SPAWN SPAWNAT SPAWNANGELAT SPAWNCLIENT SPAWNANGEL SPAWNWAIT
-%token OFFER SELECT
 %token DOOP LINDOOP
 %token LINFLAG
 %token LPAREN RPAREN
 %token LBRACE RBRACE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
-%token LBRACKETPLUSBAR BARPLUSRBRACKET
-%token LBRACKETAMPBAR BARAMPRBRACKET
-%token LEFTTRIANGLE RIGHTTRIANGLE NU
 %token FOR LARROW LLARROW WHERE
-%token LRARROW
 %token COMMA VBAR DOT DOTDOT COLON COLONCOLON
 %token TABLE TEMPORALTABLE TABLEKEYS FROM DATABASE QUERY WITH ORDERBY
 %token UPDATE DELETE INSERT VALUES SET RETURNING
@@ -368,7 +355,6 @@ let any = any_pat dp
 %token UNDERSCORE AS
 %token <Operators.Associativity.t> FIXITY
 %token TYPENAME EFFECTNAME
-%token TRY OTHERWISE RAISE
 %token <string> OPERATOR
 %token USING
 %token LTLARROW LVLARROW
@@ -564,48 +550,12 @@ atomic_expression:
 | TILDE VARIABLE                                               { with_pos $loc (FreezeVar    $2) }
 | constant                                                     { with_pos $loc (Constant     $1) }
 | parenthesized_thing                                          { $1 }
-/* HACK: allows us to support both mailbox receive syntax
-and receive for session types. */
-| RECEIVE                                                      { with_pos $loc (Var "receive") }
-
-cp_name:
-| VARIABLE                                                     { binder ~ppos:$loc($1) $1 }
-
-cp_label:
-| CONSTRUCTOR                                                  { $1 }
-
-cp_case:
-| CASE cp_label RARROW cp_expression                           { ($2, $4) }
-
-cp_cases:
-| cp_case+                                                     { $1 }
-
-perhaps_cp_cases:
-| loption(cp_cases)                                            { $1 }
-
-perhaps_name:
-| cp_name?                                                     { $1 }
-
-cp_expression:
-| LBRACE block_contents RBRACE                                 { with_pos $loc (CPUnquote (fst $2, snd $2)) }
-| cp_name LPAREN perhaps_name RPAREN DOT cp_expression         { with_pos $loc (CPGrab ((Binder.to_name $1, None), $3, $6)) }
-| cp_name LPAREN perhaps_name RPAREN                           { with_pos $loc (CPGrab ((Binder.to_name $1, None), $3, cp_unit $loc)) }
-| cp_name LBRACKET exp RBRACKET DOT cp_expression              { with_pos $loc (CPGive ((Binder.to_name $1, None), Some $3, $6)) }
-| cp_name LBRACKET exp RBRACKET                                { with_pos $loc (CPGive ((Binder.to_name $1, None), Some $3, cp_unit $loc)) }
-| cp_name LBRACKET RBRACKET                                    { with_pos $loc (CPGiveNothing $1) }
-| OFFER cp_name LBRACE perhaps_cp_cases RBRACE                 { with_pos $loc (CPOffer ($2, $4)) }
-| cp_label cp_name DOT cp_expression                           { with_pos $loc (CPSelect ($2, $1, $4)) }
-| cp_label cp_name                                             { with_pos $loc (CPSelect ($2, $1, cp_unit $loc)) }
-| cp_name LRARROW cp_name                                      { with_pos $loc (CPLink ($1, $3)) }
-| NU cp_name DOT LPAREN cp_expression VBAR cp_expression RPAREN{ with_pos $loc (CPComp ($2, $5, $7)) }
-
 primary_expression:
 | atomic_expression                                            { $1 }
 | LBRACKET perhaps_exps RBRACKET                               { list ~ppos:$loc $2 }
 | LBRACKET exp DOTDOT exp RBRACKET                             { with_pos $loc (RangeLit($2, $4))   }
 | linearity arg_lists block                                    { fun_lit ~ppos:$loc $1 $2 $3 }
 | linearity arg_lists switch_funlit_body                       { switch_fun_lit ~ppos:$loc $1 $2 $3 }
-| LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { with_pos $loc (CP $2) }
 | DOLLAR primary_expression                                    { with_pos $loc (Generalise $2) }
 
 constructor_expression:
@@ -756,10 +706,6 @@ db_expression:
 | delete_expression                                            { $1 }
 | update_expression                                            { $1 }
 
-session_expression:
-| SELECT field_label exp                                       { with_pos $loc (Select ($2, $3))      }
-| OFFER LPAREN exp RPAREN LBRACE case* RBRACE                  { with_pos $loc (Offer ($3, $6, None)) }
-
 conditional_expression:
 | IF LPAREN exp RPAREN exp ELSE exp                            { with_pos $loc (Conditional ($3, $5, $7)) }
 
@@ -773,8 +719,6 @@ case_expression:
 | HANDLE LPAREN exp RPAREN LBRACE handle_cases RBRACE          { with_pos $loc (Handle (untyped_handler $3 $6 Deep   )) }
 | HANDLE LPAREN exp RPAREN LPAREN handle_params RPAREN LBRACE handle_cases RBRACE
                                                                { with_pos $loc (Handle (untyped_handler ~parameters:$6 $3 $9 Deep)) }
-| RAISE                                                        { with_pos $loc (Raise) }
-| TRY exp AS pattern IN exp OTHERWISE exp                      { with_pos $loc (TryInOtherwise ($2, $4, $6, $8, None)) }
 
 handle_params:
 | separated_nonempty_list(COMMA,
@@ -860,7 +804,6 @@ perhaps_db_driver:
 
 seq_expression:
 // | LBRACKETBAR exp BARRBRACKET                                  { with_pos $loc (Unlet $2) }
-// | LEFTTRIANGLE exp RIGHTTRIANGLE                                { with_pos $loc (Linlet $2) } // deprecated
 | LINFLAG                                                      { with_pos $loc (Linlet (dummy_phrase $loc)) }
 
 exp:
@@ -872,7 +815,6 @@ exp:
 | escape_expression
 | iteration_expression
 | lens_expression
-| session_expression
 | table_expression
 | typed_expression                                             { $1 }
 
@@ -1030,29 +972,6 @@ mu_datatype:
 
 forall_datatype:
 | FORALL varlist DOT datatype                                  { Datatype.Forall ($2, $4) }
-| session_datatype                                             { $1 }
-
-/* Parenthesised dts disambiguate between sending qualified types and recursion variables.
-   e.g:
-
-     S = !ModuleA.ModuleB.Type.S
-     should be written
-     S = !(ModuleA.ModuleB.Type).S
-
-     Parenthesised versions take priority over non-parenthesised versions.
-
-   24.1.19: Modified grammar to allow unparenthesized qualified type names
-   in most places, but specifically forbid in ? . or ! .
-   This also requires moving the TILDE production into primary_datatype
-   since otherwise, ? ~M.x . y is ambiguous.
-   This is not ideal since it spreads the session-related constructs
-   among several nonterminals.
-*/
-session_datatype:
-| BANG primary_datatype_pos DOT datatype                       { Datatype.Output ($2, $4) }
-| QUESTION primary_datatype_pos DOT datatype                   { Datatype.Input  ($2, $4) }
-| LBRACKETPLUSBAR row BARPLUSRBRACKET                          { Datatype.Select $2       }
-| LBRACKETAMPBAR row BARAMPRBRACKET                            { Datatype.Choice $2       }
 | primary_datatype                                             { $1                       }
 | qualified_type_name                                          { Datatype.QualifiedTypeApplication ($1, []) }
 | qualified_type_name LPAREN type_arg_list RPAREN              { Datatype.QualifiedTypeApplication ($1, $3) }
@@ -1065,7 +984,6 @@ primary_datatype_pos:
 | primary_datatype                                             { with_pos $loc $1 }
 
 primary_datatype:
-| TILDE primary_datatype_pos                                   { Datatype.Dual $2 }
 | parenthesized_datatypes                                      { match $1 with
                                                                    | [] -> Datatype.Unit
                                                                    | [n] -> WithPos.node n
@@ -1087,7 +1005,6 @@ primary_datatype:
                                                                    | "String"  -> Primitive Primitive.String
                                                                    | "DateTime" -> Primitive Primitive.DateTime
                                                                    | "Database"-> DB
-                                                                   | "End"     -> Datatype.End
                                                                    | t         -> TypeApplication (t, [])
                                                                }
 | CONSTRUCTOR LPAREN type_arg_list RPAREN                      { Datatype.TypeApplication ($1, $3) }
@@ -1118,10 +1035,6 @@ vrow:
 
 erow:
 | efields                                                      { $1                    }
-| /* empty */                                                  { ([], Datatype.Closed) }
-
-row:
-| fields                                                       { $1                    }
 | /* empty */                                                  { ([], Datatype.Closed) }
 
 fields_def(field_prod, sep, row_var_prod, kinded_row_var_prod):

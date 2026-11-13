@@ -40,13 +40,6 @@ object (o : 'self_type)
            outer effects afterwards *)
         let process_type = Types.Application (Types.process, [(PrimaryKind.Row, inner_eff)]) in
         let fun_effects = Types.row_with Types.wild_present inner_eff in
-        let fun_effects =
-          if Settings.get Basicsettings.Sessions.exceptions_enabled then
-            let ty = Types.make_pure_function_type [] (Types.empty_type) in
-            Types.row_with (Value.session_exception_operation, Types.Present ty) fun_effects
-          else fun_effects
-        in
-
         let outer_eff = o#lookup_effects in
         let o = o#with_effects inner_eff in
         let (o, spawn_loc) = o#given_spawn_location spawn_loc in
@@ -76,9 +69,9 @@ object (o : 'self_type)
         in
           (o, e, process_type)
     | Receive (cases, Some t) ->
-        let (fieldenv, rho, _) = TypeUtils.extract_row_parts (o#lookup_effects) in
+        let (fieldenv, rho) = TypeUtils.extract_row_parts (o#lookup_effects) in
         let other_effects =
-          Types.(remove_field hear (remove_field wild (Row (fieldenv, rho, false))))
+          Types.(remove_field hear (remove_field wild (Row (fieldenv, rho))))
         in
         begin
           match StringMap.find Types.hear fieldenv with

@@ -367,57 +367,27 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "spawn",
   (`PFun (fun _ -> assert false),
-    begin
-    if Settings.get Basicsettings.Sessions.exceptions_enabled &&
-       Settings.get Basicsettings.Sessions.expose_session_fail then
-      datatype "(() { SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
-    else
-      datatype "(() ~e~@ _) ~> Process ({ |e })"
-    end,
+   datatype "(() ~e~@ _) ~> Process ({ |e })",
   IMPURE);
 
   "spawnAt",
   (`PFun (fun _ -> assert false),
-    begin
-    if Settings.get Basicsettings.Sessions.exceptions_enabled &&
-       Settings.get Basicsettings.Sessions.expose_session_fail then
-      datatype "(Location, () {SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
-    else
-      datatype "(Location, () ~e~@ _) ~> Process ({ |e })"
-    end,
+   datatype "(Location, () ~e~@ _) ~> Process ({ |e })",
    IMPURE);
 
   "spawnClient",
   (`PFun (fun _ -> assert false),
-    begin
-    if Settings.get Basicsettings.Sessions.exceptions_enabled &&
-       Settings.get Basicsettings.Sessions.expose_session_fail then
-      datatype "(() { SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
-    else
-      datatype "(() ~e~@ _) ~> Process ({ |e })"
-    end,
+   datatype "(() ~e~@ _) ~> Process ({ |e })",
    IMPURE);
 
   "spawnAngel",
   (`PFun (fun _ -> assert false),
-    begin
-    if Settings.get Basicsettings.Sessions.exceptions_enabled &&
-       Settings.get Basicsettings.Sessions.expose_session_fail then
-      datatype "(() { SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
-    else
-      datatype "(() ~e~@ _) ~> Process ({ |e })"
-    end,
+   datatype "(() ~e~@ _) ~> Process ({ |e })",
    IMPURE);
 
   "spawnAngelAt",
   (`PFun (fun _ -> assert false),
-    begin
-    if Settings.get Basicsettings.Sessions.exceptions_enabled &&
-       Settings.get Basicsettings.Sessions.expose_session_fail then
-      datatype "(Location, () { SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
-    else
-      datatype "(Location, () ~e~@ _) ~> Process ({ |e })"
-    end,
+   datatype "(Location, () ~e~@ _) ~> Process ({ |e })",
    IMPURE);
 
   "spawnWait",
@@ -442,64 +412,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      spawn : (() {wild{p},hear{q}:b|e}-> a) {hear{_}:_|e}~> Process(a, {wild{p},hear{q}:b|e})
      wait : Process (a, {wild{_},hear{_}:_|e}) {hear{_}:_}~> a
   *)
-
-  (* Sessions *)
-
-  "send",
-  (`PFun (fun _ -> assert false),
-   datatype "forall a::Type(Any, Any), s::Type(Any, Session), e::Row(Any, Any).(a, !a.s) ~e~> s",
-   IMPURE);
-
-  "receive",
-  (`PFun (fun _ -> assert false),
-   datatype "forall a::Type(Any, Any), s::Type(Any, Session), e::Row(Any, Any). (?a.s) ~e~> (a, s)",
-   IMPURE);
-
-  "link",
-  (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session), e::Row(Any, Any).(s, ~s) ~e~> ()",
-   IMPURE);
-
-  (* access points *)
-  "new",
-  (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session), e::Row(Any, Any).() ~e~> AP(s)",
-   IMPURE);
-
-  "newAP",
-  (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session), e::Row(Any, Any). (Location) ~e~> AP(s)",
-   IMPURE);
-
-  "newClientAP",
-  (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session), e::Row(Any, Any).() ~e~> AP(s)",
-   IMPURE);
-
-  "newServerAP",
-  (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session), e::Row(Any, Any).() ~e~> AP(s)",
-   IMPURE);
-
-  "accept",
-  (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session), e::Row(Any, Any).(AP(s)) ~e~> s",
-   IMPURE);
-
-  "request",
-  (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session), e::Row(Any, Any).(AP(s)) ~e~> ~s",
-   IMPURE);
-
-  "cancel",
-  (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session), e::Row(Any, Any).(s) ~e~> ()",
-   IMPURE);
-
-  "close",
-  (`PFun (fun _ -> assert false),
-   datatype "(End) ~> ()",
-   IMPURE);
 
   (* Lists and collections *)
   "Nil",
@@ -1151,8 +1063,7 @@ let typing_env = {Types.var_env = type_env;
                   Types.rec_vars = StringSet.empty;
                   tycon_env = alias_env;
                   Types.effect_row = Types.closed_wild_row;
-                  Types.cont_lin = -1;
-                  Types.desugared = false }
+                  Types.cont_lin = -1 }
 
 let primitive_names = StringSet.elements (Env.String.domain type_env)
 

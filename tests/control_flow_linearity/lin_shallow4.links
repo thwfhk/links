@@ -1,11 +1,7 @@
-# Use the linear variable `ch` in a shallow handler with an auxiliary
+# Use the linear variable `lf` in a shallow handler with an auxiliary
 # recursive function
 
-var ch = fork(fun(ch) {
-    xlin;
-    var ch = send(42, ch);
-    close(ch)
-});
+var lf = linfun() { xlin; 42 };
 
 sig h : (() {Foo:() =@ Int|a::Lin}~@ b) { |_::Lin}-> () {Foo{_::Lin}|a::Lin}~@ b
 fun h(m) {
@@ -25,8 +21,7 @@ shallowhandle({
 }) {
   case <Foo =@ k> -> {
     xlin;
-    var (i, ch) = receive(ch);
-    close(ch);
+    var i = lf();
     h(linfun(){xlin; k(i)})()
   }
 }

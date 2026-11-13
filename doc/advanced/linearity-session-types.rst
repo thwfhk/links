@@ -1,2 +1,0 @@
-Linearity and Session Types
-===========================

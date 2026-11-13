@@ -16,11 +16,6 @@ let relational_lenses_guard pos =
   if not (Settings.get Lens.relational_lenses)
   then raise (relational_lenses_disabled pos)
 
-let endbang_antiquotes
-  = Settings.(flag "endbang_antiquotes"
-              |> convert parse_bool
-              |> sync)
-
 let check_top_level_purity
   = Settings.(flag "check_top_level_purity"
               |> convert parse_bool
@@ -116,9 +111,6 @@ struct
     | Handle _
     | Switch _
     | Receive _
-    | Select _
-    | Offer _
-    | CP _
     | LensLit _
     | LensSerialLit _
     | LensKeysLit _
@@ -133,8 +125,6 @@ struct
     | Operation _
     | DBDelete _
     | DBInsert _
-    | TryInOtherwise _
-    | Raise
     | DBTemporalJoin _
     | DBUpdate _ -> false
   and is_pure_binding ({node ; _ }: binding) = match node with
@@ -246,7 +236,6 @@ sig
 
   val do_operation : griper
 
-  val try_effect : griper
 
   val extend_record : griper
   val record_with : griper
@@ -347,34 +336,9 @@ sig
 
   val splice_exp : griper
 
-  (* val link_session : griper *)
-  (* val link_dual : griper *)
-
-  val offer_variant : griper
-  val offer_patterns : griper
-
-  val selection : griper
-
-  val cp_wild : griper
-  val cp_unquote : griper
-  val cp_grab : string -> griper
-  val cp_give : string -> griper
-  val cp_select : string -> griper
-  val cp_offer_choice : string -> griper
-  val cp_offer_branches : griper
-  val cp_comp_left : griper
-  val cp_link_session : griper
-  val cp_link_dual : griper
-
   val non_linearity : Position.t -> int -> string -> Types.datatype -> unit
   val linear_recursive_function : Position.t -> string -> unit
   val linear_vars_in_deep_handler : Position.t -> string -> Types.datatype -> unit
-
-  val try_in_unless_pat : griper
-  val try_in_unless_branches : griper
-  val try_in_unless_linearity : Position.t -> string -> unit
-
-  val raise_effect : griper
 
   val recursive_usage : griper
 
@@ -648,13 +612,6 @@ end
           code (show_type lt) ^ nl() ^
           "but, the currently allowed effect is" ^ nli()
                ^ code (show_type rt))
-
-    let try_effect ~pos ~t1:(_,lt) ~t2:(_,rt) ~error:_ =
-      build_tyvar_names [lt;rt];
-      die pos ("Catching a session exception requires an effect context " ^ nli() ^
-                code (show_effectrow (TypeUtils.extract_row rt)) ^ nl() ^
-               "but, the currently allowed effects are" ^ nli() ^
-                code ( show_effectrow (TypeUtils.extract_row lt)))
 
     (* BUG: This griper is a bit rubbish because it doesn't distinguish
     between two different errors. *)
@@ -1286,157 +1243,6 @@ end
                "type String, but the expression here has type " ^ code ppr_lt)
 
 
-(* session stuff *)
-(*     let link_session ~pos ~t1:(lexpr, lt) ~t2:_ ~error:_ = *)
-(*       die pos ("\ *)
-(* Only session types can be linkd, but \ *)
-(* the expression" ^ nl() ^ *)
-(* tab() ^ code lexpr ^ nl() ^ *)
-(* "has type" ^ nl() ^ *)
-(* tab() ^ code (show_type lt) ^ nl() ^ *)
-(* "which is not a session type") *)
-
-(*     let link_dual ~pos ~t1:(lexpr, lt) ~t2:(rexpr, rt) ~error:_ = *)
-(*       die pos ("\ *)
-(* Only dual session types can be linkd, but \ *)
-(* the dual of the type of expression" ^ nl() ^ *)
-(* tab() ^ code lexpr ^ nl() ^ *)
-(* "is" ^ nl() ^ *)
-(* tab() ^ code (show_type lt) ^ nl() ^ *)
-(* "and the expression" ^ nl() ^ *)
-(* tab() ^ code rexpr ^ nl() ^ *)
-(* "has type" ^ nl() ^ *)
-(* tab() ^ code (show_type rt)) *)
-
-    let selection ~pos ~t1:(lexpr, lt) ~t2:(_,t) ~error:_ =
-      build_tyvar_names [lt; t];
-      let ppr_lt = show_type lt in
-      let ppr_t  = show_type  t in
-      die pos ("Only a label that is present in a session selection can be " ^
-               "selected, but the expression"                       ^ nli () ^
-                code lexpr                                          ^ nl  () ^
-               "has type"                                           ^ nli () ^
-                code ppr_lt                                         ^ nl  () ^
-               "while the selection has type"                       ^ nli () ^
-                code ppr_t)
-
-    let offer_variant ~pos ~t1:(_,lt) ~t2:(_,_) ~error:_ =
-      build_tyvar_names [lt];
-      let ppr_lt = show_type lt in
-      die pos ("The cases of an offer should have choice type, " ^
-               "but the type "                          ^ nli () ^
-                code ppr_lt                             ^ nl  () ^
-               "is not a choice type")
-
-    let offer_patterns ~pos ~t1:(lexpr,lt) ~t2:(_,rt) ~error:_ =
-      build_tyvar_names [lt;rt];
-      let ppr_lt = show_type lt in
-      let ppr_rt = show_type rt in
-      die pos ("The cases of an offer should match the type of its patterns, " ^
-               "but the pattern"                                      ^ nli () ^
-                code lexpr                                            ^ nl  () ^
-               "has type"                                             ^ nli () ^
-                code ppr_lt                                           ^ nl  () ^
-               "while the subsequent patterns have type"              ^ nli () ^
-                code ppr_rt)
-
-    let cp_wild ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      build_tyvar_names [lt; rt];
-      let ppr_rt = show_type rt in
-      let ppr_lt = show_type lt in
-      die pos ("CP clauses are wild"             ^ nli () ^
-                code ppr_rt                            ^ nl  () ^
-               "but the currently allowed effects are" ^ nli () ^
-                code ppr_lt)
-
-    let cp_unquote ~pos ~t1:(_, lt) ~t2:(_, _) ~error:_ =
-      build_tyvar_names [lt];
-      let ppr_lt = show_type lt in
-      die pos ("Spliced expression should have EndBang type, " ^
-               "but has type"                         ^ nli () ^
-                code ppr_lt                           ^ nl  () ^
-               "instead.")
-
-    let cp_grab channel ~pos ~t1:(_, actual) ~t2:(_, expected) ~error:_ =
-      build_tyvar_names [actual; expected];
-      let ppr_actual   = show_type actual   in
-      let ppr_expected = show_type expected in
-      die pos ("Channel " ^ channel ^ " " ^
-               "was expected to have input type" ^ nli () ^
-                code ppr_expected                ^ nl  () ^
-               "but has type"                    ^ nli () ^
-                code ppr_actual                  ^ nl  () ^
-               "instead.")
-
-    let cp_give channel ~pos ~t1:(_, actual) ~t2:(_, expected) ~error:_ =
-      build_tyvar_names [actual; expected];
-      let ppr_actual   = show_type actual   in
-      let ppr_expected = show_type expected in
-      die pos ("Channel " ^ channel ^ " " ^
-               "was expected to have output type" ^ nli () ^
-                code ppr_expected                 ^ nl  () ^
-               "but has type"                     ^ nli () ^
-                code ppr_actual                   ^ nl  () ^
-               "instead.")
-
-    let cp_select channel ~pos ~t1:(_, actual) ~t2:(_, expected) ~error:_ =
-      build_tyvar_names [actual; expected];
-      let ppr_actual   = show_type actual   in
-      let ppr_expected = show_type expected in
-      die pos ("Channel " ^ channel ^ " " ^
-               "was expected to have selection type" ^ nli () ^
-                code ppr_expected                    ^ nl  () ^
-               "but has type"                        ^ nli () ^
-                code ppr_actual                      ^ nl  () ^
-               "instead.")
-
-    let cp_offer_choice channel ~pos ~t1:(_, actual) ~t2:(_, expected) ~error:_ =
-      build_tyvar_names [actual; expected];
-      let ppr_actual   = show_type actual   in
-      let ppr_expected = show_type expected in
-      die pos ("Channel " ^ channel ^ " " ^
-               "was expected to have choice type" ^ nli () ^
-                code ppr_expected                 ^ nl  () ^
-               "but has type"                     ^ nli () ^
-                code ppr_actual                   ^ nl  () ^
-               "instead.")
-
-    let cp_offer_branches ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      build_tyvar_names [lt; rt];
-      let ppr_lt = show_type lt in
-      let ppr_rt = show_type rt in
-      die pos ("The branches of an offer expression have " ^
-               "divergent types:"                 ^ nli () ^
-                code ppr_lt                       ^ nl  () ^
-               "and"                              ^ nli () ^
-                code ppr_rt)
-
-    let cp_link_session ~pos ~t1:(_, lt) ~t2:_ ~error:_ =
-      build_tyvar_names [lt];
-      let ppr_lt = show_type lt in
-      die pos ("Only session types can be linked, " ^
-               "but the type"             ^ nli () ^
-                code ppr_lt               ^ nl  () ^
-               "is not a session type")
-
-    let cp_link_dual ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      build_tyvar_names [lt;rt];
-      let ppr_lt = show_type lt in
-      let ppr_rt = show_type rt in
-      die pos ("Only dual session types can be linked, " ^
-               "but the type"                  ^ nli () ^
-                code ppr_lt                    ^ nl  () ^
-               "is not the dual of the type"   ^ nli () ^
-                code ppr_rt)
-
-    let cp_comp_left ~pos ~t1:_ ~t2:(_, rt) ~error:_ =
-      build_tyvar_names [rt];
-      let ppr_rt = show_type rt in
-      die pos ("The left-hand computation in a composition must have " ^
-               "EndBang type, but has type"                  ^ nli () ^
-                code ppr_rt                                  ^ nl  () ^
-               "instead.")
-
     let non_linearity pos uses v t =
       build_tyvar_names [t];
       let ppr_t = show_type t in
@@ -1449,31 +1255,6 @@ end
 
     let linear_vars_in_deep_handler pos v t =
       die pos ("Variable " ^ v ^ " of linear type " ^ Types.string_of_datatype t ^ " is used in a deep handler.")
-
-    (* Affine session exception handling *)
-    let try_in_unless_pat ~pos ~t1:l ~t2:r ~error:_ =
-      build_tyvar_names [snd l; snd r];
-      with_but2things pos
-        ("The 'try' clause should match the pattern defined in the 'as' clause")
-        ("pattern", l) ("expression", r)
-
-    let try_in_unless_branches ~pos ~t1:l ~t2:r ~error:_ =
-      build_tyvar_names [snd l; snd r];
-      with_but2 pos
-        ("Both branches of a try-as-in-unless block should have the same type")
-        l r
-
-    let try_in_unless_linearity pos v =
-      die pos ("All variables in the as- and unless- branches of an " ^
-               "exception handler must be unrestricted, but " ^ nl () ^
-               "variable " ^ v ^ " is linear.")
-
-    let raise_effect ~pos ~t1:(_,lt) ~t2:(_,rt) ~error:_ =
-      build_tyvar_names [lt;rt];
-      die pos ("Raising a session exception requires an effect context " ^ nl() ^
-          tab() ^ code (show_effectrow (TypeUtils.extract_row rt)) ^ nl() ^
-          "but, the currently allowed effects are" ^ nl() ^
-          tab() ^ code ( show_effectrow (TypeUtils.extract_row lt)))
 
    (* quantifier checks *)
    let inconsistent_quantifiers ~pos ~t1:l ~t2:r =
@@ -1572,28 +1353,22 @@ type context = Types.typing_environment = {
      the first bool value indicates whether the current term is in a linear continuation currently
      the second bool value indicates whether the current term is bound by a linlet *)
   cont_lin : int;
-
-  (* Whether this is runs on desugared code, and so some non-user
-     facing constructs are permitted. *)
-  desugared : bool;
 }
 
-let empty_context contlin eff desugared =
-  { var_env    = Env.empty;
-    rec_vars   = StringSet.empty;
-    tycon_env  = Env.empty;
+let empty_context contlin eff =
+  { var_env = Env.empty;
+    rec_vars = StringSet.empty;
+    tycon_env = Env.empty;
     effect_row = eff;
-    cont_lin   = contlin;
-    desugared }
+    cont_lin = contlin }
 
 let bind_var         context (v, t) = {context with var_env    = Env.bind v t context.var_env}
-let unbind_var       context v      = {context with var_env    = Env.unbind v context.var_env}
 let bind_alias       context (v, t) = {context with tycon_env  = Env.bind v t context.tycon_env}
 let bind_effects     context r      = {context with effect_row = Types.flatten_row r}
 
 let lookup_effect    context name   =
   match context.effect_row with
-  | Types.Row (fields, _, _) ->
+  | Types.Row (fields, _) ->
     begin match Utility.StringMap.find_opt name fields with
       | Some (Types.Present t) -> Some t
       | _ -> None
@@ -1716,8 +1491,6 @@ module Usage: sig
   (* Adds an entry to a given container. Any preexisting entry with
      the same identifier will be overwritten. *)
   val add : Ident.t -> int -> t -> t
-  (* Removes an entry from a given container. *)
-  val remove : Ident.t -> t -> t
   (* Tests whether an entry exists. *)
   val mem : Ident.t -> t -> bool
   (* Returns the uses of an identifier. Returns 0 if `mem` returns
@@ -1754,9 +1527,6 @@ end = struct
   let add v c usages =
     assert (c >= 0);
     Ident.Map.add v c usages
-
-  let remove v usages =
-    Ident.Map.remove v usages
 
   let mem v usages =
     Ident.Map.mem v usages
@@ -1843,8 +1613,8 @@ let type_section pos context s =
        let a = Types.fresh_type_variable (lin_unl, res_any) in
        let rho = Types.fresh_row_variable (lin_unl, res_any) in
        let effects = Types.make_empty_open_row default_effect_subkind in (* projection is pure! *)
-       let r = Record (Row (StringMap.add label (Present a) StringMap.empty, rho, false)) in
-         ([(PrimaryKind.Type, a); (PrimaryKind.Row, Row (StringMap.empty, rho, false)); (PrimaryKind.Row, effects)],
+       let r = Record (Row (StringMap.add label (Present a) StringMap.empty, rho)) in
+         ([(PrimaryKind.Type, a); (PrimaryKind.Row, Row (StringMap.empty, rho)); (PrimaryKind.Row, effects)],
           Function (Types.make_tuple_type [r], effects, a)),
          Usage.empty
     | Name var      ->
@@ -1865,11 +1635,11 @@ let type_frozen_section context s =
     | Project label ->
        let a = Types.fresh_rigid_type_variable (lin_unl, res_any) in
        let rho = Types.fresh_rigid_row_variable (lin_unl, res_any) in
-       let effects = StringMap.empty, Types.fresh_rigid_row_variable default_effect_subkind, false in
-       let r = Record (Row (StringMap.add label (Present a) StringMap.empty, rho, false)) in
+       let effects = StringMap.empty, Types.fresh_rigid_row_variable default_effect_subkind in
+       let r = Record (Row (StringMap.add label (Present a) StringMap.empty, rho)) in
        Types.for_all
          (Types.quantifiers_of_type_args [(PrimaryKind.Type, a);
-                                          (PrimaryKind.Row, Row (StringMap.empty, rho, false));
+                                          (PrimaryKind.Row, Row (StringMap.empty, rho));
                                           (PrimaryKind.Row, Row effects)],
           Function (Types.make_tuple_type [r], Row effects, a)),
        Usage.empty
@@ -1947,7 +1717,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
     match t with
       | Alias (k, alias, t) -> Alias (k, alias, cpt pats t)
       | Record row when Types.is_tuple row->
-          let fields, row_var, dual = Types.unwrap_row row |> fst |> TypeUtils.extract_row_parts in
+          let fields, row_var = Types.unwrap_row row |> fst |> TypeUtils.extract_row_parts in
           let rec unwrap_at i p =
             let open Pattern in
             match p.node with
@@ -1957,8 +1727,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
                   List.nth ps i
               | Nil | Cons _ | List _ | Record _ | Variant _ | Negative _ | Operation _ -> assert false in
           let fields =
-            StringMap.fold(* true if the row variable is dualised *)
-
+            StringMap.fold
               (fun name ->
                  function
                  | Present t ->
@@ -1966,10 +1735,9 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
                          StringMap.add name (Present (cpt pats t))
                  | (Absent | Meta _) -> assert false
                  | _ -> raise Types.tag_expectation_mismatch) fields StringMap.empty in
-            Record (Row (fields, row_var, dual))
+            Record (Row (fields, row_var))
       | Record row ->
-          let fields, row_var, lr = (Types.unwrap_row row |> fst |> TypeUtils.extract_row_parts) in
-          assert (not lr);
+          let fields, row_var = (Types.unwrap_row row |> fst |> TypeUtils.extract_row_parts) in
           let rec unwrap_at name p =
             let open Pattern in
             match p.node with
@@ -1994,10 +1762,9 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
                          StringMap.add name (Present (cpt pats t))
                    | (Absent | Meta _) -> assert false
                    | _ -> raise Types.tag_expectation_mismatch) fields StringMap.empty in
-            Record (Row (fields, row_var, false))
+            Record (Row (fields, row_var))
       | Variant row ->
-          let fields, row_var, lr = (Types.unwrap_row row |> fst |> TypeUtils.extract_row_parts) in
-          assert (not lr);
+          let fields, row_var = (Types.unwrap_row row |> fst |> TypeUtils.extract_row_parts) in
 
           let rec unwrap_at : string -> Pattern.with_pos -> Pattern.with_pos list = fun name p ->
             let open Pattern in
@@ -2032,7 +1799,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
           in
             if are_open pats then
               begin
-                let row = Row (fields, row_var, false) in
+                let row = Row (fields, row_var) in
                 (* NOTE: type annotations can lead to a closed type even though
                    the patterns are open *)
                 Variant row
@@ -2040,15 +1807,14 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
             else
               begin
                 match Unionfind.find row_var with
-                  | Var _ -> Variant (Row (fields, Unionfind.fresh Closed, false))
+                  | Var _ -> Variant (Row (fields, Unionfind.fresh Closed))
                   | _ -> assert false
               end
 
       | Effect row ->
          (* We don't really close effect rows, rather, we close the
             subpatterns contained within the effect row. *)
-          let fields, row_var, lr = (Types.unwrap_row row |> fst |> TypeUtils.extract_row_parts) in
-          assert (not lr);
+          let fields, row_var = (Types.unwrap_row row |> fst |> TypeUtils.extract_row_parts) in
 
           let unwrap_at : string -> Pattern.with_pos -> Pattern.with_pos list = fun name p ->
             let open Pattern in
@@ -2111,7 +1877,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
                     end
                  | t -> StringMap.add name t env) fields StringMap.empty
           in
-          let row = Row (fields, row_var, false) in
+          let row = Row (fields, row_var) in
           (* NOTE: type annotations can lead to a closed type even though
                    the patterns are open *)
           Effect row
@@ -2146,13 +1912,6 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
       | Operation _
       | Table _
       | Lens _
-      (* TODO: do we need to do something special for session types? *)
-      | Input _
-      | Output  _
-      | Select _
-      | Choice _
-      | Dual _
-      | End
       (* TODO: or anything special for recursive applications? *)
       | RecursiveApplication _
        (* TODO: expand applications? *)
@@ -2425,8 +2184,8 @@ let type_pattern ?(linear_vars=true) closed
                 StringMap.add name Absent negative))
             names (StringMap.empty, StringMap.empty) in
 
-        let outer_type = Types.Variant (Row (positive, row_var, false)) in
-        let inner_type = Types.Variant (Row (negative, row_var, false)) in
+        let outer_type = Types.Variant (Row (positive, row_var)) in
+        let inner_type = Types.Variant (Row (negative, row_var)) in
         Negative names, (outer_type, inner_type)
       | Pattern.Record (ps, default) ->
         let ps = alistmap tp ps in
@@ -2802,7 +2561,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                 fields ([], StringMap.empty, StringMap.empty, Usage.empty) in
               begin match rest with
                 | None ->
-                   let r = T.Row (field_env, Unionfind.fresh T.Closed, false) in
+                   let r = T.Row (field_env, Unionfind.fresh T.Closed) in
                     RecordLit (alistmap erase fields, None), T.Record r, field_usages
                 | Some r ->
                     let r : phrase * Types.datatype * Usage.t = tc r in
@@ -2823,13 +2582,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                     let rtype = typ r in
 
                     (* make sure rtype is a record type that doesn't match any of the existing fields *)
-                    let row = T.Record (T.Row (absent_field_env, Types.fresh_row_variable (lin_any, res_any), false)) in
+                    let row = T.Record (T.Row (absent_field_env, Types.fresh_row_variable (lin_any, res_any))) in
                     let () = unify ~handle:Gripers.extend_record
                       (pos_and_typ r, no_pos row) in
 
-                    let rfield_env, rrow_var, lr =
+                    let rfield_env, rrow_var =
                       TypeUtils.extract_row rtype |> Types.unwrap_row |> fst |> TypeUtils.extract_row_parts in
-                    assert (lr = false);
                       (* attempt to extend field_env with the labels from rfield_env
                          i.e. all the labels belonging to the record r
                       *)
@@ -2846,7 +2604,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                                                 failwith ("Could not extend record "^ expr_string (erase r)^" (of type "^
                                                             Types.string_of_datatype rtype^") with the label "^
                                                             label^
-                                                            " (of type"^Types.string_of_datatype (T.Record (T.Row (field_env, Unionfind.fresh T.Closed, false)))^
+                                                            " (of type"^Types.string_of_datatype (T.Record (T.Row (field_env, Unionfind.fresh T.Closed)))^
                                                             ") because the labels overlap")
                                               else
                                                 StringMap.add label (T.Present t) field_env'
@@ -2854,7 +2612,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                                           | _ -> raise Types.tag_expectation_mismatch)
                         rfield_env field_env in
                     let usages = Usage.combine field_usages (usages r) in
-                      RecordLit (alistmap erase fields, Some (erase r)), T.Record (T.Row (field_env', rrow_var, false)), usages
+                      RecordLit (alistmap erase fields, Some (erase r)), T.Record (T.Row (field_env', rrow_var)), usages
               end
         | ListLit (es, _) ->
             begin match List.map tc es with
@@ -3198,14 +2956,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
               match tmp_ins with
                 | Some (ValidTimeInsertion SequencedInsertion) ->
                     let ty =
-                      T.Record (T.Row (field_env, Unionfind.fresh T.Closed, false))
+                      T.Record (T.Row (field_env, Unionfind.fresh T.Closed))
                         |> Types.make_valid_time_data_type
                         |> Types.make_list_type in
                     unify ~handle:Gripers.sequenced_insert_values (pos_and_typ values, no_pos ty)
                 | _ ->
                     unify ~handle:Gripers.insert_values
                       (pos_and_typ values,
-                       no_pos (Types.make_list_type (T.Record (T.Row (field_env, Unionfind.fresh T.Closed, false)))))
+                       no_pos (Types.make_list_type (T.Record (T.Row (field_env, Unionfind.fresh T.Closed)))))
             in
 
             let needed_env =
@@ -3214,17 +2972,17 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                 field_env in
 
             (* all fields being inserted must be present in the read row *)
-            let row = T.Row (field_env, Types.fresh_row_variable (lin_any, res_base), false) in
+            let row = T.Row (field_env, Types.fresh_row_variable (lin_any, res_base)) in
             let () = unify ~handle:Gripers.insert_read
               (no_pos read, no_pos (T.Record row)) in
 
             (* all fields being inserted must be present in the write row *)
-            let row = T.Row (field_env, Types.fresh_row_variable (lin_any, res_base), false) in
+            let row = T.Row (field_env, Types.fresh_row_variable (lin_any, res_base)) in
             let () = unify ~handle:Gripers.insert_write
               (no_pos write, no_pos (T.Record row)) in
 
             (* all fields being inserted must be consistent with the needed row *)
-            let row = T.Row (needed_env, Unionfind.fresh T.Closed, false) in
+            let row = T.Row (needed_env, Unionfind.fresh T.Closed) in
             let () = unify ~handle:Gripers.insert_needed
               (no_pos needed, no_pos (T.Record row)) in
 
@@ -3243,7 +3001,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                             *)
                            let row =
                              T.Row (StringMap.singleton id (T.Present Types.int_type),
-                               Types.fresh_row_variable (lin_any, res_base), false) in
+                               Types.fresh_row_variable (lin_any, res_base)) in
                             unify
                               ~handle:Gripers.insert_id
                               (no_pos read,
@@ -3322,15 +3080,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
 
             (* all fields being updated must be present in the read row *)
             let () = unify ~handle:Gripers.update_read
-              (no_pos read, no_pos (T.Record (T.Row (field_env, Types.fresh_row_variable (lin_any, res_base), false)))) in
+              (no_pos read, no_pos (T.Record (T.Row (field_env, Types.fresh_row_variable (lin_any, res_base))))) in
 
             (* all fields being updated must be present in the write row *)
             let () = unify ~handle:Gripers.update_write
-              (no_pos write, no_pos (T.Record (T.Row (field_env, Types.fresh_row_variable (lin_any, res_base), false)))) in
+              (no_pos write, no_pos (T.Record (T.Row (field_env, Types.fresh_row_variable (lin_any, res_base))))) in
 
             (* all fields being updated must be consistent with the needed row *)
             let () = unify ~handle:Gripers.update_needed
-              (no_pos needed, no_pos (T.Record (T.Row (needed_env, Types.fresh_row_variable (lin_any, res_base), false)))) in
+              (no_pos needed, no_pos (T.Record (T.Row (needed_env, Types.fresh_row_variable (lin_any, res_base))))) in
 
             (* Typecheck any valid-time fields and calculate usages *)
             let (tmp_upd, tmp_usages) =
@@ -3451,7 +3209,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                      let shape =
                        Types.make_list_type
                          (T.Record (T.Row (StringMap.empty,
-                            Types.fresh_row_variable (lin_any, res_base), false))) in
+                            Types.fresh_row_variable (lin_any, res_base)))) in
                      unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape)
             in
             Query (range, policy, erase p, Some (typ p)), typ p, Usage.combine (range_usages) (usages p)
@@ -3490,23 +3248,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
 
             let pid_effects = Types.make_empty_open_row default_effect_subkind in
 
-            (* The various spawn methods have the type [(() ~e~> _) -> Process (e)]
-               (unless session exceptions are enabled, then the spawned body may
-               raise the SessionFail exception.
-
-               We need to type the body of the spawn block with the effect type [{
-               wild | e }] (and maybe SessionFail) (call this "inner_effects"), and
-               then use e (pid_effects) as the type argument to the process.
-             *)
             let inner_effects = Types.row_with Types.wild_present pid_effects in
-            let inner_effects =
-              if Settings.get Basicsettings.Sessions.exceptions_enabled &&
-                 Settings.get Basicsettings.Sessions.expose_session_fail
-              then
-                let ty = LinCont.make_operation_type [] (Types.empty_type) in
-                Types.row_with (Value.session_exception_operation, T.Present ty) inner_effects
-              else
-                inner_effects in
             let pid_type = T.Application (Types.process, [PrimaryKind.Row, pid_effects]) in
             let () =
               let outer_effects =
@@ -3543,28 +3285,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
               (no_pos mb_type, no_pos pattern_type)
             in
               Receive (erase_cases binders, Some body_type), body_type, usages_cases binders
-
-        (* session-based concurrency *)
-        | Select (l, e) ->
-           let e = tc e in
-           let selected_session = Types.fresh_type_variable (lin_any, res_session) in
-           unify ~handle:Gripers.selection
-                 (pos_and_typ e, no_pos (T.Select (Types.make_singleton_open_row
-                                                              (l, T.Present selected_session)
-                                                              (lin_any, res_session))));
-           Select (l, erase e), selected_session, usages e
-        | Offer (e, branches, _) ->
-           let e = tc e in
-           let branches, pattern_type, body_type = type_cases branches in
-           let r = Types.make_empty_open_row (lin_any, res_session) in
-             unify ~handle:Gripers.offer_variant (no_pos pattern_type, no_pos (T.Variant r));
-             unify ~handle:Gripers.offer_patterns (pos_and_typ e, no_pos (T.Choice r));
-             Offer (erase e, erase_cases branches, Some body_type), body_type, Usage.combine (usages e) (usages_cases branches)
-
-        (* No comment *)
-        | CP p ->
-           let (p, t, u) = type_cp context p in
-           CP p, t, u
 
         (* applications of various sorts *)
         | UnaryAppl ((_, op), p) ->
@@ -3910,12 +3630,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                   | T.ForAll (_, T.Record _) as t ->
                       let tyargs, rt = Instantiate.typ t in
 
-                      let field_env, _row_var, lr =
+                      let field_env, _row_var =
                         match rt with
                         | T.Record row -> Types.unwrap_row row |> fst |> TypeUtils.extract_row_parts
                         | _ -> assert false
                       in
-                      assert (not lr);
                       begin
                         match StringMap.lookup l field_env with
                         | Some (T.Present t) ->
@@ -3972,8 +3691,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                               Types.row_with (lab, T.Present (Types.fresh_type_variable (lin_unl, res_any))) row)
                            fields (Types.make_empty_open_row (lin_any, res_any))) in
                 unify ~handle:Gripers.record_with (pos_and_typ r, no_pos fields_type) in
-            let rfields, row_var, lr = (TypeUtils.extract_row (typ r)) |> Types.unwrap_row |> fst |> TypeUtils.extract_row_parts in
-            assert (not lr);
+            let rfields, row_var = (TypeUtils.extract_row (typ r)) |> Types.unwrap_row |> fst |> TypeUtils.extract_row_parts in
             let rfields =
               StringMap.mapi
                 (fun name t ->
@@ -3982,7 +3700,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                    else t)
                 rfields
             in
-              With (erase r, alistmap erase fields), T.Record (T.Row (rfields, row_var, false)), Usage.combine_many (usages r :: List.map usages (range fields))
+              With (erase r, alistmap erase fields), T.Record (T.Row (rfields, row_var)), Usage.combine_many (usages r :: List.map usages (range fields))
         | TypeAnnotation (e, (_, Some t as dt)) ->
             let e = tc e in
               unify ~handle:Gripers.type_annotation (pos_and_typ e, no_pos t);
@@ -4094,13 +3812,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                      | _ -> assert false
                    in
                    let effrow =
-                     if Settings.get Basicsettings.Sessions.exceptions_enabled &&
-                        not (Settings.get Basicsettings.Sessions.expose_session_fail) &&
-                        String.equal effname Value.session_exception_operation
-                     then
-                       Types.Effect (Types.make_empty_open_row default_effect_subkind)
-                     else
-                       Types.Effect (Types.make_singleton_open_row (effname, Types.Present efftyp) default_effect_subkind) in
+                     Types.Effect (Types.make_singleton_open_row (effname, Types.Present efftyp) default_effect_subkind) in
                    unify ~handle:Gripers.handle_effect_patterns
                          ((uexp_pos pat, effrow),  no_pos (T.Effect inner_eff));
                    let pat, kpat =
@@ -4132,7 +3844,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                         | Variable bndr ->
                            let kname = Binder.to_name bndr in
                            let kt =
-                             let (fields,_,_) = TypeUtils.extract_row_parts (TypeUtils.extract_row effrow) in
+                             let (fields, _) = TypeUtils.extract_row_parts (TypeUtils.extract_row effrow) in
                              let kt = find_effect_type effname (StringMap.to_alist fields) in
                              let op_param = TypeUtils.return_type kt in
                              let typ = Env.find kname env in
@@ -4271,7 +3983,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
            (* make_operations_presence_polymorphic makes the operations in the given row polymorphic in their presence *)
            let make_operations_presence_polymorphic : Types.row -> Types.row
             = fun row ->
-             let (operations, rho, dual) = TypeUtils.extract_row_parts row in
+             let (operations, rho) = TypeUtils.extract_row_parts row in
              let operations' =
                StringMap.mapi
                  (fun name p ->
@@ -4281,7 +3993,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                                                                        make absent operations polymorphic in their presence. *)
                  operations
              in
-             T.Row (operations', rho, dual)
+             T.Row (operations', rho)
            in
            let m_context = { context with
               effect_row = Types.make_empty_open_row default_effect_subkind;
@@ -4344,18 +4056,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
              use is_lindo *)
           let op = (match op.node with
             | Operation name ->
-                if String.equal name Value.session_exception_operation then
-                  if not context.desugared then
-                    Gripers.die pos "The session failure effect SessionFail is not directly invocable (use `raise` instead)"
-                  else
-                    (Operation name, Types.empty_type, Usage.empty)
-                else
-                  let t =
-                    match lookup_effect context name with
-                    | Some t -> t
-                    | None   -> Types.fresh_type_variable (op_linearity, res_any)
-                  in
-                  (Operation name, t, Usage.empty)
+                let t =
+                  match lookup_effect context name with
+                  | Some t -> t
+                  | None   -> Types.fresh_type_variable (op_linearity, res_any)
+                in
+                (Operation name, t, Usage.empty)
             | _ -> Gripers.die pos "Do should take an operation label.")
           in
           let op = (let a,b,c = op in with_pos pos a,b,c) in
@@ -4405,13 +4111,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
           let infer_opt = no_pos (LinCont.make_operation_type ~linear:is_lindo (List.map typ ps) rettyp) in
           let term = (exp_pos op, opt) in
           let row =
-            if Settings.get Basicsettings.Sessions.exceptions_enabled &&
-               not (Settings.get Basicsettings.Sessions.expose_session_fail) &&
-               String.equal opname Value.session_exception_operation
-            then
-               Types.make_empty_open_row default_effect_subkind
-            else
-              Types.make_singleton_open_row (opname, T.Present (typ op)) default_effect_subkind in
+            Types.make_singleton_open_row (opname, T.Present (typ op)) default_effect_subkind in
           let p = Position.resolve_expression pos in
           let () =
             unify ~handle:Gripers.do_operation
@@ -4441,115 +4141,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             let binders, pattern_type, body_type = type_cases binders in
             let () = unify ~handle:Gripers.switch_pattern (pos_and_typ e, no_pos pattern_type) in
               Switch (erase e, erase_cases binders, Some body_type), body_type, Usage.combine (usages e) (usages_cases binders)
-        | TryInOtherwise (try_phrase, pat, in_phrase, unless_phrase, _) ->
-           (* Ensure that the body of the try has the SessionFail
-              effect and that the remaining effects agree with the
-              outer effects *)
-            let rho = Types.fresh_row_variable default_effect_subkind in
-            let outer_effects =
-              if Settings.get Basicsettings.Sessions.expose_session_fail then
-                Types.row_with
-                  (Value.session_exception_operation, Types.fresh_presence_variable default_subkind)
-                  (T.Row (StringMap.empty, rho, false))
-              else
-                T.Row (StringMap.empty, rho, false)
-            in
-            let try_effects =
-              if Settings.get Basicsettings.Sessions.expose_session_fail then
-                Types.row_with
-                  (Value.session_exception_operation, T.Present (LinCont.make_operation_type [] Types.empty_type))
-                  (T.Row (StringMap.empty, rho, false))
-              else
-                T.Row (StringMap.empty, rho, false)
-            in
-
-            unify ~handle:Gripers.try_effect
-              (no_pos (T.Effect context.effect_row), no_pos (T.Effect outer_effects));
-
-            let try_phrase = type_check {context with effect_row = try_effects} try_phrase in
-
-            (* Pattern.with_posype variable *)
-            let pat = tpc pat in
-
-            (* Check whether pattern corresponds to try_phrase *)
-            let () =
-              unify ~handle:Gripers.try_in_unless_pat
-                (ppos_and_typ pat, (exp_pos try_phrase, (typ try_phrase))) in
-
-            let in_context = context ++ (pattern_env pat) in
-            let in_phrase = type_check in_context in_phrase in
-
-            (* Pattern we have just bound should either be used, or should be
-             * able to be made unrestricted *)
-            let () =
-              Env.iter (fun v t ->
-                let uses = Usage.uses_of v (usages in_phrase) in
-                if uses <> 1 then
-                  if Types.Unl.can_type_be t then
-                    Types.Unl.make_type t
-                  else
-                    Gripers.non_linearity pos uses v t) (pattern_env pat) in
-
-            (* vs: variables bound in the pattern. *)
-            let vs = Env.domain (pattern_env pat) in
-
-            let unless_phrase = tc unless_phrase in
-            unify ~handle:Gripers.try_in_unless_branches
-                (pos_and_typ in_phrase, pos_and_typ unless_phrase);
-
-            (* in_usages: usages in the in_phrase *not* bound in the pattern *)
-            let in_usages = Usage.restrict (usages in_phrase) vs in
-
-            (* Now, we need to ensure that all variables used in the in- and unless-
-             * phrases are unrestricted (apart from the pattern variables!) *)
-            let () =
-              Usage.iter
-                (fun v n ->
-                  if n = 0 then () else
-                    if Env.has v (pattern_env pat) then () else
-                      let ty = Env.find v context.var_env in
-                      if Types.Unl.can_type_be ty then
-                        Types.Unl.make_type ty
-                      else
-                        Gripers.try_in_unless_linearity pos v
-                ) (usages in_phrase)
-            in
-            let () =
-              Usage.iter
-                (fun v n ->
-                  if n = 0 then () else
-                    let ty = Env.find v context.var_env in
-                    if Types.Unl.can_type_be ty then
-                      Types.Unl.make_type ty
-                    else
-                      Gripers.try_in_unless_linearity pos v)
-                (usages unless_phrase)
-            in
-
-
-            (* Calculate resulting usages *)
-            let usages_res =
-              Usage.combine (usages try_phrase) (Usage.align [in_usages; (usages unless_phrase)])
-            in
-
-            let return_type = typ in_phrase in
-
-            TryInOtherwise
-              (erase try_phrase, erase_pat pat, erase in_phrase,
-                erase unless_phrase, Some return_type), return_type, usages_res
         | QualifiedVar _ -> assert false
-        | Raise ->
-            let effects =
-              if Settings.get Basicsettings.Sessions.expose_session_fail then
-                Types.make_singleton_open_row
-                  (Value.session_exception_operation, T.Present (LinCont.make_operation_type [] Types.empty_type))
-                  default_effect_subkind
-              else
-                Types.make_empty_open_row default_effect_subkind
-            in
-            unify ~handle:Gripers.raise_effect
-              (no_pos (T.Effect context.effect_row), (Position.resolve_expression pos, T.Effect effects));
-            (Raise, Types.fresh_type_variable (lin_any, res_any), Usage.empty)
     in
     let p = with_pos pos e in
     let () = update_cflinearity expr usages in
@@ -4586,7 +4178,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
     let exp_pos (p,_,_) = uexp_pos p in
     let pos_and_typ e = (exp_pos e, typ e) in
 
-    let empty_context = empty_context context.cont_lin context.effect_row context.desugared in
+    let empty_context = empty_context context.cont_lin context.effect_row in
 
     let module T = Types in
     let typed, ctxt, usage = match def with
@@ -5066,7 +4658,7 @@ and type_bindings (globals : context) bindings =
          let binding, ctxt', usage = type_binding cur_ctxt binding in
          let result_ctxt = Types.extend_typing_environment ctxt ctxt' in
          result_ctxt, (binding::bindings, (binding.pos,ctxt'.var_env,usage)::uinf))
-      (empty_context globals.cont_lin globals.effect_row globals.desugared, ([], [])) bindings in
+      (empty_context globals.cont_lin globals.effect_row, ([], [])) bindings in
   (* usage_builder checks the usage of variables from the bindings *)
   let usage_builder body_usage =
     List.fold_left
@@ -5085,150 +4677,6 @@ and type_bindings (globals : context) bindings =
       body_usage uinf
   in
   tyenv, List.rev bindings, usage_builder
-and type_cp (context : context) = fun {node = p; pos} ->
-  let with_channel = fun c s (p, t, u) ->
-    if Usage.uses_of c u <> 1 then
-      if Types.Unl.can_type_be s then
-        Types.Unl.make_type s
-      else
-        Gripers.non_linearity pos (Usage.uses_of c u) c s;
-    (p, t, Usage.remove c u)
-  in
-
-  let use s u = Usage.incr ~by:1 s u in
-
-  let unify ~pos ~handle (t, u) = unify_or_raise ~pos:pos ~handle:handle (("<unknown>", t), ("<unknown>", u)) in
-
-  let wild_open = Types.(open_row default_effect_subkind closed_wild_row) in
-  unify ~pos ~handle:Gripers.cp_wild (Types.Effect wild_open, Types.Effect context.effect_row);
-
-  let module T = Types in
-  let (p, t, u) = match p with
-    | CPUnquote (bindings, e) ->
-       let context', bindings, usage_builder = type_bindings context bindings in
-       let (e, t, u) = type_check (Types.extend_typing_environment context context') e in
-         if Settings.get endbang_antiquotes then
-           unify ~pos:pos ~handle:Gripers.cp_unquote (t, Types.make_endbang_type);
-         CPUnquote (bindings, e), t, usage_builder u
-    | CPGrab ((c, _), None, p) ->
-       let (_, t, _) = type_check context (var c) in
-       let ctype = T.Alias (pk_type, ("EndQuery", [], [], false), T.Input (Types.unit_type, T.End)) in
-       unify ~pos:pos ~handle:(Gripers.cp_grab c) (t, ctype);
-       let (p, pt, u) = type_cp (unbind_var context c) p in
-       CPGrab ((c, Some (ctype, [])), None, p), pt, use c u
-    | CPGrab ((c, _), Some bndr, p) ->
-       let x = Binder.to_name bndr in
-       let (_, t, _) = type_check context (with_pos pos (Var c)) in
-       let a = Types.fresh_type_variable (lin_any, res_any) in
-       let s = Types.fresh_session_variable lin_any in
-       let ctype = T.Input (a, s) in
-       unify ~pos:pos ~handle:(Gripers.cp_grab c)
-             (t, ctype);
-       let (p, pt, u) = with_channel c s (type_cp (bind_var (bind_var context (c, s)) (x, a)) p) in
-       let uses = Usage.uses_of x u in
-       if uses <> 1 then
-         if Types.Unl.can_type_be a then
-           Types.Unl.make_type a
-         else
-           Gripers.non_linearity pos uses x a;
-       let grab_ty = (Env.find "receive" context.var_env) in
-       let tyargs =
-         match Types.concrete_type grab_ty with
-         | T.ForAll _ ->
-            begin
-              match Instantiate.typ grab_ty with
-              | tyargs, T.Function (fps, _fe, _rettype) ->
-                 unify ~pos:pos ~handle:(Gripers.cp_grab "") (Types.make_tuple_type [ctype], fps);
-                 tyargs
-              | _ -> assert false
-            end
-         | _ -> assert false in
-       CPGrab ((c, Some (ctype, tyargs)), Some (Binder.set_type bndr a), p), pt, use c (Usage.remove x u)
-    | CPGive ((c, _), None, p) ->
-       let (_, t, _) = type_check context (with_pos pos (Var c)) in
-       let ctype = T.Output (Types.unit_type, T.End) in
-       unify ~pos:pos ~handle:(Gripers.cp_give c) (t, ctype);
-       let (p, t, u) = type_cp (unbind_var context c) p in
-       CPGive ((c, Some (ctype, [])), None, p), t, use c u
-    | CPGive ((c, _), Some e, p) ->
-       let (_, t, _) = type_check context (var c) in
-       let (e, t', u) = type_check context e in
-       let s = Types.fresh_session_variable lin_any in
-       let ctype = T.Output (t', s) in
-       unify ~pos:pos ~handle:(Gripers.cp_give c)
-             (t, ctype);
-       let (p, t, u') = with_channel c s (type_cp (bind_var context (c, s)) p) in
-
-       let give_ty = (Env.find "send" context.var_env) in
-       let tyargs =
-         match Types.concrete_type give_ty with
-         | T.ForAll _ ->
-            begin
-              match Instantiate.typ give_ty with
-              | tyargs, T.Function (fps, _fe, _rettpe) ->
-                 unify ~pos:pos ~handle:(Gripers.cp_give "") (Types.make_tuple_type [t'; ctype], fps);
-                 tyargs
-              | _ -> assert false
-            end
-         | _ -> assert false in
-       CPGive ((c, Some (ctype, tyargs)), Some e, p), t, use c (Usage.combine u u')
-    | CPGiveNothing bndr ->
-       let c = Binder.to_name bndr in
-       let _, t, _ = type_check context (var c) in
-       unify ~pos:pos ~handle:Gripers.(cp_give c) (t, Types.make_endbang_type);
-       CPGiveNothing (Binder.set_type bndr t), t, Usage.singleton c
-    | CPSelect (bndr, label, p) ->
-       let c = Binder.to_name bndr in
-       let (_, t, _) = type_check context (var c) in
-       let s = Types.fresh_session_variable lin_any in
-       let r = Types.make_singleton_open_row (label, T.Present s) (lin_any, res_session) in
-       let ctype = T.Select r in
-       unify ~pos:pos ~handle:(Gripers.cp_select c)
-             (t, ctype);
-       let (p, t, u) = with_channel c s (type_cp (bind_var context (c, s)) p) in
-       CPSelect (Binder.set_type bndr ctype, label, p), t, use c u
-    | CPOffer (bndr, branches) ->
-       let c = Binder.to_name bndr in
-       let (_, t, _) = type_check context (var c) in
-       (*
-       let crow = Types.make_empty_open_row (lin_any, res_session) in
-       let ctype = Choice crow in
-       unify ~pos:pos ~handle:(Gripers.cp_offer_choice c)
-             (t, ctype);
-        *)
-       let check_branch (label, body) =
-         let s = Types.fresh_type_variable (lin_any, res_session) in
-         let r = Types.make_singleton_open_row (label, T.Present s) (lin_any, res_session) in
-         unify ~pos:pos ~handle:(Gripers.cp_offer_choice c) (t, T.Choice r);
-         let (p, t, u) = with_channel c s (type_cp (bind_var context (c, s)) body) in
-         (label, p), t, u
-       in
-       let branches = List.map check_branch branches in
-       let t' = Types.fresh_type_variable (lin_any, res_any) in
-       List.iter (fun (_, t, _) -> unify ~pos:pos ~handle:Gripers.cp_offer_branches (t, t')) branches;
-       let u = Usage.align (List.map (fun (_, _, u) -> u) branches) in
-       CPOffer (Binder.set_type bndr t, List.map (fun (x, _, _) -> x) branches), t', use c u
-    | CPLink (bndr1, bndr2) ->
-      let c = Binder.to_name bndr1 in
-      let d = Binder.to_name bndr2 in
-      let (_, tc, uc) = type_check context (var c) in
-      let (_, td, ud) = type_check context (var d) in
-        unify ~pos:pos ~handle:Gripers.cp_link_session
-          (tc, Types.fresh_type_variable (lin_any, res_session));
-        unify ~pos:pos ~handle:Gripers.cp_link_session
-          (td, Types.fresh_type_variable (lin_any, res_session));
-        unify ~pos:pos ~handle:Gripers.cp_link_dual (Types.dual_type tc, td);
-        CPLink (Binder.set_type bndr1 tc, Binder.set_type bndr1 td), Types.make_endbang_type, Usage.combine uc ud
-    | CPComp (bndr, left, right) ->
-       let c = Binder.to_name bndr in
-       let s = Types.fresh_session_variable lin_any in
-       let left, t, u = with_channel c s (type_cp (bind_var context (c, s)) left) in
-       let right, t', u' = with_channel c (T.Dual s) (type_cp (bind_var context (c, T.Dual s)) right) in
-       unify ~pos:pos ~handle:Gripers.cp_comp_left (Types.make_endbang_type, t);
-       CPComp (Binder.set_type bndr s, left, right), t', Usage.combine u u'
-  in
-  WithPos.make ~pos p, t, u
-
 let type_check_general context body =
   let body, typ, _ = type_check context body in
   if Utils.is_generalisable body

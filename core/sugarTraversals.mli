@@ -48,8 +48,6 @@ class map :
     method given_spawn_location : given_spawn_location -> given_spawn_location
     method phrasenode      : phrasenode -> phrasenode
     method phrase          : phrase -> phrase
-    method cp_phrasenode   : cp_phrasenode -> cp_phrasenode
-    method cp_phrase       : cp_phrase -> cp_phrase
     method patternnode     : Pattern.t -> Pattern.t
     method pattern         : Pattern.with_pos -> Pattern.with_pos
     method name            : Name.t -> Name.t
@@ -132,8 +130,6 @@ class fold :
     method temporal_deletion : temporal_deletion -> 'self
     method phrasenode      : phrasenode -> 'self
     method phrase          : phrase -> 'self
-    method cp_phrasenode   : cp_phrasenode -> 'self
-    method cp_phrase       : cp_phrase -> 'self
     method patternnode     : Pattern.t -> 'self
     method pattern         : Pattern.with_pos -> 'self
     method name            : Name.t -> 'self
@@ -215,8 +211,6 @@ object ('self)
   method temporal_deletion : temporal_deletion -> ('self * temporal_deletion)
   method given_spawn_location : given_spawn_location -> 'self * given_spawn_location
   method phrasenode      : phrasenode -> 'self * phrasenode
-  method cp_phrasenode   : cp_phrasenode -> 'self * cp_phrasenode
-  method cp_phrase       : cp_phrase -> 'self * cp_phrase
   method position        : Position.t -> 'self * Position.t
   method program         : program -> 'self * program
   method regex           : regex -> 'self * regex

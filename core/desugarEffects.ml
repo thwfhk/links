@@ -513,7 +513,7 @@ let gather_operation_of_type tp
 
         method effect_row : maybe_main_var:bool -> row -> 'self_type * row
           = fun ~maybe_main_var r ->
-          let (fields, rvar, _) = flatten_row r (* |> fst *) |> extract_row_parts in
+          let (fields, rvar) = flatten_row r (* |> fst *) |> extract_row_parts in
           let rvar = Unionfind.find rvar in
           let o = match rvar with
             | Var (vid,_,_)  ->
@@ -559,17 +559,17 @@ let gather_operation_of_type tp
              let (o, _) = o#typ r in
              let (o, _) = o#typ d in
              (o, tp)
-          | Alias (_, (_,kinds,tyargs,_), inner_tp) ->
+          | Alias (_, (_,kinds,tyargs), inner_tp) ->
              let o = o#alias_recapp kinds tyargs in
              let (o,_) = o#typ inner_tp in
              (o, tp)
           | RecursiveApplication { r_unique_name ; r_quantifiers = kinds
-                                   ; r_args = tyargs ; r_unwind; r_dual ; _ } ->
+                                   ; r_args = tyargs ; r_unwind; _ } ->
              let o = o#alias_recapp kinds tyargs in
              let o = if StringSet.mem r_unique_name seen_recapps
                      then o (* skip, decycling *)
                      else begin
-                         let inner_type = r_unwind tyargs r_dual in
+                         let inner_type = r_unwind tyargs in
                          let o = o#add_seen_recapp r_unique_name in
                          fst (o#typ inner_type)
                        end
