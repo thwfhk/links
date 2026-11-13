@@ -20,16 +20,17 @@ OCaml.
 
 ## Task management
 
-For each independent task `X` that spans sessions or needs a handover,
-keep one `tasks/X/PLAN.md`. Record milestones, completed and remaining
-work, dependencies, completion checks, and the latest check results.
-At each pause or handover, record the next action and any blockers.
-Mark the plan complete when its completion checks pass.
+When the user asks, for each independent large task `X` that spans
+sessions or needs a handover, keep one `tasks/X/PLAN.md`. Record
+milestones, completed and remaining work, dependencies, completion
+checks, and the latest check results. At each pause or handover,
+record the next action and any blockers. Mark the plan complete when
+its completion checks pass.
 
-Use `tasks/X/SPEC.md` for changes to language behaviour. Use
-`tasks/X/IMPL.md` for significant implementation decisions. Mark design
-questions that need the user's review. Once resolved, replace each
-question with the decision.
+Use `tasks/X/SPEC.md` for a specification of the language feature
+design. Use `tasks/X/IMPL.md` for significant implementation
+decisions. Mark design questions that need the user's review. Once
+resolved, replace each question with the decision.
 
 Link between these documents without repeating their contents.
 
@@ -37,8 +38,9 @@ Link between these documents without repeating their contents.
 
 - Before an implementation task, read the relevant documents first.
 - Follow existing Links conventions for routine choices. Ask the user
-  before making unresolved choices that affect which programs Links
-  accepts, what annotations it requires, or how programs run.
+  before making unresolved choices that significantly affect which
+  programs Links accepts, what annotations it requires, or how
+  programs run.
 - Use Sol 6.1 x-high subagents by default for design, coding,
   investigation and review. Use Sol 6.1 high for simpler tasks, and
   Sol 6.1 max for very difficult tasks. Use Astra only for an
