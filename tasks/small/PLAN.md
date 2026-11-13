@@ -49,7 +49,7 @@ annotations or evaluation before implementing them.
 
 ### 1. Record the native baseline
 
-- [ ] **1.1** Build the Links revision before the cuts. Record compiler
+- [x] **1.1** Build the Links revision before the cuts. Record compiler
   settings and check the native file, expression and REPL entry points.
 - [ ] **1.2** Record results for the retained language, handler, FreezeML,
   value linearity and IR tests. Identify mixed suites and examples
@@ -149,16 +149,21 @@ regressions and native IR unit tests pass, and source checks pass.
 
 ## Status
 
-Milestone 1: the build and initial checks for 1.1 and 1.2 passed on
-`4e5c78c5` with OCaml 5.4.0. The checkboxes track completed commits.
-Next: record the baseline commits and check for gaps in the retained
-tests (1.3). The scope review decisions are recorded in
-[IMPL.md](IMPL.md#decisions-from-the-scope-review).
+Milestone 1 is in progress. The build and native entry checks passed
+on `1912d9b7` with OCaml 5.4.0. The compiler source is the same as at
+`4e5c78c5`, the revision tested during planning. Next, finish recording
+the retained suites in 1.2 and check for coverage gaps in 1.3.
+
+| Command on `1912d9b7` | Result | Log under `/private/tmp/smalllinks-m1.yNp7d5/` |
+| --- | --- | --- |
+| `make no-db` | Passed with `xcrun` cache warnings. | `build.log` |
+| `./links -e '40 + 2'` | Printed `42 : Int`. | `expression.log` |
+| `./links --enable-handlers --path=examples/handlers --set=effect_sugar=true --set=effect_sugar_policy=final_arrow examples/handlers/tests.links` | Evaluated the handler examples with imports and printed `() : ()`. | `file.log` |
+| `./links --enable-handlers --set=typecheck_only=true examples/handlers/identity.links` | Exited successfully with no output. | `typecheck.log` |
+| `./links` with `fun inc(x) { x + 1 };`, `inc(41);` and `@quit;` | Printed the function type and `42 : Int`. | `repl.log` |
 
 | Command or check | Result on `4e5c78c5` | Log |
 | --- | --- | --- |
-| `make no-db` | Passed. The system tool launcher reported sandbox warnings about its `xcrun` cache. | `/private/tmp/smalllinks-spec-build.or7t6X` |
-| `./links -e`, handler file with imports, `--set=typecheck_only=true`, REPL definition and call | Passed. The baseline still needs `--enable-handlers` for handler programs. The example runner also uses `effect_sugar=true` and `effect_sugar_policy=final_arrow`. | `/private/tmp/smalllinks-native-smoke.o6IszT` |
 | `./test-harness tests/<suite>.tests` for each suite below | 669 passed, 15 ignored by the existing example suite, 0 failed. | `/private/tmp/smalllinks-review-tests.Ux21Wd/` (one log per suite) |
 | `opam exec -- ./run-tests nodb-unit-tests` | 44 passed. | `/private/tmp/smalllinks-ir-baseline.ewkwjd` |
 | Run the source examples from `SPEC.md` with `./links -e` | All six examples passed; the duplicate call of the linear function was rejected. | `/private/tmp/smalllinks-spec-final.qXtMJF` |
