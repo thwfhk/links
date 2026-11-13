@@ -144,3 +144,23 @@ signatures; the `gen` helpers use effect upcasts.
    example. Remove feature-only suites, configs and runners after
    moving any retained cases. Update the native IR unit test runner
    when its database configuration sample goes.
+
+## Baseline fixtures to migrate
+
+1. Before deleting the session and control-flow linearity suites, move
+   the tests that use only ordinary linear functions or generalisation
+   into retained suites. See the early cases in
+   [`sessions.tests`](../../tests/sessions.tests) and the cases marked
+   `with CFL off` in [`control_flow_linearity.tests`](../../tests/control_flow_linearity.tests).
+   The two session entries in [`freezeml.tests`](../../tests/freezeml.tests)
+   pass their filenames to `-e`. The results do not test the contents
+   of those files.
+2. Keep the ordinary list generator and range tests in
+   [`database.tests`](../../tests/database.tests) where the collection
+   suite lacks them. The `asList` case in
+   [`typed_ir.tests`](../../tests/typed_ir.tests) needs a list fixture
+   in place of its table generator and `server` declaration.
+3. Keep native tests from mixed suites. `booleans` uses `javascript`,
+   `lexing` has XML cases, `modules` has a foreign import, and
+   `continuations` has an escape that crosses process boundaries.
+   Keep tests for equivalent native behaviour where they still apply.
