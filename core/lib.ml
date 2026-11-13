@@ -461,21 +461,6 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
    datatype "() ~> Int",
    IMPURE);
 
-  "lensQueryTimeMilliseconds",
-  (pure_pfun (fun _ -> Value.box_int (Lens.Statistics.get_query_time ())),
-   datatype "() ~> Int",
-   IMPURE);
-
-  "lensQueryCount",
-  (pure_pfun (fun _ -> Value.box_int (Lens.Statistics.get_query_count ())),
-   datatype "() ~> Int",
-   IMPURE);
-
-  "lensQueryStatisticsReset",
-  (pure_pfun (fun _ -> Value.box_unit (Lens.Statistics.reset ())),
-   datatype "() ~> ()",
-   IMPURE);
-
   "serverTimeMilliseconds",
   (pure_pfun (fun _ ->
                Value.box_int(time_milliseconds())),

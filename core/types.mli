@@ -135,7 +135,6 @@ and typ =
   | Record of row
   | Variant of row
   | Table of (Temporality.t * typ * typ * typ)
-  | Lens of Lens.Type.t
   | ForAll of (Quantifier.t list * typ)
   (* Effect *)
   | Effect of row

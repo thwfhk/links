@@ -324,7 +324,6 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
             eqt (context, lt3, rt3)
          | _ -> false
          end
-      | Lens _ -> raise (internal_error "The IR type equality check does not support lenses (yet)")
       | ForAll (qs, t) ->
          begin match t2 with
          | ForAll (qs', t') ->
@@ -490,7 +489,7 @@ struct
 
   let checker tyenv =
   object (o)
-    inherit IrTraversals.Transform.visitor(tyenv) as super
+    inherit IrTraversals.Transform.visitor(tyenv)
 
     (*val env = env*)
     val closure_def_env = Env.empty
@@ -1064,14 +1063,6 @@ struct
 
           (o, DoOperation (name, vs, t), t)
 
-        | Lens _
-        | LensSerial _
-        | LensDrop _
-        | LensSelect _
-        | LensGet _
-        | LensCheck _
-        | LensJoin _
-        | LensPut _ -> (* just do type reconstruction *) super#special special
       in
       fun special -> translate_helper_exns special_inner special (SSpec special)
 

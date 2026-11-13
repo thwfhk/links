@@ -12,7 +12,7 @@ if [[ $1 == "fix" ]]; then
 fi
 
 # Directories under scrutiny
-DIRS=("bin" "core" "lens" "tests/unit")
+DIRS=("bin" "core" "tests/unit")
 
 # Counter to keep track of number of files with trailing white space.
 ERRORS=0

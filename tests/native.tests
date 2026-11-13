@@ -191,3 +191,38 @@ stdout : fun : () {hear:() => Int|_}-> Int
 Exclamation mark can be defined as an operator
 infixl 6 !; op a ! b { a + b } 19 ! 23
 stdout : 42 : Int
+
+Relational lens construction is rejected
+lens [(id=1)] default
+stderr : @.*Parse error:.*
+exit : 1
+
+Relational lens get syntax is rejected
+fun f(l) { lensget l } ()
+stderr : @.*Parse error:.*
+exit : 1
+
+Relational lens put syntax is rejected
+fun f(l) { lensput l with [(id=1)] } ()
+stderr : @.*Parse error:.*
+exit : 1
+
+Relational lens Serial type is unavailable
+sig f : (Serial) -> () fun f(_) { () }
+stderr : @.*Unbound type constructor Serial.*
+exit : 1
+
+Relational lens statistics primitive is unavailable
+lensQueryCount()
+stderr : @.*Unknown variable lensQueryCount\..*
+exit : 1
+
+Relational lens setting is unknown
+()
+args : --set=relational_lenses=true
+stdout : () : ()
+stderr : @.*Unknown setting 'relational_lenses'.*
+
+Former lens keywords are identifiers
+var lens = 40; var lensget = 2; lens + lensget
+stdout : 42 : Int

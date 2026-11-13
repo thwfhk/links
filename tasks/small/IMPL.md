@@ -109,9 +109,13 @@ signatures; the `gen` helpers use effect upcasts.
    remains and uses its existing `Unknown` value for native functions.
    Keep Yojson for the shared database loader until milestone 3.
    Retained mailbox fixtures use algebraic operations and handlers.
-5. **3.1–3.3.** With web and JS gone, remove query and lens constructs
-   across parsing, inference, IR and evaluation before deleting
-   `core/query/`, `lens/` and the remaining database modules. Remove the
+5. **3.1.** Remove lens syntax, inference, IR and evaluation, the lens
+   library, `Serial` and `isNew` from the prelude, and the statistics
+   primitives. Lens keywords such as `lens` and `lensget` become
+   ordinary identifiers. The table and query paths still build in 3.1.
+6. **3.2–3.3.** Remove query constructs across parsing, inference, IR and
+   evaluation before deleting `core/query/` and the remaining database
+   modules. Remove the
    `sparql` primitive before dropping RDF. Keep the list cases in
    [`DesugarFors`](../../core/desugarFors.ml), including `sortByBase`
    and the `Base` row restriction used by list `orderby`. Ordinary

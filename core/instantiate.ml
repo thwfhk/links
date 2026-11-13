@@ -94,7 +94,6 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
         | RecursiveApplication app ->
             RecursiveApplication { app with r_args =
               List.map instta app.r_args }
-        | Lens s -> Lens s
         (* presence stuff*)
         | Present t -> Present (inst t)
         | Absent -> Absent

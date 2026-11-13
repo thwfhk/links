@@ -11,7 +11,6 @@ OCaml.
   Database query compilation is in `core/query/`.
 - `bin/` contains the command-line driver and REPL.
 - `lib/stdlib/` and `prelude.links` contain the Links standard library.
-- `lens/` contains relational lenses.
 - `tests/` contains regression tests and OCaml unit tests.
 - `examples/` contains Links programs; `doc/` contains documentation.
 

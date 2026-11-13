@@ -834,18 +834,6 @@ fun toLower(ch) {
   } else ch
 }
 
-typename Serial = [| Key:Int | NewKey | NewKeyMapped:Int |];
-
-sig isNew : (Serial) -> Bool
-fun isNew(x) {
-  switch (x) {
-    case NewKey -> true
-    case NewKeyMapped (x) -> true
-    case Key (x) -> false
-  }
-}
-
-
 ### Date / Time functions
 
 # UTC Time Accessors

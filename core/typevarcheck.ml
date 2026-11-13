@@ -80,7 +80,6 @@ let rec is_guarded : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
            end
         | Variant row -> isgr row
         | Table (_, f, d, r) -> isg f && isg d && isg r
-        | Lens _sort -> true (* does not contain type variables *)
         | ForAll (qs, t) ->
             is_guarded
               (TypeVarSet.add_quantifiers qs bound_vars)
@@ -162,7 +161,6 @@ let rec is_negative : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
         | Record row -> isnr row
         | Variant row -> isnr row
         | Table (_, f, d, r) -> isn f || isn d || isn r
-        | Lens typ -> is_negative_lens_type bound_vars expanded_apps var typ
         | ForAll (qs, t) ->
             is_negative
               (TypeVarSet.add_quantifiers qs bound_vars)
@@ -201,10 +199,6 @@ and is_negative_row_var : TypeVarSet.t -> StringSet.t -> int -> row_var -> bool 
 and is_negative_type_arg : TypeVarSet.t -> StringSet.t -> int -> type_arg -> bool =
   fun bound_vars expanded_apps var (_pk, t)->
   is_negative bound_vars expanded_apps var t
-and is_negative_lens_type = (*: TypeVarSet.t -> StringSet.t -> int -> Lens.Type.t -> bool =*)
-  fun _bound_vars _expanded_apps _var _typ ->
-    false
-
 and is_positive : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
   fun bound_vars expanded_apps var t ->
     let isp = is_positive bound_vars expanded_apps var in
@@ -244,7 +238,6 @@ and is_positive : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
         | Record row -> ispr row
         | Variant row -> ispr row
         | Table (_, f, d, r) -> isp f || isp d || isp r
-        | Lens typ -> is_positive_lens_type bound_vars expanded_apps var typ
         | ForAll (qs, t) ->
             is_positive
               (TypeVarSet.add_quantifiers qs bound_vars)
@@ -283,10 +276,6 @@ and is_positive_row_var : TypeVarSet.t -> StringSet.t -> int -> row_var -> bool 
 and is_positive_type_arg : TypeVarSet.t -> StringSet.t -> int -> type_arg -> bool =
   fun bound_vars expanded_apps var (_pk, t) ->
   is_positive bound_vars expanded_apps var t
-and is_positive_lens_type = (*: TypeVarSet.t -> StringSet.t -> int -> Lens.Type.t -> bool =*)
-  fun _bound_vars _expanded_apps _var _typ ->
-    false
-
 let is_guarded = is_guarded TypeVarSet.empty StringSet.empty
 let is_guarded_row = is_guarded_row false TypeVarSet.empty StringSet.empty
 

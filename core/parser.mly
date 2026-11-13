@@ -331,8 +331,6 @@ let any = any_pat dp
 %token COMMA VBAR DOT DOTDOT COLON COLONCOLON
 %token TABLE TEMPORALTABLE TABLEKEYS FROM DATABASE QUERY WITH ORDERBY
 %token UPDATE DELETE INSERT VALUES SET RETURNING
-%token LENS LENSDROP LENSSELECT LENSJOIN DETERMINED BY ON DELETE_LEFT
-%token LENSPUT LENSGET LENSCHECK LENSSERIAL
 %token READONLY DEFAULT
 %token ESCAPE
 %token SEMICOLON
@@ -803,7 +801,6 @@ exp:
 | db_expression
 | escape_expression
 | iteration_expression
-| lens_expression
 | table_expression
 | typed_expression                                             { $1 }
 
@@ -824,32 +821,6 @@ database_expression:
 | insert_keyword exp VALUES LPAREN record_labels RPAREN typed_expression
   RETURNING VARIABLE                                           { db_insert ~ppos:$loc $1 $2 $5 $7 (Some $9) }
 | DATABASE atomic_expression perhaps_db_driver                 { with_pos $loc (DatabaseLit ($2, $3))           }
-
-fn_dep_cols:
-| field_label+                                                 { $1 }
-
-fn_dep:
-| fn_dep_cols RARROW fn_dep_cols                               { ($1, $3) }
-
-fn_deps:
-| separated_nonempty_list(COMMA, fn_dep)                       { $1 }
-
-lens_expression:
-| LENS exp DEFAULT                                             { with_pos $loc (LensLit ($2, None))}
-| LENS exp TABLEKEYS exp                                       { with_pos $loc (LensKeysLit ($2, $4, None))}
-| LENS exp WITH LBRACE fn_deps RBRACE                          { with_pos $loc (LensFunDepsLit ($2, $5, None))}
-| LENSSERIAL exp WITH VARIABLE+                                { with_pos $loc (LensSerialLit ($2, $4, None))}
-| LENSDROP field_label DETERMINED BY
-  field_label DEFAULT exp FROM exp                             { with_pos $loc (LensDropLit ($9, $2, $5, $7, None)) }
-| LENSSELECT FROM exp BY exp                                   { with_pos $loc (LensSelectLit ($3, $5, None)) }
-| LENSJOIN exp WITH exp ON exp DELETE LBRACE exp COMMA exp RBRACE  { with_pos $loc (LensJoinLit ($2, $4, $6, $9, $11, None)) }
-| LENSJOIN exp WITH exp ON exp DELETE_LEFT                     { with_pos $loc (LensJoinLit ($2, $4, $6,
-                                                                                       with_pos $loc (Constant (Constant.Bool true )),
-                                                                                       with_pos $loc (Constant (Constant.Bool false)), None)) }
-| LENSGET exp                                                  { with_pos $loc (LensGetLit ($2, None)) }
-| LENSCHECK exp                                                { with_pos $loc (LensCheckLit ($2, None)) }
-| LENSPUT exp WITH exp                                         { with_pos $loc (LensPutLit ($2, $4, None)) }
-
 
 record_labels:
 | separated_list(COMMA, record_label)                          { $1 }

@@ -6,9 +6,6 @@
      ::     is also used in patterns
      ~      triggers a lexer state switch
 
-   Operators were extracted from Sugartypes to their own module to avoid import
-   cycle with lens code.  If, at any point in the future, the import cycle no
-   longer exists this module can be merged back into Sugartypes.
 *)
 
 open CommonTypes

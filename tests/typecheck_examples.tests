@@ -169,10 +169,6 @@ Typecheck example file examples/progressiveQuery.links
 examples/progressiveQuery.links
 filemode : true
 
-Typecheck example file examples/relational_lenses/cds.links
-examples/relational_lenses/cds.links
-filemode : true
-
 Typecheck example file examples/shredding.links
 examples/shredding.links
 filemode : true

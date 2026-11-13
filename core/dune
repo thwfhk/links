@@ -15,7 +15,7 @@
              yojson
              lwt lwt.unix
              uri
-             findlib menhirLib links.lens calendar
+             findlib menhirLib calendar
              dynlink
              rdf rdf_lwt iri)
   (preprocess (pps ppx_deriving.std)))

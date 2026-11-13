@@ -139,7 +139,6 @@ and typ =
   | Record of row
   | Variant of row
   | Table of (Temporality.t * typ * typ * typ)
-  | Lens of Lens.Type.t
   | ForAll of (Quantifier.t list * typ)
   (* Effect *)
   | Effect of row
@@ -352,12 +351,6 @@ struct
          let (o, write') = o#typ write in
          let (o, needed') = o#typ needed in
          (o, Table (temporality, read', write', needed'))
-      | Lens t ->
-         (* Lens types are substantially more complex than allowed for by a
-            visitor. If this functionality is needed, then the visitor can
-            be extended and a separate visitor can be written for lens types
-            separately. *)
-         (o, Lens t)
       | ForAll (names, body) ->
          let (o, names') = o#list (fun o -> o#quantifier) names in
          let (o, body') = o#typ body in
@@ -554,7 +547,6 @@ class virtual type_predicate = object(self)
     | Function (a, e, r) | Lolli (a, e, r) -> self#type_satisfies vars a && self#row_satisfies vars e && self#type_satisfies vars r
     | Record r | Effect r | Variant r -> self#row_satisfies vars r
     | Table _ -> true
-    | Lens _ -> true
     | ForAll (qs, t) -> self#type_satisfies (rec_appl, rec_vars, TypeVarSet.add_quantifiers qs quant_vars) t
     | Row (fields, row_var) ->
        let row_var = self#point_satisfies self#row_satisfies vars row_var in
@@ -618,7 +610,6 @@ class virtual type_iter = object(self)
        self#visit_type vars a; self#visit_row vars e; self#visit_type vars r
     | Record r | Variant r -> self#visit_row vars r
     | Table _ -> ()
-    | Lens _ -> ()
     | ForAll (qs, t) ->
        self#visit_type (rec_appl, rec_vars, TypeVarSet.add_quantifiers qs quant_vars) t
     (* Effect *)
@@ -714,7 +705,7 @@ module Base : Constraint = struct
         (* Type *)
         | Primitive (Bool | Int | Char | Float | String | DateTime) -> true
         | Primitive _ -> false
-        | (Function _ | Lolli _ | Record _ | Variant _ | Table _ | Lens _ | ForAll (_::_, _)) -> false
+        | (Function _ | Lolli _ | Record _ | Variant _ | Table _ | ForAll (_::_, _)) -> false
         | ForAll ([], t) -> super#type_satisfies vars t
         (* Effect *)
         | Effect _ as t -> super#type_satisfies vars t
@@ -760,7 +751,7 @@ module Unl : Constraint = struct
       | Primitive _ | Function _ -> true
       | Lolli _ -> false
       | (Record _ | Variant _) as t -> super#type_satisfies vars t
-      | (Table _ | Lens _) -> true
+      | Table _ -> true
       | ForAll _ as t -> super#type_satisfies vars t
       (* Effect *)
       | Effect _  -> true
@@ -811,7 +802,7 @@ module Unl : Constraint = struct
        | Function _ -> ()
        | Lolli _ -> assert false
        | (Record _ | Variant _) as t -> super#visit_type vars t
-       | Table _ | Lens _ -> ()
+       | Table _ -> ()
        | ForAll _ as t -> super#visit_type vars t
        (* Effect *)
        | Effect _ -> ()
@@ -1069,7 +1060,6 @@ let free_type_vars, free_row_type_vars, free_tyarg_vars =
     | Table (_, r, w, n)         ->
        S.union_all
          [free_type_vars' rec_vars r; free_type_vars' rec_vars w; free_type_vars' rec_vars n]
-    | Lens _          -> S.empty
     | Alias (_, (_, _, ts), datatype) ->
        S.union (S.union_all (List.map (free_tyarg_vars' rec_vars) ts)) (free_type_vars' rec_vars datatype)
     | Application (_, tyargs) -> S.union_all (List.map (free_tyarg_vars' rec_vars) tyargs)
@@ -1322,7 +1312,6 @@ and normalise_datatype rec_names t =
   | Effect row              -> Effect (nr row)
   | Operation (f, t, b)     -> Operation (nt f, nt t, b)
   | Table (t, r, w, n)      -> Table (t, nt r, nt w, nt n)
-  | Lens sort               -> Lens sort
   | Alias (k, (name, qs, ts), datatype) ->
      Alias (k, (name, qs, ts), nt datatype)
   | Application (abs, tyargs) ->
@@ -1601,7 +1590,6 @@ struct
     | Record row
       | Variant row -> free_bound_row_type_vars bound_vars row
     | Table (_, r, w, n) -> (fbtv r) @ (fbtv w) @ (fbtv n)
-    | Lens _ -> []
     | ForAll (tyvars, body) ->
        let bound_vars, vars =
          List.fold_left
@@ -2308,34 +2296,6 @@ struct
             Printf.sprintf "TemporalTable(%s, %s, %s, %s)"
                 (Temporality.show t)
                 (sd r) (sd w) (sd n)
-         | Lens _typ ->
-            let open Lens in
-            let sort = Type.sort _typ in
-            let cols = Sort.present_colset sort |> Column.Set.elements in
-            let fds = Sort.fds sort in
-            let predicate =
-              Sort.predicate sort
-           |> OptionUtils.from_option (Phrase.Constant.bool true) in
-            let pp_col f col =
-              Format.fprintf f "%s : %a"
-                (Lens.Column.alias col)
-                Lens.Phrase.Type.pp_pretty (Lens.Column.typ col) in
-            if Lens.Type.is_abstract _typ
-            then
-              if Lens.Type.is_checked _typ
-              then
-                Format.asprintf "LensChecked((%a), { %a })"
-                  (Lens.Utility.Format.pp_comma_list pp_col) cols
-                  Lens.Fun_dep.Set.pp_pretty fds
-              else
-                Format.asprintf "LensUnchecked((%a), { %a })"
-                  (Lens.Utility.Format.pp_comma_list pp_col) cols
-                  Lens.Fun_dep.Set.pp_pretty fds
-            else
-              Format.asprintf "Lens((%a), %a, { %a })"
-                (Lens.Utility.Format.pp_comma_list pp_col) cols
-                Lens.Database.fmt_phrase_dummy predicate
-                Lens.Fun_dep.Set.pp_pretty fds
          | ForAll (tyvars, body) ->
             let bound_vars =
               List.fold_left
@@ -3676,41 +3636,6 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           StringBuffer.write buf ".";
           Printer.apply datatype inner_ctx tp buf)
 
-  (* code for printing relational lenses taken verbatim from the original printer *)
-  and lens : Lens.Type.t printer
-    = let open Printer in
-      Printer (fun _ctx _typ buf ->
-          let open Lens in
-          let sort = Type.sort _typ in
-          let cols = Sort.present_colset sort |> Column.Set.elements in
-          let fds = Sort.fds sort in
-          let predicate =
-            Sort.predicate sort
-            |> OptionUtils.from_option (Phrase.Constant.bool true) in
-          let pp_col f col =
-            Format.fprintf f "%s : %a"
-              (Lens.Column.alias col)
-              Lens.Phrase.Type.pp_pretty (Lens.Column.typ col) in
-          let ret =
-            if Lens.Type.is_abstract _typ
-            then
-              if Lens.Type.is_checked _typ
-              then
-                Format.asprintf "LensChecked((%a), { %a })"
-                  (Lens.Utility.Format.pp_comma_list pp_col) cols
-                  Lens.Fun_dep.Set.pp_pretty fds
-              else
-                Format.asprintf "LensUnchecked((%a), { %a })"
-                  (Lens.Utility.Format.pp_comma_list pp_col) cols
-                  Lens.Fun_dep.Set.pp_pretty fds
-            else
-              Format.asprintf "Lens((%a), %a, { %a })"
-                (Lens.Utility.Format.pp_comma_list pp_col) cols
-                Lens.Database.fmt_phrase_dummy predicate
-                Lens.Fun_dep.Set.pp_pretty fds
-          in
-          StringBuffer.write buf ret)
-
   and table : (Temporality.t * typ * typ * typ) printer
     = let open Printer in
       Printer (fun ctx (t, r, w, n) buf ->
@@ -3747,7 +3672,6 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | Lolli f            -> with_ambient Context.ambient_linfun_default   func f
 
             | Table tab          -> with_value table tab
-            | Lens tp            -> with_value lens tp
             | ForAll fa          -> with_value forall fa
 
             | Record _ | Variant _ | Effect _ | Row _
@@ -4078,7 +4002,6 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
     | Effect row | Record row | Variant row -> make_env boundvars row
     | Operation (f, t, _)     -> union [make_env boundvars f; make_env boundvars t]
     | Table (_, r, w, n)      -> union [make_env boundvars r; make_env boundvars w; make_env boundvars n]
-    | Lens _                  -> empties
     | Alias (_, (_, _, ts), d) -> union (List.map (make_env_ta boundvars) ts @ [make_env boundvars d])
     | Application (_, ds)     -> union (List.map (make_env_ta boundvars) ds)
     | RecursiveApplication { r_args ; _ } -> union (List.map (make_env_ta boundvars) r_args)

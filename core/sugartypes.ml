@@ -390,21 +390,6 @@ and phrasenode =
   | DBUpdate         of temporal_update option * Pattern.with_pos * phrase *
                           phrase option * (Name.t * phrase) list
   | DBTemporalJoin   of Temporality.t * phrase * Types.datatype option
-  | LensLit          of phrase * Lens.Type.t option
-  | LensSerialLit    of phrase * string list * Lens.Type.t option
-  (* the lens keys lit is a literal that takes an expression and is converted
-     into a LensLit with the corresponding table keys marked in the lens_sort *)
-  | LensKeysLit      of phrase * phrase * Lens.Type.t option
-  | LensFunDepsLit   of phrase * (string list * string list) list *
-                          Lens.Type.t option
-  | LensDropLit      of phrase * string * string * phrase *
-                          Lens.Type.t option
-  | LensSelectLit    of phrase * phrase * Lens.Type.t option
-  | LensJoinLit      of phrase * phrase * phrase * phrase * phrase *
-                          Lens.Type.t option
-  | LensGetLit       of phrase * Types.datatype option
-  | LensCheckLit     of phrase * Lens.Type.t option
-  | LensPutLit       of phrase * phrase * Types.datatype option
 and phrase = phrasenode WithPos.t
 and bindingnode =
   | Val     of Pattern.with_pos * (SugarQuantifier.t list * phrase) * Location.t *
@@ -543,18 +528,6 @@ struct
 
     | ListLit (ps, _)
     | TupleLit ps -> union_map phrase ps
-
-    | LensLit (l, _) -> phrase l
-    | LensSerialLit (l, _, _) -> phrase l
-    | LensFunDepsLit (l, _, _) -> phrase l
-    | LensKeysLit (l, _, _) -> phrase l
-    | LensSelectLit (l, _, _) -> phrase l
-    | LensDropLit (l, _, _, _, _) -> phrase l
-    | LensJoinLit (l1, l2, _, _, _, _) -> union_all [phrase l1; phrase l2]
-
-    | LensCheckLit (l, _) -> phrase l
-    | LensGetLit (l, _) -> phrase l
-    | LensPutLit (l, data, _) -> union_all [phrase l; phrase data]
 
     | Query (None, _, p, _) -> phrase p
     | Query (Some (limit, offset), _, p, _) ->

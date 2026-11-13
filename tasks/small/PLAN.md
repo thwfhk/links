@@ -76,7 +76,7 @@ reproduced; existing failures are recorded separately.
 - [x] **2.4** (`aadfb528`) Remove session types, session exceptions and
   CP syntax. Preserve value linearity and ordinary handler dispatch.
   Update session-dependent tests whose purpose still applies.
-- [x] **2.5** Remove native processes and mailboxes. Replace the
+- [x] **2.5** (`516a5544`) Remove native processes and mailboxes. Replace the
   evaluator's scheduler calls and delete the unused process and web
   runtime, request data and serialisation.
 
@@ -86,7 +86,7 @@ tests pass, including deep recursion. Removed constructs are rejected.
 
 ### 3. Remove the remaining database and lens code
 
-- [ ] **3.1** Remove relational lens syntax, types, primitives and
+- [x] **3.1** Remove relational lens syntax, types, primitives and
   evaluation. Delete the lens library and tests specific to it.
 - [ ] **3.2** Remove tables, queries, updates and temporal database
   features. Keep list generators, `where` and `orderby`.
@@ -153,9 +153,31 @@ regressions and native IR unit tests pass, and source checks pass.
 
 ## Status
 
+Milestone 3 is in progress. Item 3.1 is complete. Next, remove tables,
+queries, updates and temporal database features in 3.2.
+
+Checks for 3.1 used `516a5544` plus the item changes on OCaml 5.4.0.
+Logs are under `/private/tmp/smalllinks-m3.yjxu5W/`.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make no-db` and `make all-ci` | Passed. | `3.1-build.log`, `3.1-ci.log` |
+| Native expression, file with imports, typecheck-only file and REPL checks | Passed. | `3.1-expr.log`, `3.1-file.log`, `3.1-typecheck.log`, `3.1-repl.log` |
+| `./test-harness tests/<suite>.tests` for the suites below | 546 passed, 8 ignored and 0 failed. The native suite includes seven lens removal cases. | One `3.1-<suite>.log` per suite |
+| `opam exec -- ./run-tests nodb-unit-tests` | 44 passed. | `3.1-unit.log` |
+| `./tests/validate_typecheck_testfile.testscript` | Passed. | `3.1-registration.log` |
+| `make rule-check` and `git diff --check` | Passed. GNU find was unavailable for the tabs rule. | `3.1-rule.log`, `3.1-diff.log` |
+
+Suites for 3.1: `collections`, `database`, `effect_sugar`, `freezeml`,
+`handlers`, `native`, `parser`, `polymorphism`,
+`recheck_frontend_transformations`, `records`, `roundtrippable_types`,
+`temporal`, `typecheck_examples`, `typecheck_examples_with_cfl_on` and
+`typed_ir`.
+
+### Milestone 2
+
 Milestone 2 is complete. The prelude, native entry points, handlers,
-continuations and rejection checks passed. Next, remove relational
-lenses in 3.1. There are no blockers for 3.1.
+continuations and rejection checks passed.
 
 Checks for 2.5 used `aadfb528` plus the item changes on OCaml 5.4.0.
 Logs are under `/private/tmp/smalllinks-m2.B3p5xp/`.
@@ -172,7 +194,10 @@ Logs are under `/private/tmp/smalllinks-m2.B3p5xp/`.
 | Arithmetic and list length in two resumptions of a handler | Printed `45 : Int`. | `2.5-pure.log` |
 | `./links examples/TicTacToe-Console.links` | Ran successfully. | `2.5-tic-tac-toe.log` |
 | `./tests/validate_typecheck_testfile.testscript` | Passed. | `2.5-registration.log` |
-| `make rule-check` and `git diff --check` | Passed. GNU find was unavailable for the tabs rule. | `2.5-rule.log`, `2.5-diff.log` |
+| `make rule-check` and `git diff --check` | Passed. GNU find was unavailable, so the tabs check was repeated with `rg`. It found no tabs in the checked files. | `2.5-rule.log`, `2.5-diff.log`, `2.5-tabs-fallback.log` |
+
+After committing 2.5, `./test-harness tests/native.tests` passed all 39
+cases on `516a5544`. See `2.5-committed-native.log`.
 
 Checks for 2.4 used `68c19606` plus the item changes on OCaml 5.4.0.
 Logs are under `/private/tmp/smalllinks-m2.B3p5xp/`.

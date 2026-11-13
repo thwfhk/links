@@ -94,14 +94,6 @@ and binding =
 and special =
   | Wrong      of Types.t
   | Database   of value
-  | Lens       of value * Lens.Type.t
-  | LensSerial of { lens: value; columns : Lens.Alias.Set.t; typ : Lens.Type.t }
-  | LensDrop   of { lens: value; drop : string; key : string; default : value; typ : Lens.Type.t }
-  | LensSelect of { lens : value; predicate : lens_predicate; typ : Lens.Type.t }
-  | LensJoin   of { left : value; right : value; on : string list; del_left : Lens.Phrase.t; del_right : Lens.Phrase.t; typ : Lens.Type.t }
-  | LensCheck  of value * Lens.Type.t
-  | LensGet    of value * Types.t
-  | LensPut    of value * value * Types.t
   | Table      of table
   | Query      of (value * value) option * QueryPolicy.t * computation * Types.t
   | TemporalJoin of Temporality.t * computation * Types.datatype
@@ -121,7 +113,6 @@ and handler = {
     ih_depth: handler_depth;
 }
 and handler_depth = | Deep of (binder * value) list | Shallow
-and lens_predicate = Static of Lens.Phrase.t | Dynamic of value
 and table = {
   database: value;
   table: value;

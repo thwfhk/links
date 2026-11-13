@@ -38,7 +38,6 @@ BLACKLIST = {
   "tests/modules/overflow-test/a8.links",
   "tests/modules/overflow-test/a9.links",
   "tests/modules/varRefB.links",
-  "tests/unit/lens/benchmark/dblp.links",
  }
 
 

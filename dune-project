@@ -43,7 +43,6 @@
            result
            ocamlfind
           (menhir (>= 20210419))
-          (ppx_sexp_conv (>= v0.16.0))
           (calendar (>= 2.0.4))
           (rdf_lwt (>= 0.13.0)))
  (tags

@@ -226,8 +226,7 @@ let rec primary_kind_of_type t =
   | ForAll _
   | Application _
   | RecursiveApplication _
-  | Operation _
-  | Lens _ ->
+  | Operation _ ->
      pk_type
   | Present _
   | Absent ->
@@ -320,9 +319,6 @@ let check_type_wellformedness primary_kind t : unit =
     | Table (_, f, d, r) ->
        idatatype f; idatatype d; idatatype r;
        pk_type
-    | Lens _s ->
-       (* todo *)
-       assert false
     | ForAll (_qs, t) ->
        idatatype t;
        pk_type

@@ -170,22 +170,6 @@ sig
 
   val table_handle : value sem * value sem * value sem * (Temporality.t * datatype * datatype * datatype) * (string * string) option -> tail_computation sem
 
-  val lens_handle : value sem * Lens.Type.t -> tail_computation sem
-
-  val lens_serial : value sem * Lens.Alias.Set.t * Lens.Type.t -> tail_computation sem
-
-  val lens_drop_handle : value sem * string * string * value sem * Lens.Type.t -> tail_computation sem
-
-  val lens_select_handle : value sem * [`Static of Lens.Phrase.t | `Dynamic of value sem] * Lens.Type.t -> tail_computation sem
-
-  val lens_join_handle : value sem * value sem * string list * Lens.Phrase.t * Lens.Phrase.t * Lens.Type.t -> tail_computation sem
-
-  val lens_check : value sem * Lens.Type.t -> tail_computation sem
-
-  val lens_get : value sem * datatype -> tail_computation sem
-
-  val lens_put : value sem * value sem * datatype -> tail_computation sem
-
   val wrong : datatype -> tail_computation sem
 
   val letfun :
@@ -459,60 +443,6 @@ struct
             } in
             lift (Special (Table tbl),
                                Types.Table (tmp, r, w, n)))))
-
-  let lens_handle (table, t) =
-      bind table
-        (fun table ->
-            lift (Special (Lens (table, t)), Types.Lens t))
-
-  let lens_serial (lens, columns, typ) =
-    bind lens
-      (fun lens ->
-         lift (Special (LensSerial {lens; columns; typ}), Types.Lens typ))
-
-  let lens_drop_handle (lens, drop, key, default, typ) =
-      bind lens
-        (fun lens ->
-            bind default
-            (fun default ->
-               lift (Special (LensDrop {lens; drop; key; default; typ}), Types.Lens typ)))
-
-  let lens_select_handle (lens, pred, typ) =
-      bind lens
-        (fun lens ->
-           match pred with
-           | `Dynamic pred ->
-             bind pred
-               (fun predicate ->
-                  let predicate = Dynamic predicate in
-                  lift (Special (LensSelect {lens; predicate; typ}), Types.Lens typ))
-           | `Static predicate ->
-             let predicate = Static predicate in
-             lift (Special (LensSelect {lens; predicate; typ}), Types.Lens typ))
-
-  let lens_join_handle (left, right, on, del_left, del_right, typ) =
-      bind left
-        (fun left ->
-          bind right
-          (fun right ->
-            lift (Special (LensJoin {left; right; on; del_left; del_right; typ}), Types.Lens typ)))
-
-  let lens_check (lens, t) =
-      bind lens
-         (fun lens ->
-            lift (Special (LensCheck (lens, t)), Types.Lens t))
-
-  let lens_get (lens, rtype) =
-      bind lens
-        (fun lens ->
-            lift (Special (LensGet (lens, rtype)), Types.make_list_type rtype))
-
-  let lens_put (lens, data, rtype) =
-      bind lens
-        (fun lens ->
-            bind data
-                (fun data ->
-                        lift (Special (LensPut (lens, data, rtype)), Types.make_list_type rtype)))
 
   let wrong t = lift (Special (Wrong t), t)
 
@@ -985,43 +915,6 @@ struct
               in
                 I.database
                   (ev (WithPos.make ~pos (RecordLit ([("name", name); ("driver", driver); ("args", args)], None))))
-          | LensLit (table, Some t) ->
-              let table = ev table in
-                I.lens_handle (table, t)
-          | LensSerialLit (lens, columns, Some t) ->
-              let lens = ev lens in
-              let columns = Lens.Alias.Set.of_list columns in
-                I.lens_serial (lens, columns, t)
-          | LensDropLit (lens, drop, key, default, Some t) ->
-              let lens = ev lens in
-              let default = ev default in
-                I.lens_drop_handle (lens, drop, key, default, t)
-          | LensSelectLit (lens, pred, Some t) ->
-              let lens = ev lens in
-              let trow = Lens.Type.sort t |> Lens.Sort.record_type in
-              if Lens_sugar_conv.is_static trow pred then
-                let pred = Lens_sugar_conv.lens_sugar_phrase_of_sugar pred |> Lens.Phrase.of_sugar in
-                I.lens_select_handle (lens, `Static pred, t)
-              else
-                let pred = ev pred in
-                I.lens_select_handle (lens, `Dynamic pred, t)
-          | LensJoinLit (lens1, lens2, on, left, right, Some t) ->
-              let lens1 = ev lens1 in
-              let lens2 = ev lens2 in
-              let on = Lens_sugar_conv.cols_of_phrase on in
-              let left = Lens_sugar_conv.lens_sugar_phrase_of_sugar left |> Lens.Phrase.of_sugar in
-              let right = Lens_sugar_conv.lens_sugar_phrase_of_sugar right |> Lens.Phrase.of_sugar in
-                I.lens_join_handle (lens1, lens2, on, left, right, t)
-          | LensCheckLit (lens, Some t) ->
-              let lens = ev lens in
-                I.lens_check (lens, t)
-          | LensGetLit (lens, Some t) ->
-              let lens = ev lens in
-                I.lens_get (lens, t)
-          | LensPutLit (lens, data, Some t) ->
-              let lens = ev lens in
-              let data = ev data in
-                I.lens_put (lens, data, t)
           | TableLit {
               tbl_name; tbl_type = (tmp, _, Some (readtype, writetype, neededtype));
               tbl_keys; tbl_temporal_fields; tbl_database; _ } ->
@@ -1102,16 +995,6 @@ struct
           | ConstructorLit _
           | Switch _
           | TableLit _
-          | LensLit _
-          | LensSerialLit _
-          | LensDropLit _
-          | LensSelectLit _
-          | LensJoinLit _
-          | LensCheckLit _
-          | LensGetLit _
-          | LensPutLit _
-          | LensFunDepsLit _
-          | LensKeysLit _
           | QualifiedVar _
           | DoOperation _
           | Instantiate _ | Generalise _ ->

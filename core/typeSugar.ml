@@ -9,13 +9,6 @@ open SourceCode.WithPos
 let internal_error message =
   Errors.internal_error ~filename:"typeSugar.ml" ~message
 
-let relational_lenses_guard pos =
-  let relational_lenses_disabled pos =
-    Errors.disabled_extension ~pos ~setting:("relational_lenses", true) "Relational lenses"
-  in
-  if not (Settings.get Lens.relational_lenses)
-  then raise (relational_lenses_disabled pos)
-
 let check_top_level_purity
   = Settings.(flag "check_top_level_purity"
               |> convert parse_bool
@@ -109,16 +102,6 @@ struct
     | FnAppl _
     | Handle _
     | Switch _
-    | LensLit _
-    | LensSerialLit _
-    | LensKeysLit _
-    | LensFunDepsLit _
-    | LensDropLit _
-    | LensSelectLit _
-    | LensJoinLit _
-    | LensCheckLit _
-    | LensGetLit _
-    | LensPutLit _
     | DoOperation _
     | Operation _
     | DBDelete _
@@ -237,9 +220,6 @@ sig
 
   val extend_record : griper
   val record_with : griper
-
-  val lens_predicate : griper
-  val lens_put_input : griper
 
   val list_lit : griper
 
@@ -628,41 +608,6 @@ end
                 code ppr_lt                        ^ nl  () ^
                "while the update fields have type" ^ nli () ^
                 code ppr_t)
-
-    let lens_predicate ~pos ~t1 ~t2 ~error:_ =
-      build_tyvar_names [snd t1; snd t2];
-      Format.asprintf
-        "The predicate\n\
-        \  %s\n
-         has type\n\
-        \  %s\n
-         but the lens\n\
-        \  %s\n
-         expected a predicate of type\n\
-        \  %s"
-        (fst t1 |> code)
-        (snd t1 |> show_type)
-        (fst t2 |> code)
-        (snd t2 |> show_type)
-      |> die pos
-
-    let lens_put_input ~pos ~t1 ~t2 ~error:_ =
-      build_tyvar_names [snd t1; snd t2];
-      Format.asprintf
-        "The put value \n\
-        \  %s\n
-         has type\n\
-        \  %s\n
-         but the lens\n\
-        \  %s\n
-         expected an input type\n\
-        \  %s"
-        (fst t1 |> code)
-        (snd t1 |> show_type)
-        (fst t2 |> code)
-        (snd t2 |> show_type)
-      |> die pos
-
 
     let list_lit ~pos ~t1:l ~t2:r ~error:_ =
       build_tyvar_names [snd l; snd r];
@@ -1850,7 +1795,6 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
       | Lolli _
       | Operation _
       | Table _
-      | Lens _
       (* TODO: or anything special for recursive applications? *)
       | RecursiveApplication _
        (* TODO: expand applications? *)
@@ -2692,115 +2636,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             T.Table (tmp, read_row, write_row, needed_row),
             Usage.combine (usages tname) (usages tbl_database)
         | TableLit _ -> assert false
-        | LensLit (table, _) ->
-           relational_lenses_guard pos;
-           let open Lens in
-           let table = tc table in
-           let cols = Lens_type_conv.sort_cols_of_table ~table:"" (typ table) in
-           let lens_sort = Sort.make cols in
-           let typ = Lens.Type.ConcreteLens lens_sort in
-           LensLit (erase table, Some typ), T.Lens typ, usages table
-        | LensSerialLit(lens, columns, _) ->
-          let lens = tc lens in
-          let typ =
-            let columns = Lens.Alias.Set.of_list columns in
-            let lens = typ lens |> Lens_type_conv.lens_type_of_type ~die:(Gripers.die pos) |> Lens.Type.set_serial ~columns in
-            lens in
-          LensSerialLit (erase lens, columns, Some typ), T.Lens typ, usages lens
-        | LensKeysLit (table, keys, _) ->
-           relational_lenses_guard pos;
-           let open Lens in
-           let table = tc table in
-           let columns = Lens_type_conv.sort_cols_of_table ~table:"" (typ table) in
-           let keys = Lens_sugar_conv.cols_of_phrase keys in
-           let fds = Fun_dep.Set.key_fds ~keys ~cols:(Column.List.present_aliases columns) in
-           let lens_sort = Sort.make ~fds columns in
-           let typ = Lens.Type.ConcreteLens lens_sort in
-           LensLit (erase table, Some typ), T.Lens typ, usages table
-        | LensFunDepsLit (table, fds, _) ->
-           relational_lenses_guard pos;
-           let table = tc table in
-           let columns = Lens_type_conv.sort_cols_of_table ~table:"" (typ table) in
-           let typ =
-             Lens.Type.type_lens_fun_dep ~fds ~columns
-             |> Lens_errors.unpack_type_lens_result ~die:(Gripers.die pos) in
-           LensLit (erase table, Some typ), T.Lens typ, usages table
-        | LensDropLit (lens, drop, key, default, _) ->
-           relational_lenses_guard pos;
-           let open Lens in
-           let lens = tc lens in
-           let default = tc default in
-           let typ =
-             let lens = typ lens |> Lens_type_conv.lens_type_of_type ~die:(Gripers.die pos) in
-             let default = typ default |> Lens_type_conv.lens_phrase_type_of_type |> fun a -> [a] in
-             let drop = [drop] in
-             let key = Alias.Set.singleton key in
-             Type.type_drop_lens lens ~default ~drop ~key
-             |> Lens_errors.unpack_type_drop_lens_result ~die:(Gripers.die pos) in
-           LensDropLit (erase lens, drop, key, erase default, Some typ), T.Lens typ, Usage.combine (usages lens) (usages default)
-        | LensSelectLit (lens, predicate, _) ->
-           relational_lenses_guard pos;
-           let lens = tc lens in
-           let tpredicate = tc predicate in
-           let typ =
-             let tlens = typ lens |> Lens_type_conv.lens_type_of_type ~die:(Gripers.die pos) in
-             let trow = Lens.Type.sort tlens |> Lens.Sort.record_type in
-             let {tycon_env = context;_} = context in
-             let ltrow = Lens_type_conv.type_of_lens_phrase_type ~context trow in
-             let tmatch = Types.make_pure_function_type [ltrow] Types.bool_type in
-             unify (pos_and_typ tpredicate, (exp_pos lens, tmatch)) ~handle:Gripers.lens_predicate;
-             if Lens_sugar_conv.is_static trow predicate
-             then
-               let predicate = Lens_sugar_conv.lens_sugar_phrase_of_sugar predicate in
-               let typ = Lens.Type.type_select_lens tlens ~predicate
-                         |> Lens_errors.unpack_type_select_lens_result ~die:(Gripers.die pos) in
-               typ
-             else
-               let typ = Lens.Type.type_select_lens_dynamic tlens
-                         |> Lens_errors.unpack_type_select_lens_result ~die:(Gripers.die pos) in
-               typ
-           in
-           LensSelectLit(erase lens, erase tpredicate, Some typ), T.Lens typ, usages lens
-        | LensJoinLit (lens1, lens2, on, left, right, _) ->
-           relational_lenses_guard pos;
-           let lens1 = tc lens1
-           and lens2 = tc lens2 in
-           let typ =
-             let lens1 = typ lens1 |> Lens_type_conv.lens_type_of_type ~die:(Gripers.die pos) in
-             let lens2 = typ lens2 |> Lens_type_conv.lens_type_of_type ~die:(Gripers.die pos) in
-             let on = Lens_sugar_conv.cols_of_phrase on |> List.map (fun a -> a, a, a) in
-             let del_left = Lens_sugar_conv.lens_sugar_phrase_of_sugar left in
-             let del_right = Lens_sugar_conv.lens_sugar_phrase_of_sugar right in
-             Lens.Type.type_join_lens lens1 lens2 ~on ~del_left ~del_right
-           |> Lens_errors.unpack_type_join_lens_result ~die:(Gripers.die pos) in
-           LensJoinLit (erase lens1, erase lens2, on, left, right, Some typ), T.Lens typ, Usage.combine (usages lens1) (usages lens2)
-        | LensGetLit (lens, _) ->
-           relational_lenses_guard pos;
-           let lens = tc lens in
-           let typ = typ lens |> Lens_type_conv.lens_type_of_type ~die:(Gripers.die pos) in
-           Lens.Type.ensure_checked typ |> Lens_errors.unpack_lens_checked_result ~die:(Gripers.die pos);
-           let sort = Lens.Type.sort typ in
-           let {tycon_env = context;_} = context in
-           let trowtype = Lens.Sort.record_type sort |> Lens_type_conv.type_of_lens_phrase_type ~context in
-           LensGetLit (erase lens, Some trowtype), Types.make_list_type trowtype, usages lens
-        | LensCheckLit (lens, _) ->
-          relational_lenses_guard pos;
-           let lens = tc lens in
-           let typ = typ lens |> Lens_type_conv.lens_type_of_type ~die:(Gripers.die pos) in
-           let typ = Lens.Type.make_checked typ in
-           LensCheckLit (erase lens, Some typ), T.Lens typ, usages lens
-        | LensPutLit (lens, data, _) ->
-           relational_lenses_guard pos;
-           let make_tuple_type = Types.make_tuple_type in
-           let lens = tc lens in
-           let typ = typ lens |> Lens_type_conv.lens_type_of_type ~die:(Gripers.die pos) in
-           Lens.Type.ensure_checked typ |> Lens_errors.unpack_lens_checked_result ~die:(Gripers.die pos);
-           let data = tc data in
-           let trow = Lens.Type.sort typ |> Lens.Sort.record_type in
-           let {tycon_env = context;_} = context in
-           let ltrow = Lens_type_conv.type_of_lens_phrase_type ~context trow in
-           unify (pos_and_typ data, (exp_pos lens, Types.make_list_type ltrow)) ~handle:Gripers.lens_put_input;
-           LensPutLit (erase lens, erase data, Some Types.unit_type), make_tuple_type [], Usage.combine (usages lens) (usages data)
         | DBDelete (tdel, pat, from, where) ->
             (* Check the temporal_deletion to ascertain the temporality *)
             let (tmp, tdel, tmp_usages) =

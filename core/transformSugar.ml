@@ -182,10 +182,6 @@ class transform (env : Types.typing_environment) =
         let (o, t) = optionu o (fun o -> o#datatype) t in
           (o, (s, t))
 
-    method lens_type : Lens.Type.t -> ('self_type * Lens.Type.t) =
-      fun sort ->
-            (o, sort)
-
     method row : Types.row -> ('self_type * Types.row) =
       fun row -> (o, row)
 
@@ -501,43 +497,6 @@ class transform (env : Types.typing_environment) =
           let (o, driver, _) = option o (fun o -> o#phrase) driver in
           let (o, args, _) = option o (fun o -> o#phrase) args in
             (o, DatabaseLit (name, (driver, args)), Primitive Primitive.DB)
-      | LensLit (table, Some t) ->
-         let (o, table, _) = o#phrase table in
-         let (o, t) = o#lens_type t in
-            (o, LensLit (table, Some t), Lens t)
-      | LensSerialLit (lens,columns,Some t) ->
-         let (o, lens, _) = o#phrase lens in
-         let (o, t) = o#lens_type t in
-            (o, LensSerialLit (lens, columns, Some t), Lens t)
-      | LensDropLit (lens, drop, key, default, Some t) ->
-          let (o, lens, _) = o#phrase lens in
-          let (o, t) = o#lens_type t in
-          let (o, default, _) = o#phrase default in
-            (o, LensDropLit (lens, drop, key, default, Some t), Lens t)
-      | LensSelectLit (lens, predicate, Some t) ->
-          let (o, lens, _) = o#phrase lens in
-          let (o, predicate, _) = o#phrase predicate in
-          let (o, t) = o#lens_type t in
-            (o, LensSelectLit (lens, predicate, Some t), Lens t)
-      | LensJoinLit (lens1, lens2, on, left, right, Some t) ->
-          let (o, lens1, _) = o#phrase lens1 in
-          let (o, lens2, _) = o#phrase lens2 in
-          let (o, t) = o#lens_type t in
-            (o, LensJoinLit (lens1, lens2, on, left, right, Some t), Lens t)
-
-      | LensCheckLit (lens, Some t) ->
-          let (o, lens, _) = o#phrase lens in
-          let (o, t) = o#lens_type t in
-            (o, LensCheckLit (lens, Some t), Lens t)
-      | LensGetLit (lens, Some t) ->
-          let (o, lens, _) = o#phrase lens in
-          let (o, t) = o#datatype t in
-            (o, LensGetLit (lens, Some t), Types.make_list_type t)
-      | LensPutLit (lens, data, Some t) ->
-          let (o, lens, _) = o#phrase lens in
-          let (o, data, _) = o#phrase data in
-          let (o, t) = o#datatype t in
-            (o, LensPutLit (lens, data, Some t), Types.make_list_type t)
       | TableLit {
             tbl_name;
             tbl_type = (tmp, dtype, Some (read_row, write_row, needed_row));

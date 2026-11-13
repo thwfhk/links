@@ -142,11 +142,6 @@ let rec eq_types : (datatype * datatype) -> bool =
          | _         -> false
          end
       | Table _  -> assert false
-      | Lens l ->
-         begin match unalias t2 with
-         | Lens l2 -> Lens.Type.equal l l2
-         | _ -> false
-         end
       | ForAll (qs, t) ->
           begin match unalias t2 with
           | ForAll (qs', t') ->
@@ -606,7 +601,6 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
         ut (lf, rf);
         ut (ld, rd);
         ut (lr, rr))
-    (* FIXME: what about Lens? *)
     | ForAll l, ForAll r ->
        let check_quantifier_kinds l r =
          if Quantifier.to_kind l <> Quantifier.to_kind r then

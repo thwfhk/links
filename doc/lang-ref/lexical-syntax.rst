@@ -34,11 +34,9 @@ Keywords
 
 The following keywords are reserved and are unavailable for use as identifiers::
 
-  as by case database default delete delete_left
-  determined do else escape false for forall from fun
-  handle if in lens lensdrop lensget lensput lensselect lensjoin
-  lenscheck import insert linfun module mu mutual
-  on orderby op open prefix query
+  as case database default delete do else escape false for forall from fun
+  handle if in import insert linfun module mu mutual
+  orderby op open prefix query
   readonly returning set shallowhandle sig
   switch table TableHandle true typename update unsafe
   values var where with tablekeys

@@ -299,39 +299,6 @@ struct
             let o, keys, _ = o#value keys in
             let o, table, _ = o#value table in
               o, Table { database; table; keys; temporal_fields; table_type }, Types.Table table_type
-        | Lens (table, rtype) ->
-            let o, table, _ = o#value table in
-              o, Lens (table, rtype), Types.Lens rtype
-        | LensSerial {lens; columns; typ} ->
-            let o, lens, _ = o#value lens in
-              o, LensSerial {lens; columns; typ}, Types.Lens typ
-        | LensDrop {lens; drop; key; default; typ} ->
-            let o, lens, _ = o#value lens in
-            let o, default, _ = o#value default in
-              o, LensDrop {lens; drop; key; default; typ}, Types.Lens typ
-        | LensSelect {lens; predicate; typ} ->
-            let o, lens, _ = o#value lens in
-            let o, predicate =
-              (match predicate with
-               | Dynamic predicate ->
-                 let o, predicate, _ = o#value predicate in
-                 o, Dynamic predicate
-              | Static predicate -> o, Static predicate) in
-              o, LensSelect {lens; predicate; typ}, Types.Lens typ
-        | LensJoin {left; right; on; del_left; del_right; typ} ->
-            let o, left, _ = o#value left in
-            let o, right, _ = o#value right in
-              o, LensJoin {left; right; on; del_left; del_right; typ}, Types.Lens typ
-        | LensCheck (lens, t) ->
-            let o, lens, _ = o#value lens in
-              o, LensCheck (lens, t), Types.Lens t
-        | LensGet (lens, rtype) ->
-            let o, lens, _ = o#value lens in
-              o, LensGet (lens, rtype), Types.make_list_type rtype
-        | LensPut (lens, data, rtype) ->
-            let o, lens, _ = o#value lens in
-            let o, data, _ = o#value data in
-            o, LensPut (lens, data, rtype), Types.make_tuple_type []
         | TemporalJoin (tmp, comp, _) ->
             let o, comp, t = o#computation comp in
             o, TemporalJoin (tmp, comp, t), t

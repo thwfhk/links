@@ -9,6 +9,5 @@ encouraged to try them out!
   :maxdepth: 2
 
   advanced/effect-handlers.rst
-  advanced/relational-lenses.rst
   advanced/shredding.rst
 

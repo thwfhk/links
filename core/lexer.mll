@@ -35,12 +35,9 @@ let bump_lines lexbuf n =
 let keywords = [
  "as"       , AS;
  "between"  , BETWEEN;
- "by"       , BY;
  "case"     , CASE;
  "database" , DATABASE;
  "default"  , DEFAULT;
- "delete_left", DELETE_LEFT;
- "determined", DETERMINED;
  "do"       , DOOP;
  "lindo"      , LINDOOP;
  "effectname", EFFECTNAME;
@@ -54,21 +51,12 @@ let keywords = [
  "handle"   , HANDLE;
  "if"       , IF;
  "in"       , IN;
- "lens"     , LENS;
- "lensdrop" , LENSDROP;
- "lensget"  , LENSGET;
- "lensput"  , LENSPUT;
- "lensselect", LENSSELECT;
- "lensjoin" , LENSJOIN;
- "lenscheck", LENSCHECK;
- "lensserial", LENSSERIAL;
  "import"   , IMPORT;
  "insert"   , INSERT;
  "linfun"   , LINFUN;
  "module"   , MODULE;
  "mu"       , MU;
  "mutual"   , MUTUAL;
- "on"       , ON;
  "orderby"  , ORDERBY;
  "op"       , OP;
  "open"     , OPEN;
