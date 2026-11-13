@@ -38,6 +38,8 @@ one commit. Keep each commit buildable. Tick the item in its commit
 once its checks pass. A milestone is complete when all its items and
 its completion check pass.
 
+Record the commit ID next to each completed item after committing it.
+
 At each pause, record the current milestone, next item, any blockers
 and the latest check results under [Status](#status). Record the
 command, tested revision, result and log path, plus any useful failure
@@ -49,13 +51,14 @@ annotations or evaluation before implementing them.
 
 ### 1. Record the native baseline
 
-- [x] **1.1** Build the Links revision before the cuts. Record compiler
-  settings and check the native file, expression and REPL entry points.
-- [x] **1.2** Record results for the retained language, handler, FreezeML,
-  value linearity and IR tests. Identify mixed suites and examples
-  before removing their dependencies.
-- [x] **1.3** Add any missing tests for retained behaviour to the baseline
-  suite. Cover both acceptance and rejection.
+- [x] **1.1** (`c6136506`) Build the Links revision before the cuts.
+  Record compiler settings and check the native file, expression and
+  REPL entry points.
+- [x] **1.2** (`5f296788`) Record results for the retained language, handler,
+  FreezeML, value linearity and IR tests. Identify mixed suites and
+  examples before removing their dependencies.
+- [x] **1.3** (`56a7b221`) Add missing tests for retained behaviour to the
+  baseline suite. Cover both acceptance and rejection.
 
 Completion check: the reference build and its passing cases can be
 reproduced; existing failures are recorded separately.
