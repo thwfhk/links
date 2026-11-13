@@ -125,9 +125,10 @@ parsed again.
 - [x] **5.2** (`8d08a03b`) Align the build, installation, CI, test runner
   and repository instructions with SmallLinks. Verify the installed
   executable finds its prelude and standard library.
-- [x] **5.3** Expand the language guide to cover ordinary types and
-  terms as well as effect handlers. Check the guide's examples, register
-  the retained source examples and run all retained checks.
+- [x] **5.3** (`651be3c5`) Expand the language guide to cover ordinary
+  types and terms as well as effect handlers. Check the guide's
+  examples, register the retained source examples and run all retained
+  checks.
 
 Completion check: a clean build and install succeed, all retained
 regressions and native IR unit tests pass, and source checks pass.
