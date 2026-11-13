@@ -34,19 +34,14 @@
  (depends (ocaml (>= 5.3.0))
           (dune-configurator (>= 3.8))
            ppx_deriving
-           yojson
            linenoise
            ANSITerminal
           (lwt (>= 5.0.0))
-           uri
            safepass
-           result
-           ocamlfind
           (menhir (>= 20210419))
-          (calendar (>= 2.0.4))
-          (rdf_lwt (>= 0.13.0)))
+          (calendar (>= 2.0.4)))
  (tags
-  ("effect handlers" "effect typing" "extensible data types" "language-integrated queries")))
+  ("effect handlers" "effect typing" "extensible data types")))
 
 ; See the complete stanza docs at https://dune.readthedocs.io/en/stable/dune-files.html#dune-project
 

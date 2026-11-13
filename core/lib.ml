@@ -1,7 +1,6 @@
 open CommonTypes
 
 open Utility
-open Lwt
 
 (* Error functions *)
 let runtime_error msg = raise (Errors.runtime_error msg)
@@ -402,8 +401,6 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
    datatype "([a]) ~> [|Just:a | Nothing:()|]",
   PURE);
 
-  (* We need to have these here in order to patch through to the underlying SQL functions. *)
-  (* The over-specific type is there because part of evalNestedQuery is type-directed. *)
   "least",
   (p2 (fun x y -> if less x y then x else y),
    datatype "(DateTime, DateTime) ~> DateTime",
@@ -796,25 +793,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
     (pure_pfun (fun _ ->
             Value.(box_list (List.map box_string (Settings.get_rest_arguments ())))),
      datatype "() ~> [String]",
-     IMPURE);
-
-    (* SPARQL *)
-    "sparql",
-    (`PFun (function
-       | [base; uri; query] ->
-          let base = Iri.of_string (Value.unbox_string base) in
-          let uri = Uri.of_string (Value.unbox_string uri) in
-          let query = Value.unbox_string query in
-          Sparql.select ~base uri query >|= fun rows ->
-          Value.box_list (List.map
-            (fun row -> Value.box_list (List.map
-              (fun (k, v) -> Value.box_pair (Value.box_string k) (Value.box_string v))
-              row))
-            rows)
-       | _ -> assert false),
-     datatype "(String,String,String) ~> [[(String,String)]]",
      IMPURE)
-
 ]
 
 let nenv =

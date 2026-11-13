@@ -296,3 +296,15 @@ exit : 1
 Former database keywords are identifiers
 var table = 40; var query = 2; table + query
 stdout : 42 : Int
+
+SPARQL primitive is unavailable
+sparql("", "", "")
+args : --set=typecheck_only=true
+stderr : @.*Unknown variable sparql\..*
+exit : 1
+
+Database driver setting is unknown
+()
+args : --set=database_driver=null
+stdout : () : ()
+stderr : @.*Unknown setting 'database_driver'.*

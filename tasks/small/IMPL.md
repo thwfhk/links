@@ -121,6 +121,11 @@ signatures; the `gen` helpers use effect upcasts.
    `<-v-` as whole operators so they cannot start a list generator.
    The old query modules still build after dropping their references
    to the deleted IR constructors. Remove those modules in 3.3.
+7. **3.3.** Remove `sparql`, the query modules, the database loader,
+   internal database values and the settings and libraries they used.
+   The IR unit test runner uses no database configuration. Keep
+   `calendar` and the user timestamp parser for ordinary dates.
+   The REPL keeps `Dynlink` for its `@dload` command.
 
 ## Preserve inference as features go
 
@@ -178,11 +183,10 @@ signatures; the `gen` helpers use effect upcasts.
    The two session entries in [`freezeml.tests`](../../tests/freezeml.tests)
    pass their filenames to `-e`. The results do not test the contents
    of those files.
-2. Keep the ordinary list generator and range tests in
-   [`database.tests`](../../tests/database.tests) where the collection
-   suite lacks them. The `asList` case in
-   [`typed_ir.tests`](../../tests/typed_ir.tests) needs a list fixture
-   in place of its table generator and `server` declaration.
+2. In 3.2, move the ordinary list generator and range tests into
+   [`collections.tests`](../../tests/collections.tests). The former
+   `asList` case in [`typed_ir.tests`](../../tests/typed_ir.tests) uses
+   a list comprehension, and the Base row case uses lists of records.
 3. Keep native tests from mixed suites. `booleans` uses `javascript`,
    `lexing` has XML cases, `modules` has a foreign import, and
    `continuations` has an escape that crosses process boundaries.

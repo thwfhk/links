@@ -5,7 +5,6 @@
 #
 # https://github.com/links-lang/links/wiki/Running-the-test-suite
 
-UNIT_TEST_DIR=tests/unit # Location of unit tests
 ret=0                              # Return code. If <> 0 then some tests failed
 
 # If the user presses CTRL+C then kill the script as well
@@ -15,10 +14,6 @@ control_c() {
 trap control_c SIGINT
 
 if [[ "$1" == "nodb-unit-tests" ]]; then
-    if [[ ! -e "$UNIT_TEST_DIR/config" ]]; then
-        cp "$UNIT_TEST_DIR/config.nodb.sample" "$UNIT_TEST_DIR/config" || exit 1
-    fi
-    export LINKS_CONFIG="$UNIT_TEST_DIR"
     shift
     exec dune exec --profile=development tests/unit/nodb.exe -- -runner sequential "$@"
 fi

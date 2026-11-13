@@ -18,7 +18,10 @@ strings, lists, tuples, records, variants and functions. `if` evaluates
 one branch after checking its condition. `switch` tries patterns in
 order. Patterns include variables, wildcards, literals, tuples, lists,
 records and variant constructors. Records support field projection,
-extension and update. List comprehensions support `where` and `orderby`.
+extension and update. In a list comprehension, `pattern <- list` draws
+elements from a list. `where` filters them with a Boolean expression,
+and `orderby` sorts them using keys of base types such as `Int`,
+`String` or `DateTime`.
 
 Programs can import or open modules and use qualified names for terms
 and types. The prelude provides common functions and aliases, including

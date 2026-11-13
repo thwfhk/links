@@ -40,20 +40,10 @@ exception TypeApplicationGlobalKindMismatch of
   { pos: Position.t; name: string;
     expected: string; provided: string }
 exception SettingsError of string
-exception DynlinkError of string
 exception ModuleError of string * Position.t option
 exception DisabledExtension of Position.t option * (string * bool) option * string option * string
 exception MissingBuiltinType of string
 exception MissingSSLCertificate
-
-exception LocateFailure of string
-let driver_locate_failure driver = LocateFailure driver
-exception IllformedPluginDescription of string
-let illformed_plugin_description plugin = IllformedPluginDescription plugin
-exception DependencyLoadFailure of string * Dynlink.error
-let dependency_load_failure file err = DependencyLoadFailure (file, err)
-exception LoadFailure of string * Dynlink.error
-let load_failure file err = LoadFailure (file, err)
 
 let prefix_lines prefix s =
   prefix ^ Str.global_replace (Str.regexp "\n") ("\n" ^ prefix) s
@@ -168,14 +158,6 @@ let format_exception =
         pos_prefix ~pos message
      | None -> pos_prefix message
      end
-  | LocateFailure driver ->
-     pos_prefix (Printf.sprintf "Error: Cannot locate database driver '%s'\n" driver)
-  | IllformedPluginDescription file ->
-     pos_prefix (Printf.sprintf "Error: The database driver description '%s' is illformed\n" file)
-  | DependencyLoadFailure (file, err) ->
-     pos_prefix (Printf.sprintf "Error: Cannot load plugin dependency '%s' (link error: %s)\n" file (Dynlink.error_message err))
-  | LoadFailure (file, err) ->
-     pos_prefix (Printf.sprintf "Error: Cannot load plugin '%s' (link error: %s)\n" file (Dynlink.error_message err))
   | MissingBuiltinType alias -> Printf.sprintf "Error: Missing builtin type with alias '%s'. Is it defined in the prelude?" alias
   | MissingSSLCertificate -> "Error: SSL mode requires both a valid certificate and key\n"
   | Sys.Break -> "Caught interrupt"
@@ -219,7 +201,6 @@ let rethrow_errors_if_better_position alternative_position f x =
 
 let settings_error message = (SettingsError message)
 let runtime_error message = (RuntimeError message)
-let dynlink_error message = (DynlinkError message)
 let module_error ?pos message = (ModuleError (message, pos))
 let disabled_extension ?pos ?setting ?flag name =
   DisabledExtension (pos, setting, flag, name)

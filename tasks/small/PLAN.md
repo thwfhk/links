@@ -86,11 +86,11 @@ tests pass, including deep recursion. Removed constructs are rejected.
 
 ### 3. Remove the remaining database and lens code
 
-- [x] **3.1** (`eb457d6f`) Remove relational lens syntax, types, primitives and
-  evaluation. Delete the lens library and tests specific to it.
-- [x] **3.2** Remove tables, queries, updates and temporal database
-  features. Keep list generators, `where` and `orderby`.
-- [ ] **3.3** Remove SPARQL, the remaining database and query modules,
+- [x] **3.1** (`eb457d6f`) Remove relational lens syntax, types,
+  primitives and evaluation. Delete the lens library and its tests.
+- [x] **3.2** (`447c8a5e`) Remove tables, queries, updates and temporal
+  database features. Keep list generators, `where` and `orderby`.
+- [x] **3.3** Remove SPARQL, the remaining database and query modules,
   and unused build dependencies and settings. Keep ordinary date/time.
 
 Completion check: the build has no database, query or lens modules.
@@ -153,8 +153,28 @@ regressions and native IR unit tests pass, and source checks pass.
 
 ## Status
 
-Milestone 3 is in progress. Items 3.1 and 3.2 are complete. Next, remove
-SPARQL and the remaining database and query modules in 3.3.
+Milestone 3 is complete. A clean build contains no database, query or
+lens modules. List, record, handler and ordinary date/time tests pass,
+and the removed constructs are rejected. Next, remove control-flow
+linearity in 4.1. There are no blockers for 4.1.
+
+Checks for 3.3 used `447c8a5e` plus the item changes on OCaml 5.4.0.
+Logs are under `/private/tmp/smalllinks-m3.yjxu5W/`. The macOS `xcrun`
+cache messages in the logs did not affect the check results.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make no-db` and `make all-ci` | Passed. | `3.3-build.log`, `3.3-ci.log` |
+| `opam exec -- dune build --build-dir=/private/tmp/smalllinks-m3.yjxu5W/clean-build @install` | Clean build passed. | `3.3-clean-build.log` |
+| `opam exec -- ocamlobjinfo` on the clean build's `links_core.cmxa` | No database, query or lens modules. | `3.3-compiled-modules.log` |
+| `opam exec -- dune describe external-lib-deps` and `opam exec -- dune build links.opam` | The removed libraries are absent from the dependency list and generated metadata. | `3.3-dependencies.log`, `3.3-opam.log` |
+| `make tests` | 43 suites, 1,110 passed, 6 ignored and 0 failed. | `3.3-regressions.log` |
+| `./test-harness tests/native.tests` and `./test-harness tests/datetime.tests` | 62 and 27 passed. | `3.3-native.log`, `3.3-datetime.log` |
+| `opam exec -- ./run-tests nodb-unit-tests` | 44 passed without a database test config. | `3.3-unit.log` |
+| Native expression, file with imports, typecheck-only file and REPL checks | Passed. | `3.3-expr.log`, `3.3-file.log`, `3.3-typecheck.log`, `3.3-repl.log` |
+| List generator with subtraction, `where` and `orderby` | Printed `[2, 3] : [Int]`. | `3.3-grammar.log` |
+| `./tests/validate_typecheck_testfile.testscript` | Passed. | `3.3-registration.log` |
+| `make rule-check` and `git diff --check` | Passed. GNU find was unavailable, so the tabs check was repeated with `rg` and found no tabs. | `3.3-rule.log`, `3.3-diff.log`, `3.3-tabs.log` |
 
 Checks for 3.2 used `eb457d6f` plus the item changes on OCaml 5.4.0.
 Logs are under `/private/tmp/smalllinks-m3.yjxu5W/`.

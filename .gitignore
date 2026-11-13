@@ -58,12 +58,6 @@ links_unit.opt
 links
 linx
 
-# database configuration
-tests/database/config
-
-# shredding configuration
-tests/shredding/config
-
 # OPAM install files
 *.install
 

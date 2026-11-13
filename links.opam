@@ -5,12 +5,7 @@ description: "SmallLinks is a native interpreter for a subset of Links."
 maintainer: ["Daniel Hillerström <daniel.hillerstrom@ed.ac.uk>"]
 authors: ["The Links Team <links-dev@inf.ed.ac.uk>"]
 license: "GPL-3.0-only"
-tags: [
-  "effect handlers"
-  "effect typing"
-  "extensible data types"
-  "language-integrated queries"
-]
+tags: ["effect handlers" "effect typing" "extensible data types"]
 homepage: "https://links-lang.org"
 doc: "https://links-lang.org/quick-help.html"
 bug-reports: "https://github.com/links-lang/links/issues"
@@ -19,17 +14,12 @@ depends: [
   "ocaml" {>= "5.3.0"}
   "dune-configurator" {>= "3.8"}
   "ppx_deriving"
-  "yojson"
   "linenoise"
   "ANSITerminal"
   "lwt" {>= "5.0.0"}
-  "uri"
   "safepass"
-  "result"
-  "ocamlfind"
   "menhir" {>= "20210419"}
   "calendar" {>= "2.0.4"}
-  "rdf_lwt" {>= "0.13.0"}
   "odoc" {with-doc}
 ]
 dev-repo: "git+https://github.com/links-lang/links.git"

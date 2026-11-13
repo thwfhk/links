@@ -33,7 +33,6 @@ exception TypeApplicationGlobalKindMismatch of
   { pos: Position.t; name: string;
     expected: string; provided: string }
 exception SettingsError of string
-exception DynlinkError of string
 exception ModuleError of string * Position.t option
 exception MissingBuiltinType of string
 exception MissingSSLCertificate
@@ -47,13 +46,8 @@ val internal_error : filename:string -> message:string -> exn (* filename in whi
 val desugaring_error: pos:Position.t -> stage:sugar_error_stage -> message:string -> exn
 val settings_error: string -> exn
 val runtime_error: string -> exn
-val dynlink_error: string -> exn
 val module_error : ?pos:Position.t -> string -> exn
 val disabled_extension : ?pos:Position.t -> ?setting:(string * bool) -> ?flag:string -> string -> exn
-val driver_locate_failure : string -> exn
-val illformed_plugin_description : string -> exn
-val dependency_load_failure : string -> Dynlink.error -> exn
-val load_failure : string -> Dynlink.error -> exn
 val rethrow_errors_if_better_position : Position.t -> ('a -> 'b) -> 'a -> 'b
 val type_application_kind_mismatch : Position.t -> string -> int -> string -> string -> exn
 val type_application_global_kind_mismatch : Position.t -> string -> string -> string -> exn

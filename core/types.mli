@@ -85,7 +85,6 @@ module Policy : sig
 end
 
 val list         : Abstype.t
-val mapentry     : Abstype.t
 val socket       : Abstype.t
 
 (* Type groups *)
@@ -342,15 +341,12 @@ or None otherwise.
 *)
 val unwrap_row : row -> (row * row_var option)
 val unwrap_list_type : typ -> typ
-val unwrap_mapentry_type : typ -> typ * typ
-val unwrap_map_type : typ -> typ * typ
 
 val extract_tuple : row -> datatype list
 
 (** type constructors *)
 val make_tuple_type : datatype list -> datatype
 val make_list_type : datatype -> datatype
-val make_mapentry_type : datatype -> datatype -> datatype
 val make_record_type  : datatype field_env -> datatype
 val make_variant_type : datatype field_env -> datatype
 

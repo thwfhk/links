@@ -8,7 +8,6 @@ OCaml.
 
 - Local worktrees should be at `.worktrees/<name>`.
 - `core/` contains parsing, type checking, compiler passes and evaluation.
-  Database query compilation is in `core/query/`.
 - `bin/` contains the command-line driver and REPL.
 - `lib/stdlib/` and `prelude.links` contain the Links standard library.
 - `tests/` contains regression tests and OCaml unit tests.

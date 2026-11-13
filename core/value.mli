@@ -1,74 +1,6 @@
 (* Values and environments *)
 open CommonTypes
 
-class type otherfield
- = object method show : string end
-
-type db_status = [ `QueryOk | `QueryError of string ]
-
-class virtual dbvalue :
-  object
-    method virtual error : string
-    method virtual fname : int -> string
-    method virtual nfields : int
-    method virtual ntuples : int
-    method map : 'a. ((int -> string) -> 'a) -> 'a list
-    method map_array : 'a. (string array -> 'a) -> 'a list
-    method fold_array : 'a. (string array -> 'a -> 'a) -> 'a -> 'a
-    method virtual getvalue : int -> int -> string
-    method virtual gettuple : int -> string array
-    method virtual status : db_status
-  end
-
-class virtual database : Sql.printer ->
-  object
-    method virtual driver_name : unit -> string
-    method virtual escape_string : string -> string
-    method virtual exec : string -> dbvalue
-    method make_insert_returning_query :
-      string (* "returning" field *) ->
-      Sql.query ->
-      string list
-    method virtual supports_shredding : unit -> bool
-    method string_of_query : ?range:(Sql.range option) -> Sql.query -> string
-    method sql_printer : Sql.printer
-  end
-
-
-val equal_database : database -> database -> bool
-val pp_database : Format.formatter -> database -> unit
-
-type db_constructor = string -> database * string
-
-val register_driver : string * db_constructor -> unit
-val db_connect : string -> string -> database * string
-val parse_db_string : string -> string * string
-val reconstruct_db_string : string * string -> string
-
-module Table: sig
-  type t = {
-  database: (database * string);
-  name: string;
-  keys: string list list;
-  temporality: Temporality.t;
-  temporal_fields: (string * string) option;
-  row: Types.row'
-  }
-[@@deriving show]
-end
-
-type table = Table.t
-    [@@deriving show]
-
-val make_table :
-  database:(database * string) ->
-  name:string ->
-  keys:(string list list) ->
-  temporality:Temporality.t ->
-  temporal_fields:(string * string) option ->
-  row:Types.row' ->
-  table
-
 type primitive_value_basis =  [
   | `Bool of bool
   | `Char of char
@@ -79,8 +11,6 @@ type primitive_value_basis =  [
 
 type primitive_value = [
   | primitive_value_basis
-  | `Database of (database * string)
-  | `Table of table
   | `DateTime of Timestamp.t ]
   [@@deriving show]
 
@@ -178,7 +108,6 @@ module Continuation : CONTINUATION
 type t = [
 | primitive_value
 | `List of t list
-| `Entry of t * t
 | `Record of (string * t) list
 | `Variant of string * t
 | `FunctionPtr of (Ir.var * t option)
@@ -229,5 +158,3 @@ val string_of_value : t -> string
 val string_of_calendar_utc : Utility.CalendarShow.t -> string
 
 val p_value: Format.formatter -> t -> unit
-
-val row_columns_values : t -> string list * t list list

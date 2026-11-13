@@ -176,13 +176,6 @@ module Timestamp = struct
       | Infinity      -> pp_print_string ppf "'infinity'"
       | MinusInfinity -> pp_print_string ppf "'-infinity'"
 
-  let show x =
-      let open Format in
-      fprintf str_formatter "%a" pp x;
-      flush_str_formatter ()
-
-  let to_string = show
-
   let parse_string str =
     let open Lexing in
 
@@ -215,18 +208,6 @@ module Timestamp = struct
       | `Timestamp (cal, None) ->
             Timestamp (CalendarShow.convert cal
               (CalendarLib.Time_Zone.Local)
-              (CalendarLib.Time_Zone.UTC))
-      | `Infinity -> Infinity
-      | `MinusInfinity -> MinusInfinity
-
-  (** Parses a database timestamp string. Lack of an offset is assumed to mean
-      UTC. *)
-  let parse_db_string str =
-    match parse_string str with
-      | `Timestamp (cal, offset) ->
-          let offset = OptionUtils.from_option 0 offset in
-          Timestamp (CalendarShow.convert cal
-              (CalendarLib.Time_Zone.UTC_Plus offset)
               (CalendarLib.Time_Zone.UTC))
       | `Infinity -> Infinity
       | `MinusInfinity -> MinusInfinity
@@ -304,53 +285,4 @@ module Constant = struct
     | Char     _ -> Primitive.Char
     | String   _ -> Primitive.String
     | DateTime _ -> Primitive.DateTime
-
-  module DateTime = struct
-    let now () = DateTime (Timestamp.timestamp (CalendarShow.now()))
-    let beginning_of_time = DateTime (Timestamp.minus_infinity)
-    let forever = DateTime (Timestamp.infinity)
-  end
-
-  (* SQL standard for escaping single quotes in a string *)
-  let escape_string s =
-    Str.global_replace (Str.regexp "'") "''" s
-
-  (* This function is actually specific to database query generation; it should
-     be moved to the database module(s). *)
-  let to_string = function
-    | Bool value  -> string_of_bool value
-    | Int value   -> string_of_int value
-    | Char c      -> "'"^ Char.escaped c ^"'"
-    | String s    -> "'" ^ escape_string s ^ "'"
-    | Float value -> string_of_float' value
-    | DateTime ts -> Timestamp.show ts
-end
-
-module QueryPolicy = struct
-  type t = Flat | Nested | Mixing | Delat
-    [@@deriving show]
-end
-
-(* Temporality of queries, inserts, and temporal joins *)
-module Temporality = struct
-  type t = Current | Transaction | Valid
-
-  let current = Current
-  let transaction = Transaction
-  let valid = Valid
-
-  let pp ppf =
-      let open Format in
-      function
-        | Current -> pp_print_string ppf "Current"
-        | Transaction -> pp_print_string ppf "Transaction"
-        | Valid -> pp_print_string ppf "Valid"
-
-  let show x = Format.asprintf "%a" pp x
-end
-
-module TemporalField = struct
-  let data_field = "!data"
-  let from_field = "!from"
-  let to_field = "!to"
 end

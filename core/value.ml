@@ -17,144 +17,6 @@ let printing_functions
               |> sync)
 
 
-class type otherfield =
-object
-  method show : string
-end
-
-
-
-type db_status = [ `QueryOk | `QueryError of string ]
-
-class virtual dbvalue = object (self)
-  method virtual status : db_status
-  method virtual nfields : int
-  method virtual ntuples : int
-  method virtual fname : int -> string
-  method map : 'a. ((int -> string) -> 'a) -> 'a list = fun f ->
-      List.init (self#ntuples) (fun i -> f (self#getvalue i))
-  method map_array : 'a. (string array -> 'a) -> 'a list = fun f ->
-      List.init (self#ntuples) (fun i -> f (self#gettuple i))
-  method fold_array : 'a. (string array -> 'a -> 'a) -> 'a -> 'a = fun f x ->
-      let max = self#ntuples in
-      let rec do_fold n acc =
-        if n < max
-        then (
-          do_fold (n+1) (f (self#gettuple n) acc)
-        )
-        else acc
-      in do_fold 0 x
-  method virtual getvalue : int -> int -> string
-  method virtual gettuple : int -> string array
-  method virtual error : string
-end
-
-class virtual database (printer : Sql.printer) = object(self)
-  method virtual driver_name : unit -> string
-  method virtual escape_string : string -> string
-  method virtual exec : string -> dbvalue
-  (* SJF: This is still a bit of a kludge. It would be nice to incorporate
-   * insert-returning statements into the query processing code. *)
-  method make_insert_returning_query : string -> Sql.query -> string list =
-    fun _ _ ->
-    raise (raise (internal_error ("insert ... returning is not yet implemented for the database driver: "^self#driver_name())))
-  method virtual supports_shredding : unit -> bool
-
-  method string_of_query : ?range:(Sql.range option) -> Sql.query -> string =
-    fun ?(range=None) q ->
-      printer#string_of_query ~range  q
-  method sql_printer = printer
-end
-
-let equal_database db1 db2 = db1 == db2
-(**module Typeable_database = Deriving_Typeable.Primitive_typeable
-  (struct
-    type t = database
-    let magic = "database"
-   end)**)
-let pp_database = fun fmt _ -> Utility.format_omission fmt (** Supress output **)
-
-(* Here we could do something better, like pickling enough information
-   about the database to be able to restore the connection on
-   deserialisation *)
-
-type db_constructor = string -> (database * string)
-
-(** {1 Database Drivers and Values} *)
-
-(** [database_drivers]: a list of available database drivers.  Each
-    driver registers itself at load time: the contents of the list
-    depends on which drivers are built.. *)
-
-let database_drivers = ref ([] : (string * db_constructor) list)
-
-(** [register_driver (name, driver)] registers a DB [driver] under the
-    name [name]. *[driver] is a function taking the database params (a
-    string with db-specific colon-separated fields) to a pair of
-    database object and params (I guess the params could be modified
-    by the driver?) *)
-let register_driver : (string * db_constructor) -> unit
-  = fun ((name, _) as pair) ->
-    Debug.print ("registering driver for " ^ name);
-    database_drivers := pair :: !database_drivers
-
-let resolve_database_driver driver_name =
-  match List.assoc_opt driver_name !database_drivers with
-  | Some driver -> driver
-  | None ->
-     DatabaseDriver.load driver_name;
-     (* Loading driver should make it register*)
-     List.assoc driver_name !database_drivers
-
-let parse_db_string : string -> (string * string) =
-  fun params ->
-    match Str.bounded_split (Str.regexp ":") params 2 with
-      | [hd; tail] -> (hd, tail)
-      | _ -> raise (raise (internal_error ("Could not parse db connection string : " ^ params)))
-and reconstruct_db_string : (string * string) -> string =
-  fun (x,y) -> x ^ ":" ^ y
-
-let database_connections = ref (StringMap.empty : (database * string) StringMap.t)
-
-let db_connect driver params =
-  let s = reconstruct_db_string (driver, params) in
-  let constructor = resolve_database_driver driver  in
-    match StringMap.lookup s !database_connections with
-      | None ->
-          let db = constructor params in
-          database_connections := StringMap.add s db (!database_connections);
-          db
-      | Some db -> db
-
-class null_database =
-object
-  inherit database (Sql.default_printer (fun _ -> assert false))
-  method driver_name () = "null"
-  method exec _query : dbvalue = assert false
-  method supports_shredding () = assert false
-  method escape_string _ = assert false
-end
-
-let _ = register_driver ("null", fun args -> new null_database, reconstruct_db_string ("null", args))
-
-module Table = struct
-  type t = {
-  database: (database * string);
-  name: string;
-  keys: string list list;
-  temporality: Temporality.t;
-  temporal_fields: (string * string) option;
-  row: Types.row'
-  }
-[@@deriving show]
-end
-
-type table = Table.t
-    [@@deriving show]
-
-let make_table ~database ~name ~keys ~temporality ~temporal_fields ~row =
-  Table.({ database; name; keys; temporality; temporal_fields; row })
-
 type primitive_value_basis =  [
 | `Bool of bool
 | `Char of char
@@ -167,8 +29,6 @@ let _show_primitive_value_basis = show_primitive_value_basis (* Generated by ppx
 
 type primitive_value = [
 | primitive_value_basis
-| `Database of (database * string)
-| `Table of table
 | `DateTime of Timestamp.t
 ]
   [@@deriving show]
@@ -570,7 +430,6 @@ module Continuation
 type t = [
 | primitive_value
 | `List of t list
-| `Entry of t * t
 | `Record of (string * t) list
 | `Variant of string * t
 | `FunctionPtr of (Ir.var * t option)
@@ -606,7 +465,6 @@ let rec p_value (ppf : formatter) : t -> 'a = function
       try p_tuple ppf fields
       with Not_tuple ->
         fprintf ppf "(@[<hv 0>%a@])" p_record_fields (List.sort (fun (l,_) (r, _) -> compare l r) fields) end
-  | `Entry (k,v) -> fprintf ppf "@{<key>%a@}(@[%a)@]" p_value k p_value v
   | `List [] -> fprintf ppf "[]"
   | `List [v] -> fprintf ppf "[%a]" p_value v
   | `List l -> fprintf ppf "[@[<hov 0>";
@@ -623,8 +481,6 @@ let rec p_value (ppf : formatter) : t -> 'a = function
                              else
                                fprintf ppf "fun"
   | `Socket _ -> fprintf ppf "<socket>"
-  | `Table { Table.name; _}  -> fprintf ppf "(table %s)" name
-  | `Database (_, params) -> fprintf ppf "(database %s" params
   | `Continuation cont -> fprintf ppf "Continuation%s" (Continuation.to_string cont)
   | `Resumption _res -> fprintf ppf "Resumption"
   | `DateTime (Timestamp.Timestamp ts) ->
@@ -818,19 +674,3 @@ let intmap_of_record = function
       Some(IntMap.from_alist(
              List.map (fun (k,v) -> int_of_string k, v ) members))
   | _ -> None
-
-let row_columns_values v =
-  let row_columns : t -> string list = function
-    | `List ((`Record fields)::_) -> List.map fst fields
-    | v -> raise (type_error ~action:"form query columns from" "a list of records" v)
-  in
-  let row_values = function
-    | `List records ->
-    (List.map (function
-          | `Record fields -> List.map snd fields
-          | v -> raise (type_error ~action:"form query field from" "record" v)) records)
-    | v -> raise (type_error ~action:"form query row from" "list" v)
-  in
-  (row_columns v, row_values v)
-
-
