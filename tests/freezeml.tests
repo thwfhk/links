@@ -191,6 +191,15 @@ FreezeML programs (9)
 var f = revapp(~id); f(poly)
 stdout : (0, true) : (Int, Bool)
 
+Explicit application of presence and row arguments
+sig getBar : forall p::Presence,r::Row. ((bar:Int,foo{p}|r)) {}~> Int fun getBar(r) { r.bar } ((~getBar)[{-},{z:Bool}]((bar=3,z=true)), (~getBar)[{:Int},{}]((bar=4,foo=42)))
+stdout : (3, 4) : (Int, Int)
+
+Explicit application rejects a row for a presence parameter
+sig getBar : forall p::Presence,r::Row. ((bar:Int,foo{p}|r)) {}~> Int fun getBar(r) { r.bar } (~getBar)[{},{z:Bool}]((bar=3,z=true))
+stderr : @.*Type error: The term.*while we're trying to instantiate it with.*
+exit : 1
+
 Do not generalise non-values
 $(id(2))
 exit : 1

@@ -150,8 +150,9 @@ signatures; the `gen` helpers use effect upcasts.
 1. Before deleting the session and control-flow linearity suites, move
    the tests that use only ordinary linear functions or generalisation
    into retained suites. See the early cases in
-   [`sessions.tests`](../../tests/sessions.tests) and the cases marked
-   `with CFL off` in [`control_flow_linearity.tests`](../../tests/control_flow_linearity.tests).
+   [`sessions.tests`](../../tests/sessions.tests) and the two value
+   subkinding cases marked `with CFL off` in
+   [`control_flow_linearity.tests`](../../tests/control_flow_linearity.tests).
    The two session entries in [`freezeml.tests`](../../tests/freezeml.tests)
    pass their filenames to `-e`. The results do not test the contents
    of those files.

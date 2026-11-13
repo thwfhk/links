@@ -47,6 +47,15 @@ Row types preserved across functions
 (fun (x) { var (r=r|s) = x; (r=3|s) })((r=3,s=4)).s
 stdout : 4 : Int
 
+Braced row fields allow extension of a record without the field
+sig addX : ((x{-} | r)) -> (x{:Int} | r) fun addX(r) { (x=42 | r) } addX((y=true))
+stdout : (x = 42, y = true) : (x:Int,y:Bool)
+
+Braced absent field excludes a record that has the field
+sig addX : ((x{-} | r)) -> (x{:Int} | r) fun addX(r) { (x=42 | r) } addX((x=1, y=true))
+stderr : @.*Type error: The function.*addX.*while the arguments passed to it have types.*
+exit : 1
+
 With syntax (same type)
 ((x = 3) with x = 4)
 stdout : (x = 4) : (x:Int)

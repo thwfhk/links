@@ -477,6 +477,33 @@ fun(m) { handle(m()) { case <Foo(x) => k> : ((a) => (() {}-> (a,a))) -> k ( fun 
 stdout : fun : (() {Foo:(a) => () {}-> (a, a)|b}~> c::Any) {Foo{_}|b}~> c::Any
 args : --enable-handlers
 
+Handled operation may be absent from the output row
+sig ask : () {Ask{:Int}}~> Int fun ask() { do Ask } sig read : () {Ask{-}}~> Int fun read() { handle(ask()) { case <Ask => k> -> k(42) } } read()
+stdout : 42 : Int
+args : --enable-handlers
+
+Unhandled operation cannot be absent from the output row
+sig ask : () {Ask{:Int}}~> Int fun ask() { do Ask } sig read : () {Ask{-}}~> Int fun read() { handle(ask()) { case x -> x } } read()
+stderr : @.*Type error: The handle has effect type.*
+exit : 1
+args : --enable-handlers
+
+Repeated resumption of a computation using a linear local
+{ var f = linfun(x) { x + 1 }; handle(f(do Ask)) { case <Ask => k> -> k(19) + k(21) } }
+stdout : 42 : Int
+args : --enable-handlers
+
+Shallow handler return clause can use a linear local
+{ var f = linfun(x) { x + 1 }; shallowhandle(41) { case n -> f(n) } }
+stdout : 42 : Int
+args : --enable-handlers
+
+Deep handler return clause cannot use a linear local
+{ var f = linfun(x) { x + 1 }; handle(41) { case n -> f(n) } }
+stderr : @.*Type error: Variable f of linear type .* is used in a deep handler.*
+exit : 1
+args : --enable-handlers
+
 Examples
 ./examples/handlers/tests.links
 filemode : true

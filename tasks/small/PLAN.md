@@ -54,7 +54,7 @@ annotations or evaluation before implementing them.
 - [x] **1.2** Record results for the retained language, handler, FreezeML,
   value linearity and IR tests. Identify mixed suites and examples
   before removing their dependencies.
-- [ ] **1.3** Add any missing tests for retained behaviour to the baseline
+- [x] **1.3** Add any missing tests for retained behaviour to the baseline
   suite. Cover both acceptance and rejection.
 
 Completion check: the reference build and its passing cases can be
@@ -149,12 +149,16 @@ regressions and native IR unit tests pass, and source checks pass.
 
 ## Status
 
-Milestone 1 is in progress. The build and native entry checks passed
-on `1912d9b7` with OCaml 5.4.0. The compiler source is the same as at
-`4e5c78c5`, the revision tested during planning. The 39 baseline
-regression suites recorded below had 976 passing cases, 18 ignored
-cases and no failures counted by the harness. Next, add tests for the
-gaps identified in 1.3.
+Milestone 1 is complete. The build and native entry checks passed on
+`1912d9b7` with OCaml 5.4.0. Baseline settings were the Links defaults
+unless the commands or suites specify otherwise. Handlers, optional
+effect sugar and control-flow linearity were off by default.
+
+Across the 39 baseline suites, 986 cases passed and 18 were ignored
+after adding the ten cases in 1.3. All 44 native IR unit tests passed.
+Next, start 2.1 by removing the external database driver packages and
+their dedicated Make and CI targets. Keep the database code still used
+by the compiler until milestone 3. There are no blockers for 2.1.
 
 | Command on `1912d9b7` | Result | Log under `/private/tmp/smalllinks-m1.yNp7d5/` |
 | --- | --- | --- |
@@ -189,3 +193,18 @@ pattern checks and the `Quasituples` printer check. The logs list
 their names and reasons. The handler example runner passes with its
 own settings in `handlers.tests` despite its ignored entry in the
 example typecheck suite.
+
+Tests added in 1.3 cover deep recursion, braced record and operation
+fields, explicit FreezeML application of row and presence arguments,
+and the use of linear values in deep and shallow handlers and repeated
+resumptions. The checks used `5f296788` with the test additions and the
+baseline compiler. Logs are under `/private/tmp/smalllinks-m1.yNp7d5/`.
+
+| Command | Result | Log |
+| --- | --- | --- |
+| `./test-harness tests/functions.tests` | 34 passed. | `functions-with-baseline-cases.log` |
+| `./test-harness tests/freezeml.tests` | 61 passed. | `freezeml-with-baseline-cases.log` |
+| `./test-harness tests/handlers.tests` | 100 passed. | `handlers-with-baseline-cases.log` |
+| `./test-harness tests/records.tests` | 32 passed. | `records-with-baseline-cases.log` |
+| `make rule-check` | Passed with the same tabs skip. | `rule-check-with-baseline-cases.log` |
+| `git diff --check` | Passed. | No output |
