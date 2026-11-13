@@ -5,7 +5,6 @@ config: tests/examples_default.config
 Typecheck example file examples/church.links
 examples/church.links
 filemode : true
-ignore : broken example
 
 Typecheck example file examples/extensible-case.links
 examples/extensible-case.links

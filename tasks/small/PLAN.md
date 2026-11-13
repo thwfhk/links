@@ -4,7 +4,7 @@ SmallLinks is a native subset of Links for developing modal effect types.
 First establish a smaller compiler with the current Links type and effect
 inference. Adding modal effect types is a later task.
 
-The [language draft](SPEC.md) describes the subset.
+The [language guide](SPEC.md) describes the subset.
 [Implementation notes](IMPL.md) record decisions and open questions.
 
 ## Scope
@@ -122,11 +122,12 @@ parsed again.
 
 - [x] **5.1** (`c5452cef`) Enable handlers by default and check handler
   programs in all three native entry points without `--enable-handlers`.
-- [x] **5.2** Align the build, installation, CI and test runner with
-  SmallLinks. Verify the installed executable finds its prelude and
-  standard library.
-- [ ] **5.3** Finish the language draft, register the retained examples
-  and run all retained checks.
+- [x] **5.2** (`8d08a03b`) Align the build, installation, CI, test runner
+  and repository instructions with SmallLinks. Verify the installed
+  executable finds its prelude and standard library.
+- [x] **5.3** Expand the language guide to cover ordinary types and
+  terms as well as effect handlers. Check the guide's examples, register
+  the retained source examples and run all retained checks.
 
 Completion check: a clean build and install succeed, all retained
 regressions and native IR unit tests pass, and source checks pass.
@@ -154,8 +155,26 @@ regressions and native IR unit tests pass, and source checks pass.
 
 ## Status
 
-Items 5.1 and 5.2 are complete. Next, finish the language guide,
-example registration and final checks in 5.3. There are no blockers.
+The SmallLinks plan is complete. A clean build and install pass, the
+installed interpreter loads its runtime files, and all 35 source
+examples type check. The language guide covers the retained syntax and
+its examples pass. Modal effect types are a separate task. There are no
+blockers or open design questions for this plan.
+
+Checks for 5.3 used `8d08a03b` plus the item changes on OCaml 5.4.0
+and Dune 3.20.2. Logs are under `/private/tmp/smalllinks-m5.sodOj9/`.
+The macOS `xcrun` cache messages did not affect the check results.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make clean` and `make all-ci` | Clean CI-profile build passed. | `5.3-clean.log`, `5.3-build.log` |
+| `opam exec -- dune install --profile=ci --prefix=… links` and `./tests/check-install.sh` for the staged binary | Passed from outside the checkout. | `5.3-install.log`, `5.3-installed.log` |
+| `make tests` | 40 suites, 927 passed, 2 ignored and 0 failed. The two ignored cases are existing redundant-pattern tests. The example registration, REPL and five print and reparse checks passed. | `5.3-regressions.log` |
+| `opam exec -- ./run-tests unit-tests` | All 44 IR unit tests passed. | `5.3-unit.log` |
+| `./test-harness tests/typecheck_examples.tests` | All 35 examples type checked, including Church numerals. | `5.3-typecheck_examples.log` |
+| Run each handler example with `./links --path=examples/handlers`. Run the installed handler runner and Church example with `linx`. | All 27 handler examples passed. The installed examples returned `()` and `4`. | `5.3-all-handler-examples.log`, `5.3-installed-examples.log` |
+| Run the language guide's code with `./links` in file, expression, type-check-only and REPL modes | 33 checks passed, including every fenced Links block. | `5.3-guide.log` |
+| `make rule-check`, `git diff --check` and check local links in the guide and setup files | Passed. The tabs check used `rg` because GNU find was unavailable. | `5.3-rule.log`, `5.3-diff.log`, `5.3-tabs.log`, `5.3-doc-links.log` |
 
 Checks for 5.2 used `c5452cef` plus the item changes on OCaml 5.4.0
 and Dune 3.20.2. Logs are under `/private/tmp/smalllinks-m5.sodOj9/`.

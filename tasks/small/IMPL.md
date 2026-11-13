@@ -2,7 +2,7 @@
 
 Update this file as each [milestone](PLAN.md#milestones) proceeds. Record
 significant choices under the relevant milestone number, with the reason
-and any impact on the [language draft](SPEC.md). Put unresolved choices
+and any impact on the [language guide](SPEC.md). Put unresolved choices
 under Questions for review. Once resolved, replace each question with
 the decision and update the plan or spec if needed.
 
@@ -192,12 +192,17 @@ signatures; the `gen` helpers use effect upcasts.
 2. **5.2.** Dune installs the prelude, standard library and examples
    directly. The executable resolves paths from its real location.
    Use `lib/links` under the install prefix and `lib` next to the build
-   tree's `bin` directory. Keep explicit config, prelude and standard
-   library settings. The install check runs the executable from a
-   separate directory and loads both the prelude and standard library.
+   tree's `bin` directory. An explicit `--config` takes precedence over
+   `LINKS_CONFIG`, then an existing `etc/links/config` in the prefix.
+   Keep the prelude and standard library settings. The install check
+   runs the executable from a separate directory and loads both.
    The source launcher is `./links`, the installed command is `linx`,
    and the package name is `links`. Use `make` for a development build
    and `./run-tests unit-tests` for the native IR tests.
+3. **5.3.** The Church numeral example uses closed `wild` arrows to
+   match its call contexts, including the top level. The quantified
+   encoding stays the same. Check the guide's examples using the same
+   compiler as the final regression suite.
 
 ## Baseline fixtures to migrate
 
