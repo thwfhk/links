@@ -1,6 +1,0 @@
-[
-    {
-	opam_package: "postgresql",
-	files : ["postgresql"]
-    }
-]

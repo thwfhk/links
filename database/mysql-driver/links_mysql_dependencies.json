@@ -1,6 +1,0 @@
-[
-    {
-	opam_package: "mysql8",
-	files : ["mysql8"]
-    }
-]

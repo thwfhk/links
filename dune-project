@@ -58,47 +58,5 @@
   ("web programming" "tierless" "multi-tier" "effect handlers" "effect typing" "session types"
    "concurrency" "webpage" "extensible data types" "language-integrated queries")))
 
-;;
-;; Links PostgreSQL driver
-;;
-
-(package
- (name links-postgresql)
- (synopsis "Postgresql database driver for the Links Programming Language")
- (description "Postgresql database driver for the Links Programming Language")
- (depends (links (= :version))
-          postgresql)
- (tags
-   ("postgresql" "database")))
-
-;;
-;; Links SQLite3 driver
-;;
-
-(package
- (name links-sqlite3)
- (synopsis "SQLite database driver for the Links Programming Language")
- (description "SQLite database driver for the Links Programming Language")
- (depends (links (= :version))
-          sqlite3)
- (tags
-   ("sqlite" "database")))
-
-;;
-;; Links MySQL driver
-;;
-
-(package
- (name links-mysql)
- (synopsis "MySQL database driver for the Links Programming Language")
- (description "MySQL database driver for the Links Programming Language")
- (depends (links (= :version))
-          conf-mysql
-          mysql8)
- (tags
-   ("mysql" "database")))
-
-
-
 ; See the complete stanza docs at https://dune.readthedocs.io/en/stable/dune-files.html#dune-project
 

@@ -65,7 +65,7 @@ reproduced; existing failures are recorded separately.
 
 ### 2. Separate the native runtime
 
-- [ ] **2.1** Remove external database driver packages and their build
+- [x] **2.1** Remove external database driver packages and their build
   and CI targets. Keep the shared database code until milestone 3.
 - [ ] **2.2** Remove the web and JavaScript entry points and foreign code.
   Keep file execution, `-e`, the REPL and type checking.
@@ -152,6 +152,24 @@ regressions and native IR unit tests pass, and source checks pass.
 
 ## Status
 
+Milestone 2 is in progress. Item 2.1 is complete. Next, remove the web
+and JavaScript entry points and foreign code in 2.2.
+
+Checks for 2.1 used `f0a027bc` plus the item changes on OCaml 5.4.0.
+Logs are under `/private/tmp/smalllinks-m2.B3p5xp/`.
+
+| Command | Result | Log |
+| --- | --- | --- |
+| `make no-db` and `make all-ci` | Passed. | `2.1-build.log`, `2.1-ci.log` |
+| `opam exec -- dune build links.opam` and check driver files | Main metadata unchanged. No external driver files. | `2.1-driver-packages.log` |
+| Native expression, file with imports, typecheck-only file and REPL checks | All passed. | `2.1-expression.log`, `2.1-import.log`, `2.1-typecheck.log`, `2.1-repl.log` |
+| `./test-harness tests/functions.tests` and `./test-harness tests/handlers.tests` | 34 and 100 passed. | `2.1-functions.log`, `2.1-handlers.log` |
+| `opam exec -- ./run-tests nodb-unit-tests` | 44 passed. | `2.1-unit.log` |
+| `./tests/validate_typecheck_testfile.testscript` | Passed. | `2.1-example-registration.log` |
+| `make rule-check` and `git diff --check` | Passed. GNU find was unavailable for the tabs rule. | `2.1-rules.log`, `2.1-diff.log` |
+
+### Milestone 1 baseline
+
 Milestone 1 is complete. The build and native entry checks passed on
 `1912d9b7` with OCaml 5.4.0. Baseline settings were the Links defaults
 unless the commands or suites specify otherwise. Handlers, optional
@@ -159,9 +177,6 @@ effect sugar and control-flow linearity were off by default.
 
 Across the 39 baseline suites, 986 cases passed and 18 were ignored
 after adding the ten cases in 1.3. All 44 native IR unit tests passed.
-Next, start 2.1 by removing the external database driver packages and
-their dedicated Make and CI targets. Keep the database code still used
-by the compiler until milestone 3. There are no blockers for 2.1.
 
 | Command on `1912d9b7` | Result | Log under `/private/tmp/smalllinks-m1.yNp7d5/` |
 | --- | --- | --- |

@@ -12,8 +12,7 @@ OCaml.
 - `bin/` contains the command-line driver and REPL.
 - `lib/stdlib/` and `prelude.links` contain the Links standard library.
 - `lib/js/` contains the JavaScript runtime.
-- `database/` contains database drivers; `lens/` contains relational
-  lenses.
+- `lens/` contains relational lenses.
 - `tests/` contains regression tests and OCaml unit tests.
 - `examples/` contains Links programs; `doc/` contains documentation.
 
@@ -94,9 +93,9 @@ Use OCaml 5.3.0 or later. Install the build dependencies with
 make no-db
 ```
 
-This builds the compiler without database drivers and creates the
-`./links` launcher. Rebuild after changing compiler code and before
-running tests; the test harness uses the existing launcher and binary.
+This builds the compiler and creates the `./links` launcher. Rebuild
+after changing compiler code and before running tests; the test harness
+uses the existing launcher and binary.
 
 ### 2. Test the affected behaviour
 
@@ -120,11 +119,6 @@ Run OCaml unit tests when changing the code they cover:
 ```sh
 opam exec -- ./run-tests nodb-unit-tests
 ```
-
-For changes that affect database behaviour, build with the relevant
-drivers (`make all`), configure a local database, and run
-`make database-tests`. Run `opam exec -- ./run-tests db-unit-tests`
-when changing code covered by those unit tests.
 
 `make tests` runs all top-level regression suites, including suites
 outside the current scope. Use the selected suites above for now.

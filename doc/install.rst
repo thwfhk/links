@@ -55,23 +55,6 @@ If your ``opam`` switch is set up correctly, you should be able to get to the
 Links REPL by typing ``linx`` at a command line. If not, writing ``eval $(opam
 env)`` should set the system path correctly.
 
-Installing the Links Database Drivers
--------------------------------------
-
-Links supports interfacing with databases. The database drivers are not
-installed by default.
-
-PostgreSQL
-~~~~~~~~~~
-
-Running::
-
-  opam install links-postgresql
-
-will install the ``postgresql`` library, the required Links PostgreSQL driver,
-and recompile ``links`` to allow it to use the driver.
-
-
 Where next?
 ~~~~~~~~~~~
 

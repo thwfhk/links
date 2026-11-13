@@ -3,8 +3,7 @@
 #
 
 # This file contains instructions for building a bleeding-edge version
-# of Links in release or development mode with and without database
-# support.
+# of Links in release or development mode.
 
 # LATEST STABLE RELEASE
 # =====================
@@ -17,25 +16,15 @@
 # DEVELOPMENT
 # ===========
 # By default the build rule `all' attempts to build the latest
-# development version of Links with database support, thus the
-# following command suffices to build everything
+# development version of Links.
 # $ make all
-# For legacy reasons the rule `nc' (native compile) is an alias of
-# `all'.
-# NOTE: The rule `all' may skip the building the database drivers if
-# the necessary system prerequisites are absent.
-
-# The following command builds Links in development mode without
-# database support
-# $ make no-db
+# The `nc' and `no-db' targets are aliases for `all'.
 
 # RELEASE
 # =======
 # To build Links in release mode use the following command
 # $ make all-release
-# This rule builds every artefact which is part of a release. As such,
-# it will include all the database drivers. Currently, there is no
-# support for building Links without database support in release mode.
+# This rule builds every artefact which is part of a release.
 
 
 # Project root and build directory
@@ -44,17 +33,12 @@ BUILD_DIR:=$(ROOT)/_build
 
 # The build command and some standard build system flags
 BUILD=opam exec dune -- build
-MAIN=links
-SOURCES=$(MAIN)
-DB_STABLE=links-postgresql,links-sqlite3,links-mysql
-DB_SOURCES=$(DB_STABLE)
-# Note: this relies on lazy expansion of `SOURCES'.
-COMMON_FLAGS=--only-packages $(SOURCES) --build-dir=$(BUILD_DIR)
+COMMON_FLAGS=--build-dir=$(BUILD_DIR)
 DEV_FLAGS=$(COMMON_FLAGS) --profile=dev
 REL_FLAGS=$(COMMON_FLAGS) --profile=release
 CI_FLAGS=$(COMMON_FLAGS) --profile=ci
 # List of packages that we currently release
-RELEASE_PKGS:=$(MAIN),$(DB_STABLE)
+RELEASE_PKGS:=links
 
 # Build rules.
 
@@ -76,9 +60,8 @@ all-ci: build-ci-all create-startup-script
 .PHONY: nc
 nc: all
 
-# Builds core Links (without database support) in development mode.
 .PHONY: no-db
-no-db:	build-dev-nodb create-startup-script
+no-db: all
 
 # Creates a thin shell script, which executes the built Links
 # executable in a pre-configured environment.
@@ -97,30 +80,19 @@ create-startup-script:
 
 # Invokes `dune' to build everything in continuous integration mode.
 .PHONY: build-ci-all
-build-ci-all: dune dune-project include-db-sources
+build-ci-all: dune dune-project
 	$(BUILD) $(CI_FLAGS) @install
 
 # Invokes `dune' to build everything in development mode.
 .PHONY: build-dev-all
-build-dev-all: dune dune-project include-db-sources
-	$(BUILD) $(DEV_FLAGS) @install
-
-# Invokes `dune' to build only core Links in development mode.
-.PHONY: build-dev-nodb
-build-dev-nodb: dune dune-project
+build-dev-all: dune dune-project
 	$(BUILD) $(DEV_FLAGS) @install
 
 # Invokes `dune' to build everything in release mode.
 .PHONY: build-release-all
-build-release-all: dune dune-project include-db-sources
+build-release-all: dune dune-project
 	$(BUILD) $(REL_FLAGS) @install
 
-
-# This rule updates the contents of the `SOURCES' variable to include
-# the database sources.
-.PHONY: include-db-sources
-include-db-sources:
-	$(eval SOURCES:=$(SOURCES),$(DB_SOURCES))
 
 # Auxiliary rule used by `opam install` to build Links
 .PHONY: opam-build-links.opam
@@ -135,15 +107,6 @@ tests: links
 	$(eval OCAMLRUNPARAM="")
 	$(eval CAMLRUNPARAM="")
 	./run-tests
-
-# Runs the database test suite. This calls run-database-tests
-# with the --local flag ensuring that a local config file is used
-# if available.
-.PHONY: tests
-database-tests: links
-	./run-tests database
-	./run-tests shredding
-	./run-tests relational-lenses
 
 # Cleans the project directory.
 .PHONY: clean

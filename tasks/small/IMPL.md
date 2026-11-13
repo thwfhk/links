@@ -70,11 +70,12 @@ library and handler helpers `Maybe`, `Either`, `Comp`, `Zero` and
 `gen0`–`gen2`. The list library uses `unsafe sig` for its current effect
 signatures; the `gen` helpers use effect upcasts.
 
-1. **2.1.** `make no-db` skips the external driver packages in
-   [`database/`](../../database/). [`core/dune`](../../core/dune) still
-   compiles query modules and links lenses, RDF and the web libraries.
-   Remove the driver packages and their build hooks first. Leave the
-   shared database code in place while web code still uses it.
+1. **2.1.** `make no-db` is an alias of `make all` now that the MySQL,
+   PostgreSQL and SQLite driver packages are gone. The database test
+   targets required those drivers, so their source fixtures stay in
+   the tree for milestone 3 with the runners and build stanzas removed.
+   The native IR unit runner remains available. The shared database
+   loader and query code remain in the compiler until milestone 3.
 2. **2.2–2.3.** Remove web and JS modes from [`bin/links.ml`](../../bin/links.ml),
    the corresponding driver branches and foreign code support. Keep the
    REPL mode used by module renaming and plain-text type errors. Remove
