@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+
+set -u
+
+roundtrip() {
+    local name="$1" bindings="$2" expression="$3"
+    shift 3
+
+    local printed printed_type reparsed
+    if ! printed=$(./links --enable-handlers "$@" -e "$bindings $expression"); then
+        echo "FAILURE: $name could not be printed"
+        return 1
+    fi
+    case "$printed" in
+        "fun : "*) printed_type=${printed#fun : } ;;
+        *)
+            echo "FAILURE: $name printed an unexpected result: $printed"
+            return 1 ;;
+    esac
+    if ! reparsed=$(./links --enable-handlers "$@" -e "$bindings (($expression) : $printed_type)"); then
+        echo "FAILURE: $name could not reparse $printed_type"
+        return 1
+    fi
+    if [[ "$printed" != "$reparsed" ]]; then
+        echo "FAILURE: $name changed from $printed to $reparsed"
+        return 1
+    fi
+    echo "SUCCESS: $name"
+}
+
+status=0
+roundtrip "Wild in a computation type alias argument" \
+    'typename Thunk(a,e::Eff) = () -e-> a;' \
+    'fun() { print("hello"); do Ask } : Thunk(Int,{wild:(),Ask:Int})' || status=1
+
+roundtrip "Quantified effect tail and effect presence" \
+    'sig f : forall e::Eff,p::Presence(Unl,Eff). (() {Ask{p}|e}-> ()) {Ask{p}|e}-> () fun f(g) {g()}' \
+    '~f' --set=show_quantifiers=true || status=1
+
+roundtrip "Quantified presence in an alias argument" \
+    'typename Shape(p::Presence(Any,Any)) = (x{p},anchor:Int); sig f : forall p::Presence(Any,Any),e::Eff. (Shape({p})) -e-> Shape({p}) fun f(r) {r}' \
+    '~f' --set=show_quantifiers=true || status=1
+
+roundtrip "Quantified value type that admits linear values" \
+    'sig f : forall a::Any,e::Eff. (a::Any) -e-> a::Any fun f(x) {x}' \
+    '~f' --set=show_quantifiers=true || status=1
+
+roundtrip "Recursive effect row" \
+    'fun w(g) { handle(g()) { case () -> () case <F(h) => res> -> w(h) }}' \
+    'w' || status=1
+
+exit "$status"

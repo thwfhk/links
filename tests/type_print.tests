@@ -1,49 +1,43 @@
-Effect sugar: Implicit effect variables (1)
+---
+args: --set=types_pretty_printer_engine=old
+---
+
+Shared effect in a higher-order function
 fun (f, x: Int) { f(x) + 0 } : ((Int) -e-> Int, Int) -e-> Int
-stdout : fun : ((Int) -> Int, Int) -> Int
-args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+stdout : fun : ((Int) -a-> Int, Int) -a-> Int
 
-Effect sugar: Implicit effect variables (2)
+Independent effect in a curried arrow
 fun (f)(x: Int) { f(x) + 0 } : ((Int) -e-> Int) -f-> (Int) -e-> Int
-stdout : fun : ((Int) -> Int) -> (Int) -> Int
-args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+stdout : fun : ((Int) -a-> Int) -> (Int) -a-> Int
 
-Effect sugar: Implicit effect variables (3)
+Shared effect across a tuple
 (map, id) : (((a) -e-> b, [a]) -e-> [b], (c) -e-> c)
-stdout : (fun, fun) : (((a) -> c, [a]) -> [c], (d) -> d)
-args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+stdout : (fun, fun) : (((a) -b-> c, [a]) -b-> [c], (d) -b-> d)
 
-Effect sugar: Implicit effect variables (4)
+Anonymous effect tails after operation fields
 fun(_) {} : (() {F:()|_}-> ()) {F:()|_} -> ()
 stdout : fun : (() {F:() => ()|_}-> ()) {F:() => ()|_}-> ()
-args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
 
-Effect sugar: Single-use variables
+Single-use effect tails
 fun(_) { } : (() -e-> ()) -f-> ()
-stdout : fun : (() -a-> ()) -> ()
-args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+stdout : fun : (() -> ()) -> ()
 
-Effect sugar: Shared variables
+Shared effect tail in curried arrows
 fun()() { } : () -a-> () -a-> ()
-stdout : fun : () -_-> () -> ()
-args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+stdout : fun : () -a-> () -a-> ()
 
-Effect sugar: Distinct variables
+Distinct effect tails across a tuple
 (fun(){}, fun(){}) : (() -a-> (), () -b-> ())
-stdout : (fun, fun) : (() -> (), () -b-> ())
-args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+stdout : (fun, fun) : (() -> (), () -> ())
 
-Effect sugar: Type aliases (1)
+Type alias with an anonymous effect tail
 fun() {} : Comp((), { | e })
-stdout : fun : Comp (())
-args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+stdout : fun : Comp ((),{ |_ })
 
-Effect sugar: Type aliases (2)
+Curried function returning a computation type alias
 fun()() {} : () -e-> Comp((), { | f })
-stdout : fun : () -> Comp (())
-args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+stdout : fun : () -> Comp ((),{ |_ })
 
-Effect sugar: Type aliases (3)
+Type aliases with a shared effect tail
 fun(x) {x} : (Comp(a, { | e })) -f-> Comp(a, { | e })
-stdout : fun : (Comp (a)) -> Comp (a)
-args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+stdout : fun : (Comp (a,{ |b })) -> Comp (a,{ |b })

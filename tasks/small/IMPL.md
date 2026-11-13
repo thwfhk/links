@@ -23,10 +23,8 @@ the decision and update the plan or spec if needed.
 3. Delete code used only by features we remove. Remove built-in
    processes, mailboxes and XML as part of the native runtime cut.
    Enable handlers by default in the resulting interpreter.
-4. **4.2–4.3.** Use the current `effect_sugar=false` rules and remove
-   the optional effect sugar and printing policies. Migrate retained
-   programs that opt in. For example, the SAT example's `(Comp(a)) ~> a`
-   can be written `(Comp(a,{|e})) ~e~> a`.
+4. **4.2–4.3.** Use the former default effect annotation rules.
+   The SAT example uses `(Comp(a,{|e})) ~e~> a` to share its effect tail.
 
 5. **4.3.** Keep `~>` and the related `wild` arrows, including the
    linear forms. They give short signatures for recursive calls and
@@ -47,9 +45,9 @@ the decision and update the plan or spec if needed.
    and [`Evalir`](../../core/evalir.ml). Files, `-e` and interactive
    sentences enter through different driver functions. Test all three.
 2. Keep the effect desugaring in [`desugarEffects.ml`](../../core/desugarEffects.ml).
-   It expands operation signatures and resolves anonymous effect rows
-   even when the optional `effect_sugar` setting is off. Keep the module,
-   datatype, function and pattern passes on the native path.
+   It expands operation signatures and resolves anonymous row tails.
+   Keep the module, datatype, function and pattern passes on the
+   native path.
 3. Keep closure conversion and [`BuildTables`](../../core/buildTables.ml).
    The interpreter looks up function bodies and uses the continuation
    variable table to save locals. Remove entries used only to serialise
@@ -155,6 +153,15 @@ signatures; the `gen` helpers use effect upcasts.
    where the optional policy supplied them. `Fringe.step` keeps its
    separate continuation tail. The handler example runner now calls
    the SAT assertions and is included in the example type checks.
+6. **4.3.** Remove implicit sharing, automatic presence insertion and
+   implicit alias arguments. `DesugarEffects` uses declared alias kinds
+   when elaborating type alias arguments and resolves anonymous row
+   tails in the same pass. Alias bodies, including `effectname`, check
+   for unbound anonymous tails before conversion to internal types.
+   The default printer uses `~` for `wild:()` in an arrow, preserves
+   `wild:()` in row arguments, and prints quantifier kinds in a form
+   accepted by the parser. Keep the other display settings and printer
+   engines.
 
 ## Keep build and test files in step
 

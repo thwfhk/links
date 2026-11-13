@@ -170,27 +170,7 @@ let fresh_typevar ?(is_eff=false) freedom : SugarTypeVar.t =
   named_typevar ~is_eff:is_eff "$" freedom
 
 let fresh_effects =
-  let stv = SugarTypeVar.mk_unresolved ~is_eff:true "$eff" None `Rigid in
-  ([], Datatype.Open stv)
-
-let make_effect_var : is_dot:bool -> ParserPosition.t -> Datatype.row_var
-  = fun ~is_dot loc ->
-  let open Types.Policy in
-  let pol = default_policy () in
-  let effect_sugar = effect_sugar pol in
-  let open_default = EffectSugar.open_default (es_policy pol) in
-
-  if effect_sugar && open_default
-  then begin
-      if is_dot
-      then Datatype.Closed
-      else Datatype.Open (SugarTypeVar.mk_unresolved "$eff" ~is_eff:true None `Rigid)
-    end else begin
-      if is_dot
-      then raise (ConcreteSyntaxError (pos loc, "Dot syntax in effect row variables is only supported when effect_sugar and effect_sugar_policy.open_default are enabled."))
-      else Datatype.Closed
-    end
-
+  ([], Datatype.Open (fresh_typevar ~is_eff:true `Rigid))
 
 module MutualBindings = struct
 
@@ -822,8 +802,7 @@ vfield:
 | CONSTRUCTOR fieldspec                                        { ($1, $2)      }
 
 efields:
-| efield                                                       { ([$1], make_effect_var ~is_dot:false $loc) }
-| soption(efield) VBAR DOT                                     { ( $1 , make_effect_var ~is_dot:true  $loc) }
+| efield                                                      { ([$1], Datatype.Closed                 ) }
 | soption(efield) VBAR eff_var                                 { ( $1 , $3                                ) }
 | soption(efield) VBAR kinded_row_var                          { ( $1 , $3                                ) }
 | soption(efield) VBAR effect_app                              { ( $1 , $3                                ) }

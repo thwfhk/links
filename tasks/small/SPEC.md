@@ -92,8 +92,8 @@ Adding a second call to `f` in the block is a type error.
 
 ### Effect annotation syntax
 
-The examples use the proposed notation for SmallLinks. In these forms,
-`A` and `B` stand for value types, and `e` stands for a row variable.
+In these forms, `A` and `B` stand for value types, and `e` stands for a
+row variable.
 
 | Form | Meaning |
 | --- | --- |
@@ -103,6 +103,13 @@ The examples use the proposed notation for SmallLinks. In these forms,
 | `(A) -e-> B` | The effect row is `e`; this abbreviates `(A) {\|e}-> B`. |
 | `(A) ~> B` | The fresh effect row contains `wild`. |
 | `(A) ~e~> B` | The effect row extends `e` with `wild`. |
+
+Each bare arrow introduces its own row. To share a tail between rows,
+use the same named variable in each row and write the presence fields
+each row needs. Supply all alias arguments, including row arguments.
+Aliases and explicit `forall` types require their row variables to be
+bound. In signatures with implicit quantification, `_` denotes a fresh
+rigid variable and `%` denotes a fresh flexible variable.
 
 `wild` accounts for effects such as recursive calls and `print`.
 `(A) ~> B` can also be written `(A) {wild:() | _}-> B`. The `_`

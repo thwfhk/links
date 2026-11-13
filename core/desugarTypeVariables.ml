@@ -524,11 +524,8 @@ object (o : 'self)
 
   method! aliasnode (name, unresolved_qs, body) =
 
-    (* Don't allow unbound named type variables in type definitions.
-       We do allow unbound *anoynmous* variables, because those may be
-       effect variables that the effect sugar handling will generalize the
-       type binding over.
-       Hence, we must re-check the free variables in the type definiton later on. *)
+    (* Reject unbound named variables here. DesugarEffects checks
+       anonymous row tails. *)
 
     let o = o#set_allow_implictly_bound_vars false in
     (* Aliases must never use type variables from an outer scope *)

@@ -8,15 +8,15 @@ stdout : fun : forall a,b::Row.(a) -b-> Int
 
 Anonymous identity function (#693)
 fun (x) {x}
-stdout : fun : forall a::(Any,Any),b::Row.(a::Any) -b-> a::Any
+stdout : fun : forall a::Any,b::Row.(a::Any) -b-> a::Any
 
 Anonymous composition function (#693)
 fun (f,g) {fun (x){f (g(x))}}
-stdout : fun : forall a::(Any,Any),b::Row,c::(Any,Any),d::(Any,Any),e::Row.((a::Any) -b-> c::Any, (d::Any) -b-> a::Any) -e-> (d::Any) -b-> c::Any
+stdout : fun : forall a::Any,b::Row,c::Any,d::Any,e::Row.((a::Any) -b-> c::Any, (d::Any) -b-> a::Any) -e-> (d::Any) -b-> c::Any
 
 Anonymous application function (#693)
 fun (f) {fun (x){f (x)}}
-stdout : fun : forall a::(Any,Any),b::Row,c::(Any,Any),d::Row.((a::Any) -b-> c::Any) -d-> (a::Any) -b-> c::Any
+stdout : fun : forall a::Any,b::Row,c::Any,d::Row.((a::Any) -b-> c::Any) -d-> (a::Any) -b-> c::Any
 
 ConcatMap (#368)
 tests/typed_ir/T368.links

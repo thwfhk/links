@@ -38,35 +38,11 @@ end
 module Policy : sig
   type kind_policy = Default | Full | Hide
 
-  module EffectSugar : sig
-    type opt = PresenceOmit
-             | AliasOmit
-             | ArrowsShowImplicitEffectVariable
-             | ArrowsCurriedHideFresh
-             | ContractOperationArrows
-             | OpenDefault
-             | FinalArrowSharesWithAlias
-             | AllImplicitArrowsShare
-    type t = opt list
-    val default : unit -> t
-
-    val presence_omit             : t -> bool
-    val alias_omit                : t -> bool
-    val arrows_show_implicit      : t -> bool
-    val arrows_curried_hide_fresh : t -> bool
-    val contract_operation_arrows : t -> bool
-    val open_default              : t -> bool
-    val final_arrow_shares_with_alias : t -> bool
-    val all_implicit_arrows_share : t -> bool
-  end
-
   type t = {
     quantifiers : bool;
     flavours : bool;
     hide_fresh : bool;
     kinds : kind_policy;
-    effect_sugar : bool;
-    es_policy : EffectSugar.t;
   }
   val default_policy : unit -> t
 
@@ -74,14 +50,11 @@ module Policy : sig
   val flavours : t -> bool
   val hide_fresh : t -> bool
   val kinds : t -> kind_policy
-  val effect_sugar : t -> bool
-  val es_policy : t -> EffectSugar.t
 
   val set_quantifiers : bool -> t -> t
   val set_flavours : bool -> t -> t
   val set_hide_fresh : bool -> t -> t
   val set_kinds : kind_policy -> t -> t
-  val set_effect_sugar : bool -> t -> t
 end
 
 val list         : Abstype.t

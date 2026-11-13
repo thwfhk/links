@@ -4,11 +4,11 @@ config: tests/freezeml.config
 
 Polymorphic Instantiation (1)
 fun(x)(y) { y }
-stdout : fun : forall a,b::Row,c::(Any,Any),d::Row.(a) -b-> (c::Any) -d-> c::Any
+stdout : fun : forall a,b::Row,c::Any,d::Row.(a) -b-> (c::Any) -d-> c::Any
 
 Polymorphic Instantiation (1•)
 $(fun(x)(y) { y })
-stdout : fun : forall a,b::Row,c::(Any,Any),d::Row.(a) -b-> (c::Any) -d-> c::Any
+stdout : fun : forall a,b::Row,c::Any,d::Row.(a) -b-> (c::Any) -d-> c::Any
 
 Polymorphic Instantiation (2)
 choose(id)
@@ -161,7 +161,7 @@ stdout : 0 : Int
 
 FreezeML programs (1)
 fun id(x) { x } ~id
-stdout : fun : forall a::(Any,Any),b::Row.(a::Any) -b-> a::Any
+stdout : fun : forall a::Any,b::Row.(a::Any) -b-> a::Any
 
 FreezeML programs (2)
 var ids = [~id]; ~ids

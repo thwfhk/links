@@ -206,7 +206,7 @@ args : --set=show_quantifiers=true
 Type abstraction: correct, polymorphic body
 /\ [a]. { $(fun(x){x}) }
 exit : 0
-stdout : fun : forall a,b::(Any,Any),c::Row.(b::Any) -c-> b::Any
+stdout : fun : forall a,b::Any,c::Row.(b::Any) -c-> b::Any
 args : --set=show_quantifiers=true
 
 Type abstraction: correct, use type variable in signature

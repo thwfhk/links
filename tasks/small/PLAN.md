@@ -103,10 +103,10 @@ constructs are rejected.
 - [x] **4.1** (`f888b2df`) Remove control-flow linearity, including its
   settings and source forms. Preserve linear functions, kinds and usage
   checks, FreezeML and ordinary multi-shot resumptions.
-- [x] **4.2** Migrate retained examples and tests away from optional
-  effect sugar. Use explicit shared tails, alias arguments and
-  presence fields where needed.
-- [ ] **4.3** Fix annotation rules to the current default and remove the
+- [x] **4.2** (`9d1b400d`) Migrate retained examples and tests away from
+  optional effect sugar. Use explicit shared tails, alias arguments
+  and presence fields where needed.
+- [x] **4.3** Fix annotation rules to the former default and remove the
   optional effect sugar policies. Keep operation type elaboration and
   anonymous row resolution. Replace tests of the removed policies with
   tests of the retained syntax, including `~>`, `x{:T}` and `x{-}`, and
@@ -154,8 +154,24 @@ regressions and native IR unit tests pass, and source checks pass.
 
 ## Status
 
-Items 4.1 and 4.2 are complete. Next, remove the optional effect sugar
-and printing policies in 4.3. There are no blockers.
+Milestone 4 is complete. The retained tests and examples pass with the
+fixed effect annotation rules. The default printer's output is checked
+by using it again as a type annotation. Next, enable handlers by default
+in 5.1. There are no blockers or open design questions for milestone 4.
+
+Checks for 4.3 used `9d1b400d` plus the item changes on OCaml 5.4.0.
+Logs are under `/private/tmp/smalllinks-m4.Fx8PK2/`. The macOS `xcrun`
+cache messages did not affect the build or test results.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make no-db` and `make all-ci` | Passed. | `4.3-build.log`, `4.3-ci.log` |
+| `make tests` | 40 suites, 923 passed, 4 ignored and 0 failed. All five print and reparse checks and the example registration check passed. | `4.3-regressions.log` |
+| `opam exec -- ./run-tests nodb-unit-tests` | 44 passed. | `4.3-unit.log` |
+| `./links --enable-handlers --path=examples/handlers` with each handler example, with and without `--set=typecheck_only=true` | All 27 examples type checked and ran. | `4.3-all-handler-examples.log`, `4.3-example-*.log` |
+| `./links --enable-handlers --path=examples/handlers examples/handlers/tests.links` and the same command with `--set=typecheck_only=true` | Imported examples ran and type checked. | `4.3-runner.log`, `4.3-typecheck.log` |
+| `./links --enable-handlers -e` and `./links --enable-handlers` with REPL input | A multi-shot handler returned `[1, 2]`. The REPL bound and handled `ask`, returning `42`. | `4.3-expr.log`, `4.3-repl.log` |
+| `make rule-check` and `git diff --check` | Passed. The tabs check used `rg` because GNU find was unavailable. | `4.3-rule.log`, `4.3-diff.log`, `4.3-tabs.log` |
 
 Checks for 4.2 used the compiler at `f888b2df` with the item changes to
 the examples and their tests. Logs are under `/private/tmp/smalllinks-m4.Fx8PK2/`

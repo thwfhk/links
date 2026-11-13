@@ -90,38 +90,51 @@ foralls cannot repeat variables
 exit : 1
 stderr : @.*Multiple definitions of type variable `a'.\.*
 
-Sugar for shared effect variables in functions
-fun (f, x: Int) { f(x) + 0 }
-stdout : @fun : \(\(Int\) -> Int, Int\) -> Int
-args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+Type aliases take explicit effect arguments
+typename Thunk(a,e::Eff) = () ~e~> a; fun() {} : Thunk((), {|e})
+stdout : fun : Thunk ((),{ |_})
 
-Sugar for shared effect variables in type applications (1)
-sig forever : (Comp(a)) ~> b fun forever(f) { ignore(f()); forever(f) } forever
-stdout : fun : (Comp (_)) ~> _
-args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+Mutual type aliases take explicit effect arguments
+mutual { typename Either(a,e::Eff) = [|A:() ~e~> a|B:Indirect(a,{|e})|]; typename Indirect(a,e::Eff) = Either(a,{|e}); } A(fun() {}) : Either((), { | e})
+stdout : A(fun) : Either ((),{ |_})
 
-Sugar for shared effect variables in type applications (2)
-sig f : Comp(()) fun f() { } f
-stdout : fun : Comp (())
-args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+The last effect argument of a type alias is required
+sig f : Comp(Int) fun f() { 42 }
+exit : 1
+stderr : @.*Arity mismatch: Type Comp expects 2 type arguments, but 1 arguments were provided.*
 
-Implicit effect variables are shared across different functions
-(map, id) : (((a) -> b, [a]) -> [b], (c) -> c)
-stdout : (fun, fun) : (((a) -> c, [a]) -> [c], (d) -> d)
-args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+An effect argument must be a row
+fun() { 42 } : Comp(Int, String)
+exit : 1
+stderr : @.*Kind mismatch: Type argument .* for type constructor Comp has kind Type, but an argument of kind Row was expected.*
 
-Sugar for implicit effect variables in typenames
-typename Comp(a) = () ~> a; fun() {} : Comp((), { | e})
-stdout : fun : Comp (())
-args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+A row argument cannot replace a type argument
+fun() { 42 } : Comp({}, {|e})
+exit : 1
+stderr : @.*Kind mismatch: Type argument .* for type constructor Comp has kind Row, but an argument of kind Type was expected.*
 
-Sugar for implicit effect variables in typenames (propagates through types)
-mutual { typename Either(a) = [|A:() ~> a|B:Indirect(a)|]; typename Indirect(a) = Either(a); } A(fun() {}) : Either((), { | e})
-stdout : A(fun) : Either (())
-args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
-
-Type names with effect arrows are not considered
+An alias of a computation type cannot take an extra effect argument
 typename X = Comp((), {Var:() => ()}); fun() { } : X({ |_})
 exit : 1
 stderr : @.*Arity mismatch: Type X expects 0 type arguments, but 1 arguments were provided.*
-args : --set=effect_sugar=true
+
+A quantified signature cannot use a fresh implicit effect row
+sig f : forall a. (a) -> a fun f(x) { x }
+exit : 1
+stderr : @.*Unbound anonymous type variable.*
+
+Type alias row arguments use their declared kinds
+typename Reader(r::Row,e::Eff) = ((|r)) -e-> Int; fun(r) { r.x + do Ask } : Reader({x:Int}, {Ask:Int})
+stdout : fun : Reader ({x:Int},{Ask:() => Int})
+args : --enable-handlers
+
+Effect aliases require their row arguments
+effectname E(e::Eff) = {Ask:Int|e}; sig f : () -E-> Int fun f() { do Ask }
+stderr : @.*Arity mismatch: Type E expects 1 type arguments, but 0 arguments were provided.*
+exit : 1
+args : --enable-handlers
+
+An effect alias cannot use an anonymous tail
+effectname E = {Ask:Int|_};
+stderr : @.*Unbound anonymous type variable.*
+exit : 1
