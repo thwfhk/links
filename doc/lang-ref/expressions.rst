@@ -141,8 +141,8 @@ the fields::
 Field names are generally not enclosed in quotes and are not expressions. Field
 names can be quoted if the name clashes with a keyword, for example::
 
-  links>   ("for" = 1, "query" = true, notAKeyword = "string");
-  ("for" = 1, notAKeyword = "string", "query" = true) : (for:Int, notAKeyword:String, query:Bool)
+  links>   ("for" = 1, "where" = true, notAKeyword = "string");
+  ("for" = 1, notAKeyword = "string", "where" = true) : (for:Int, notAKeyword:String, where:Bool)
 
 Note that, whereas the content of a field can be any expression, the field name
 must be literally present when constructing a record. For example::

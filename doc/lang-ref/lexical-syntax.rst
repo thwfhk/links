@@ -34,9 +34,6 @@ Keywords
 
 The following keywords are reserved and are unavailable for use as identifiers::
 
-  as case database default delete do else escape false for forall from fun
-  handle if in import insert linfun module mu mutual
-  orderby op open prefix query
-  readonly returning set shallowhandle sig
-  switch table TableHandle true typename update unsafe
-  values var where with tablekeys
+  as case do else escape false for forall fun handle if in import linfun
+  module mu mutual orderby op open prefix shallowhandle sig switch true
+  typename unsafe var where with

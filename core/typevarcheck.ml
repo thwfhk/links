@@ -79,7 +79,6 @@ let rec is_guarded : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
                 isgr row
            end
         | Variant row -> isgr row
-        | Table (_, f, d, r) -> isg f && isg d && isg r
         | ForAll (qs, t) ->
             is_guarded
               (TypeVarSet.add_quantifiers qs bound_vars)
@@ -160,7 +159,6 @@ let rec is_negative : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
             isp f || isnr m || isn t
         | Record row -> isnr row
         | Variant row -> isnr row
-        | Table (_, f, d, r) -> isn f || isn d || isn r
         | ForAll (qs, t) ->
             is_negative
               (TypeVarSet.add_quantifiers qs bound_vars)
@@ -237,7 +235,6 @@ and is_positive : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
             isn f || ispr m || isp t
         | Record row -> ispr row
         | Variant row -> ispr row
-        | Table (_, f, d, r) -> isp f || isp d || isp r
         | ForAll (qs, t) ->
             is_positive
               (TypeVarSet.add_quantifiers qs bound_vars)

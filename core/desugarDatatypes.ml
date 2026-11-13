@@ -36,7 +36,7 @@ let fresh_tygroup_id () =
 (** Check that no datatype is left undesugared. *)
 let all_datatypes_desugared =
 object (self)
-  inherit SugarTraversals.predicate as super
+  inherit SugarTraversals.predicate
 
   val all_desugared = true
   method satisfied = all_desugared
@@ -52,11 +52,6 @@ object (self)
   method! type_arg' = function
       (_, None) -> {< all_desugared = false >}
     | _ -> self
-
-  method! phrasenode = function
-    | TableLit { tbl_type = (_, _, None); _ } ->
-        {< all_desugared = false >}
-    | p -> super#phrasenode p
 end
 
 
@@ -115,7 +110,6 @@ module Desugar = struct
         | Effect r -> Types.Effect (row alias_env r t')
         | Operation (f, t, b) -> Types.Operation ( Types.make_tuple_type (List.map datatype f)
                            , datatype t, b)
-        | Table (tmp, r, w, n) -> Types.Table (tmp, datatype r, datatype w, datatype n)
         | List k -> Types.Application (Types.list, [(PrimaryKind.Type, datatype k)])
         | TypeApplication (tycon, ts) ->
             (* Matches kinds of the quantifiers against the type arguments.
@@ -180,7 +174,6 @@ module Desugar = struct
                     }
             end
         | Primitive k -> Types.Primitive k
-        | DB -> Types.Primitive Primitive.DB
   and fieldspec alias_env fs _ =
     match fs with
     | Datatype.Absent -> Types.Absent
@@ -299,34 +292,6 @@ module Desugar = struct
   let type_arg' alias_env ((ta, _) : type_arg') : type_arg' =
     let unlocated = WithPos.make Datatype.Unit in
     (ta, Some (type_arg alias_env ta unlocated))
-
-  (* Desugar a table literal. No free variables are allowed here. We generate both read and write
-     types by looking for readonly constraints *)
-  let table_lit alias_env constraints dt =
-    let read_type =
-      match datatype' alias_env (dt, None) with
-      | _, Some read_type -> read_type
-      | _ -> assert false in
-    let write_row, needed_row =
-      match TypeUtils.concrete_type read_type with
-      | Record (Row (fields, _)) ->
-          StringMap.fold
-            (fun label t (write, needed) ->
-              match lookup label constraints with
-              | Some cs ->
-                  if List.exists (( = ) Readonly) cs then (write, needed)
-                  else
-                    (* if List.exists ((=) `Default) cs then *)
-                    (Types.row_with (label, t) write, needed)
-              | _ ->
-                  let add = Types.row_with (label, t) in
-                  (add write, add needed) )
-            fields
-            (Types.make_empty_closed_row (), Types.make_empty_closed_row ())
-      | _ -> raise (internal_error "Table types must be record types") in
-    (* We deliberately don't concretise the returned read_type in the hope of improving error
-       messages during type inference. *)
-    (read_type, Record write_row, Record needed_row)
 end
 
 (** Convert a syntactic type into a semantic type, using `map' to resolve free type variables *)
@@ -353,26 +318,6 @@ object (self)
              to the outer scope; any aliases bound in _o are
              unreachable from outside the block *)
           self, Block (bs, p)
-    | TableLit {
-        tbl_name;
-        tbl_type = (tmp, dt, _);
-        tbl_field_constraints = cs;
-        tbl_keys;
-        tbl_temporal_fields; tbl_database } ->
-
-        let read, write, needed = Desugar.table_lit alias_env cs dt in
-        let o, tbl_name = self#phrase tbl_name in
-        let o, tbl_keys = o#phrase tbl_keys in
-        let o, tbl_database = o#phrase tbl_database in
-        let lit = TableLit {
-            tbl_name;
-            tbl_type = (tmp, dt, Some (read, write, needed));
-            tbl_field_constraints = cs;
-            tbl_keys; tbl_temporal_fields; tbl_database }
-        in
-          o, lit
-    (* Switch and receive type annotations are never filled in by
-       this point, so we ignore them.  *)
     | p -> super#phrasenode p
 
 

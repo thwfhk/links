@@ -98,6 +98,10 @@ Issue 1126 (3)
 forever <= parseDate("2022-08-04 12:03:12")
 stdout : false : Bool
 
+Filter and order records by date
+for (event <- [(name="later", starts=intToDate(2)), (name="earlier", starts=intToDate(1)), (name="past", starts=intToDate(0))]) where (event.starts > intToDate(0)) orderby (event.starts) [event.name]
+stdout : ["earlier", "later"] : [String]
+
 Date parser roundtrips
 var bday = parseDate("1992-04-24 06:00:00+0"); bday == parseDate(show(bday))
 stdout : true : Bool

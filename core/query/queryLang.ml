@@ -134,7 +134,6 @@ let default_of_base_type =
     | Primitive.Float    -> Constant (Constant.Float 0.0)
     | Primitive.String   -> Constant (Constant.String "")
     | Primitive.DateTime -> Constant (Constant.DateTime.now())
-    | _                  -> assert false
 
 let rec value_of_expression = fun v ->
   let ve = value_of_expression in

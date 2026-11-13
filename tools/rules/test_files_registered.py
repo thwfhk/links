@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 
-import glob, json, os, re, sys
+import glob, os, re, sys
 
 TEST_DIR="tests"
 
 # The following files are excluded from being tested,
 # because they are not entry points to some test
 BLACKLIST = {
-  "tests/database/grouping-create.links",
-  "tests/database/grouping.links",
   "tests/empty_prelude.links",
   "tests/freezeml_prelude.links",
   "tests/presence_type_arg_typename.links",
@@ -74,22 +72,6 @@ for test_file in glob.glob(os.path.join(TEST_DIR, "**", "*.tests"), recursive=Tr
                 if normed in links_files:
                     links_files.remove(normed)
             prev_line = line
-
-
-#Iterate testsuite.config files, containing paths (relative from their location) to database tests
-for testsuite_file in glob.glob(os.path.join(TEST_DIR, "**", "testsuite.json"), recursive=True):
-    path_dir = os.path.dirname(testsuite_file)
-
-    with open(testsuite_file, "r") as f:
-        config = json.load(f)
-        for line in config['tests']:
-            path_file = line.strip() + ".links"
-
-            combined_path = os.path.join(path_dir,path_file)
-            normed = normed = os.path.normpath(combined_path)
-            if normed in links_files:
-                    links_files.remove(normed)
-
 
 
 #Those .links files remaining in test_files are the ones we haven't found a .tests file for

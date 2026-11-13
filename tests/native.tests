@@ -94,10 +94,6 @@ Angle brackets still work inside a regular expression
 "<tag>" =~ /<tag>/
 stdout : true : Bool
 
-Database generator still accepts a left arrow
-fun f(t) { query { for (x <-- t) [(a=x.a)] } } ()
-stdout : () : ()
-
 Session kind is rejected
 sig f : forall s::Session. (s) -> s fun f(x) { x }
 stderr : @.*Invalid kind: Session.*
@@ -225,4 +221,78 @@ stderr : @.*Unknown setting 'relational_lenses'.*
 
 Former lens keywords are identifiers
 var lens = 40; var lensget = 2; lens + lensget
+stdout : 42 : Int
+
+Database declaration is rejected
+database "example"
+stderr : @.*Parse error:.*
+exit : 1
+
+Table expression is rejected
+fun f(db) { table "t" with (id:Int) from db } ()
+stderr : @.*Parse error:.*
+exit : 1
+
+Query block is rejected
+query { [1] }
+stderr : @.*Parse error:.*
+exit : 1
+
+Table generator is rejected
+fun f(t) { for (x <-- t) [x] } ()
+stderr : @.*Parse error:.*
+exit : 1
+
+Temporal table generator is rejected
+fun f(t) { for (x <-v- t) [x] } ()
+stderr : @.*Parse error:.*
+exit : 1
+
+Transaction-time table generator is rejected
+fun f(t) { for (x <-t- t) [x] } ()
+stderr : @.*Parse error:.*
+exit : 1
+
+Temporal join block is rejected
+vt_join { [] }
+stderr : @.*Parse error:.*
+exit : 1
+
+Database insert is rejected
+fun f(t) { insert t values (id) [(id=1)] } ()
+stderr : @.*Parse error:.*
+exit : 1
+
+Database update is rejected
+fun f(t) { update (x <-- t) set (id=1) } ()
+stderr : @.*Parse error:.*
+exit : 1
+
+Database delete is rejected
+fun f(t) { delete (x <-- t) where (x.id == 1) } ()
+stderr : @.*Parse error:.*
+exit : 1
+
+Database type is unavailable
+sig f : (Database) -> () fun f(_) { () }
+stderr : @.*Unbound type constructor Database.*
+exit : 1
+
+Table type is unavailable
+sig f : (TemporalTable(Current,(id:Int),(id:Int),(id:Int))) -> () fun f(_) { () }
+stderr : @.*Unbound type constructor TemporalTable.*
+exit : 1
+
+Temporal data type is unavailable
+sig f : (ValidTime((id:Int))) -> () fun f(_) { () }
+stderr : @.*Unbound type constructor ValidTime.*
+exit : 1
+
+Table conversion helper is unavailable
+asList([])
+stderr : @.*Unknown variable asList\..*
+exit : 1
+
+Former database keywords are identifiers
+var table = 40; var query = 2; table + query
 stdout : 42 : Int

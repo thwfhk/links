@@ -1,6 +1,6 @@
-Row types
-fun (tbl) { for (x <-- tbl) where (x.id == 42) [x] }
-stdout : fun : (TemporalTable(Current,(id:Int|a::Base),(|_::Base),(|_::Base))) {}-> [(id:Int|a::Base)]
+Base row types
+fun (rows : [(id:Int|r::Base)]) { for (x <- rows) where (x.id == 42) [x] }
+stdout : fun : ([(id:Int|a::Base)]) -> [(id:Int|a::Base)]
 
 Onetuple with unit
 (1=())

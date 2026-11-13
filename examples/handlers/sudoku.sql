@@ -1,4 +1,0 @@
-CREATE TABLE sudoku (
-  id   SERIAL PRIMARY KEY,
-  grid VARCHAR(81) NOT NULL
-);

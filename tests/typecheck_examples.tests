@@ -7,18 +7,6 @@ examples/church.links
 filemode : true
 ignore : broken example
 
-Typecheck example file examples/dictionary/dictSuggest.links
-examples/dictionary/dictSuggest.links
-filemode : true
-
-Typecheck example file examples/dictionary/dictSuggestLite.links
-examples/dictionary/dictSuggestLite.links
-filemode : true
-
-Typecheck example file examples/dictionary/dictSuggestUpdate.links
-examples/dictionary/dictSuggestUpdate.links
-filemode : true
-
 Typecheck example file examples/extensible-case.links
 examples/extensible-case.links
 filemode : true
@@ -149,14 +137,6 @@ Typecheck example file examples/handlers/u2_puzzle.links
 examples/handlers/u2_puzzle.links
 filemode : true
 
-Typecheck example file examples/initialise-list.links
-examples/initialise-list.links
-filemode : true
-
-Typecheck example file examples/insert-factorials.links
-examples/insert-factorials.links
-filemode : true
-
 Typecheck example file examples/mandelcolor.links
 examples/mandelcolor.links
 filemode : true
@@ -164,30 +144,6 @@ filemode : true
 Typecheck example file examples/paginate.links
 examples/paginate.links
 filemode : true
-
-Typecheck example file examples/progressiveQuery.links
-examples/progressiveQuery.links
-filemode : true
-
-Typecheck example file examples/shredding.links
-examples/shredding.links
-filemode : true
-ignore : broken example
-
-Typecheck example file examples/shredding2.links
-examples/shredding2.links
-filemode : true
-ignore : broken example
-
-Typecheck example file examples/shredding3.links
-examples/shredding3.links
-filemode : true
-ignore : broken example
-
-Typecheck example file examples/shredding4.links
-examples/shredding4.links
-filemode : true
-ignore : broken example
 
 Typecheck example file examples/TicTacToe-Console.links
 examples/TicTacToe-Console.links

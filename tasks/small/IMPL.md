@@ -113,13 +113,14 @@ signatures; the `gen` helpers use effect upcasts.
    library, `Serial` and `isNew` from the prelude, and the statistics
    primitives. Lens keywords such as `lens` and `lensget` become
    ordinary identifiers. The table and query paths still build in 3.1.
-6. **3.2–3.3.** Remove query constructs across parsing, inference, IR and
-   evaluation before deleting `core/query/` and the remaining database
-   modules. Remove the
-   `sparql` primitive before dropping RDF. Keep the list cases in
-   [`DesugarFors`](../../core/desugarFors.ml), including `sortByBase`
-   and the `Base` row restriction used by list `orderby`. Ordinary
-   date/time values still need `calendar`.
+6. **3.2.** Remove database declarations, tables, query blocks, database
+   updates and temporal syntax from the source language and IR. A list
+   generator now holds a pattern and source expression. Keep
+   `sortByBase` in [`DesugarFors`](../../core/desugarFors.ml) and the
+   `Base` restriction used by `orderby`. The lexer treats `<-t-` and
+   `<-v-` as whole operators so they cannot start a list generator.
+   The old query modules still build after dropping their references
+   to the deleted IR constructors. Remove those modules in 3.3.
 
 ## Preserve inference as features go
 

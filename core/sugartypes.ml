@@ -187,9 +187,6 @@ end
 let rigidify (name, kind, _) = (name, kind, `Rigid)
 
 
-type fieldconstraint = Readonly | Default
-    [@@deriving show]
-
 module Datatype = struct
   type t =
     | TypeVar         of SugarTypeVar.t
@@ -204,11 +201,9 @@ module Datatype = struct
     | Variant         of row
     | Effect          of row
     | Operation       of with_pos list * with_pos * DeclaredLinearity.t
-    | Table           of Temporality.t * with_pos * with_pos * with_pos
     | List            of with_pos
     | TypeApplication of string * type_arg list
     | Primitive       of Primitive.t
-    | DB
   and with_pos = t WithPos.t
   and row = (string * fieldspec) list * row_var
   and row_var =
@@ -302,46 +297,7 @@ and handler_parameterisation =
   { shp_bindings : (Pattern.with_pos * phrase) list
   ; shp_types    : Types.datatype list
   }
-and table_lit = {
-    tbl_name: phrase;
-    tbl_type:
-        (Temporality.t * Datatype.with_pos * (Types.datatype *
-         Types.datatype * Types.datatype) option);
-    tbl_field_constraints: (Name.t * fieldconstraint list) list;
-    tbl_keys: phrase;
-    tbl_temporal_fields: (string * string) option;
-    tbl_database: phrase
-}
-and iterpatt =
-  | List  of Pattern.with_pos * phrase
-  | Table of Temporality.t * Pattern.with_pos * phrase
-and valid_time_update =
-  (* Update current row, terminating previous end period and creating new row *)
-  | CurrentUpdate
-  (* Update between two times *)
-  | SequencedUpdate of { validity_from: phrase; validity_to: phrase }
-  (* Update with direct access to to- and from- fields, potentially setting the to
-     and from fields directly (from_time, to_time) *)
-  | NonsequencedUpdate of { from_time: phrase option; to_time: phrase option }
-and temporal_update =
-  | ValidTimeUpdate of valid_time_update
-  | TransactionTimeUpdate
-and valid_time_deletion =
-  (* Remove current row by terminating end-period *)
-  | CurrentDeletion
-  (* Delete within a range, potentially creating multiple rows *)
-  | SequencedDeletion of { validity_from: phrase; validity_to: phrase }
-  (* Give direct access to to- and from- fields *)
-  | NonsequencedDeletion
-and temporal_deletion =
-  | ValidTimeDeletion of valid_time_deletion
-  | TransactionTimeDeletion
-and valid_time_insertion =
-  | CurrentInsertion
-  | SequencedInsertion
-and temporal_insertion =
-  | ValidTimeInsertion of valid_time_insertion
-  | TransactionTimeInsertion
+and iterpatt = Pattern.with_pos * phrase
 and phrasenode =
   | Constant         of Constant.t
   | Var              of Name.t
@@ -349,8 +305,6 @@ and phrasenode =
   | QualifiedVar     of Name.t list
   | FunLit           of ((Types.datatype * Types.row) list) option *
                           DeclaredLinearity.t * funlit * Location.t
-  | Query            of (phrase * phrase) option * QueryPolicy.t * phrase *
-                          Types.datatype option
   | RangeLit         of phrase * phrase
   | ListLit          of phrase list * Types.datatype option
   | Iteration        of iterpatt list * phrase
@@ -383,13 +337,6 @@ and phrasenode =
   | Linlet           of phrase
   | Switch           of phrase * (Pattern.with_pos * phrase) list *
                           Types.datatype option
-  | DatabaseLit      of phrase * (phrase option * phrase option)
-  | TableLit         of table_lit
-  | DBDelete         of temporal_deletion option * Pattern.with_pos * phrase * phrase option
-  | DBInsert         of temporal_insertion option * phrase * Name.t list * phrase * phrase option
-  | DBUpdate         of temporal_update option * Pattern.with_pos * phrase *
-                          phrase option * (Name.t * phrase) list
-  | DBTemporalJoin   of Temporality.t * phrase * Types.datatype option
 and phrase = phrasenode WithPos.t
 and bindingnode =
   | Val     of Pattern.with_pos * (SugarQuantifier.t list * phrase) * Location.t *
@@ -529,10 +476,6 @@ struct
     | ListLit (ps, _)
     | TupleLit ps -> union_map phrase ps
 
-    | Query (None, _, p, _) -> phrase p
-    | Query (Some (limit, offset), _, p, _) ->
-       union_all [phrase limit; phrase offset; phrase p]
-
     | Escape (v, p) -> diff (phrase p) (singleton (Binder.to_name v))
     | Conditional (p1, p2, p3) -> union_map phrase [p1;p2;p3]
     | Block b -> block b
@@ -550,20 +493,10 @@ struct
         union (union_map (snd ->- phrase) fields)
           (phrase p)
     | ConstructorLit (_, popt, _) -> option_map phrase popt
-    | DatabaseLit (p, (popt1, popt2)) ->
-        union_all [phrase p; option_map phrase popt1; option_map phrase popt2]
-    | DBInsert (_, p1, _labels, p2, popt) ->
-        union_all [phrase p1; phrase p2; option_map phrase popt]
-    | TableLit { tbl_name; tbl_database; _ } ->
-        union (phrase tbl_name) (phrase tbl_database)
     | FunLit (_, _, fnlit, _) -> funlit fnlit
     | Iteration (generators, body, where, orderby) ->
-        let xs = union_map (function
-                             | List (_, source)
-                             | Table (_, _, source) -> phrase source) generators in
-        let pat_bound = union_map (function
-                                  | List (pat, _)
-                                  | Table (_, pat, _) -> pattern pat) generators in
+        let xs = union_map (snd ->- phrase) generators in
+        let pat_bound = union_map (fst ->- pattern) generators in
           union_all [xs;
                      diff (phrase body) pat_bound;
                      diff (option_map phrase where) pat_bound;
@@ -582,38 +515,6 @@ struct
                                                     params.shp_bindings)
                           descr.shd_params) params_bound]
     | Switch (p, cases, _) -> union (phrase p) (union_map case cases)
-    | DBDelete (del, pat, p, where) ->
-        let del =
-          match del with
-            | Some (ValidTimeDeletion (SequencedDeletion { validity_from; validity_to })) ->
-                (* Note: validity periods cannot refer to the pattern. *)
-                union (phrase validity_from) (phrase validity_to)
-            | _ -> empty
-        in
-        union del
-          (union (phrase p)
-             (diff (option_map phrase where)
-               (pattern pat)))
-    | DBUpdate (upd, pat, from, where, fields) ->
-        let upd =
-          match upd with
-            | Some (ValidTimeUpdate (SequencedUpdate { validity_from; validity_to })) ->
-                union (phrase validity_from) (phrase validity_to)
-            | Some (ValidTimeUpdate (NonsequencedUpdate { from_time; to_time })) ->
-                (* Nonsequenced updates *can* refer to the pattern, however. *)
-                (diff
-                  (union
-                    (option_map phrase from_time)
-                    (option_map phrase to_time))
-                  (pattern pat))
-            | _ -> empty
-        in
-        let pat_bound = pattern pat in
-        union_all [upd;
-                     phrase from;
-                     diff (option_map phrase where) pat_bound;
-                     diff (union_map (snd ->- phrase) fields) pat_bound]
-    | DBTemporalJoin (_, p, _) -> phrase p
     | DoOperation (_, ps, _, _) -> union_map phrase ps
     | Operation _ -> empty
     | QualifiedVar _ -> empty

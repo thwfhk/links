@@ -1,8 +1,7 @@
 (*
   The lexer stack lets a regular expression contain Links expressions.
   On encountering '{', the lexer pushes a Links lexer. On encountering
-  '}', it pops that lexer and resumes the previous one. The stack also
-  holds the lexers for database qualifiers.
+  '}', it pops that lexer and resumes the previous one.
 *)
 
 {
@@ -34,10 +33,7 @@ let bump_lines lexbuf n =
 
 let keywords = [
  "as"       , AS;
- "between"  , BETWEEN;
  "case"     , CASE;
- "database" , DATABASE;
- "default"  , DEFAULT;
  "do"       , DOOP;
  "lindo"      , LINDOOP;
  "effectname", EFFECTNAME;
@@ -46,13 +42,11 @@ let keywords = [
  "false"    , FALSE;
  "for"      , FOR;
  "forall"   , FORALL;
- "from"     , FROM;
  "fun"      , FUN;
  "handle"   , HANDLE;
  "if"       , IF;
  "in"       , IN;
  "import"   , IMPORT;
- "insert"   , INSERT;
  "linfun"   , LINFUN;
  "module"   , MODULE;
  "mu"       , MU;
@@ -60,31 +54,15 @@ let keywords = [
  "orderby"  , ORDERBY;
  "op"       , OP;
  "open"     , OPEN;
- "query"    , QUERY;
- "readonly" , READONLY;
- "returning", RETURNING;
- "set"      , SET;
  "shallowhandle", SHALLOWHANDLE;
  "sig"      , SIG;
  "switch"   , SWITCH;
- "table"    , TABLE;
- "TemporalTable", TEMPORALTABLE;
- "to"       , TO;
  "true"     , TRUE;
- "tt_insert" , TTINSERT;
- "tt_join"   , TTJOIN;
  "typename" , TYPENAME;
  "unsafe"   , UNSAFE;
- "using"    , USING;
- "valid"    , VALID;
- "values"   , VALUES;
- "vt_join"  , VTJOIN;
  "var"      , VAR;
- "vt_insert", VTINSERT;
  "where"    , WHERE;
  "with"     , WITH;
-(* SAND *)
- "tablekeys"     , TABLEKEYS;
  (* Control-flow linearity *)
  "xlin"     , LINFLAG
 ]
@@ -137,9 +115,7 @@ rule lex ctxt nl = parse
   | ')'                                 { RPAREN }
   | '{'                                 { ctxt#push_lexer (lex ctxt nl); LBRACE }
   | '}'                                 { ctxt#pop_lexer (* fall back *); RBRACE }
-  | "<--"                               { LLARROW }
-  | "<-t-"                              { LTLARROW }
-  | "<-v-"                              { LVLARROW }
+  | ("<-t-" | "<-v-") as op              { OPERATOR op }
   | "<-"                                { LARROW }
   | "[|"                                { LBRACKETBAR }
   | "|]"                                { BARRBRACKET }
@@ -178,34 +154,11 @@ rule lex ctxt nl = parse
   | "postfix"                           { FIXITY Associativity.Left }
   | "~fun"                              { FROZEN_FUN }
   | "~linfun"                           { FROZEN_LINFUN }
-  | "update"                            { ctxt#push_lexer (upd_qual ctxt nl); UPDATE }
-  | "vt_insert"                         { ctxt#push_lexer (ins_qual ctxt nl); VTINSERT }
-  | "tt_insert"                         { ctxt#push_lexer (ins_qual ctxt nl); TTINSERT }
-  | "delete"                            { ctxt#push_lexer (upd_qual ctxt nl); DELETE }
   | def_id as var                       { try List.assoc var keywords
                                           with Not_found | NotFound _ ->
                                             if Char.isUpper var.[0] then CONSTRUCTOR var
                                             else VARIABLE var }
   | def_blank                           { lex ctxt nl lexbuf }
-  | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
-and upd_qual ctxt nl = parse
-  | def_blank                           { upd_qual ctxt nl lexbuf }
-  | '\n'                                { nl (); bump_lines lexbuf 1; upd_qual ctxt nl lexbuf }
-  | '('                                 { (* Switch back -- current update *) ctxt#pop_lexer; LPAREN }
-  | "sequenced"                         { ctxt#pop_lexer; SEQUENCED }
-  | "nonsequenced"                      { ctxt#pop_lexer; NONSEQUENCED }
-  | "current"                           { ctxt#pop_lexer; CURRENT }
-  | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
-and ins_qual ctxt nl = parse
-  | def_blank                           { ins_qual ctxt nl lexbuf }
-  | '\n'                                { nl (); bump_lines lexbuf 1; ins_qual ctxt nl lexbuf }
-  | "sequenced"                         { ctxt#pop_lexer; SEQUENCED }
-  | "current"                           { ctxt#pop_lexer; CURRENT }
-  | def_id as var                       { ctxt#pop_lexer;
-                                          try List.assoc var keywords
-                                          with Not_found | NotFound _ ->
-                                            if Char.isUpper var.[0] then CONSTRUCTOR var
-                                            else VARIABLE var }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
 and regex' ctxt nl = parse
   | eof                                 { EOF }

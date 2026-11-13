@@ -65,7 +65,6 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
               from_gens @ effect_gens @ to_gens
         | Record row
         | Variant row -> get_row_type_args kind bound_vars row
-        | Table (_, r, w, n) -> gt r @ gt w @ gt n
         | ForAll (qs, t) ->
            get_type_args kind (TypeVarSet.add_quantifiers qs bound_vars) t
         (* Effect *)

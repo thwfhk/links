@@ -54,15 +54,6 @@ let rec project_type ?(overstep_quantifiers=true) name t = match (concrete_type 
   | (Record row, _) ->
       let t, _ = split_row name row in
         t
-  | (Application (absty, [PrimaryKind.Type, typ]), _) when
-      (Abstype.name absty) = "TransactionTime" || (Abstype.name absty = "ValidTime") ->
-        if name = TemporalField.data_field then typ
-        else if
-          name = TemporalField.from_field ||
-          name = TemporalField.to_field then
-          Primitive (Primitive.DateTime)
-        else
-          error ("Trying to project " ^ name ^ " from temporal metadata: " ^ string_of_datatype t)
   | (t, _) ->
       error ("Attempt to project non-record type "^string_of_datatype t)
 
@@ -150,24 +141,6 @@ let rec element_type ?(overstep_quantifiers=true) t = match (concrete_type t, ov
   | (t, _) ->
       error ("Attempt to take element type of non-list: " ^ string_of_datatype t)
 
-let rec table_read_type t = match concrete_type t with
-  | ForAll (_, t) -> table_read_type t
-  | Table (_, r, _, _) -> r
-  | t ->
-      error ("Attempt to take read type of non-table: " ^ string_of_datatype t)
-
-let rec table_write_type t = match concrete_type t with
-  | ForAll (_, t) -> table_write_type t
-  | Table (_, _, w, _) -> w
-  | t ->
-      error ("Attempt to take write type of non-table: " ^ string_of_datatype t)
-
-let rec table_needed_type t = match concrete_type t with
-  | ForAll (_, t) -> table_needed_type t
-  | Table (_, _, _, n) -> n
-  | t ->
-      error ("Attempt to take needed type of non-table: " ^ string_of_datatype t)
-
 let inject_type name t =
   Variant (make_singleton_open_row (name, Present t) (lin_any, res_any))
 
@@ -222,7 +195,6 @@ let rec primary_kind_of_type t =
   | Lolli _
   | Record _
   | Variant _
-  | Table _
   | ForAll _
   | Application _
   | RecursiveApplication _
@@ -315,9 +287,6 @@ let check_type_wellformedness primary_kind t : unit =
     | Record row
     | Variant row ->
        irow row;
-       pk_type
-    | Table (_, f, d, r) ->
-       idatatype f; idatatype d; idatatype r;
        pk_type
     | ForAll (_qs, t) ->
        idatatype t;

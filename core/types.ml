@@ -69,18 +69,6 @@ let socket = {
   arity = []
 }
 
-let transaction_time_data = {
-  Abstype.id = "TransactionTime";
-  name       = "TransactionTime";
-  arity      = [pk_type, (lin_any, res_any)]
-}
-
-let valid_time_data = {
-  Abstype.id = "ValidTime";
-  name       = "ValidTime";
-  arity      = [pk_type, (lin_any, res_any)]
-}
-
 (* Not a real type!
  * Used when a type is needed, but none is known.
  * You need to make sure any code using this type will not be executed. *)
@@ -138,7 +126,6 @@ and typ =
   | Lolli of (typ * row * typ)
   | Record of row
   | Variant of row
-  | Table of (Temporality.t * typ * typ * typ)
   | ForAll of (Quantifier.t list * typ)
   (* Effect *)
   | Effect of row
@@ -346,11 +333,6 @@ struct
       | Variant row ->
          let (o, row') = o#row row in
          (o, Variant row')
-      | Table (temporality, read, write, needed) ->
-         let (o, read') = o#typ read in
-         let (o, write') = o#typ write in
-         let (o, needed') = o#typ needed in
-         (o, Table (temporality, read', write', needed'))
       | ForAll (names, body) ->
          let (o, names') = o#list (fun o -> o#quantifier) names in
          let (o, body') = o#typ body in
@@ -546,7 +528,6 @@ class virtual type_predicate = object(self)
     | Primitive _ -> true
     | Function (a, e, r) | Lolli (a, e, r) -> self#type_satisfies vars a && self#row_satisfies vars e && self#type_satisfies vars r
     | Record r | Effect r | Variant r -> self#row_satisfies vars r
-    | Table _ -> true
     | ForAll (qs, t) -> self#type_satisfies (rec_appl, rec_vars, TypeVarSet.add_quantifiers qs quant_vars) t
     | Row (fields, row_var) ->
        let row_var = self#point_satisfies self#row_satisfies vars row_var in
@@ -609,7 +590,6 @@ class virtual type_iter = object(self)
     | Function (a, e, r) | Lolli (a, e, r) ->
        self#visit_type vars a; self#visit_row vars e; self#visit_type vars r
     | Record r | Variant r -> self#visit_row vars r
-    | Table _ -> ()
     | ForAll (qs, t) ->
        self#visit_type (rec_appl, rec_vars, TypeVarSet.add_quantifiers qs quant_vars) t
     (* Effect *)
@@ -683,7 +663,6 @@ let make_restriction_transform ?(ensure=false) subkind =
 
 module Base : Constraint = struct
   open Restriction
-  open Primitive
 
   module BasePredicate = struct
     class klass = object
@@ -703,9 +682,8 @@ module Base : Constraint = struct
         | (Application _ | RecursiveApplication _) -> false
         | Meta _ as t  -> super#type_satisfies vars t
         (* Type *)
-        | Primitive (Bool | Int | Char | Float | String | DateTime) -> true
-        | Primitive _ -> false
-        | (Function _ | Lolli _ | Record _ | Variant _ | Table _ | ForAll (_::_, _)) -> false
+        | Primitive _ -> true
+        | (Function _ | Lolli _ | Record _ | Variant _ | ForAll (_::_, _)) -> false
         | ForAll ([], t) -> super#type_satisfies vars t
         (* Effect *)
         | Effect _ as t -> super#type_satisfies vars t
@@ -751,7 +729,6 @@ module Unl : Constraint = struct
       | Primitive _ | Function _ -> true
       | Lolli _ -> false
       | (Record _ | Variant _) as t -> super#type_satisfies vars t
-      | Table _ -> true
       | ForAll _ as t -> super#type_satisfies vars t
       (* Effect *)
       | Effect _  -> true
@@ -802,7 +779,6 @@ module Unl : Constraint = struct
        | Function _ -> ()
        | Lolli _ -> assert false
        | (Record _ | Variant _) as t -> super#visit_type vars t
-       | Table _ -> ()
        | ForAll _ as t -> super#visit_type vars t
        (* Effect *)
        | Effect _ -> ()
@@ -1057,9 +1033,6 @@ let free_type_vars, free_row_type_vars, free_tyarg_vars =
     | Effect row | Record row | Variant row -> free_row_type_vars' rec_vars row
     | Operation (f, t, _) ->
        S.union_all [free_type_vars' rec_vars f; free_type_vars' rec_vars t]
-    | Table (_, r, w, n)         ->
-       S.union_all
-         [free_type_vars' rec_vars r; free_type_vars' rec_vars w; free_type_vars' rec_vars n]
     | Alias (_, (_, _, ts), datatype) ->
        S.union (S.union_all (List.map (free_tyarg_vars' rec_vars) ts)) (free_type_vars' rec_vars datatype)
     | Application (_, tyargs) -> S.union_all (List.map (free_tyarg_vars' rec_vars) tyargs)
@@ -1311,7 +1284,6 @@ and normalise_datatype rec_names t =
   | Variant row             -> Variant (nr row)
   | Effect row              -> Effect (nr row)
   | Operation (f, t, b)     -> Operation (nt f, nt t, b)
-  | Table (t, r, w, n)      -> Table (t, nt r, nt w, nt n)
   | Alias (k, (name, qs, ts), datatype) ->
      Alias (k, (name, qs, ts), nt datatype)
   | Application (abs, tyargs) ->
@@ -1407,13 +1379,11 @@ let for_all : Quantifier.t list * datatype -> datatype =
 (* useful types *)
 let unit_type     = Record (make_empty_closed_row ())
 let string_type   = Primitive Primitive.String
-let keys_type     = Application (list, [(PrimaryKind.Type, Application (list, [(PrimaryKind.Type, string_type)]))])
 let char_type     = Primitive Primitive.Char
 let bool_type     = Primitive Primitive.Bool
 let int_type      = Primitive Primitive.Int
 let float_type    = Primitive Primitive.Float
 let datetime_type = Primitive Primitive.DateTime
-let database_type = Primitive Primitive.DB
 let wrong_type    = Application (wrong, [])
 (* Empty type, used for exceptions *)
 let empty_type    = Variant (make_empty_closed_row ())
@@ -1589,7 +1559,6 @@ struct
        (fbtv f) @ (free_bound_row_type_vars bound_vars m) @ (fbtv t)
     | Record row
       | Variant row -> free_bound_row_type_vars bound_vars row
-    | Table (_, r, w, n) -> (fbtv r) @ (fbtv w) @ (fbtv n)
     | ForAll (tyvars, body) ->
        let bound_vars, vars =
          List.fold_left
@@ -2291,11 +2260,6 @@ struct
             (if is_tuple ur then string_of_tuple context r
              else "(" ^ row "," context p (Row r) ^ ")")
          | Variant r -> "[|" ^ row "|" context p r ^ "|]"
-         | Table (t, r, w, n)   ->
-            (* TODO: pretty-print this using constraints? *)
-            Printf.sprintf "TemporalTable(%s, %s, %s, %s)"
-                (Temporality.show t)
-                (sd r) (sd w) (sd n)
          | ForAll (tyvars, body) ->
             let bound_vars =
               List.fold_left
@@ -3636,15 +3600,6 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           StringBuffer.write buf ".";
           Printer.apply datatype inner_ctx tp buf)
 
-  and table : (Temporality.t * typ * typ * typ) printer
-    = let open Printer in
-      Printer (fun ctx (t, r, w, n) buf ->
-          let ctx = Context.toplevel ctx in
-          StringBuffer.write buf "TemporalTable(";
-          StringBuffer.write buf (Temporality.show t ^ ",");
-          Printer.concat_items ~sep:"," datatype [ r ;  w ;  n ] ctx buf;
-          StringBuffer.write buf ")")
-
   and datatype : datatype printer
     = let open Printer in
       Printer (fun ctx tp buf ->
@@ -3671,7 +3626,6 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                                     with_ambient ambient func f
             | Lolli f            -> with_ambient Context.ambient_linfun_default   func f
 
-            | Table tab          -> with_value table tab
             | ForAll fa          -> with_value forall fa
 
             | Record _ | Variant _ | Effect _ | Row _
@@ -4001,7 +3955,6 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
     | Lolli (f, m, t)         -> union [make_env boundvars f; make_env boundvars m; make_env boundvars t]
     | Effect row | Record row | Variant row -> make_env boundvars row
     | Operation (f, t, _)     -> union [make_env boundvars f; make_env boundvars t]
-    | Table (_, r, w, n)      -> union [make_env boundvars r; make_env boundvars w; make_env boundvars n]
     | Alias (_, (_, _, ts), d) -> union (List.map (make_env_ta boundvars) ts @ [make_env boundvars d])
     | Application (_, ds)     -> union (List.map (make_env_ta boundvars) ds)
     | RecursiveApplication { r_args ; _ } -> union (List.map (make_env_ta boundvars) r_args)
@@ -4094,7 +4047,6 @@ let is_sub_type, is_sub_row =
           let lrow, _ = unwrap_row row
           and rrow, _ = unwrap_row row' in
             is_sub_row rec_vars (lrow, rrow)
-      | Table _, Table _ -> raise (internal_error "not implemented subtyping on tables yet")
       | Application (labs, _), Application (rabs, _) ->
           (* WARNING:
 
@@ -4220,13 +4172,6 @@ let make_list_type t = Application (list, [PrimaryKind.Type, t])
 let make_mapentry_type t t' =
         Application (mapentry, [PrimaryKind.Type, t; PrimaryKind.Type, t'])
 
-let make_transaction_time_data_type typ =
-  Application (transaction_time_data, [PrimaryKind.Type, typ])
-
-let make_valid_time_data_type typ =
-  Application (valid_time_data, [PrimaryKind.Type, typ])
-
-
 let extend_row_check_duplicates fields row =
   match row with
   | Row (fields', row_var) ->
@@ -4277,17 +4222,6 @@ let make_closed_row : datatype field_env -> row =
 
 let make_record_type ts = Record (make_closed_row ts)
 let make_variant_type ts = Variant (make_closed_row ts)
-
-let make_table_type (t, r, w, n) = Table (t, r, w, n)
-
-(* Alias of more general TemporalTable type *)
-let make_tablehandle_alias (r, w, n) =
-    let kind = (PrimaryKind.Type, (lin_unl, res_any)) in
-    let kinds = List.init 3 (fun _ -> kind) in
-    let tyargs = List.map (fun x -> (PrimaryKind.Type, x)) [r; w; n] in
-    Alias (pk_type, ("TableHandle", kinds, tyargs),
-        Table (Temporality.current, r, w, n))
-
 
 let make_function_type : ?linear:bool -> datatype list -> row -> datatype -> datatype
   = fun ?(linear=false) args effs range ->

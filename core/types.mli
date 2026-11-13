@@ -87,8 +87,6 @@ end
 val list         : Abstype.t
 val mapentry     : Abstype.t
 val socket       : Abstype.t
-val transaction_time_data : Abstype.t
-val valid_time_data : Abstype.t
 
 (* Type groups *)
 
@@ -134,7 +132,6 @@ and typ =
   | Lolli of (typ * row * typ)
   | Record of row
   | Variant of row
-  | Table of (Temporality.t * typ * typ * typ)
   | ForAll of (Quantifier.t list * typ)
   (* Effect *)
   | Effect of row
@@ -219,13 +216,11 @@ val for_all : Quantifier.t list * datatype -> datatype
 (** useful types *)
 val unit_type : datatype
 val string_type : datatype
-val keys_type : datatype
 val char_type : datatype
 val bool_type : datatype
 val int_type : datatype
 val float_type : datatype
 val datetime_type : datatype
-val database_type : datatype
 val empty_type : datatype
 val wrong_type : datatype
 val wild : Label.t
@@ -358,10 +353,6 @@ val make_list_type : datatype -> datatype
 val make_mapentry_type : datatype -> datatype -> datatype
 val make_record_type  : datatype field_env -> datatype
 val make_variant_type : datatype field_env -> datatype
-val make_table_type : Temporality.t * datatype * datatype * datatype -> datatype
-val make_tablehandle_alias : datatype * datatype * datatype -> datatype
-val make_transaction_time_data_type : datatype -> datatype
-val make_valid_time_data_type : datatype -> datatype
 
 (** subtyping *)
 val is_sub_type : datatype * datatype -> bool

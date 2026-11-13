@@ -117,7 +117,6 @@ sig
 
   val comp : env -> (CompilePatterns.Pattern.t * value sem * tail_computation sem) -> tail_computation sem
 
-  val temporal_join : Temporality.t * tail_computation sem -> tail_computation sem
 
   val letvar : (var_info * tail_computation sem * tyvar list *
                (var -> tail_computation sem)) -> tail_computation sem
@@ -128,24 +127,6 @@ sig
   val update : value sem * (Name.t * value sem) list -> value sem
 
   val coerce : value sem * datatype -> value sem
-
-  val query : (value sem * value sem) option * QueryPolicy.t * tail_computation sem -> tail_computation sem
-
-  val db_insert : env -> (temporal_insertion option * value sem * value sem) -> tail_computation sem
-  val db_insert_returning : env -> (temporal_insertion option * value sem * value sem * value sem) -> tail_computation sem
-  val db_update : env ->
-    ([   `TransactionUpdate | `ValidCurrentUpdate
-       | `ValidSequencedUpdate of (value sem * value sem)
-       | `ValidNonsequencedUpdate of (tail_computation sem option * tail_computation sem option)] option *
-     CompilePatterns.Pattern.t *
-     value sem *
-     tail_computation sem option *
-     tail_computation sem) -> tail_computation sem
-
-  val db_delete : env -> (
-    [   `TransactionDelete | `ValidCurrentDelete
-      | `ValidSequencedDelete of (value sem * value sem) | `ValidNonsequencedDelete ] option *
-    CompilePatterns.Pattern.t * value sem * tail_computation sem option) -> tail_computation sem
 
   val do_operation : Name.t * (value sem) list * Types.datatype -> tail_computation sem
 
@@ -165,10 +146,6 @@ sig
   (*   tail_computation sem *)
   val case_zero : value sem * datatype -> tail_computation sem
 
-
-  val database : value sem -> tail_computation sem
-
-  val table_handle : value sem * value sem * value sem * (Temporality.t * datatype * datatype * datatype) * (string * string) option -> tail_computation sem
 
   val wrong : datatype -> tail_computation sem
 
@@ -426,128 +403,13 @@ struct
     bind s (fun v ->
               lift (Case (v, StringMap.empty, None), t))
 
-  let database s =
-    bind s (fun v -> lift (Special (Database v), Types.Primitive Primitive.DB))
-
-  let table_handle (database, table, keys, (tmp, r, w, n), temporal_fields) =
-    bind database
-      (fun database ->
-         bind table
-           (fun table ->
-         bind keys
-        (fun keys ->
-            let tbl = {
-                database; table; keys;
-                table_type = (tmp, r, w, n);
-                temporal_fields
-            } in
-            lift (Special (Table tbl),
-                               Types.Table (tmp, r, w, n)))))
-
   let wrong t = lift (Special (Wrong t), t)
-
-  let db_insert _env (tmp, source, rows) =
-    bind source
-      (fun source ->
-        bind rows
-          (fun rows ->
-            lift (Special (InsertRows (tmp, source, rows)), Types.unit_type)))
-
-  let db_insert_returning _env (tmp, source, rows, returning) =
-    bind source
-      (fun source ->
-        bind rows
-          (fun rows ->
-            bind returning
-              (fun returning ->
-                lift (Special (InsertReturning (tmp, source, rows, returning)), Types.int_type))))
-
-  let db_update env (upd, p, source, where, body) =
-    let source_type = sem_type source in
-    let xt = TypeUtils.table_read_type source_type in
-    let xb, x = Var.fresh_var_of_type xt in
-    let wrap = CompilePatterns.let_pattern env p (Variable x, xt) in
-      bind source
-        (fun source ->
-          let body_type = sem_type body in
-          let body = wrap (reify body, body_type) in
-          let where = OptionUtils.opt_map
-            (fun where -> wrap (reify where, Types.bool_type)) where in
-          let lift_special upd =
-            lift (Special (Update (upd, (xb, source), where, body)), Types.unit_type) in
-
-          match upd with
-            | None -> lift_special None
-            | Some `TransactionUpdate ->
-                lift_special (Some Ir.TransactionTimeUpdate)
-            | Some `ValidCurrentUpdate ->
-                lift_special (Some (Ir.ValidTimeUpdate (Ir.CurrentUpdate)))
-            | Some (`ValidNonsequencedUpdate (valid_from, valid_to)) ->
-                let valid_from = OptionUtils.opt_map
-                  (fun valid_from -> wrap (reify valid_from, Types.datetime_type)) valid_from in
-                let valid_to = OptionUtils.opt_map
-                  (fun valid_to -> wrap (reify valid_to, Types.datetime_type)) valid_to in
-                lift_special
-                  (Some (Ir.(ValidTimeUpdate (Ir.NonsequencedUpdate {
-                      from_time = valid_from; to_time = valid_to }))))
-            | Some (`ValidSequencedUpdate (validity_from, validity_to)) ->
-                bind validity_from
-                  (fun validity_from ->
-                    bind validity_to
-                      (fun validity_to ->
-                         lift_special
-                           (Some (Ir.(ValidTimeUpdate (SequencedUpdate {
-                               validity_from; validity_to })))))))
-
-  let db_delete env (del, p, source, where) =
-    let source_type = sem_type source in
-    let xt = TypeUtils.table_read_type source_type in
-    let xb, x = Var.fresh_var_of_type xt in
-    let wrap tcomp ty = CompilePatterns.let_pattern env p (Variable x, xt) (reify tcomp, ty) in
-    bind source
-      (fun source ->
-        let lift_special del =
-          match where with
-            | None ->
-                lift (Special (Delete (del, (xb, source), None)), Types.unit_type)
-            | Some where ->
-                let where = wrap where Types.bool_type in
-                    lift (Special (Delete (del, (xb, source), Some where)), Types.unit_type) in
-        match del with
-          | None -> lift_special None
-          | Some `TransactionDelete -> lift_special (Some Ir.TransactionTimeDeletion)
-          | Some `ValidCurrentDelete -> lift_special (Some Ir.(ValidTimeDeletion CurrentDeletion))
-          | Some (`ValidSequencedDelete (validity_from, validity_to)) ->
-              bind validity_from
-                (fun validity_from ->
-                  bind validity_to
-                    (fun validity_to ->
-                       lift_special (Some (Ir.(ValidTimeDeletion (SequencedDeletion {
-                           validity_from; validity_to }))))))
-          | Some `ValidNonsequencedDelete ->
-              lift_special (Some (Ir.(ValidTimeDeletion NonsequencedDeletion))))
-
-  let query (range, policy, s) =
-    let bs, e = reify s in
-      match range with
-        | None ->
-            lift (Special (Query (None, policy, (bs, e), sem_type s)), sem_type s)
-        | Some (limit, offset) ->
-            bind limit
-              (fun limit ->
-                 bind offset
-                   (fun offset ->
-                      lift (Special (Query (Some (limit, offset), policy, (bs, e), sem_type s)), sem_type s)))
 
   let letvar (x_info, s, tyvars, body) =
     bind s
       (fun e ->
          M.bind (comp_binding ~tyvars (x_info, e))
            (fun x -> body x))
-
-  let temporal_join (mode, comp) =
-    let bs, e = reify comp in
-    lift (Special (TemporalJoin (mode, (bs, e), sem_type comp)), sem_type comp)
 
   let comp env (p, s, body) =
     let vt = sem_type s in
@@ -722,16 +584,6 @@ struct
       let ec = eval env in
       let ev = evalv env in
       let evs = List.map ev in
-      let ir_temporal_insert tmp =
-        match tmp with
-          | None -> None
-          | Some (Sugartypes.ValidTimeInsertion Sugartypes.CurrentInsertion) ->
-              Some (Ir.ValidTimeInsertion Ir.CurrentInsertion)
-          | Some (Sugartypes.ValidTimeInsertion Sugartypes.SequencedInsertion) ->
-              Some (Ir.ValidTimeInsertion Ir.SequencedInsertion)
-          | Some (Sugartypes.TransactionTimeInsertion) ->
-              Some Ir.TransactionTimeInsertion
-      in
         let open Sugartypes in
         match e with
           | Constant c -> cofv (I.constant c)
@@ -904,84 +756,7 @@ struct
                   cases
               in
                 I.switch env (ev e, cases, t)
-          | DatabaseLit (name, (None, _)) ->
-              I.database (ev (WithPos.make ~pos (RecordLit ([("name", name)],
-                                          Some (WithPos.make ~pos (FnAppl (WithPos.make ~pos (Var "getDatabaseConfig"), [])))))))
-          | DatabaseLit (name, (Some driver, args)) ->
-              let args =
-                match args with
-                  | None -> WithPos.make ~pos (Sugartypes.Constant (Constant.String ""))
-                  | Some args -> args
-              in
-                I.database
-                  (ev (WithPos.make ~pos (RecordLit ([("name", name); ("driver", driver); ("args", args)], None))))
-          | TableLit {
-              tbl_name; tbl_type = (tmp, _, Some (readtype, writetype, neededtype));
-              tbl_keys; tbl_temporal_fields; tbl_database; _ } ->
-              I.table_handle (ev tbl_database, ev tbl_name, ev tbl_keys,
-                (tmp, readtype, writetype, neededtype), tbl_temporal_fields)
-(*          (name, (_, Some (readtype, writetype, neededtype)), _constraints, keys, db) -> *)
           | Block (bs, e) -> eval_bindings Scope.Local env bs e
-          | Query (range, policy, e, _) ->
-              I.query (opt_map (fun (limit, offset) -> (ev limit, ev offset)) range, policy, ec e)
-          | DBInsert (tmp, source, _fields, rows, None) ->
-              let tmp = ir_temporal_insert tmp in
-              let source = ev source in
-              let rows = ev rows in
-              I.db_insert env (tmp, source, rows)
-          | DBInsert (tmp, source, _fields, rows, Some returning) ->
-              let tmp = ir_temporal_insert tmp in
-              let source = ev source in
-              let rows = ev rows in
-              let returning = ev returning in
-              I.db_insert_returning env (tmp, source, rows, returning)
-          | DBUpdate (upd, p, source, where, fields) ->
-              let p, penv = CompilePatterns.desugar_pattern (lookup_effects env) p in
-              let env' = env ++ penv in
-              let source = ev source in
-              let eval_opt = opt_map (eval env') in
-              let where = eval_opt where in
-              (* We need to do some annoying wrapping / unwrapping here to get the right
-                  info across to db_update *)
-              let upd =
-                opt_map (fun upd ->
-                    match upd with
-                      | Sugartypes.TransactionTimeUpdate -> `TransactionUpdate
-                      | Sugartypes.ValidTimeUpdate CurrentUpdate -> `ValidCurrentUpdate
-                      | Sugartypes.ValidTimeUpdate (SequencedUpdate { validity_from; validity_to }) ->
-                          let validity_from = ev validity_from in
-                          let validity_to = ev validity_to in
-                          `ValidSequencedUpdate (validity_from, validity_to)
-                      | Sugartypes.ValidTimeUpdate (NonsequencedUpdate { from_time; to_time }) ->
-                          let from_time = eval_opt from_time in
-                          let to_time = eval_opt to_time in
-                          `ValidNonsequencedUpdate (from_time, to_time)
-                ) upd
-              in
-              let body = eval env' (WithPos.make ~pos (RecordLit (fields, None))) in
-                I.db_update env (upd, p, source, where, body)
-          | DBDelete (del, p, source, where) ->
-              let p, penv = CompilePatterns.desugar_pattern (lookup_effects env) p in
-              let env' = env ++ penv in
-              let source = ev source in
-              let eval_opt = opt_map (eval env') in
-              let where = eval_opt where in
-              let del =
-                opt_map (fun del ->
-                    match del with
-                      | Sugartypes.TransactionTimeDeletion ->
-                          `TransactionDelete
-                      | Sugartypes.ValidTimeDeletion CurrentDeletion ->
-                          `ValidCurrentDelete
-                      | Sugartypes.ValidTimeDeletion NonsequencedDeletion ->
-                          `ValidNonsequencedDelete
-                      | Sugartypes.ValidTimeDeletion (SequencedDeletion {
-                          validity_from; validity_to }) ->
-                          `ValidSequencedDelete (ev validity_from, ev validity_to)
-                ) del
-              in
-                I.db_delete env (del, p, source, where)
-          | DBTemporalJoin (mode, e, _) -> I.temporal_join (mode, ec e)
                   (* These things should all have been desugared already *)
           | Section (Section.Project _)
           | FreezeSection (Section.Project _)
@@ -994,7 +769,6 @@ struct
           | Upcast _
           | ConstructorLit _
           | Switch _
-          | TableLit _
           | QualifiedVar _
           | DoOperation _
           | Instantiate _ | Generalise _ ->

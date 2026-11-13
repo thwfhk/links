@@ -1,2 +1,0 @@
-Shredding: Nested query results
-===============================

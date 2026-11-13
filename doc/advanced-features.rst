@@ -9,5 +9,4 @@ encouraged to try them out!
   :maxdepth: 2
 
   advanced/effect-handlers.rst
-  advanced/shredding.rst
 

@@ -102,44 +102,14 @@ object (o : 'self_type)
     fun qs ->
       let o, (es, ps, xs, ts) =
         List.fold_left
-          (fun (o, (es, ps, xs, ts)) q ->
-             match q with
-               | List (p, e) ->
-                   let (o, e, t) = o#phrase e in
-                   let (o, p) = o#pattern p in
-
-                   let element_type = TypeUtils.element_type t in
-
-                   let var = Utility.gensym ~prefix:"_for_" () in
-                   let xb = binder ~ty:element_type var in
-                     o, (e::es, with_dummy_pos (Pattern.As (xb, p))::ps,
-                         var::xs, element_type::ts)
-               | Table (tmp, p, e) ->
-                   let (o, e, t) = o#phrase e in
-                   let (o, p) = o#pattern p in
-
-                   let r = TypeUtils.table_read_type   t in
-                   let w = TypeUtils.table_write_type  t in
-                   let n = TypeUtils.table_needed_type t in
-
-                   let open PrimaryKind in
-                   let fn_name, element_type =
-                       let open Temporality in
-                       let element_type = TypeUtils.table_read_type t in
-                       match tmp with
-                         | Current -> "AsList", element_type
-                         | Transaction ->
-                             "AsListT",
-                             Types.make_transaction_time_data_type element_type
-                         | Valid ->
-                             "AsListV",
-                             Types.make_valid_time_data_type element_type
-                   in
-                   let e = fn_appl fn_name [(Type, r); (Type, w); (Type, n)] [e] in
-                   let var = Utility.gensym ~prefix:"_for_" () in
-                   let xb = binder ~ty:element_type var in
-                     o, (e::es, with_dummy_pos (Pattern.As (xb, p))::ps,
-                         var::xs, element_type::ts))
+          (fun (o, (es, ps, xs, ts)) (p, e) ->
+             let (o, e, t) = o#phrase e in
+             let (o, p) = o#pattern p in
+             let element_type = TypeUtils.element_type t in
+             let var = Utility.gensym ~prefix:"_for_" () in
+             let xb = binder ~ty:element_type var in
+             o, (e::es, with_dummy_pos (Pattern.As (xb, p))::ps,
+                 var::xs, element_type::ts))
           (o, ([], [], [], []))
           qs
       in

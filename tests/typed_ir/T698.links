@@ -6,8 +6,8 @@ fun concatMap(f, l) {
   }
 }
 
-
-#The function we are actually interested in
-fun asList(t) {
-  for (x <-- t) [x]
+fun copyList(xs) {
+  for (x <- xs) [x]
 }
+
+copyList([1, 2])

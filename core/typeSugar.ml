@@ -65,8 +65,6 @@ struct
     | Var _
     | FreezeVar _
     | FunLit _
-    | DatabaseLit _
-    | TableLit _
     | Section _
     | FreezeSection _ -> true
 
@@ -98,16 +96,11 @@ struct
     | Iteration _ (* could do a little better in some of these cases *)
     | UnaryAppl _
     | InfixAppl _
-    | Query _
     | FnAppl _
     | Handle _
     | Switch _
     | DoOperation _
-    | Operation _
-    | DBDelete _
-    | DBInsert _
-    | DBTemporalJoin _
-    | DBUpdate _ -> false
+    | Operation _ -> false
   and is_pure_binding ({node ; _ }: binding) = match node with
       (* need to check that pattern matching cannot fail *)
     | Import _
@@ -223,37 +216,8 @@ sig
 
   val list_lit : griper
 
-  val table_name : griper
-  val table_db : griper
-  val table_keys : griper
-
-  val delete_table : griper
-  val delete_pattern : griper
-  val delete_where : griper
-  val delete_outer : griper
-
-  val insert_table : griper
-  val insert_values : griper
-  val sequenced_insert_values : griper
-  val insert_read : griper
-  val insert_write : griper
-  val insert_needed : griper
-  val insert_outer : griper
-
-  val insert_id : griper
-  val update_table : griper
-  val update_pattern : griper
-  val update_where : griper
-  val update_read : griper
-  val update_write : griper
-  val update_needed : griper
-  val update_outer : griper
-
   val range_bound : griper
   val range_wild : griper
-
-  val query_outer : griper
-  val query_base_row : griper
 
   val unary_apply : griper
   val infix_apply : griper
@@ -263,11 +227,8 @@ sig
   val generalise_value_restriction : Position.t -> string -> 'a
 
   val iteration_unl_effect : griper
-  val iteration_ambient_effect : griper
   val iteration_list_body : griper
   val iteration_list_pattern : griper
-  val iteration_table_body : griper
-  val iteration_table_pattern : Temporality.t -> griper
   val iteration_body : griper
   val iteration_where : griper
   val iteration_base_order : griper
@@ -323,12 +284,6 @@ sig
     annotation:Types.datatype ->
     escapees:((string * Types.datatype) list) ->
     unit
-
-  val temporal_join_effects : griper
-  val temporal_join_body : griper
-  val valid_update_pattern : griper
-  val sequenced_update_datetime : griper
-  val nonsequenced_update_datetime : griper
 
 end
   = struct
@@ -613,176 +568,6 @@ end
       build_tyvar_names [snd l; snd r];
       with_but2 pos "All elements of a list literal must have the same type" l r
 
-    let table_name ~pos ~t1:l ~t2:(_,t) ~error:_ =
-      build_tyvar_names [snd l; t];
-      fixed_type pos "Table names" t l
-
-    let table_db ~pos ~t1:l ~t2:(_,t) ~error:_ =
-      build_tyvar_names [snd l; t];
-      fixed_type pos "Databases" t l
-
-    let table_keys ~pos ~t1:l ~t2:(_,t) ~error:_ =
-      build_tyvar_names [snd l; t];
-      fixed_type pos "Database keys" t l
-
-    let delete_table ~pos ~t1:l ~t2:(_,t) ~error:_ =
-      build_tyvar_names [snd l; t];
-      fixed_type pos "Tables" t l
-
-    let delete_where ~pos ~t1:l ~t2:(_,t) ~error:_ =
-      build_tyvar_names [snd l; t];
-      fixed_type pos "Where clauses" t l
-
-    let delete_pattern ~pos ~t1:(lexpr, lt) ~t2:(_,rt) ~error:_ =
-      build_tyvar_names [lt; rt];
-      let ppr_lt = show_type lt in
-      let ppr_rt = show_type rt in
-      die pos ("The binder must match the table in a delete generator, " ^
-               "but the pattern"             ^ nli () ^
-                code lexpr                   ^ nl  () ^
-               "has type"                    ^ nli () ^
-                code ppr_lt                  ^ nl  () ^
-               "while the read row has type" ^ nli () ^
-                code ppr_rt)
-
-    let delete_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      build_tyvar_names [lt; rt];
-      let ppr_rt = show_type rt in
-      let ppr_lt = show_type lt in
-      die pos ("Database deletes are wild"             ^ nli () ^
-                code ppr_rt                            ^ nl  () ^
-               "but the currently allowed effects are" ^ nli () ^
-                code ppr_lt)
-
-    let insert_table ~pos ~t1:l ~t2:(_,t) ~error:_ =
-      build_tyvar_names [snd l; t];
-      fixed_type pos "Tables" t l
-
-
-    let sequenced_insert_values ~pos ~t1:(lexpr, lt) ~t2:(_,rt) ~error:_ =
-      build_tyvar_names [lt; rt];
-      let ppr_lt = show_type lt in
-      let ppr_rt = show_type rt in
-      die pos ("Valid time insertions require values matching the table " ^
-               "in an insert expression, associated with validity periods," ^
-               "but the values"               ^ nli () ^
-                code lexpr                    ^ nl  () ^
-               "have type"                    ^ nli () ^
-                code ppr_lt                   ^ nl  () ^
-               "while values of type"         ^ nli () ^
-                code ppr_rt                   ^ nl  () ^
-               "were expected."               ^ nl  () ^
-                "Hint: try using"             ^ nli () ^
-                "withValidity(x, from, to)")
-
-    let insert_values ~pos ~t1:(lexpr, lt) ~t2:(_,rt) ~error:_ =
-      build_tyvar_names [lt; rt];
-      let ppr_lt = show_type lt in
-      let ppr_rt = show_type rt in
-      die pos ("The values must match the table in an insert expression, " ^
-               "but the values"               ^ nli () ^
-                code lexpr                    ^ nl  () ^
-               "have type"                    ^ nli () ^
-                code ppr_lt                   ^ nl  () ^
-               "while the write row has type" ^ nli () ^
-                code ppr_rt)
-
-    let insert_read ~pos ~t1:(_, lt) ~t2:(_,rt) ~error:_ =
-      build_tyvar_names [lt; rt];
-      let ppr_lt = show_type lt in
-      let ppr_rt = show_type rt in
-      die pos ("The fields must match the table in an insert expression, " ^
-               "but the fields have type"    ^ nli () ^
-                code ppr_lt                  ^ nl  () ^
-               "while the read row has type" ^ nli () ^
-                code ppr_rt)
-
-    let insert_write ~pos ~t1:(_, lt) ~t2:(_,rt) ~error:_ =
-      build_tyvar_names [lt; rt];
-      let ppr_lt = show_type lt in
-      let ppr_rt = show_type rt in
-      die pos ("The fields must match the table in an insert expression, " ^
-               "but the fields have type"     ^ nli () ^
-                code ppr_lt                   ^ nl  () ^
-               "while the write row has type" ^ nli () ^
-                code ppr_rt)
-
-    let insert_needed ~pos ~t1:(_, lt) ~t2:(_,rt) ~error:_ =
-      build_tyvar_names [lt; rt];
-      let ppr_lt = show_type lt in
-      let ppr_rt = show_type rt in
-      die pos ("The fields must match the table in an insert expression, " ^
-               "but the fields have type"      ^ nli () ^
-                code ppr_lt                    ^ nl  () ^
-               "while the needed row has type" ^ nli () ^
-                code ppr_rt)
-
-    let insert_id ~pos ~t1:l ~t2:(_,t) ~error:_ =
-      build_tyvar_names [snd l; t];
-      fixed_type pos "Identity variables" t l
-
-    let insert_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      build_tyvar_names [lt; rt];
-      let ppr_rt = show_type rt in
-      let ppr_lt = show_type lt in
-      die pos ("Database inserts are wild"             ^ nli () ^
-                code ppr_rt                            ^ nl  () ^
-               "but the currently allowed effects are" ^ nli () ^
-                code ppr_lt)
-
-    let update_table ~pos ~t1:l ~t2:(_,t) ~error:_ =
-      build_tyvar_names [snd l; t];
-      fixed_type pos "Tables" t l
-
-    let update_pattern ~pos ~t1:l ~t2:r ~error:_ =
-      build_tyvar_names [snd l; snd r];
-      with_but2things pos
-        "The binding must match the table in an update expression"
-        ("pattern", l) ("row", r)
-
-    let update_read ~pos ~t1:(_, lt) ~t2:(_,rt) ~error:_ =
-      build_tyvar_names [lt; rt];
-      let ppr_lt = show_type lt in
-      let ppr_rt = show_type rt in
-      die pos ("The fields must match the table in an update expression, " ^
-               "but the fields have type"    ^ nli () ^
-                code ppr_lt                  ^ nl  () ^
-               "while the read row has type" ^ nli () ^
-                code ppr_rt)
-
-    let update_write ~pos ~t1:(_, lt) ~t2:(_,rt) ~error:_ =
-      build_tyvar_names [lt; rt];
-      let ppr_lt = code (show_type lt) in
-      let ppr_rt = code (show_type rt) in
-      die pos ("The fields must match the table in an update expression, " ^
-               "but the fields have type"     ^ nli () ^
-                code ppr_lt                   ^ nl  () ^
-               "while the write row has type" ^ nli () ^
-                ppr_rt)
-
-    let update_needed ~pos ~t1:(_, lt) ~t2:(_,rt) ~error:_ =
-      build_tyvar_names [lt; rt];
-      let ppr_lt = show_type lt in
-      let ppr_rt = show_type rt in
-      die pos ("The fields must match the table in an update expression, " ^
-               "but the fields have type"      ^ nli () ^
-                code ppr_lt                    ^ nl  () ^
-               "while the needed row has type" ^ nli () ^
-                code ppr_rt)
-
-    let update_where ~pos ~t1:l ~t2:(_,t) ~error:_ =
-      build_tyvar_names [snd l; t];
-      fixed_type pos "Where clauses" t l
-
-    let update_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      build_tyvar_names [lt; rt];
-      let ppr_rt = show_type rt in
-      let ppr_lt = show_type lt in
-      die pos ("Database updates are wild"             ^ nli () ^
-                code ppr_rt                            ^ nl  () ^
-               "but the currently allowed effects are" ^ nli () ^
-                code ppr_lt)
-
     let range_bound ~pos ~t1:_l ~t2:(_, _t) ~error:_ =
       die pos "Range bounds must be integers."
 
@@ -794,19 +579,6 @@ end
                 code ppr_rt                            ^ nl  () ^
                "but the currently allowed effects are" ^ nli () ^
                 code ppr_lt)
-
-    let query_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      build_tyvar_names [lt; rt];
-      let ppr_rt = show_type rt in
-      let ppr_lt = show_type lt in
-      die pos ("The query block has effects"           ^ nli () ^
-                code ppr_rt                            ^ nl  () ^
-               "but the currently allowed effects are" ^ nli () ^
-                code ppr_lt)
-
-    let query_base_row ~pos ~t1:(lexpr, lt) ~t2:_ ~error:_ =
-      build_tyvar_names [lt];
-      with_but pos ("Flat query blocks must return a list of records of base type") (lexpr, lt)
 
     let unary_apply ~pos ~t1:(lexpr, lt) ~t2:(_,rt) ~error:_ =
       let arg_hd = List.hd (TypeUtils.arg_types rt) in
@@ -890,16 +662,6 @@ end
                "but the currently allowed effects are" ^ nli () ^
                 code ppr_lt)
 
-    let iteration_ambient_effect ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      build_tyvar_names [lt; rt];
-      let ppr_rt = show_type rt in
-      let ppr_lt = show_type lt in
-      die pos ("Iterations over tables are only allowed in tame contexts." ^ nli () ^
-               "This iteration has ambient effect"     ^ nli () ^
-                code ppr_rt                            ^ nl  () ^
-               "but the currently allowed effects are" ^ nli () ^
-                code ppr_lt)
-
     let iteration_list_body ~pos ~t1:l ~t2:(_,t) ~error:_ =
       build_tyvar_names [snd l; t];
       fixed_type pos "The body of a list generator" t l
@@ -909,19 +671,6 @@ end
       let rt = Types.make_list_type rt in
         with_but2things pos
           ("The binding must match the list in a list generator")
-          ("pattern", l) ("expression", (rexpr, rt))
-
-    let iteration_table_body ~pos ~t1:l ~t2:(_,t) ~error:_ =
-      build_tyvar_names [snd l; t];
-      fixed_type pos "The body of a table generator" t l
-
-    let iteration_table_pattern tmp ~pos ~t1:l ~t2:(rexpr,rt) ~error:_ =
-      build_tyvar_names [snd l; rt];
-      let rt = Types.make_table_type
-                 (tmp, rt, Types.fresh_type_variable (lin_any, res_any),
-                  Types.fresh_type_variable (lin_any, res_any)) in
-        with_but2things pos
-          ("The binding must match the table in a table generator")
           ("pattern", l) ("expression", (rexpr, rt))
 
     let iteration_body ~pos ~t1:l ~t2:(_,t) ~error:_ =
@@ -1183,39 +932,6 @@ end
                "escape their scope, as they are present in the types:" ^ nli () ^
                displayed_tys)
 
-    let temporal_join_effects ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      build_tyvar_names [lt; rt];
-      let ppr_rt = show_type rt in
-      let ppr_lt = show_type lt in
-      die pos ("The join block has effects"            ^ nli () ^
-                code ppr_rt                            ^ nl  () ^
-               "but the currently allowed effects are" ^ nli () ^
-                code ppr_lt)
-
-    let temporal_join_body ~pos ~t1:(expr,t) ~t2:_ ~error:_ =
-      build_tyvar_names [t];
-      with_but pos
-        ("The body of a temporal join must return a list")
-        (expr, t)
-
-    let valid_update_pattern ~pos ~t1:l ~t2:r ~error:_ =
-      build_tyvar_names [snd l; snd r];
-      with_but2things pos
-        "The binding must match the table in a valid-time update expression"
-        ("pattern", l) ("row", r)
-
-    let sequenced_update_datetime ~pos ~t1:(_, l) ~t2:_ ~error:_ =
-        build_tyvar_names [l];
-      with_but pos
-        "The periods of validity for a valid-time sequenced update must have time DateTime"
-        ("expression", l)
-
-    let nonsequenced_update_datetime ~pos ~t1:(_, l) ~t2:_ ~error:_ =
-        build_tyvar_names [l];
-      with_but pos
-        "The new validity fields for a valid-time nonsequenced update must have time DateTime"
-        ("expression", l)
-
 end
 
 (* Tag: context begin *)
@@ -1249,7 +965,6 @@ let empty_context contlin eff =
 
 let bind_var         context (v, t) = {context with var_env    = Env.bind v t context.var_env}
 let bind_alias       context (v, t) = {context with tycon_env  = Env.bind v t context.tycon_env}
-let bind_effects     context r      = {context with effect_row = Types.flatten_row r}
 
 let lookup_effect    context name   =
   match context.effect_row with
@@ -1794,7 +1509,6 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
       | Function _
       | Lolli _
       | Operation _
-      | Table _
       (* TODO: or anything special for recursive applications? *)
       | RecursiveApplication _
        (* TODO: expand applications? *)
@@ -2187,9 +1901,7 @@ let resolve_type_annotation : Binder.with_pos -> Sugartypes.datatype' option -> 
    The syntax "unsafe sig f : ty" asserts that f has type t, *provided* that recursive
    calls to f are not treated as wild.  This is used to allow recursive definitions for
    specific operations such as map, concatMap, filter, sortByBase which previously required
-   an even more awkward workaround.  "unsafe" should not be used outside of the prelude since it would
-   enable constructing queries that typecheck but cannot be translated to SQL and
-   perhaps we should check for this.
+   an even more awkward workaround.
 
    The initial implementation of "unsafe" ran type inference as normal, and then performed
    surgery on the type.  Unfortunately this meant that other occurrences of the wild effect
@@ -2198,10 +1910,7 @@ let resolve_type_annotation : Binder.with_pos -> Sugartypes.datatype' option -> 
 
    The unsafe flag is currently propagated to the IR and has the same meaning there -
    calls involving function names are given the wild effect only if they are recursive
-   and not declared with the unsafe flag.  It is desirable to move to a design where "unsafe"
-   is not needed in the IR (because the staging distinction between queries and normal code
-   has already been made explicit) or at all (because query syntax is desugared to an interface
-   with sufficiently effect-polymorphic operations).
+   and not declared with the unsafe flag.
  *)
 
 let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
@@ -2601,392 +2310,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                                     (lin_any, res_any)) in
               ConstructorLit (c, Some (erase v), Some type'), type', usages v
 
-        (* database *)
-        | DatabaseLit (name, (driver, args)) ->
-            let driver = opt_map tc driver
-            and args   = opt_map tc args
-            and name   = tc name in
-              DatabaseLit (erase name, (opt_map erase driver, opt_map erase args)), T.Primitive Primitive.DB,
-              Usage.combine_many [from_option Usage.empty (opt_map usages driver); from_option Usage.empty (opt_map usages args); usages name]
-        | TableLit {
-            tbl_name = tname;
-            tbl_type = (tmp, dtype, Some (read_row, write_row, needed_row));
-            tbl_field_constraints;
-            tbl_keys;
-            tbl_temporal_fields;
-            tbl_database
-        } ->
-            let tname = tc tname
-            and tbl_database = tc tbl_database
-            and tbl_keys = tc tbl_keys in
-            let () = unify ~handle:Gripers.table_name (pos_and_typ tname, no_pos Types.string_type)
-            and () = unify ~handle:Gripers.table_db (pos_and_typ tbl_database, no_pos Types.database_type)
-            and () = unify ~handle:Gripers.table_keys (pos_and_typ tbl_keys, no_pos Types.keys_type) in
-            let tlit =
-                TableLit {
-                    tbl_name = erase tname;
-                    tbl_type = (tmp, dtype, Some (read_row, write_row, needed_row));
-                    tbl_field_constraints;
-                    tbl_keys = erase tbl_keys;
-                    tbl_temporal_fields;
-                    tbl_database = erase tbl_database
-                }
-            in
-            tlit,
-            T.Table (tmp, read_row, write_row, needed_row),
-            Usage.combine (usages tname) (usages tbl_database)
-        | TableLit _ -> assert false
-        | DBDelete (tdel, pat, from, where) ->
-            (* Check the temporal_deletion to ascertain the temporality *)
-            let (tmp, tdel, tmp_usages) =
-                match tdel with
-                    | None ->
-                        (Temporality.current, tdel, Usage.empty)
-                    | Some (ValidTimeDeletion (SequencedDeletion { validity_from; validity_to })) ->
-                        let validity_from = tc validity_from in
-                        let validity_to = tc validity_to in
-                        (Temporality.valid,
-                         Some (ValidTimeDeletion (SequencedDeletion {
-                             validity_from = erase validity_from;
-                             validity_to = erase validity_to
-                         })),
-                         Usage.combine (usages validity_from) (usages validity_to))
-                    | Some (ValidTimeDeletion _) ->
-                        (Temporality.valid, tdel, Usage.empty)
-                    | Some TransactionTimeDeletion ->
-                        (Temporality.transaction, tdel, Usage.empty)
-            in
-            let pat  = tpc pat in
-            let from = tc from in
-            let read  = T.Record (Types.make_empty_open_row (lin_any, res_base)) in
-            let write = T.Record (Types.make_empty_open_row (lin_any, res_base)) in
-            let needed = T.Record (Types.make_empty_open_row (lin_any, res_base)) in
-            let () = unify ~handle:Gripers.delete_table
-              (pos_and_typ from, no_pos (T.Table (tmp, read, write, needed))) in
-
-            let () =
-              let expected =
-                match tdel with
-                  | Some (ValidTimeDeletion NonsequencedDeletion) ->
-                      Types.make_valid_time_data_type read
-                  | _ -> read in
-              unify ~handle:Gripers.delete_pattern (ppos_and_typ pat, no_pos expected) in
-
-            let hide =
-              let bs = Env.domain (pattern_env pat) in
-              (fun usages -> Usage.restrict usages bs) in
-
-            let inner_effects = Types.make_empty_closed_row () in
-            let context' = bind_effects (context ++ pattern_env pat) inner_effects in
-
-            let where = opt_map (type_check context') where in
-            let () =
-              opt_iter
-                (fun e -> unify ~handle:Gripers.delete_where (pos_and_typ e, no_pos Types.bool_type)) where in
-
-            (* delete is wild *)
-            let () =
-              let outer_effects =
-                Types.(open_row default_effect_subkind closed_wild_row)
-              in
-                unify ~handle:Gripers.delete_outer
-                  (no_pos (T.Record context.effect_row), no_pos (T.Record outer_effects))
-            in
-              DBDelete (tdel, erase_pat pat, erase from, opt_map erase where), Types.unit_type,
-              Usage.combine_many [
-                  usages from;
-                  hide (from_option Usage.empty (opt_map usages where));
-                  hide tmp_usages
-              ]
-        | DBInsert (tmp_ins, into, labels, values, id) ->
-            let temporality =
-                match tmp_ins with
-                  | None -> Temporality.current
-                  | Some (ValidTimeInsertion _) -> Temporality.valid
-                  | Some (TransactionTimeInsertion) -> Temporality.transaction
-            in
-            let into   = tc into in
-            let values = tc values in
-            let id = opt_map tc id in
-            let read  = T.Record (Types.make_empty_open_row (lin_any, res_base)) in
-            let write = T.Record (Types.make_empty_open_row (lin_any, res_base)) in
-            let needed = T.Record (Types.make_empty_open_row (lin_any, res_base)) in
-            let () = unify ~handle:Gripers.insert_table
-              (pos_and_typ into, no_pos (T.Table (temporality, read, write, needed))) in
-
-            let field_env =
-              List.fold_right
-                (fun name field_env ->
-                   if StringMap.mem name field_env then
-                     Gripers.die pos "Duplicate labels in insert expression."
-                   else
-                     StringMap.add name (T.Present (Types.fresh_type_variable (lin_any, res_base))) field_env)
-                labels StringMap.empty
-            in
-
-            (* Check that the fields in the type of values match the declared labels *)
-            (* In the case of a valid-time sequenced insert, we need to be inserting valid-time metadata *)
-            let () =
-              match tmp_ins with
-                | Some (ValidTimeInsertion SequencedInsertion) ->
-                    let ty =
-                      T.Record (T.Row (field_env, Unionfind.fresh T.Closed))
-                        |> Types.make_valid_time_data_type
-                        |> Types.make_list_type in
-                    unify ~handle:Gripers.sequenced_insert_values (pos_and_typ values, no_pos ty)
-                | _ ->
-                    unify ~handle:Gripers.insert_values
-                      (pos_and_typ values,
-                       no_pos (Types.make_list_type (T.Record (T.Row (field_env, Unionfind.fresh T.Closed)))))
-            in
-
-            let needed_env =
-              StringMap.map
-                (fun _f -> Types.fresh_presence_variable (lin_any, res_base))
-                field_env in
-
-            (* all fields being inserted must be present in the read row *)
-            let row = T.Row (field_env, Types.fresh_row_variable (lin_any, res_base)) in
-            let () = unify ~handle:Gripers.insert_read
-              (no_pos read, no_pos (T.Record row)) in
-
-            (* all fields being inserted must be present in the write row *)
-            let row = T.Row (field_env, Types.fresh_row_variable (lin_any, res_base)) in
-            let () = unify ~handle:Gripers.insert_write
-              (no_pos write, no_pos (T.Record row)) in
-
-            (* all fields being inserted must be consistent with the needed row *)
-            let row = T.Row (needed_env, Unionfind.fresh T.Closed) in
-            let () = unify ~handle:Gripers.insert_needed
-              (no_pos needed, no_pos (T.Record row)) in
-
-            (* insert returning ... *)
-            let return_type =
-              match id with
-                | None -> Types.unit_type
-                | Some ({node=(id : phrasenode); _}, _, _) ->
-                    begin
-                      match id with
-                        | Constant (Constant.String id) ->
-                            (* HACK: The returned column is encoded as
-                               a string.  We check here that it
-                               appears as a column in the read type of
-                               the table.
-                            *)
-                           let row =
-                             T.Row (StringMap.singleton id (T.Present Types.int_type),
-                               Types.fresh_row_variable (lin_any, res_base)) in
-                            unify
-                              ~handle:Gripers.insert_id
-                              (no_pos read,
-                               no_pos (T.Record row));
-                            Types.int_type
-                        | _ -> assert false
-                    end in
-
-            (* insert is wild *)
-            let () =
-              let outer_effects =
-                Types.(open_row default_effect_subkind closed_wild_row)
-              in
-                unify ~handle:Gripers.insert_outer
-                  (no_pos (T.Record context.effect_row), no_pos (T.Record outer_effects))
-            in
-              DBInsert (tmp_ins, erase into, labels, erase values, opt_map erase id), return_type,
-              Usage.combine_many [usages into; usages values; from_option Usage.empty (opt_map usages id)]
-        | DBUpdate (tmp_upd, pat, from, where, set) ->
-            (* Need temporality to be able to deduce pattern type *)
-            let tmp =
-                match tmp_upd with
-                    | None -> Temporality.current
-                    | Some (ValidTimeUpdate _) -> Temporality.valid
-                    | Some TransactionTimeUpdate -> Temporality.transaction
-            in
-            let pat  = tpc pat in
-            let from = tc from in
-            let read =  T.Record (Types.make_empty_open_row (lin_any, res_base)) in
-            let write = T.Record (Types.make_empty_open_row (lin_any, res_base)) in
-            let needed = T.Record (Types.make_empty_open_row (lin_any, res_base)) in
-            let () = unify ~handle:Gripers.update_table
-              (pos_and_typ from, no_pos (T.Table (tmp, read, write, needed))) in
-
-            let hide =
-              let bs = Env.domain (pattern_env pat) in
-              (fun usages -> Usage.restrict usages bs)
-            in
-
-            (* the pattern should match the read type *)
-            (* Nonsequenced valid-time queries get VT metadata *)
-            let () =
-                match tmp_upd with
-                    | Some (ValidTimeUpdate (NonsequencedUpdate _)) ->
-                        let ty = Types.make_valid_time_data_type read in
-                        unify ~handle:Gripers.valid_update_pattern (ppos_and_typ pat, no_pos ty)
-                    | _ ->
-                        unify ~handle:Gripers.update_pattern (ppos_and_typ pat, no_pos read)
-            in
-
-            let inner_effects = Types.make_empty_closed_row () in
-            let context' = bind_effects (context ++ pattern_env pat) inner_effects in
-            let tc' = type_check context' in
-
-            let where = opt_map tc' where in
-
-            (* check that the where clause is boolean *)
-            let () =
-              opt_iter
-                (fun e -> unify ~handle:Gripers.update_where (pos_and_typ e, no_pos Types.bool_type)) where in
-
-            let set, field_env =
-              List.fold_right
-                (fun (name, exp) (set, field_env) ->
-                   let exp = type_check context' exp in
-                     if StringMap.mem name field_env then
-                       Gripers.die pos "Duplicate fields in update expression."
-                     else
-                       (name, exp)::set, StringMap.add name (T.Present (typ exp)) field_env)
-                set ([], StringMap.empty) in
-
-            let needed_env =
-              StringMap.map
-                (fun _f -> Types.fresh_presence_variable (lin_any, res_base))
-                field_env in
-
-            (* all fields being updated must be present in the read row *)
-            let () = unify ~handle:Gripers.update_read
-              (no_pos read, no_pos (T.Record (T.Row (field_env, Types.fresh_row_variable (lin_any, res_base))))) in
-
-            (* all fields being updated must be present in the write row *)
-            let () = unify ~handle:Gripers.update_write
-              (no_pos write, no_pos (T.Record (T.Row (field_env, Types.fresh_row_variable (lin_any, res_base))))) in
-
-            (* all fields being updated must be consistent with the needed row *)
-            let () = unify ~handle:Gripers.update_needed
-              (no_pos needed, no_pos (T.Record (T.Row (needed_env, Types.fresh_row_variable (lin_any, res_base))))) in
-
-            (* Typecheck any valid-time fields and calculate usages *)
-            let (tmp_upd, tmp_usages) =
-                match tmp_upd with
-                    (* No extra info or TCing needed *)
-                    | None
-                    | Some TransactionTimeUpdate
-                    | Some (ValidTimeUpdate (CurrentUpdate)) ->
-                        (tmp_upd, Usage.empty)
-                    | Some (ValidTimeUpdate (SequencedUpdate { validity_from; validity_to })) ->
-                        let validity_from = tc' validity_from in
-                        let validity_to = tc' validity_to in
-                        (* Ensure validity from / validity to are DateTimes *)
-                        let () = unify ~handle:Gripers.sequenced_update_datetime
-                          (pos_and_typ validity_from, no_pos (T.Primitive Primitive.DateTime))
-                        in
-                        let () = unify ~handle:Gripers.sequenced_update_datetime
-                          (pos_and_typ validity_to, no_pos (T.Primitive Primitive.DateTime))
-                        in
-                        let usages = Usage.combine (usages validity_from) (usages validity_to) in
-                        let tmp_upd = Some (ValidTimeUpdate (SequencedUpdate {
-                            validity_from = erase validity_from;
-                            validity_to = erase validity_to
-                        })) in
-                        (tmp_upd, usages)
-                    | Some (ValidTimeUpdate (NonsequencedUpdate { from_time; to_time })) ->
-                        let tc_date x =
-                            let x = tc' x in
-                            let () =
-                                unify ~handle:Gripers.nonsequenced_update_datetime
-                                  (pos_and_typ x, no_pos (T.Primitive Primitive.DateTime))
-                            in
-                            x
-                        in
-                        let from_time = OptionUtils.opt_map tc_date from_time in
-                        let to_time = OptionUtils.opt_map tc_date to_time in
-                        let usages =
-                            List.map (OptionUtils.opt_as_list) [from_time; to_time]
-                            |> List.concat
-                            |> List.map usages
-                            |> Usage.combine_many
-                        in
-                        let from_time = OptionUtils.opt_map erase from_time in
-                        let to_time = OptionUtils.opt_map erase to_time in
-                        (Some (ValidTimeUpdate (NonsequencedUpdate { from_time; to_time })), usages)
-            in
-
-            (* update is wild *)
-            let () =
-              let outer_effects =
-                Types.(open_row default_effect_subkind closed_wild_row)
-              in
-                unify ~handle:Gripers.update_outer
-                  (no_pos (T.Record context.effect_row), no_pos (T.Record outer_effects))
-            in
-              DBUpdate (tmp_upd, erase_pat pat, erase from,
-                opt_map erase where, List.map (fun (n,(p,_,_)) -> n, p) set),
-              Types.unit_type,
-              Usage.combine_many
-                ([ usages from;
-                   hide tmp_usages;
-                   hide (from_option Usage.empty (opt_map usages where))]
-                  @
-                  (List.map hide (List.map (usages -<- snd) set)))
-        | DBTemporalJoin (tmp, body, _) ->
-            let outer_effects =
-              Types.make_empty_open_row default_effect_subkind in
-            let inner_effects = Types.make_empty_closed_row () in
-            let () = unify ~handle:Gripers.temporal_join_effects
-              (no_pos (T.Record context.effect_row), no_pos (T.Record outer_effects)) in
-            let body = type_check (bind_effects context inner_effects) body in
-            (* Given body type [A], tt_join should result in [TransactionTime(A)]
-             * and likewise for valid time  *)
-            let body_type = Types.fresh_type_variable (lin_any, res_any) in
-            let () = unify ~handle:Gripers.temporal_join_body
-              (pos_and_typ body, no_pos (Types.make_list_type body_type)) in
-
-            let result_type =
-              let open Temporality in
-              match tmp with
-                | Transaction ->
-                    body_type
-                    |> Types.make_transaction_time_data_type
-                    |> Types.make_list_type
-                | Valid ->
-                    body_type
-                    |> Types.make_valid_time_data_type
-                    |> Types.make_list_type
-                | _ -> assert false (* Impossible to construct *) in
-            DBTemporalJoin (tmp, erase body, Some result_type), result_type,
-            (usages body)
-        | Query (range, policy, p, _) ->
-            let open QueryPolicy in
-            let range, outer_effects, range_usages =
-              match range with
-                | None -> None, Types.make_empty_open_row default_effect_subkind, Usage.empty
-                | Some (limit, offset) ->
-                    let limit = tc limit in
-                    let () = unify ~handle:Gripers.range_bound (pos_and_typ limit, no_pos Types.int_type) in
-                    let offset = tc offset in
-                    let () = unify ~handle:Gripers.range_bound (pos_and_typ offset, no_pos Types.int_type) in
-                    let outer_effects =
-                      Types.(open_row default_effect_subkind closed_wild_row)
-                    in
-                    Some (erase limit, erase offset), outer_effects, Usage.combine (usages limit) (usages offset)
-            in
-            let inner_effects = Types.make_empty_closed_row () in
-            let () = unify ~handle:Gripers.query_outer
-              (no_pos (T.Record context.effect_row), no_pos (T.Record outer_effects)) in
-            let p = type_check (bind_effects context inner_effects) p in
-            let () =
-              match policy with
-                (* XXX: relaxed (perhaps too much!) to allow nested record flattening in the Mixing normalizer *)
-                | Mixing
-                | Delat
-                | Nested -> ()
-                | Flat  ->
-                     let shape =
-                       Types.make_list_type
-                         (T.Record (T.Row (StringMap.empty,
-                            Types.fresh_row_variable (lin_any, res_base)))) in
-                     unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape)
-            in
-            Query (range, policy, erase p, Some (typ p)), typ p, Usage.combine (range_usages) (usages p)
         (* applications of various sorts *)
         | UnaryAppl ((_, op), p) ->
             let tyargs, opt, op_usage = type_unary_op pos context op
@@ -3179,45 +2502,18 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             end;
             let generators, generator_usages, environments =
               List.fold_left
-                (fun (generators, generator_usages, environments) ->
-                   function
-                     | List (pattern, e) ->
-                         let a = Types.fresh_type_variable (lin_unl, res_any) in
-                         let lt = Types.make_list_type a in
-                         let pattern = tpc pattern in
-                         let e = tc e in
-                         let () = unify ~handle:Gripers.iteration_list_body (pos_and_typ e, no_pos lt) in
-                         let () = unify ~handle:Gripers.iteration_list_pattern (ppos_and_typ pattern, (exp_pos e, a))
-                         in
-                           (List (erase_pat pattern, erase e) :: generators,
-                            usages e :: generator_usages,
-                            pattern_env pattern :: environments)
-                     | Table (tmp, pattern, e) ->
-                         unify ~handle:Gripers.iteration_ambient_effect
-                           (no_pos (T.Effect context.effect_row),
-                            no_pos (T.Effect (Types.make_empty_closed_row ())));
-                         let a = T.Record (Types.make_empty_open_row (lin_unl, res_base)) in
-                         let b = T.Record (Types.make_empty_open_row (lin_unl, res_base)) in
-                         let c = T.Record (Types.make_empty_open_row (lin_unl, res_base)) in
-                         let pattern_type =
-                             let open Temporality in
-                             match tmp with
-                                | Current     -> a
-                                | Transaction ->
-                                    Types.make_transaction_time_data_type a
-                                | Valid       ->
-                                    Types.make_valid_time_data_type a
-                         in
-                         let tt = Types.make_table_type (tmp, a, b, c) in
-                         let pattern = tpc pattern in
-                         let e = tc e in
-                         let () = unify ~handle:Gripers.iteration_table_body (pos_and_typ e, no_pos tt) in
-                         let () = unify ~handle:(Gripers.iteration_table_pattern tmp)
-                            (ppos_and_typ pattern, (exp_pos e, pattern_type))
-                         in
-                           (Table (tmp, erase_pat pattern, erase e) :: generators,
-                            usages e :: generator_usages,
-                            pattern_env pattern:: environments))
+                (fun (generators, generator_usages, environments) (pattern, e) ->
+                   let a = Types.fresh_type_variable (lin_unl, res_any) in
+                   let lt = Types.make_list_type a in
+                   let pattern = tpc pattern in
+                   let e = tc e in
+                   let () = unify ~handle:Gripers.iteration_list_body
+                     (pos_and_typ e, no_pos lt) in
+                   let () = unify ~handle:Gripers.iteration_list_pattern
+                     (ppos_and_typ pattern, (exp_pos e, a)) in
+                   ((erase_pat pattern, erase e) :: generators,
+                    usages e :: generator_usages,
+                    pattern_env pattern :: environments))
                 ([], [], []) generators in
             let generators = List.rev generators in
             let context = context ++ List.fold_left Env.extend Env.empty environments in

@@ -66,26 +66,6 @@ and fun_def =
     fn_location : location;
     fn_unsafe   : bool
   }
-and temporal_update =
-  | ValidTimeUpdate of valid_time_update
-  | TransactionTimeUpdate
-and valid_time_update =
-  | CurrentUpdate
-  | SequencedUpdate of { validity_from: value; validity_to: value }
-  | NonsequencedUpdate of { from_time: computation option; to_time: computation option }
-and temporal_deletion =
-  | ValidTimeDeletion of valid_time_deletion
-  | TransactionTimeDeletion
-and valid_time_deletion =
-  | CurrentDeletion
-  | SequencedDeletion of { validity_from: value; validity_to: value }
-  | NonsequencedDeletion
-and valid_time_insertion =
-  | CurrentInsertion
-  | SequencedInsertion
-and temporal_insertion =
-  | ValidTimeInsertion of valid_time_insertion
-  | TransactionTimeInsertion
 and binding =
   | Let        of binder * (tyvar list * tail_computation)
   | Fun        of fun_def
@@ -93,14 +73,6 @@ and binding =
   | Module     of string * binding list option
 and special =
   | Wrong      of Types.t
-  | Database   of value
-  | Table      of table
-  | Query      of (value * value) option * QueryPolicy.t * computation * Types.t
-  | TemporalJoin of Temporality.t * computation * Types.datatype
-  | InsertRows of temporal_insertion option * value * value
-  | InsertReturning of temporal_insertion option * value * value * value
-  | Update     of temporal_update option * (binder * value) * computation option * computation
-  | Delete     of temporal_deletion option * (binder * value) * computation option
   | CallCC     of value
   | Handle     of handler
   | DoOperation of Name.t * value list * Types.t
@@ -113,13 +85,6 @@ and handler = {
     ih_depth: handler_depth;
 }
 and handler_depth = | Deep of (binder * value) list | Shallow
-and table = {
-  database: value;
-  table: value;
-  keys: value;
-  temporal_fields: (string * string) option;
-  table_type: (Temporality.t * Types.datatype * Types.datatype * Types.datatype)
-}
   [@@deriving show]
 
 let binding_scope : binding -> scope =

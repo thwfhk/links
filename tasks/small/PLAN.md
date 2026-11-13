@@ -86,9 +86,9 @@ tests pass, including deep recursion. Removed constructs are rejected.
 
 ### 3. Remove the remaining database and lens code
 
-- [x] **3.1** Remove relational lens syntax, types, primitives and
+- [x] **3.1** (`eb457d6f`) Remove relational lens syntax, types, primitives and
   evaluation. Delete the lens library and tests specific to it.
-- [ ] **3.2** Remove tables, queries, updates and temporal database
+- [x] **3.2** Remove tables, queries, updates and temporal database
   features. Keep list generators, `where` and `orderby`.
 - [ ] **3.3** Remove SPARQL, the remaining database and query modules,
   and unused build dependencies and settings. Keep ordinary date/time.
@@ -153,8 +153,27 @@ regressions and native IR unit tests pass, and source checks pass.
 
 ## Status
 
-Milestone 3 is in progress. Item 3.1 is complete. Next, remove tables,
-queries, updates and temporal database features in 3.2.
+Milestone 3 is in progress. Items 3.1 and 3.2 are complete. Next, remove
+SPARQL and the remaining database and query modules in 3.3.
+
+Checks for 3.2 used `eb457d6f` plus the item changes on OCaml 5.4.0.
+Logs are under `/private/tmp/smalllinks-m3.yjxu5W/`.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make no-db` and `make all-ci` | Passed. | `3.2-build.log`, `3.2-ci.log` |
+| Native expression, file with imports, typecheck-only file and REPL checks | Passed. | `3.2-expr.log`, `3.2-file.log`, `3.2-typecheck.log`, `3.2-repl.log` |
+| `./test-harness tests/<suite>.tests` for the suites below | 619 passed, 3 ignored and 0 failed. | One `3.2-<suite>.log` per suite |
+| `opam exec -- ./run-tests nodb-unit-tests` | 44 passed. | `3.2-unit.log` |
+| `./links examples/factorial.links` and `./links examples/paginate.links` | Passed with list data. | `3.2-factorial.log`, `3.2-paginate.log` |
+| `./tests/validate_typecheck_testfile.testscript` | Passed. | `3.2-registration.log` |
+| `make rule-check` and `git diff --check` | Passed. GNU find was unavailable for the tabs rule. | `3.2-rule.log`, `3.2-diff.log` |
+
+Suites for 3.2: `collections`, `datetime`, `effect_sugar`, `effectname`,
+`freezeml`, `functions`, `handlers`, `lexing`, `native`, `parser`,
+`polymorphism`, `presence_type_arg`, `recheck_frontend_transformations`,
+`records`, `roundtrippable_types`, `typecheck_examples`,
+`typecheck_examples_with_cfl_on`, `typed_ir` and `variants`.
 
 Checks for 3.1 used `516a5544` plus the item changes on OCaml 5.4.0.
 Logs are under `/private/tmp/smalllinks-m3.yjxu5W/`.

@@ -1,3 +1,0 @@
-database_driver=sqlite3
-coerce_null_integers=on
-null_integer=-1

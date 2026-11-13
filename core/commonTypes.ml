@@ -275,7 +275,7 @@ module Label = struct
 end
 
 module Primitive = struct
-  type t = Bool | Int | Char | Float | DB | String | DateTime
+  type t = Bool | Int | Char | Float | String | DateTime
     [@@deriving show]
 
   let to_string = function
@@ -283,7 +283,6 @@ module Primitive = struct
     | Int      -> "Int"
     | Char     -> "Char"
     | Float    -> "Float"
-    | DB       -> "Database"
     | String   -> "String"
     | DateTime -> "DateTime"
 end

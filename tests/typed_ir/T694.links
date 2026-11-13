@@ -6,4 +6,4 @@ fun concatMap(f, l) {
   }
 }
 
-fun () {query {[]}}
+fun () { [] : [(|r::(Any,Base))] }

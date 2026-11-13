@@ -43,8 +43,6 @@ class map :
     method regexflag       : regexflag -> regexflag
     method regex           : regex -> regex
     method position        : Position.t -> Position.t
-    method temporal_update : temporal_update -> temporal_update
-    method temporal_deletion : temporal_deletion -> temporal_deletion
     method phrasenode      : phrasenode -> phrasenode
     method phrase          : phrase -> phrase
     method patternnode     : Pattern.t -> Pattern.t
@@ -55,7 +53,6 @@ class map :
     method funlit          : funlit -> funlit
     method handle_params   : handler_parameterisation -> handler_parameterisation
     method fieldspec       : Datatype.fieldspec -> Datatype.fieldspec
-    method fieldconstraint : fieldconstraint -> fieldconstraint
     method directive       : directive -> directive
     method datatype        : Datatype.with_pos -> Datatype.with_pos
     method datatypenode    : Datatype.t -> Datatype.t
@@ -124,8 +121,6 @@ class fold :
     method regexflag       : regexflag -> 'self
     method regex           : regex -> 'self
     method position        : Position.t -> 'self
-    method temporal_update : temporal_update -> 'self
-    method temporal_deletion : temporal_deletion -> 'self
     method phrasenode      : phrasenode -> 'self
     method phrase          : phrase -> 'self
     method patternnode     : Pattern.t -> 'self
@@ -136,7 +131,6 @@ class fold :
     method funlit          : funlit -> 'self
     method handle_params   : handler_parameterisation -> 'self
     method fieldspec       : Datatype.fieldspec -> 'self
-    method fieldconstraint : fieldconstraint -> 'self
     method directive       : directive -> 'self
     method datatype        : Datatype.with_pos -> 'self
     method datatypenode    : Datatype.t -> 'self
@@ -191,7 +185,6 @@ object ('self)
   method row'            : row' -> 'self * row'
   method type_arg'       : type_arg' -> 'self * type_arg'
   method directive       : directive -> 'self * directive
-  method fieldconstraint : fieldconstraint -> 'self * fieldconstraint
   method fieldspec       : Datatype.fieldspec -> 'self * Datatype.fieldspec
   method int             : int -> 'self * int
   method float           : float -> 'self * float
@@ -205,8 +198,6 @@ object ('self)
   method patternnode     : Pattern.t -> 'self * Pattern.t
   method pattern         : Pattern.with_pos -> 'self * Pattern.with_pos
   method phrase          : phrase -> 'self * phrase
-  method temporal_update : temporal_update -> ('self * temporal_update)
-  method temporal_deletion : temporal_deletion -> ('self * temporal_deletion)
   method phrasenode      : phrasenode -> 'self * phrasenode
   method position        : Position.t -> 'self * Position.t
   method program         : program -> 'self * program

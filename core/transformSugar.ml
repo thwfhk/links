@@ -123,12 +123,6 @@ let rec listu :
           let (o, x) = f o x in
           let (o, xs) = listu o f xs in (o, x::xs)
 
-let on_effects o (eff : Types.row) fn x =
-  let effect_row = o#lookup_effects in
-  let o = o#with_effects eff in
-  let (o, x, y) = fn o x in
-  (o#with_effects effect_row, x, y)
-
 let check_type_application (e, t) k =
   begin
     try
@@ -237,26 +231,6 @@ class transform (env : Types.typing_environment) =
         let (o, e, t) = option o (fun o -> o#phrase) e
         in (o, (bs, e), opt_map Types.normalise_datatype t)
 
-    method temporal_update : temporal_update -> ('self_type * temporal_update) =
-        function
-            | ValidTimeUpdate (SequencedUpdate { validity_from; validity_to }) ->
-                let (o, validity_from, _) = o#phrase validity_from in
-                let (o, validity_to, _) = o#phrase validity_to in
-                (o, ValidTimeUpdate (SequencedUpdate { validity_from; validity_to }))
-            | ValidTimeUpdate (NonsequencedUpdate { from_time; to_time }) ->
-                let (o, from_time, _) = option o (fun o -> o#phrase) from_time in
-                let (o, to_time, _) = option o (fun o -> o#phrase) to_time in
-                (o, ValidTimeUpdate (NonsequencedUpdate { from_time; to_time }))
-            | upd -> (o, upd)
-
-    method temporal_deletion : temporal_deletion -> ('self_type * temporal_deletion) =
-        function
-            | ValidTimeDeletion (SequencedDeletion { validity_from; validity_to }) ->
-                let (o, validity_from, _) = o#phrase validity_from in
-                let (o, validity_to, _) = o#phrase validity_to in
-                (o, ValidTimeDeletion (SequencedDeletion { validity_from; validity_to }))
-            | del -> (o, del)
-
     method phrasenode : phrasenode -> ('self_type * phrasenode * Types.datatype) =
       function
       | Constant c -> let (o, c, t) = o#constant c in (o, Constant c, t)
@@ -275,18 +249,6 @@ class transform (env : Types.typing_environment) =
               (o, rt)
           in
             (o, FunLit (Some argss, lin, lam, location), t)
-      | Query (range, policy, body, Some t) ->
-          let (o, range) =
-            optionu o
-              (fun o (limit, offset) ->
-                 let (o, limit, _) = o#phrase limit in
-                 let (o, offset, _) = o#phrase offset in
-                   (o, (limit, offset)))
-              range in
-          let (o, body, _) = on_effects o (Types.make_empty_closed_row ()) (fun o -> o#phrase) body in
-          let (o, body, _) = o#phrase body in
-          let (o, t) = o#datatype t in
-            (o, Query (range, policy, body, Some t), t)
       | ListLit (es, Some t) ->
           let (o, es, _) = list o (fun o -> o#phrase) es in
           let (o, t) = o#datatype t in
@@ -492,70 +454,6 @@ class transform (env : Types.typing_environment) =
               cases in
           let (o, t) = o#datatype t in
             (o, Switch (v, cases, Some t), t)
-      | DatabaseLit (name, (driver, args)) ->
-          let (o, name, _) = o#phrase name in
-          let (o, driver, _) = option o (fun o -> o#phrase) driver in
-          let (o, args, _) = option o (fun o -> o#phrase) args in
-            (o, DatabaseLit (name, (driver, args)), Primitive Primitive.DB)
-      | TableLit {
-            tbl_name;
-            tbl_type = (tmp, dtype, Some (read_row, write_row, needed_row));
-            tbl_field_constraints;
-            tbl_keys; tbl_temporal_fields; tbl_database
-         } ->
-          let (o, tbl_name, _) = o#phrase tbl_name in
-          let (o, tbl_database, _) = o#phrase tbl_database in
-          let (o, dtype) = o#sugar_datatype dtype in
-          let (o, read_row) = o#datatype read_row in
-          let (o, write_row) = o#datatype write_row in
-          let (o, needed_row) = o#datatype needed_row in
-          let tbl =
-              TableLit {
-                  tbl_name;
-                  tbl_type = (tmp, dtype, Some (read_row, write_row, needed_row));
-                  tbl_field_constraints;
-                  tbl_keys;
-                  tbl_temporal_fields;
-                  tbl_database
-              }
-          in
-          (o, tbl, Table (tmp, read_row, write_row, needed_row))
-      | DBDelete (del, p, from, where) ->
-          let (o, del) = optionu o (fun o -> o#temporal_deletion) del in
-          let (o, from, _) = o#phrase from in
-          let (o, p) = o#pattern p in
-            (* BUG:
-
-               We should really reset the environment: variables bound
-               by p shouldn't be visible in subsequent expression.
-
-               The same applies to DBUpdate and Iteration.
-            *)
-          let (o, where, _) = option o (fun o -> o#phrase) where in
-            (o, DBDelete (del, p, from, where), Types.unit_type)
-      | DBInsert (tmp, into, labels, values, id) ->
-          let (o, into, _) = o#phrase into in
-          let (o, values, _) = o#phrase values in
-          let (o, id, _) = option o (fun o -> o#phrase) id in
-            (o, DBInsert (tmp, into, labels, values, id), Types.unit_type)
-      | DBUpdate (upd, p, from, where, set) ->
-          let (o, from, _) = o#phrase from in
-          let (o, p) = o#pattern p in
-          let (o, upd) = optionu o (fun o -> o#temporal_update) upd in
-          let (o, where, _) = option o (fun o -> o#phrase) where in
-          let (o, set) =
-            listu o
-              (fun o (name, value) ->
-                 let (o, value, _) = o#phrase value in (o, (name, value)))
-              set
-          in
-            (o, DBUpdate (upd, p, from, where, set), Types.unit_type)
-      | DBTemporalJoin (mode, body, Some t) ->
-          let (o, body, _) =
-              on_effects o (Types.make_empty_closed_row ()) (fun o -> o#phrase) body in
-          let (o, body, _) = o#phrase body in
-          let (o, t) = o#datatype t in
-            (o, DBTemporalJoin (mode, body, Some t), t)
       | e -> raise (internal_error ("oops: "^show_phrasenode  e))
 
     method phrase : phrase -> ('self_type * phrase * Types.datatype) =
@@ -606,15 +504,10 @@ class transform (env : Types.typing_environment) =
         ~f_node:(fun o v -> o#patternnode v)
 
     method iterpatt : iterpatt -> ('self_type * iterpatt) =
-      function
-      | List (p, e) ->
-          let (o, e, _) = o#phrase e in
-          let (o, p) = o#pattern p in
-          (o, List (p, e))
-      | Sugartypes.Table (t, p, e) ->
-          let (o, e, _) = o#phrase e in
-          let (o, p) = o#pattern p in
-          (o, Sugartypes.Table (t, p, e))
+      fun (p, e) ->
+        let (o, e, _) = o#phrase e in
+        let (o, p) = o#pattern p in
+        (o, (p, e))
 
     method funlit : Types.row -> funlit -> ('self_type * funlit * Types.datatype) =
       fun inner_eff f ->

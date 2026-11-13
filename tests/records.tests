@@ -77,9 +77,9 @@ With syntax (missing label)
 stderr : @.
 exit : 1
 
-Tables must have table type.
-fun (t) { for (x <-- t) [(a=x.y)] }
-stdout : @fun : \(TemporalTable\(.*\)\) {}-> .*
+List comprehension infers a row for its input records
+fun (rows) { for (x <- rows) [(a=x.y)] }
+stdout : fun : ([(y:a|_)]) -> [(a:a)]
 
 Duplicate fields
 (x=3,x=3)

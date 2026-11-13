@@ -16,9 +16,6 @@ val is_thunk_type : Types.datatype -> bool
 val is_builtin_effect : string -> bool
 val element_type : ?overstep_quantifiers:bool -> Types.datatype -> Types.datatype
 
-val table_read_type : Types.datatype -> Types.datatype
-val table_write_type : Types.datatype -> Types.datatype
-val table_needed_type : Types.datatype -> Types.datatype
 
 val abs_type     : Types.datatype -> Types.datatype
 val app_type     : Types.datatype -> Types.datatype -> Types.datatype

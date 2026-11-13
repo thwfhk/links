@@ -180,26 +180,6 @@ class map =
         let y = o#option (fun o -> o#typ) y in
         (x,y)
 
-    method temporal_update : temporal_update -> temporal_update =
-      function
-        | ValidTimeUpdate (SequencedUpdate { validity_from; validity_to }) ->
-            let validity_from = o#phrase validity_from in
-            let validity_to = o#phrase validity_to in
-            ValidTimeUpdate (SequencedUpdate { validity_from; validity_to } )
-        | ValidTimeUpdate (NonsequencedUpdate { from_time; to_time }) ->
-            let from_time = o#option (fun o -> o#phrase) from_time in
-            let to_time = o#option (fun o -> o#phrase) to_time in
-            ValidTimeUpdate (NonsequencedUpdate { from_time; to_time })
-        | x -> x
-
-    method temporal_deletion : temporal_deletion -> temporal_deletion =
-      function
-        | ValidTimeDeletion (SequencedDeletion { validity_from; validity_to }) ->
-            let validity_from = o#phrase validity_from in
-            let validity_to = o#phrase validity_to in
-            ValidTimeDeletion (SequencedDeletion { validity_from; validity_to })
-        | x -> x
-
     method phrasenode : phrasenode -> phrasenode =
       function
       | Constant _x -> let _x = o#constant _x in Constant _x
@@ -212,17 +192,6 @@ class map =
           let _x_i1 = o#funlit _x_i1 in
           let _x_i2 = o#location _x_i2 in
           FunLit (_x, _x1, _x_i1, _x_i2)
-      | Query (_x, _policy, _x_i1, _x_i2) ->
-          let _x =
-            o#option
-              (fun o (_x, _x_i1) ->
-                 let _x = o#phrase _x in
-                 let _x_i1 = o#phrase _x_i1 in (_x, _x_i1))
-              _x in
-          let _x_i1 = o#phrase _x_i1 in Query (_x, _policy, _x_i1, _x_i2)
-      | DBTemporalJoin (_mode, _block, _ty) ->
-          let _block = o#phrase _block in
-          DBTemporalJoin (_mode, _block, _ty)
       | ListLit (_x, _x_i1) ->
           let _x = o#list (fun o -> o#phrase) _x in
           let _x_i1 = o#option (fun o -> o#typ) _x_i1 in
@@ -353,62 +322,6 @@ class map =
               _x_i1 in
           let _x_i2 = o#option (fun o -> o#typ) _x_i2
           in Switch ((_x, _x_i1, _x_i2))
-      | DatabaseLit ((_x, _x_i1)) ->
-          let _x = o#phrase _x in
-          let _x_i1 =
-            (fun (_x, _x_i1) ->
-               let _x = o#option (fun o -> o#phrase) _x in
-               let _x_i1 = o#option (fun o -> o#phrase) _x_i1 in (_x, _x_i1))
-              _x_i1
-          in DatabaseLit ((_x, _x_i1))
-      | TableLit { tbl_name; tbl_type = (tmp, dt, rows_opt);
-          tbl_field_constraints;
-          tbl_keys; tbl_temporal_fields; tbl_database } ->
-          let tbl_name = o#phrase tbl_name in
-          let dt = o#datatype dt in
-          let rows_opt = o#option
-            (fun o (a, b, c) ->
-              let a = o#typ a in
-              let b = o#typ b in
-              let c = o#typ c in
-              (a, b, c)) rows_opt in
-          let tbl_field_constraints =
-            o#list
-              (fun o (_x, _x_i1) ->
-                 let _x = o#name _x in
-                 let _x_i1 = o#list (fun o -> o#fieldconstraint) _x_i1
-                 in (_x, _x_i1))
-              tbl_field_constraints in
-          let tbl_keys = o#phrase tbl_keys in
-          let tbl_database = o#phrase tbl_database in
-          let tbl_type = (tmp, dt, rows_opt) in
-          TableLit
-            { tbl_name; tbl_type; tbl_field_constraints;
-              tbl_keys; tbl_temporal_fields; tbl_database }
-      | DBDelete ((_del, _x, _x_i1, _x_i2)) ->
-          let _del = o#option (fun o -> o#temporal_deletion) _del in
-          let _x = o#pattern _x in
-          let _x_i1 = o#phrase _x_i1 in
-          let _x_i2 = o#option (fun o -> o#phrase) _x_i2
-          in DBDelete ((_del, _x, _x_i1, _x_i2))
-      | DBInsert ((_mode, _x, _x_i1, _x_i2, _x_i3)) ->
-          let _x = o#phrase _x in
-          let _x_i1 = o#list (fun o -> o#name) _x_i1 in
-          let _x_i2 = o#phrase _x_i2 in
-          let _x_i3 = o#option (fun o -> o#phrase) _x_i3 in
-          DBInsert ((_mode, _x, _x_i1, _x_i2, _x_i3))
-      | DBUpdate ((_upd, _x, _x_i1, _x_i2, _x_i3)) ->
-          let _upd = o#option (fun o -> o#temporal_update) _upd in
-          let _x = o#pattern _x in
-          let _x_i1 = o#phrase _x_i1 in
-          let _x_i2 = o#option (fun o -> o#phrase) _x_i2 in
-          let _x_i3 =
-            o#list
-              (fun o (_x, _x_i1) ->
-                 let _x = o#name _x in
-                 let _x_i1 = o#phrase _x_i1 in (_x, _x_i1))
-              _x_i3
-          in DBUpdate ((_upd, _x, _x_i1, _x_i2, _x_i3))
 
     method phrase : phrase -> phrase =
       fun p ->
@@ -464,13 +377,10 @@ class map =
     method location : Location.t -> Location.t = o#unknown
 
     method iterpatt : iterpatt -> iterpatt =
-      function
-      | List ((_x, _x_i1)) ->
-          let _x = o#pattern _x in
-          let _x_i1 = o#phrase _x_i1 in List ((_x, _x_i1))
-      | Table ((_t, _x, _x_i1)) ->
-          let _x = o#pattern _x in
-          let _x_i1 = o#phrase _x_i1 in Table ((_t, _x, _x_i1))
+      fun (p, e) ->
+        let p = o#pattern p in
+        let e = o#phrase e in
+        (p, e)
 
     method funlit : funlit -> funlit =
       fun f ->
@@ -504,9 +414,6 @@ class map =
       | Present _x -> let _x = o#datatype _x in Present _x
       | Absent -> Absent
       | Var _x -> let _x = o#type_variable _x in Var _x
-
-    method fieldconstraint : fieldconstraint -> fieldconstraint =
-      fun fc -> fc
 
     method directive : directive -> directive =
       fun (_x, _x_i1) ->
@@ -545,17 +452,12 @@ class map =
         let _x = o#list (fun o -> o#datatype) _x in
         let _x_i1 = o#datatype _x_i1 in
         let _x_i2 = o#linearity _x_i2 in Operation (_x, _x_i1, _x_i2)
-      | Table (_t, _x, _x_i1, _x_i2) ->
-         let _x = o#datatype _x in
-         let _x_i1 = o#datatype _x_i1 in
-         let _x_i2 = o#datatype _x_i2 in Table (_t, _x, _x_i1, _x_i2)
       | List _x -> let _x = o#datatype _x in List _x
       | TypeApplication (_x, _x_i1) ->
           let _x = o#name _x in
           let _x_i1 = o#list (fun o -> o#type_arg) _x_i1
           in TypeApplication (_x, _x_i1)
       | Primitive _x -> let _x = o#unknown _x in Primitive _x
-      | DB -> DB
 
     method datatype : Datatype.with_pos -> Datatype.with_pos =
         WithPos.map2 ~f_pos:o#position ~f_node:o#datatypenode
@@ -859,26 +761,6 @@ class fold =
         let o = o#unknown y in
           o
 
-    method temporal_update : temporal_update -> 'self_type =
-      function
-        | ValidTimeUpdate (SequencedUpdate { validity_from; validity_to }) ->
-            let o = o#phrase validity_from in
-            let o = o#phrase validity_to in
-            o
-        | ValidTimeUpdate (NonsequencedUpdate { from_time; to_time }) ->
-            let o = o#option (fun o -> o#phrase) from_time in
-            let o = o#option (fun o -> o#phrase) to_time in
-            o
-        | _ -> o
-
-    method temporal_deletion : temporal_deletion -> 'self_type =
-      function
-        | ValidTimeDeletion (SequencedDeletion { validity_from; validity_to }) ->
-            let o = o#phrase validity_from in
-            let o = o#phrase validity_to in
-            o
-        | _ -> o
-
     method phrasenode : phrasenode -> 'self_type =
       function
       | Constant _x -> let o = o#constant _x in o
@@ -887,17 +769,6 @@ class fold =
       | QualifiedVar _xs ->
           let o = o#list (fun o -> o#name) _xs in o
       | FunLit (_x, _x1, _x_i1, _x_i2) -> let o = o#funlit _x_i1 in let _x_i2 = o#location _x_i2 in o
-      | Query (_x, _policy, _x_i1, _x_i2) ->
-          let o =
-            o#option
-              (fun o (_x, _x_i1) ->
-                 let o = o#phrase _x in
-                 let o = o#phrase _x_i1 in o)
-              _x in
-          let o = o#phrase _x_i1 in o
-      | DBTemporalJoin (_mode, _block, _ty) ->
-          let o = o#phrase _block in
-          o
       | ListLit (_x, _x_i1) -> let o = o#list (fun o -> o#phrase) _x in o
       | Iteration ((_x, _x_i1, _x_i2, _x_i3)) ->
           let o = o#list (fun o -> o#iterpatt) _x in
@@ -1001,52 +872,6 @@ class fold =
               _x_i1 in
           let o = o#option (fun o -> o#unknown) _x_i2
           in o
-      | DatabaseLit ((_x, _x_i1)) ->
-          let o = o#phrase _x in
-          let o =
-            (fun (_x, _x_i1) ->
-               let o = o#option (fun o -> o#phrase) _x in
-               let o = o#option (fun o -> o#phrase) _x_i1 in o)
-              _x_i1
-          in o
-      | TableLit { tbl_name; tbl_type = (_, dt, rows_opt);
-          tbl_field_constraints;
-          tbl_keys; tbl_database; _ } ->
-          let o = o#phrase tbl_name in
-          let o = o#datatype dt in
-          let o = o#option
-            (fun o r ->
-               let o = o#unknown r in
-                 o) rows_opt in
-          let o =
-            o#list
-              (fun o (_x, _x_i1) ->
-                 let o = o#name _x in
-                 let o = o#list (fun o -> o#fieldconstraint) _x_i1 in o)
-              tbl_field_constraints in
-          let o = o#phrase tbl_keys in
-          let o = o#phrase tbl_database in
-          o
-      | DBDelete ((_del, _x, _x_i1, _x_i2)) ->
-          let o = o#option (fun o -> o#temporal_deletion) _del in
-          let o = o#pattern _x in
-          let o = o#phrase _x_i1 in
-          let o = o#option (fun o -> o#phrase) _x_i2 in o
-      | DBInsert ((_mode, _x, _x_i1, _x_i2, _x_i3)) ->
-          let o = o#phrase _x in
-          let o = o#list (fun o -> o#name) _x_i1 in
-          let o = o#phrase _x_i2 in let o = o#option (fun o -> o#phrase) _x_i3 in o
-      | DBUpdate ((_upd, _x, _x_i1, _x_i2, _x_i3)) ->
-          let o = o#option (fun o -> o#temporal_update) _upd in
-          let o = o#pattern _x in
-          let o = o#phrase _x_i1 in
-          let o = o#option (fun o -> o#phrase) _x_i2 in
-          let o =
-            o#list
-              (fun o (_x, _x_i1) ->
-                 let o = o#name _x in let o = o#phrase _x_i1 in o)
-              _x_i3
-          in o
 
     method phrase : phrase -> 'self_type =
       WithPos.traverse
@@ -1100,11 +925,9 @@ class fold =
     method location : Location.t -> 'self_type = o#unknown
 
     method iterpatt : iterpatt -> 'self_type =
-      function
-      | List ((_x, _x_i1)) ->
-          let o = o#pattern _x in let o = o#phrase _x_i1 in o
-      | Table ((_t, _x, _x_i1)) ->
-          let o = o#pattern _x in let o = o#phrase _x_i1 in o
+      fun (p, e) ->
+        let o = o#pattern p in
+        o#phrase e
 
     method funlit : funlit -> 'self_type =
       fun f ->
@@ -1133,9 +956,6 @@ class fold =
       | Present _x -> let o = o#datatype _x in o
       | Absent -> o
       | Var _x -> let o = o#type_variable _x in o
-
-    method fieldconstraint : fieldconstraint -> 'self_type =
-      fun _ -> o
 
     method directive : directive -> 'self_type =
       fun (_x, _x_i1) ->
@@ -1170,16 +990,11 @@ class fold =
         let o = o#list (fun o -> o#datatype) _x in
         let o = o#datatype _x_i1 in
         let o = o#linearity _x_i2 in o
-      | Table (_t, _x, _x_i1, _x_i2) ->
-          let o = o#datatype _x in
-          let o = o#datatype _x_i1 in
-          let o = o#datatype _x_i2 in o
       | List _x -> let o = o#datatype _x in o
       | TypeApplication (_x, _x_i1) ->
           let o = o#name _x in
           let o = o#list (fun o -> o#type_arg) _x_i1 in o
       | Primitive _x -> let o = o#unknown _x in o
-      | DB -> o
 
     method datatype : Datatype.with_pos -> 'self_type =
       WithPos.traverse
@@ -1490,26 +1305,6 @@ class fold_map =
         ~f_finish:(fun o v -> o#unknown v)
         ~f_code:(fun o v -> o#option (fun o -> o#unknown) v)
 
-    method temporal_update : temporal_update -> ('self_type * temporal_update) =
-      function
-        | ValidTimeUpdate (SequencedUpdate { validity_from; validity_to }) ->
-            let (o, validity_from) = o#phrase validity_from in
-            let (o, validity_to) = o#phrase validity_to in
-            (o, ValidTimeUpdate (SequencedUpdate { validity_from; validity_to } ))
-        | ValidTimeUpdate (NonsequencedUpdate { from_time; to_time }) ->
-            let (o, from_time) = o#option (fun o -> o#phrase) from_time in
-            let (o, to_time) = o#option (fun o -> o#phrase) to_time in
-            (o, ValidTimeUpdate (NonsequencedUpdate { from_time; to_time }))
-        | x -> (o, x)
-
-    method temporal_deletion : temporal_deletion -> ('self_type * temporal_deletion) =
-      function
-        | ValidTimeDeletion (SequencedDeletion { validity_from; validity_to }) ->
-            let (o, validity_from) = o#phrase validity_from in
-            let (o, validity_to) = o#phrase validity_to in
-            (o, ValidTimeDeletion (SequencedDeletion { validity_from; validity_to }))
-        | x -> (o, x)
-
     method phrasenode : phrasenode -> ('self_type * phrasenode) =
       function
       | Constant _x -> let (o, _x) = o#constant _x in (o, (Constant _x))
@@ -1527,17 +1322,6 @@ class fold_map =
         in
         let (o, _x) = o#option (fun o -> o#list handle_funtype) _x in
         let (o, _x_i2) = o#location _x_i2 in (o, (FunLit (_x, _x1, _x_i1, _x_i2)))
-      | Query (_x, _policy, _x_i1, _x_i2) ->
-          let (o, _x) =
-            o#option
-              (fun o (_x, _x_i1) ->
-                 let (o, _x) = o#phrase _x in
-                 let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1)))
-              _x in
-          let (o, _x_i1) = o#phrase _x_i1 in (o, (Query (_x, _policy, _x_i1, _x_i2)))
-      | DBTemporalJoin (_mode, _block, _ty) ->
-          let (o, _block) = o#phrase _block in
-          (o, DBTemporalJoin (_mode, _block, _ty))
       | ListLit (_x, _x_i1) ->
           let (o, _x) = o#list (fun o -> o#phrase) _x in
           let (o, _x_i1) = o#option (fun o -> o#typ) _x_i1 in
@@ -1675,71 +1459,6 @@ class fold_map =
               _x_i1 in
           let (o, _x_i2) = o#option (fun o -> o#typ) _x_i2
           in (o, (Switch ((_x, _x_i1, _x_i2))))
-      | DatabaseLit ((_x, _x_i1)) ->
-          let (o, _x) = o#phrase _x in
-          let (o, _x_i1) =
-            (fun (_x, _x_i1) ->
-               let (o, _x) = o#option (fun o -> o#phrase) _x in
-               let (o, _x_i1) = o#option (fun o -> o#phrase) _x_i1
-               in (o, (_x, _x_i1)))
-              _x_i1
-          in (o, (DatabaseLit ((_x, _x_i1))))
-      | TableLit { tbl_name; tbl_type; tbl_field_constraints;
-          tbl_keys; tbl_temporal_fields; tbl_database } ->
-            (*
-      | TableLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
-          *)
-          let (o, tbl_name) = o#phrase tbl_name in
-          let (o, tbl_type) =
-            (fun (tmp, dt, rows_opt) ->
-               let (o, dt) = o#datatype dt in
-               let (o, rows_opt) =
-                 o#option
-                   (fun o (a, b, c) ->
-                     let o, a = o#typ a in
-                     let o, b = o#typ b in
-                     let o, c = o#typ c in
-                     o, (a, b, c)) rows_opt
-               in (o, (tmp, dt, rows_opt)))
-              tbl_type in
-          let (o, tbl_field_constraints) =
-            o#list
-              (fun o (_x, _x_i1) ->
-                 let (o, _x) = o#name _x in
-                 let (o, _x_i1) = o#list (fun o -> o#fieldconstraint) _x_i1
-                 in (o, (_x, _x_i1)))
-              tbl_field_constraints in
-          let (o, tbl_keys) = o#phrase tbl_keys in
-          let (o, tbl_database) = o#phrase tbl_database in
-          let tbl =
-            TableLit { tbl_name; tbl_type; tbl_field_constraints;
-            tbl_keys; tbl_temporal_fields; tbl_database }
-          in
-          (o, tbl)
-      | DBDelete ((_del, _x, _x_i1, _x_i2)) ->
-          let (o, _del) = o#option (fun o -> o#temporal_deletion) _del in
-          let (o, _x) = o#pattern _x in
-          let (o, _x_i1) = o#phrase _x_i1 in
-          let (o, _x_i2) = o#option (fun o -> o#phrase) _x_i2
-          in (o, (DBDelete ((_del, _x, _x_i1, _x_i2))))
-      | DBInsert ((_mode, _x, _x_i1, _x_i2, _x_i3)) ->
-          let (o, _x) = o#phrase _x in
-          let (o, _x_i1) = o#list (fun o -> o#name) _x_i1 in
-          let (o, _x_i2) = o#phrase _x_i2 in
-          let (o, _x_i3) = o#option (fun o -> o#phrase) _x_i3
-          in (o, (DBInsert ((_mode, _x, _x_i1, _x_i2, _x_i3))))
-      | DBUpdate ((_upd, _x, _x_i1, _x_i2, _x_i3)) ->
-          let (o, _upd) = o#option (fun o -> o#temporal_update) _upd in
-          let (o, _x) = o#pattern _x in
-          let (o, _x_i1) = o#phrase _x_i1 in
-          let (o, _x_i2) = o#option (fun o -> o#phrase) _x_i2 in
-          let (o, _x_i3) =
-            o#list
-              (fun o (_x, _x_i1) ->
-                 let (o, _x) = o#name _x in
-                 let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1)))
-              _x_i3
-          in (o, (DBUpdate ((_upd, _x, _x_i1, _x_i2, _x_i3))))
 
     method phrase : phrase -> ('self_type * phrase) =
       WithPos.traverse_map
@@ -1800,13 +1519,10 @@ class fold_map =
     method location : Location.t -> ('self_type * Location.t) = o#unknown
 
     method iterpatt : iterpatt -> ('self_type * iterpatt) =
-      function
-      | List ((_x, _x_i1)) ->
-          let (o, _x) = o#pattern _x in
-          let (o, _x_i1) = o#phrase _x_i1 in (o, (List ((_x, _x_i1))))
-      | Table ((_t, _x, _x_i1)) ->
-          let (o, _x) = o#pattern _x in
-          let (o, _x_i1) = o#phrase _x_i1 in (o, (Table ((_t, _x, _x_i1))))
+      fun (p, e) ->
+        let (o, p) = o#pattern p in
+        let (o, e) = o#phrase e in
+        (o, (p, e))
 
     method funlit : funlit -> ('self_type * funlit) =
       fun f ->
@@ -1841,9 +1557,6 @@ class fold_map =
       | Present _x -> let (o, _x) = o#datatype _x in (o, Present _x)
       | Absent -> (o, Absent)
       | Var _x -> let (o, _x) = o#type_variable _x in (o, Var _x)
-
-    method fieldconstraint : fieldconstraint -> ('self_type * fieldconstraint) =
-      fun fc -> (o, fc)
 
     method directive : directive -> ('self_type * directive) =
       fun (_x, _x_i1) ->
@@ -1899,10 +1612,6 @@ class fold_map =
         let (o, _x_i1) = o#datatype _x_i1 in
         let (o, _x_i2) = o#linearity _x_i2 in
         (o, Operation (_x, _x_i1, _x_i2))
-      | Table (_t, _x, _x_i1, _x_i2) ->
-          let (o, _x) = o#datatype _x in
-          let (o, _x_i1) = o#datatype _x_i1 in
-          let (o, _x_i2) = o#datatype _x_i2 in (o, (Table (_t, _x, _x_i1, _x_i2)))
       | List _x -> let (o, _x) = o#datatype _x in (o, (List _x))
       | TypeApplication (_x, _x_i1) ->
           let (o, _x) = o#string _x in
@@ -1910,7 +1619,6 @@ class fold_map =
           in (o, TypeApplication (_x, _x_i1))
       | Primitive _x ->
           let (o, _x) = o#unknown _x in (o, (Primitive _x))
-      | DB -> (o, DB)
 
     method datatype : Datatype.with_pos -> ('self_type * Datatype.with_pos) =
       WithPos.traverse_map

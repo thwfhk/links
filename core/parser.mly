@@ -83,32 +83,6 @@ let restriction_of_string p =
   | rest      ->
      raise (ConcreteSyntaxError (pos p, "Invalid kind restriction: " ^ rest))
 
-let query_policy_of_string p =
-  function
-  | "flat" -> QueryPolicy.Flat
-  | "nested" -> QueryPolicy.Nested
-  | "mixing" -> QueryPolicy.Mixing
-  | "delat" -> QueryPolicy.Delat
-  | rest      ->
-     raise (ConcreteSyntaxError (pos p, "Invalid query policy: " ^ rest ^ ", expected 'flat' or 'nested'"))
-
-let temporality_of_string p =
-  function
-  | "valid_time"       -> Temporality.valid
-  | "transaction_time" -> Temporality.transaction
-  | "current_time"     -> Temporality.current
-  | rest               ->
-     raise (ConcreteSyntaxError (pos p, "Invalid temporality: " ^ rest))
-
-
-let temporality_type_of_string p =
-  function
-  | "Valid"       -> Temporality.valid
-  | "Transaction" -> Temporality.transaction
-  | "Current"     -> Temporality.current
-  | rest          ->
-     raise (ConcreteSyntaxError (pos p, "Invalid temporality: " ^ rest))
-
 let full_kind_of pos prim lin rest =
   let p = primary_kind_of_string pos prim in
   let l = linearity_of_string    pos lin  in
@@ -193,8 +167,6 @@ let attach_presence_subkind (t, subkind) =
 
 let alias p name args aliasbody =
     with_pos p (Aliases [with_pos p (name, args, aliasbody)])
-
-let labels xs = fst (List.split xs)
 
 let parseRegexFlags f =
   let rec asList f i l =
@@ -327,11 +299,9 @@ let any = any_pat dp
 %token LPAREN RPAREN
 %token LBRACE RBRACE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
-%token FOR LARROW LLARROW WHERE
+%token FOR LARROW WHERE
 %token COMMA VBAR DOT DOTDOT COLON COLONCOLON
-%token TABLE TEMPORALTABLE TABLEKEYS FROM DATABASE QUERY WITH ORDERBY
-%token UPDATE DELETE INSERT VALUES SET RETURNING
-%token READONLY DEFAULT
+%token WITH ORDERBY
 %token ESCAPE
 %token SEMICOLON
 %token TRUE FALSE
@@ -353,12 +323,6 @@ let any = any_pat dp
 %token <Operators.Associativity.t> FIXITY
 %token TYPENAME EFFECTNAME
 %token <string> OPERATOR
-%token USING
-%token LTLARROW LVLARROW
-%token SEQUENCED CURRENT NONSEQUENCED TO BETWEEN
-%token TTINSERT VTINSERT
-%token VALID
-%token VTJOIN TTJOIN
 
 %start just_datatype
 %start interactive
@@ -417,7 +381,6 @@ arg:
 | UFLOAT                                                       { string_of_float' $1 }
 | TRUE                                                         { "true"  }
 | FALSE                                                        { "false" }
-| DEFAULT                                                      { "default" }
 
 var:
 | VARIABLE                                                     { with_pos $loc $1 }
@@ -578,18 +541,9 @@ sigop:
 op:
 | OPERATOR                                                     { with_pos $loc $1 }
 
-query_policy:
-| VARIABLE                                                     { query_policy_of_string $loc $1 }
-| /* empty */                                                  { QueryPolicy.Flat }
-
 postfix_expression:
 | primary_expression                                           { $1 }
 | block                                                        { $1 }
-| TTJOIN block                                                 { temporal_join ~ppos:$loc Temporality.transaction $2 }
-| VTJOIN block                                                 { temporal_join ~ppos:$loc Temporality.valid $2 }
-| QUERY query_policy block                                     { query ~ppos:$loc None $2 $3 }
-| QUERY LBRACKET exp RBRACKET query_policy block               { query ~ppos:$loc (Some ($3, with_pos $loc (Constant (Constant.Int 0)))) $5 $6 }
-| QUERY LBRACKET exp COMMA exp RBRACKET query_policy block     { query ~ppos:$loc (Some ($3, $5)) $7 $8 }
 | postfix_expression arg_spec                                  { with_pos $loc (FnAppl ($1, $2)) }
 | postfix_expression targ_spec                                 { with_pos $loc (TAppl ($1, $2)) }
 | postfix_expression DOT record_label                          { with_pos $loc (Projection ($1, $3)) }
@@ -637,63 +591,6 @@ typed_expression:
 | typed_expression COLON datatype LARROW datatype              { with_pos $loc (Upcast ($1, datatype $3, datatype $5)) }
 | CAPITAL_LAMBDA type_abstracion_vars DOT block                { type_abstraction ~ppos:$loc $2 $4 }
 
-mode_not_valid:
-| LLARROW                                                      { Temporality.current }
-| LTLARROW                                                     { Temporality.transaction }
-
-valid_time_exps:
-| labeled_exps { $1, None, None }
-| maybe_labeled_exps VALID FROM exp TO exp { $1, Some $4, Some $6 }
-| maybe_labeled_exps VALID TO exp FROM exp { $1, Some $4, Some $6 }
-| maybe_labeled_exps VALID FROM exp { $1, Some $4, None }
-| maybe_labeled_exps VALID TO exp { $1, None, Some $4 }
-
-update_expression:
-| UPDATE CURRENT LPAREN pattern LVLARROW exp RPAREN
-         perhaps_where SET LPAREN labeled_exps RPAREN          { with_pos $loc (DBUpdate (Some (ValidTimeUpdate CurrentUpdate), $4, $6, $8, $11)) }
-
-| UPDATE NONSEQUENCED LPAREN pattern LVLARROW exp RPAREN
-         perhaps_where SET LPAREN valid_time_exps RPAREN       { let exps, from_time, to_time = $11 in
-                                                                 let upd = ValidTimeUpdate (NonsequencedUpdate { from_time; to_time }) in
-                                                                 with_pos $loc (DBUpdate (Some upd, $4, $6, $8, exps)) }
-| UPDATE SEQUENCED LPAREN pattern LVLARROW exp RPAREN
-         BETWEEN LPAREN exp COMMA exp RPAREN perhaps_where
-         SET LPAREN labeled_exps RPAREN                        { let upd = ValidTimeUpdate (SequencedUpdate { validity_from = $10; validity_to = $12 }) in
-                                                                 with_pos $loc (DBUpdate (Some upd, $4, $6, $14, $17)) }
-| UPDATE LPAREN pattern mode_not_valid exp RPAREN
-         perhaps_where
-         SET LPAREN labeled_exps RPAREN                        { let upd =
-                                                                   match $4 with
-                                                                     | Temporality.Current -> None
-                                                                     | Temporality.Transaction -> Some TransactionTimeUpdate
-                                                                     | Temporality.Valid -> assert false
-                                                                 in
-                                                                 with_pos $loc (DBUpdate (upd, $3, $5, $7, $10)) }
-
-delete_expression:
-| DELETE CURRENT LPAREN pattern LVLARROW exp RPAREN
-         perhaps_where                                         { let upd = ValidTimeDeletion CurrentDeletion in
-                                                                 with_pos $loc (DBDelete (Some upd, $4, $6, $8)) }
-| DELETE NONSEQUENCED LPAREN pattern LVLARROW exp RPAREN
-         perhaps_where                                         { let upd = ValidTimeDeletion NonsequencedDeletion in
-                                                                 with_pos $loc (DBDelete (Some upd, $4, $6, $8)) }
-| DELETE SEQUENCED LPAREN pattern LVLARROW exp RPAREN
-         BETWEEN LPAREN exp COMMA exp RPAREN perhaps_where     { let upd = ValidTimeDeletion (SequencedDeletion { validity_from = $10; validity_to = $12 }) in
-                                                                 with_pos $loc (DBDelete (Some upd, $4, $6, $14)) }
-
-| DELETE LPAREN pattern mode_not_valid exp RPAREN
-    perhaps_where                                              { let upd =
-                                                                   match $4 with
-                                                                     | Temporality.Current -> None
-                                                                     | Temporality.Transaction -> Some TransactionTimeDeletion
-                                                                     | Temporality.Valid -> assert false
-                                                                 in
-                                                                 with_pos $loc (DBDelete (upd, $3, $5, $7)) }
-
-db_expression:
-| delete_expression                                            { $1 }
-| update_expression                                            { $1 }
-
 conditional_expression:
 | IF LPAREN exp RPAREN exp ELSE exp                            { with_pos $loc (Conditional ($3, $5, $7)) }
 
@@ -729,17 +626,7 @@ perhaps_generators:
 | separated_list(COMMA, generator)                             { $1 }
 
 generator:
-| list_generator                                               { List  (fst $1, snd $1) }
-| table_generator                                              { let (temp, pat, phr) = $1 in Table (temp, pat, phr) }
-
-list_generator:
 | pattern LARROW exp                                           { ($1, $3) }
-
-
-table_generator:
-| pattern LLARROW exp                                          { (Temporality.current, $1, $3) }
-| pattern LTLARROW exp                                         { (Temporality.transaction, $1, $3) }
-| pattern LVLARROW exp                                         { (Temporality.valid, $1, $3) }
 
 perhaps_where:
 | /* empty */                                                  { None    }
@@ -752,43 +639,6 @@ perhaps_orderby:
 escape_expression:
 | ESCAPE VARIABLE IN exp                                       { with_pos $loc (Escape (binder ~ppos:$loc($2) $2, $4)) }
 
-temporality:
-| VARIABLE                                                     { temporality_of_string $loc $1 }
-
-temporality_type:
-| CONSTRUCTOR                                                  { temporality_type_of_string $loc $1 }
-
-temporal:
-| USING temporality LPAREN field_label COMMA field_label RPAREN  { ($2, ($4, $6)) }
-
-table_keys:
-| TABLEKEYS exp                                                { $2 }
-
-table_expression:
-| TABLE exp WITH datatype perhaps_table_constraints
-    option(table_keys) option(temporal) FROM exp               { table ~ppos:$loc ~tbl_keys:$6 $2 $4 $5 $7 $9}
-
-perhaps_table_constraints:
-| loption(preceded(WHERE, table_constraints))                  { $1 }
-
-table_constraints:
-| separated_nonempty_list(COMMA,
-    pair(record_label, field_constraints))                     { $1 }
-
-field_constraints:
-| field_constraint+                                            { $1 }
-
-field_constraint:
-| READONLY                                                     { Readonly }
-| DEFAULT                                                      { Default  }
-
-perhaps_db_args:
-| atomic_expression?                                           { $1 }
-
-perhaps_db_driver:
-| atomic_expression perhaps_db_args                            { Some $1, $2   }
-| /* empty */                                                  { None   , None }
-
 seq_expression:
 // | LBRACKETBAR exp BARRBRACKET                                  { with_pos $loc (Unlet $2) }
 | LINFLAG                                                      { with_pos $loc (Linlet (dummy_phrase $loc)) }
@@ -797,33 +647,9 @@ exp:
 | seq_expression
 | case_expression
 | conditional_expression
-| database_expression
-| db_expression
 | escape_expression
 | iteration_expression
-| table_expression
 | typed_expression                                             { $1 }
-
-valid_time_insert_kind:
-| SEQUENCED                                                    { SequencedInsertion }
-| CURRENT                                                      { CurrentInsertion }
-| /* empty */                                                  { CurrentInsertion }
-
-insert_keyword:
-| TTINSERT                                                     { Some TransactionTimeInsertion }
-| VTINSERT valid_time_insert_kind                              { Some (ValidTimeInsertion $2) }
-| INSERT                                                       { None }
-
-database_expression:
-| insert_keyword exp VALUES LPAREN record_labels RPAREN exp    { db_insert ~ppos:$loc $1 $2 $5 $7 None }
-| insert_keyword exp VALUES LBRACKET LPAREN loption(labeled_exps)
-  RPAREN RBRACKET preceded(RETURNING, VARIABLE)?               { db_insert ~ppos:$loc $1 $2 (labels $6) (db_exps ~ppos:$loc($6) $6) $9  }
-| insert_keyword exp VALUES LPAREN record_labels RPAREN typed_expression
-  RETURNING VARIABLE                                           { db_insert ~ppos:$loc $1 $2 $5 $7 (Some $9) }
-| DATABASE atomic_expression perhaps_db_driver                 { with_pos $loc (DatabaseLit ($2, $3))           }
-
-record_labels:
-| separated_list(COMMA, record_label)                          { $1 }
 
 links_open:
 | OPEN separated_nonempty_list(DOT, CONSTRUCTOR)               { with_pos $loc (Open $2) }
@@ -873,9 +699,6 @@ labeled_exp:
 
 labeled_exps:
 | separated_nonempty_list(COMMA, labeled_exp)                  { $1 }
-
-maybe_labeled_exps:
-| separated_list(COMMA, labeled_exp)                           { $1 }
 
 /*
  * Datatype grammar
@@ -943,9 +766,6 @@ primary_datatype:
                                                                    | [n] -> WithPos.node n
                                                                    | ts  -> Datatype.Tuple ts }
 | LPAREN rfields RPAREN                                        { Datatype.Record $2 }
-| TEMPORALTABLE
-     LPAREN temporality_type COMMA datatype COMMA datatype COMMA datatype RPAREN
-                                                               { Datatype.Table ($3, $5, $7, $9) }
 | LBRACKETBAR vrow BARRBRACKET                                 { Datatype.Variant $2 }
 | LBRACKET datatype RBRACKET                                   { Datatype.List $2 }
 | type_var                                                     { $1 }
@@ -958,7 +778,6 @@ primary_datatype:
                                                                    | "Float"   -> Primitive Primitive.Float
                                                                    | "String"  -> Primitive Primitive.String
                                                                    | "DateTime" -> Primitive Primitive.DateTime
-                                                                   | "Database"-> DB
                                                                    | t         -> TypeApplication (t, [])
                                                                }
 | CONSTRUCTOR LPAREN type_arg_list RPAREN                      { Datatype.TypeApplication ($1, $3) }
