@@ -1,49 +1,31 @@
 #!/usr/bin/env bash
 
-# If you modify the behaviour of this file please remember to update the
-# relevant wiki page:
-#
-# https://github.com/links-lang/links/wiki/Running-the-test-suite
+trap 'exit 130' INT
 
-ret=0                              # Return code. If <> 0 then some tests failed
-
-# If the user presses CTRL+C then kill the script as well
-control_c() {
-        exit 130
-}
-trap control_c SIGINT
-
-if [[ "$1" == "nodb-unit-tests" ]]; then
+if [[ "${1-}" == "unit-tests" ]]; then
     shift
-    exec dune exec --profile=development tests/unit/nodb.exe -- -runner sequential "$@"
+    exec dune exec --profile=dev tests/unit/unit_tests.exe -- -runner sequential "$@"
 fi
 
 if [ "$#" -ne 0 ]; then
-    echo "Usage: ./run-tests [nodb-unit-tests [<unit test options>]]" >&2
+    echo "Usage: ./run-tests [unit-tests [<unit test options>]]" >&2
     exit 1
 fi
 
-for i in tests/*.tests; do
-    cmnd="./test-harness $i"
-    echo cmnd=$cmnd
-    eval $cmnd
-    ret_code=$?
-    if [ $ret_code != 0 ]; then
-        ret=1
+status=0
+for suite in tests/*.tests; do
+    echo "./test-harness $suite"
+    if ! ./test-harness "$suite"; then
+        status=1
     fi
 done
 
-#look for custom test scripts in the tests folder and execute them
-#they must be called  *.testscript
-for s in tests/*.testscript; do
-        echo "executing custom test script $s"
-        eval "$s"
-        ret_code=$?
-        if [ $ret_code != 0 ]; then
-            echo "script $s failed"
-            ret=1
-        fi
-    done
+for script in tests/*.testscript; do
+    echo "Running $script"
+    if ! "$script"; then
+        echo "$script failed" >&2
+        status=1
+    fi
+done
 
-
-exit $ret
+exit "$status"

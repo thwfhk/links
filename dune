@@ -31,5 +31,3 @@
  (package links)
  (section doc)
  (files (INSTALL.md as README)))
-
-(include install.inc)

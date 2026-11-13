@@ -13,10 +13,3 @@
   (modes native)
   (libraries str linenoise safepass unix lwt lwt.unix menhirLib calendar)
   (preprocess (pps ppx_deriving.std)))
-
-
-;; Generate the Linkspath module.
-(rule
-  (targets linkspath.ml)
-  (deps (:gen ../linkspath/gen_linkspath.exe))
-  (action (run %{gen} -o %{targets})))

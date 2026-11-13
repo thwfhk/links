@@ -3,4 +3,5 @@
   (public_name linx)
   (package links)
   (modes native)
+  (link_deps (alias ../lib/runtime-data))
   (libraries unix threads.posix dynlink ANSITerminal linenoise links.core))

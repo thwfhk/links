@@ -1,0 +1,12 @@
+(install
+ (package links)
+ (section share)
+ (files
+  (TicTacToe-Console.links as examples/TicTacToe-Console.links)
+  (church.links as examples/church.links)
+  (extensible-case.links as examples/extensible-case.links)
+  (factorial.links as examples/factorial.links)
+  (linearList.links as examples/linearList.links)
+  (mandelcolor.links as examples/mandelcolor.links)
+  (paginate.links as examples/paginate.links)
+  (sierpinski_bits.links as examples/sierpinski_bits.links)))

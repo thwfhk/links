@@ -7,3 +7,7 @@
   (targets prelude.links)
   (deps    %{project_root}/prelude.links)
   (action (copy %{deps} %{targets})))
+
+(alias
+  (name runtime-data)
+  (deps prelude.links (glob_files stdlib/*.links)))

@@ -29,10 +29,9 @@
 
 (package
  (name links)
- (synopsis "The Links Programming Language")
+ (synopsis "The SmallLinks Programming Language")
  (description "SmallLinks is a native interpreter for a subset of Links.")
  (depends (ocaml (>= 5.3.0))
-          (dune-configurator (>= 3.8))
            ppx_deriving
            linenoise
            ANSITerminal

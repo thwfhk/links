@@ -43,15 +43,7 @@ let try_parse_file filename =
 
   let poss_stdlib_dir =
     if Settings.get use_stdlib then
-      match Settings.get stdlib_path with
-      | None ->
-        (* Follow the same logic as for the prelude.
-         * Firstly, check the current directory.
-         * Secondly, check OPAM *)
-        let chopped_path = check_n_chop @@ locate_file "stdlib" in
-        [Filename.concat chopped_path "stdlib"]
-      | Some stdlib_path ->
-         [check_n_chop stdlib_path]
+      [check_n_chop (from_option Linkspath.stdlib (Settings.get stdlib_path))]
     else []
   in
 

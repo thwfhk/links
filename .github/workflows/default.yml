@@ -1,66 +1,22 @@
-name: Links main workflow
+name: SmallLinks
 
 on:
   pull_request:
-    branches: master
+    branches: [master, small]
   push:
-    branches: [master]
+    branches: [master, small]
   schedule:
     # Prime the caches every Monday
     - cron: 0 1 * * MON
 
 jobs:
   rule-check:
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-        ocaml-compiler:
-          - 5.3.0
-
-    runs-on: ${{ matrix.os }}
-
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-
-      - run: git diff-index --quiet HEAD --
-        shell: bash
-
-      - name: Use OCaml ${{ matrix.ocaml-compiler }}
-        uses: ocaml/setup-ocaml@v3
-        with:
-          ocaml-compiler: ${{ matrix.ocaml-compiler }}
-
-      - name: Ad-hoc rule check
-        run: |
-          eval $(opam config env)
-          make rule-check
-        shell: bash
-
-  build-doc:
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-
-    runs-on: ${{ matrix.os }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get install -y python3-setuptools python3-pip
-          pip3 install -U Sphinx
-        shell: bash
-
-      - name: Compile documentation
-        run: make doc
-        shell: bash
+      - name: Check source files
+        run: make rule-check
 
   interpreter:
     strategy:
@@ -76,29 +32,23 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-
       - name: Use OCaml ${{ matrix.ocaml-compiler }}
         uses: ocaml/setup-ocaml@v3
         with:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
-
       - run: opam install -y ounit2
-
-      - name: Install Links dependencies
-        run: >-
-          opam install
-          ./links.opam
-          --deps-only
-
-      - name: Build Links from source
+      - name: Install SmallLinks dependencies
+        run: opam install -y ./links.opam --deps-only
+      - name: Build SmallLinks from source
+        run: make all-ci
+      - name: Run regression tests
+        run: make tests
+      - name: Check installed SmallLinks
         run: |
-          eval $(opam env)
-          make all-ci
+          prefix=$(mktemp -d)
+          trap 'rm -rf "$prefix"' EXIT
+          opam exec -- dune install --profile=ci --prefix="$prefix" links
+          ./tests/check-install.sh "$prefix/bin/linx"
         shell: bash
-
-      - name: Run interpreter testsuite
-        run: |
-          eval $(opam env)
-          make tests
-          ./run-tests nodb-unit-tests
-        shell: bash
+      - name: Run OCaml unit tests
+        run: opam exec -- ./run-tests unit-tests

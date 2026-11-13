@@ -189,6 +189,15 @@ signatures; the `gen` helpers use effect upcasts.
    `--enable-handlers` as existing controls. The default evaluator uses
    handler continuations, including for `escape`. The explicit off
    setting still selects the pure evaluator. Test both settings.
+2. **5.2.** Dune installs the prelude, standard library and examples
+   directly. The executable resolves paths from its real location.
+   Use `lib/links` under the install prefix and `lib` next to the build
+   tree's `bin` directory. Keep explicit config, prelude and standard
+   library settings. The install check runs the executable from a
+   separate directory and loads both the prelude and standard library.
+   The source launcher is `./links`, the installed command is `linx`,
+   and the package name is `links`. Use `make` for a development build
+   and `./run-tests unit-tests` for the native IR tests.
 
 ## Baseline fixtures to migrate
 

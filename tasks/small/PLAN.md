@@ -120,9 +120,9 @@ parsed again.
 
 ### 5. Verify the subset
 
-- [x] **5.1** Enable handlers by default and check handler programs in
-  all three native entry points without `--enable-handlers`.
-- [ ] **5.2** Align the build, installation, CI and test runner with
+- [x] **5.1** (`c5452cef`) Enable handlers by default and check handler
+  programs in all three native entry points without `--enable-handlers`.
+- [x] **5.2** Align the build, installation, CI and test runner with
   SmallLinks. Verify the installed executable finds its prelude and
   standard library.
 - [ ] **5.3** Finish the language draft, register the retained examples
@@ -133,8 +133,7 @@ regressions and native IR unit tests pass, and source checks pass.
 
 ## Checks
 
-1. Use `make no-db` for the baseline and as long as the target exists.
-   Rebuild before running tests after compiler edits. Check `./links -e`,
+1. Run `make` after compiler edits and before running tests. Check `./links -e`,
    file execution with an import, a REPL definition followed by a call,
    and `./links --set=typecheck_only=true file.links`.
 2. `./test-harness tests/<suite>.tests` runs the native interpreter
@@ -149,14 +148,27 @@ regressions and native IR unit tests pass, and source checks pass.
    Keep accepted and rejected programs for rows, FreezeML and value
    linearity. Run the retained `typed_ir` and
    `recheck_frontend_transformations` cases after inference changes.
-4. Run `opam exec -- ./run-tests nodb-unit-tests` when changing covered IR
-   code, or its native replacement. At the end, run all retained suites,
+4. Run `opam exec -- ./run-tests unit-tests` when changing covered IR
+   code. At the end, run all retained suites,
    the example registration check, `make rule-check` and `git diff --check`.
 
 ## Status
 
-Item 5.1 is complete. Next, align the build, installation and test
-commands in 5.2. There are no blockers.
+Items 5.1 and 5.2 are complete. Next, finish the language guide,
+example registration and final checks in 5.3. There are no blockers.
+
+Checks for 5.2 used `c5452cef` plus the item changes on OCaml 5.4.0
+and Dune 3.20.2. Logs are under `/private/tmp/smalllinks-m5.sodOj9/`.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make`, `make all-ci` and `opam exec -- dune build --profile=ci @install` with a clean build directory | Passed. | `5.2-dev-build.log`, `5.2-ci-build.log`, `5.2-clean-build.log` |
+| `opam exec -- dune build -p links @install` with a clean build directory | Passed with the new opam build rules. | `5.2-package-build.log` |
+| `opam exec -- dune install --profile=ci --prefix=… links` and `./tests/check-install.sh` for the staged binary, repeated with `dev` | The installed executable used the prelude and imported the standard library from another directory. | `5.2-ci-install.log`, `5.2-ci-installed.log`, `5.2-dev-install.log`, `5.2-dev-installed.log` |
+| Move a copy of the installed prefix, run the install check, then hide each runtime path in turn | The moved copy worked. Hiding its prelude or standard library caused the expected missing-file error. | `5.2-relocated.log`, `5.2-missing-prelude.log`, `5.2-missing-stdlib.log` |
+| Compare installed and source example lists and run the installed handler example runner | All 35 source examples installed. The runner returned `()`. | `5.2-installed-examples.log`, `5.2-installed-handler-examples.log` |
+| `make tests` and `opam exec -- ./run-tests unit-tests` | 925 regressions passed, 4 ignored and 0 failed. All 44 unit tests passed. | `5.2-regressions.log`, `5.2-unit.log` |
+| `make rule-check`, `git diff --check` and parse the CI workflow YAML | Passed. The tabs check used `rg` because GNU find was unavailable. | `5.2-rule.log`, `5.2-diff.log`, `5.2-tabs.log`, `5.2-workflow.log` |
 
 Checks for 5.1 used `7aa53e07` plus the item changes on OCaml 5.4.0.
 Logs are under `/private/tmp/smalllinks-m5.sodOj9/`.

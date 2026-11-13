@@ -1,7 +1,7 @@
 (executable
-  (name nodb)
+  (name unit_tests)
   (modes native)
   (flags :standard -safe-string -dtypes -w Ae-44-45-60 -g)
-  (modules nodb)
+  (modules unit_tests)
   (libraries ounit2.advanced ounit2 links_ir_unit_tests)
   (preprocess (pps ppx_deriving.std)))
