@@ -16,8 +16,7 @@ the decision and update the plan or spec if needed.
    removing the two session cases.
 2. Keep value linearity. `linfun` and the linear arrows are part of the
    default grammar. The [type checker](../../core/typeSugar.ml) checks
-   value usage independently of control-flow linearity, which defaults
-   to off in [Basicsettings](../../core/basicsettings.ml). Keep `Lolli`,
+   value usage independently of control-flow linearity. Keep `Lolli`,
    value kinds, usage and capture checks, and ordinary handler clause
    checks. Unrestricted resumptions can still replay a computation
    that uses a linear value; preserve this Links behaviour.
@@ -140,11 +139,13 @@ signatures; the `gen` helpers use effect upcasts.
    `~@`, and `~linfun`. Adapt recursive alias linearity tests that
    currently use `End` to use a linear function type. Keep accepted
    and rejected uses of linear values in the native tests.
-3. Remove control-flow linearity separately, including `lindo`,
-   `xlin` and the operation-specific `=@` arrow. The off setting
-   leaves some of these forms accepted by the parser. Keep ordinary
-   handler input and output rows and preserve `wild`; recursion and
-   existing primitive types still use it.
+3. **4.1.** Remove control-flow linearity, including `lindo`, `xlin`,
+   the operation-specific `=@` arrow and the `Lin` kind shorthand.
+   `lindo` and `xlin` are ordinary identifiers. Operations still have
+   a distinct internal type with an argument tuple and result type.
+   Resumptions use the ordinary function type. Handler input and
+   output rows use the former default kinds. The printer uses full
+   kinds for effect presence variables, such as `Presence(Unl,Eff)`.
 4. Keep `DesugarEffects` on both user code and primitive signatures.
    Required work includes resolving anonymous effect variables,
    elaborating operation types and checking alias kinds. Keep the
@@ -174,15 +175,12 @@ signatures; the `gen` helpers use effect upcasts.
 
 ## Baseline fixtures to migrate
 
-1. Before deleting the session and control-flow linearity suites, move
-   the tests that use only ordinary linear functions or generalisation
-   into retained suites. See the early cases in
-   [`sessions.tests`](../../tests/sessions.tests) and the two value
-   subkinding cases marked `with CFL off` in
-   [`control_flow_linearity.tests`](../../tests/control_flow_linearity.tests).
-   The two session entries in [`freezeml.tests`](../../tests/freezeml.tests)
-   pass their filenames to `-e`. The results do not test the contents
-   of those files.
+1. Move tests for ordinary linear functions and generalisation from
+   the session and control-flow linearity suites to retained suites.
+   In 4.1, move the value subkinding cases into
+   [`functions.tests`](../../tests/functions.tests) and the ordinary
+   operation and value-linearity cases into
+   [`handlers.tests`](../../tests/handlers.tests).
 2. In 3.2, move the ordinary list generator and range tests into
    [`collections.tests`](../../tests/collections.tests). The former
    `asList` case in [`typed_ir.tests`](../../tests/typed_ir.tests) uses

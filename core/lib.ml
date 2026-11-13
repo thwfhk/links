@@ -834,8 +834,7 @@ let type_env : Types.environment =
 let typing_env = {Types.var_env = type_env;
                   Types.rec_vars = StringSet.empty;
                   tycon_env = alias_env;
-                  Types.effect_row = Types.closed_wild_row;
-                  Types.cont_lin = -1 }
+                  Types.effect_row = Types.closed_wild_row }
 
 let primitive_names = StringSet.elements (Env.String.domain type_env)
 

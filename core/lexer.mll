@@ -35,7 +35,6 @@ let keywords = [
  "as"       , AS;
  "case"     , CASE;
  "do"       , DOOP;
- "lindo"      , LINDOOP;
  "effectname", EFFECTNAME;
  "else"     , ELSE;
  "escape"   , ESCAPE;
@@ -63,8 +62,6 @@ let keywords = [
  "var"      , VAR;
  "where"    , WHERE;
  "with"     , WITH;
- (* Control-flow linearity *)
- "xlin"     , LINFLAG
 ]
 
 exception LexicalError of (string * Lexing.position)
@@ -108,7 +105,6 @@ rule lex ctxt nl = parse
   | "-@"                                { LOLLI }
   | "~@"                                { SQUIGLOLLI }
   | "=>"                                { FATRARROW }
-  | "=@"                                { FATLOLLI }
   | "-."                                { MINUSDOT }
   | '-'                                 { MINUS }
   | '('                                 { LPAREN }

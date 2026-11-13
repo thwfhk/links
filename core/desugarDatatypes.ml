@@ -108,8 +108,8 @@ module Desugar = struct
         | Record r -> Types.Record (row alias_env r t')
         | Variant r -> Types.Variant (row alias_env r t')
         | Effect r -> Types.Effect (row alias_env r t')
-        | Operation (f, t, b) -> Types.Operation ( Types.make_tuple_type (List.map datatype f)
-                           , datatype t, b)
+        | Operation (args, result) ->
+            Types.Operation (Types.make_tuple_type (List.map datatype args), datatype result)
         | List k -> Types.Application (Types.list, [(PrimaryKind.Type, datatype k)])
         | TypeApplication (tycon, ts) ->
             (* Matches kinds of the quantifiers against the type arguments.

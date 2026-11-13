@@ -94,7 +94,7 @@ let rec return_type ?(overstep_quantifiers=true) t = match (concrete_type t, ove
   | (ForAll (_, t), true) -> return_type t
   | (Function (_, _, t), _) -> t
   | (Lolli (_, _, t), _) -> t
-  | (Operation (_, t, _), _) -> t
+  | (Operation (_, t), _) -> t
   | (t, _) ->
       error ("Attempt to take return type of non-function: " ^ string_of_datatype t)
 
@@ -295,7 +295,7 @@ let check_type_wellformedness primary_kind t : unit =
     | Effect row ->
        irow row;
        pk_row
-    | Operation (f, t, _) ->
+    | Operation (f, t) ->
        idatatype f; idatatype t;
        pk_type
     (* Presence *)

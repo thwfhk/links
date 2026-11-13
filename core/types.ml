@@ -9,9 +9,6 @@ let internal_error message =
 let tag_expectation_mismatch =
   internal_error "Type tag expectation mismatch"
 
-
-let lincont_enabled = Settings.get Basicsettings.CTLinearity.enabled
-
 module FieldEnv = Utility.StringMap
 type 'a stringmap = 'a Utility.stringmap [@@deriving show]
 type 'a field_env = 'a stringmap [@@deriving show]
@@ -121,7 +118,7 @@ and typ =
   | ForAll of (Quantifier.t list * typ)
   (* Effect *)
   | Effect of row
-  | Operation of (typ * typ * DeclaredLinearity.t)
+  | Operation of (typ * typ)
   (* Row *)
   | Row of (field_spec_map * row_var)
   | Closed
@@ -333,11 +330,10 @@ struct
       | Effect row ->
          let (o, row') = o#row row in
          (o, Effect row')
-      | Operation (dom, cod, lin) ->
+      | Operation (dom, cod) ->
          let (o, dom') = o#typ dom in
          let (o, cod') = o#typ cod in
-         (* let (o, lin') = o#bool lin in *)
-         (o, Operation(dom', cod', lin))
+         (o, Operation (dom', cod'))
       (* Row *)
       | Row (fsp, rv) ->
          let (o, fsp') = o#field_spec_map fsp in
@@ -527,7 +523,7 @@ class virtual type_predicate = object(self)
        row_var && fields
     | Absent -> true
     | Present t -> self#type_satisfies vars t
-    | Operation (a, b, _) -> self#type_satisfies vars a && self#type_satisfies vars b
+    | Operation (a, b) -> self#type_satisfies vars a && self#type_satisfies vars b
 
   method field_satisfies : visit_context -> field_spec -> bool =
     fun vars field_spec -> self#type_satisfies vars field_spec
@@ -586,7 +582,7 @@ class virtual type_iter = object(self)
        self#visit_type (rec_appl, rec_vars, TypeVarSet.add_quantifiers qs quant_vars) t
     (* Effect *)
     | Effect r -> self#visit_row vars r
-    | Operation (a, b, _) -> self#visit_type vars a; self#visit_type vars b
+    | Operation (a, b) -> self#visit_type vars a; self#visit_type vars b
     (* Row *)
     | Row (fields, row_var) ->
        self#visit_point self#visit_row vars row_var;
@@ -723,10 +719,7 @@ module Unl : Constraint = struct
       | (Record _ | Variant _) as t -> super#type_satisfies vars t
       | ForAll _ as t -> super#type_satisfies vars t
       (* Effect *)
-      | Effect _  -> true
-      | Operation (_,_,b) ->
-        if lincont_enabled then DeclaredLinearity.(if b = Lin then true else false)
-        else true
+      | Effect _ | Operation _ -> true
       (* Row *)
       | Row _ as t -> super#type_satisfies vars t
       (* Presence *)
@@ -1023,7 +1016,7 @@ let free_type_vars, free_row_type_vars, free_tyarg_vars =
     | Lolli (f, m, t)         ->
        S.union_all [free_type_vars' rec_vars f; free_row_type_vars' rec_vars m; free_type_vars' rec_vars t]
     | Effect row | Record row | Variant row -> free_row_type_vars' rec_vars row
-    | Operation (f, t, _) ->
+    | Operation (f, t) ->
        S.union_all [free_type_vars' rec_vars f; free_type_vars' rec_vars t]
     | Alias (_, (_, _, ts), datatype) ->
        S.union (S.union_all (List.map (free_tyarg_vars' rec_vars) ts)) (free_type_vars' rec_vars datatype)
@@ -1275,7 +1268,7 @@ and normalise_datatype rec_names t =
   | Record row              -> Record (nr row)
   | Variant row             -> Variant (nr row)
   | Effect row              -> Effect (nr row)
-  | Operation (f, t, b)     -> Operation (nt f, nt t, b)
+  | Operation (f, t)        -> Operation (nt f, nt t)
   | Alias (k, (name, qs, ts), datatype) ->
      Alias (k, (name, qs, ts), nt datatype)
   | Application (abs, tyargs) ->
@@ -1562,7 +1555,7 @@ struct
        (List.rev vars) @ (free_bound_type_vars bound_vars body)
     (* Effect *)
     | Effect row -> free_bound_row_type_vars bound_vars row
-    | Operation (f, t, _) ->
+    | Operation (f, t) ->
        (fbtv f) @ (fbtv t)
     (* Row *)
     | Row (field_env, row_var) ->
@@ -2268,7 +2261,7 @@ struct
               "forall "^ mapstrcat "," (quantifier p) tyvars ^"."^ datatype { context with bound_vars } p body
          (* Effect *)
          | Effect r -> "{" ^ row "," context p r ^ "}"
-         | Operation (f, t, b) -> sd f ^ (if b=DeclaredLinearity.Lin then " =@ " else " => ") ^ sd t
+         | Operation (f, t) -> sd f ^ " => " ^ sd t
          (* Row *)
          | Row _ as t -> "{" ^ row "," context p t ^ "}"
          (* Presence *)
@@ -2397,7 +2390,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                  | Variant
                  | Effect
                  | Row
-                 | RowVar of [`Variant | `NonVariant | `Effect]
+                 | RowVar of [`Variant | `NonVariant]
                  | Binder
                  | Type_arg
                  [@@deriving show]
@@ -2499,9 +2492,6 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       = fun { ambient ; _ } -> match ambient with
                                | RowVar _ -> true
                                | _ -> false
-
-    let is_ambient_effvar : t -> bool
-      = fun { ambient ; _ } -> ambient = RowVar `Effect
 
     let is_ambient_variant_rowvar : t -> bool
       = fun { ambient ; _ } -> match ambient with
@@ -2740,15 +2730,11 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             method effect_row : row -> 'self_type * row_erasability * tid option
               = let maybe_contract : typ -> typ
                   = function
-                  | Operation (d,c,_) as tp when ES.contract_operation_arrows policy ->
+                  | Operation (d, c) as tp when ES.contract_operation_arrows policy ->
                      (* we are in an operation fieldspec and it's an arrow, and we
                       want contractions: check if a contraction is possible here
                       *)
                      if d = unit_type then c else tp
-                     (* FIXME: WT: I dont understand where this is
-                        used. However, it seems dangerous that the
-                        syntactic sugar discards the linearity
-                        information. *)
                   | tp -> tp
                 in
                 let decide_field : tid -> string -> field_spec -> 'self_type * field_spec_map -> 'self_type * field_spec_map
@@ -3054,12 +3040,12 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
   (* For correct printing of subkinds, need to know the subkind in advance:
    * see line (1): that has to be Empty so that the :: is not printed *)
-  let subkind_name : ?is_eff:bool -> Policy.t -> Subkind.t -> unit printer
-    = fun ?(is_eff=false) policy (lin, res) ->
+  let subkind_name : Policy.t -> Subkind.t -> unit printer
+    = fun policy (lin, res) ->
     let open Printer in
     let full_name : unit printer
       = let linname =
-        Linearity.to_string ~is_eff:is_eff lin
+        Linearity.to_string lin
         in Printer (fun _ctx () buf ->
             StringBuffer.write buf "(";
             StringBuffer.write buf linname;
@@ -3075,10 +3061,10 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
        let module L = Linearity in
        let module R = Restriction in
        match (lin, res) with
-       | (L.Unl, R.Any)     -> if is_eff && lincont_enabled then constant "Lin" else Empty (* (1) see above *)
-       | (L.Any, R.Any)     -> if is_eff && lincont_enabled then Empty else constant "Any"
+       | (L.Unl, R.Any)     -> Empty (* (1) see above *)
+       | (L.Any, R.Any)     -> constant "Any"
        | (L.Unl, R.Base)    -> constant @@ R.to_string res_base
-       | (L.Unl, R.Effect)  -> constant @@ R.to_string res_effect (* control-flow-linearity may also need changing this *)
+       | (L.Unl, R.Effect)  -> constant @@ R.to_string res_effect
        | _ -> full_name
 
 
@@ -3090,16 +3076,10 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
       fun ctx ((primary, subknd) as knd) ->
 
-      let is_row = Kind.primary_kind knd = PrimaryKind.Row
-                 || Context.is_ambient_rowvar ctx in
-      let is_presence = primary = PrimaryKind.Presence in
-      let is_eff = Context.is_ambient_effvar ctx
-                 || (Context.is_ambient_effect ctx && (is_presence || is_row)) in
-      (* let in_binder = Context.is_ambient_binder ctx in *)
       let full_name : unit printer
         = Printer (fun ctxt () buf ->
               StringBuffer.write buf (P.to_string primary);
-              Printer.apply (subkind_name ~is_eff:is_eff (Context.policy ctxt) subknd) ctxt () buf)
+              Printer.apply (subkind_name (Context.policy ctxt) subknd) ctxt () buf)
       in
       let policy = Context.policy ctx in
       match Policy.kinds policy, knd with
@@ -3120,16 +3100,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                end
              | PrimaryKind.Row -> begin
                  match subknd with
-                 | L.Unl, R.Any | L.Unl, R.Effect ->
-                    if is_eff && lincont_enabled then StringBuffer.write buf (P.to_string pk_row ^ "(Lin)")
-                    else StringBuffer.write buf (P.to_string pk_row)
-                 | L.Any, R.Any | L.Any, R.Effect ->
-                    (* NOTE: The first branch might not be entirely compatible with value rows. *)
-                    if not lincont_enabled then StringBuffer.write buf (P.to_string pk_row)
-                    else if is_eff then StringBuffer.write buf (P.to_string pk_row)
-                    else
-                    let ctx' = Context.(with_policy Policy.(set_kinds Full (policy ctx)) ctx) in
-                    Printer.apply full_name ctx' () buf
+                 | (L.Unl | L.Any), (R.Any | R.Effect) ->
+                    StringBuffer.write buf (P.to_string pk_row)
                  | _ ->
                     let ctx' = Context.(with_policy Policy.(set_kinds Full (policy ctx)) ctx) in
                     Printer.apply full_name ctx' () buf
@@ -3138,11 +3110,6 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                  match subknd with
                  | L.Unl, R.Any ->
                     StringBuffer.write buf (P.to_string pk_presence)
-                 | L.Any, R.Effect ->
-                    StringBuffer.write buf (P.to_string pk_row)
-                 | L.Unl, R.Effect ->
-                    (* explicit kinds for linear presence variables *)
-                    StringBuffer.write buf (P.to_string pk_presence ^ "(Lin)")
                  | _ ->
                     let ctx' = Context.(with_policy Policy.(set_kinds Full (policy ctx)) ctx) in
                     Printer.apply full_name ctx' () buf
@@ -3206,12 +3173,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                  | _, _             -> StringBuffer.write buf var_name)
                 )
           in
-          let is_row = Kind.primary_kind knd = PrimaryKind.Row
-                     || Context.is_ambient_rowvar ctx in
-          let is_eff = Context.is_ambient_effvar ctx
-                     || (Context.is_ambient_effect ctx && (is_presence || is_row)) in
           if not in_binder
-          then seq ~sep:"::" (print_var, subkind_name ~is_eff:is_eff (Context.policy ctx) subknd) (var_name, ()) ctx buf
+          then seq ~sep:"::" (print_var, subkind_name (Context.policy ctx) subknd) (var_name, ()) ctx buf
           else seq ~sep:"::" (print_var, kind_name ctx knd) (var_name, ()) ctx buf;
           (if is_presence && not (Context.is_ambient_type_arg ctx) then StringBuffer.write buf "}")
           )
@@ -3298,8 +3261,6 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                else StringBuffer.write buf "|";
                let ctx = Context.set_ambient (if Context.is_ambient_variant ctx
                                               then Context.RowVar `Variant
-                                              else if Context.is_ambient_effect ctx
-                                              then Context.RowVar `Effect
                                               else Context.RowVar `NonVariant) ctx
                in
                Printer.apply pr ctx () buf
@@ -3443,10 +3404,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | None | Some Absent | Some (Meta _) -> false
             | _ -> raise tag_expectation_mismatch
           in
-          let decide_skip ctx vid subknd =
+          let decide_skip ctx vid =
             let anonymity = get_var_anonymity ctx vid in
-            (* linear row variables should not be skipped *)
-            let is_linrow = if lincont_enabled then fst subknd = Linearity.Unl else false in
             if Context.implicit_shared_effect_exists ctx
             then begin
                 let es_policy = Policy.es_policy (Context.policy ctx) in
@@ -3457,13 +3416,12 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
                 match anonymity with
                 | Visible -> false (* decided Visible, cannot skip *)
-                | Anonymous -> (arrows_show_impl_shared ||
-                               (arrows_curried_hide_fresh && Context.is_ambient_arrow_curried ctx)) &&
-                               not is_linrow
-                | ImplicitEffectVar -> not arrows_show_impl_shared && not is_linrow
+                | Anonymous -> arrows_show_impl_shared ||
+                               (arrows_curried_hide_fresh && Context.is_ambient_arrow_curried ctx)
+                | ImplicitEffectVar -> not arrows_show_impl_shared
               end
             else match anonymity with
-                 | Anonymous -> not is_linrow (* skip *)
+                 | Anonymous -> true (* skip *)
                  | Visible   -> false (* no skip *)
                  | _         ->
                     raise (internal_error "ImplicitEffectVar anonymity is not allowed when effect sugar is disabled")
@@ -3501,13 +3459,10 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               else begin
                     match Unionfind.find rvar with
                     | Var (vid, knd, _) ->
-                      let subknd = Kind.subkind knd in
-                      let is_linrow = if lincont_enabled then fst subknd = Linearity.Unl else false in
-                    (* empty unlimited open row use the abbreviated notation -a- or ~a~ unless
-                      it's anonymous in which case we skip it entirely *)
-                      if visible_fields = 0 && not is_linrow
+                      (* Empty open rows use -a- or ~a~ unless the row variable is anonymous. *)
+                      if visible_fields = 0
                       then begin
-                        if decide_skip ctx vid subknd
+                        if decide_skip ctx vid
                         then () (* skip printing it entirely *)
                         else
                         begin
@@ -3564,12 +3519,11 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           Printer.apply datatype ctx range buf;
         )
 
-  and op : (typ * typ * DeclaredLinearity.t) printer
+  and op : (typ * typ) printer
     = let open Printer in
-      Printer (fun ctx (domain, range, lin) buf ->
-          (* build up the function type string: domain, arrow with effects, range *)
-          Printer.apply row (Context.set_ambient Context.Tuple ctx) domain buf; (* function domain is always a Record *)
-          StringBuffer.write buf (if lin=DeclaredLinearity.Lin then " =@ " else " => ");
+      Printer (fun ctx (domain, range) buf ->
+          Printer.apply row (Context.set_ambient Context.Tuple ctx) domain buf;
+          StringBuffer.write buf " => ";
           Printer.apply datatype ctx range buf;
         )
 
@@ -3783,15 +3737,13 @@ type tycon_environment = tycon_spec Env.t
 type typing_environment = { var_env    : environment ;
                             rec_vars   : StringSet.t ;
                             tycon_env  : tycon_environment ;
-                            effect_row : row;
-                            cont_lin   : int }
+                            effect_row : row }
                             [@@deriving show]
 
 let empty_typing_environment = { var_env    = Env.empty;
                                  rec_vars   = StringSet.empty;
                                  tycon_env  = Env.empty;
-                                 effect_row = make_empty_closed_row ();
-                                 cont_lin   = -1 }
+                                 effect_row = make_empty_closed_row () }
 
 (* Which printer to use *)
 type pretty_printer_engine = Old | Roundtrip | Derived
@@ -3916,13 +3868,12 @@ let normalise_typing_environment env =
 
 (* Functions on environments *)
 let extend_typing_environment
-    {var_env = l; rec_vars = lvars; tycon_env = al; effect_row = _; cont_lin = _ }
-    {var_env = r; rec_vars = rvars; tycon_env = ar; effect_row = er; cont_lin = xl } : typing_environment =
+    {var_env = l; rec_vars = lvars; tycon_env = al; effect_row = _ }
+    {var_env = r; rec_vars = rvars; tycon_env = ar; effect_row = er } : typing_environment =
   { var_env    = Env.extend l r
   ; rec_vars   = StringSet.union lvars rvars
   ; tycon_env  = Env.extend al ar
-  ; effect_row = er
-  ; cont_lin   = xl }
+  ; effect_row = er }
 
 let string_of_environment env = show_environment (Env.map DecycleTypes.datatype env)
 
@@ -3946,7 +3897,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
     | Function (f, m, t)      -> union [make_env boundvars f; make_env boundvars m; make_env boundvars t]
     | Lolli (f, m, t)         -> union [make_env boundvars f; make_env boundvars m; make_env boundvars t]
     | Effect row | Record row | Variant row -> make_env boundvars row
-    | Operation (f, t, _)     -> union [make_env boundvars f; make_env boundvars t]
+    | Operation (f, t)        -> union [make_env boundvars f; make_env boundvars t]
     | Alias (_, (_, _, ts), d) -> union (List.map (make_env_ta boundvars) ts @ [make_env boundvars d])
     | Application (_, ds)     -> union (List.map (make_env_ta boundvars) ds)
     | RecursiveApplication { r_args ; _ } -> union (List.map (make_env_ta boundvars) r_args)

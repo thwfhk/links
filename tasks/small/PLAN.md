@@ -90,8 +90,9 @@ tests pass, including deep recursion. Removed constructs are rejected.
   primitives and evaluation. Delete the lens library and its tests.
 - [x] **3.2** (`447c8a5e`) Remove tables, queries, updates and temporal
   database features. Keep list generators, `where` and `orderby`.
-- [x] **3.3** Remove SPARQL, the remaining database and query modules,
-  and unused build dependencies and settings. Keep ordinary date/time.
+- [x] **3.3** (`7aa69b42`) Remove SPARQL, the remaining database and
+  query modules, and unused build dependencies and settings. Keep
+  ordinary date/time.
 
 Completion check: the build has no database, query or lens modules.
 List, record and handler tests pass; removed database and lens
@@ -99,7 +100,7 @@ constructs are rejected.
 
 ### 4. Simplify effect and row syntax
 
-- [ ] **4.1** Remove control-flow linearity, including its settings and
+- [x] **4.1** Remove control-flow linearity, including its settings and
   source forms. Preserve linear functions, kinds and usage checks,
   FreezeML and ordinary multi-shot resumptions.
 - [ ] **4.2** Migrate retained examples and tests away from optional
@@ -153,10 +154,29 @@ regressions and native IR unit tests pass, and source checks pass.
 
 ## Status
 
+Item 4.1 is complete. Next, migrate the retained examples and tests to
+the default effect annotation rules in 4.2. There are no blockers.
+
+Checks for 4.1 used `7aa69b42` plus the item changes on OCaml 5.4.0.
+Logs are under `/private/tmp/smalllinks-m4.Fx8PK2/`.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make no-db` | Passed. | `4.1-build.log` |
+| `./test-harness tests/<suite>.tests` for the suites below | 566 passed, 2 ignored and 0 failed. | One `4.1-<suite>.log` per suite |
+| `opam exec -- ./run-tests nodb-unit-tests` | 44 passed. | `4.1-unit.log` |
+| `./tests/validate_typecheck_testfile.testscript` | Passed. | `4.1-registration.log` |
+| `make rule-check` and `git diff --check` | Passed. The tabs check used `rg` because GNU find was unavailable. | `4.1-rule.log`, `4.1-diff.log`, `4.1-tabs.log` |
+
+Suites for 4.1: `desugar_datatypes`, `effect_sugar`, `effectname`,
+`freezeml`, `functions`, `handlers`, `native`, `polymorphism`,
+`presence_type_arg`, `recheck_frontend_transformations`, `records`,
+`roundtrippable_types`, `type_print`, `typecheck_examples`, `typed_ir`
+and `variants`.
+
 Milestone 3 is complete. A clean build contains no database, query or
 lens modules. List, record, handler and ordinary date/time tests pass,
-and the removed constructs are rejected. Next, remove control-flow
-linearity in 4.1. There are no blockers for 4.1.
+and the removed constructs are rejected.
 
 Checks for 3.3 used `447c8a5e` plus the item changes on OCaml 5.4.0.
 Logs are under `/private/tmp/smalllinks-m3.yjxu5W/`. The macOS `xcrun`

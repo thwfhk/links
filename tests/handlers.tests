@@ -342,6 +342,12 @@ fun h1(m)() { handle(m()) { case <Op1 => k> -> k(1) } } fun h2(m)() { handle(m()
 stdout : 6 : Int
 args : --enable-handlers
 
+Combining choice and state handlers
+tests/handlers/choose_and_state.links
+filemode : true
+stdout : [3, 4, 9, 10, 3, 3, 3, 3] : [Int]
+args : --enable-handlers
+
 Type annotation on deep continuation parameter
 fun h1(m) { handle(m()) { case <Op => (k : ((Int) {Op{_}|_}~> Int)) > -> k(1) } }
 stdout : () : ()
@@ -488,9 +494,36 @@ stderr : @.*Type error: The handle has effect type.*
 exit : 1
 args : --enable-handlers
 
+Applying a linear function to an operation result
+fun applyChoice(f:((String) { |%}-@ ())) {f(if (do Choose) "A" else "B")} applyChoice
+stdout : fun : ((String) {Choose:() => Bool|a}-@ ()) {Choose:() => Bool|a}-> ()
+args : --enable-handlers
+
 Repeated resumption of a computation using a linear local
 { var f = linfun(x) { x + 1 }; handle(f(do Ask)) { case <Ask => k> -> k(19) + k(21) } }
 stdout : 42 : Int
+args : --enable-handlers
+
+Deep handler operation clause can use a linear argument
+var lf = linfun() { 42 }; handle(do Foo(lf) + 42) { case <Foo(f : (() { |%}-@ Int)) => k> -> k(f()) }
+stdout : 84 : Int
+args : --enable-handlers
+
+Deep handler operation clause cannot use a linear local
+var lf = linfun() { 42 }; handle(do Foo + 42) { case <Foo => k> -> k(lf()) }
+stderr : @.*Type error: Variable lf of linear type .* is used in a deep handler.*
+exit : 1
+args : --enable-handlers
+
+Shallow handler operation clause can use a linear local
+var lf = linfun() { 42 }; shallowhandle(do Foo + 42) { case <Foo -> k> -> handle(k(lf())) { case <Foo => resume> -> resume(0) } }
+stdout : 84 : Int
+args : --enable-handlers
+
+Shallow handler cannot use a linear local twice
+fun() { var lf = linfun(x) {x}; shallowhandle(lf(do Foo)) { case <Foo -> k> -> k(lf(42)) } }
+stderr : @.*Type error: Variable lf has linear type .*but is used 2 times.*
+exit : 1
 args : --enable-handlers
 
 Shallow handler return clause can use a linear local

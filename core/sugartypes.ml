@@ -69,14 +69,7 @@ type tyarg = Types.type_arg
 
 let default_subkind : Subkind.t = (lin_unl, res_any)
 
-(* NOTICE: `lin_any` here means this eff_row_var can be unified with
-    linear or unlimited row types *)
-
-let lincont_enabled = Settings.get Basicsettings.CTLinearity.enabled
-
-let default_effect_lin : Linearity.t = if lincont_enabled then lin_any else lin_unl
-
-let default_effect_subkind : Subkind.t =(default_effect_lin, res_any)
+let default_effect_subkind : Subkind.t = (lin_unl, res_any)
 
 
 type kind = PrimaryKind.t option * Subkind.t option
@@ -200,7 +193,7 @@ module Datatype = struct
     | Record          of row
     | Variant         of row
     | Effect          of row
-    | Operation       of with_pos list * with_pos * DeclaredLinearity.t
+    | Operation       of with_pos list * with_pos
     | List            of with_pos
     | TypeApplication of string * type_arg list
     | Primitive       of Primitive.t
@@ -242,7 +235,7 @@ module Pattern = struct
     | Variant  of Name.t * with_pos option
     (* | Effect   of Name.t * with_pos list * with_pos *)
     (* | Effect2  of with_pos list * with_pos option *)
-    | Operation of Label.t * with_pos list * with_pos * DeclaredLinearity.t
+    | Operation of Label.t * with_pos list * with_pos
     | Negative of Name.t list
     | Record   of (Name.t * with_pos) list * with_pos option
     | Tuple    of with_pos list
@@ -330,11 +323,9 @@ and phrasenode =
   | Instantiate      of phrase
   | Generalise       of phrase
   | ConstructorLit   of Name.t * phrase option * Types.datatype option
-  | DoOperation      of phrase * phrase list * Types.datatype option * DeclaredLinearity.t
+  | DoOperation      of phrase * phrase list * Types.datatype option
   | Operation        of Name.t
   | Handle           of handler
-  | Unlet            of phrase
-  | Linlet           of phrase
   | Switch           of phrase * (Pattern.with_pos * phrase) list *
                           Types.datatype option
 and phrase = phrasenode WithPos.t
@@ -444,7 +435,7 @@ struct
     | List ps               -> union_map pattern ps
     | Cons (p1, p2)         -> union (pattern p1) (pattern p2)
     | Variant (_, popt)     -> option_map pattern popt
-    | Operation (_, ps, kopt, _)  -> union (union_map pattern ps) (pattern kopt)
+    | Operation (_, ps, k)       -> union (union_map pattern ps) (pattern k)
     | Record (fields, popt) ->
        union (option_map pattern popt)
          (union_map (snd ->- pattern) fields)
@@ -515,11 +506,9 @@ struct
                                                     params.shp_bindings)
                           descr.shd_params) params_bound]
     | Switch (p, cases, _) -> union (phrase p) (union_map case cases)
-    | DoOperation (_, ps, _, _) -> union_map phrase ps
+    | DoOperation (_, ps, _) -> union_map phrase ps
     | Operation _ -> empty
     | QualifiedVar _ -> empty
-    | Unlet p -> phrase p
-    | Linlet p -> phrase p
   and binding (binding': binding)
       : StringSet.t (* vars bound in the pattern *)
       * StringSet.t (* free vars in the rhs *) =

@@ -161,6 +161,14 @@ fun (x) {x}
 stdout : fun : (a::Any) -> a::Any
 exit : 0
 
+Linear identity accepts an unrestricted value
+fun id(x) {x} id(42)
+stdout : 42 : Int
+
+Linear identity accepts a linear value
+fun id(x) {x} id(linfun(){42})
+stdout : fun : () -@ Int
+
 Non-linear dup
 fun (x) {(x, x)}
 stdout : fun : (a) -> (a, a)
@@ -174,3 +182,12 @@ exit : 1
 Linear function is used once in either branch
 var f = linfun(x) { x + 1 }; if (true) {f(41)} else {f(0)}
 stdout : 42 : Int
+
+Linear closure can capture a linear function
+fun faithfulApply(f:((a::Any) { |%}-@ ())) { linfun (s) { f(s) } } faithfulApply
+stdout : fun : ((a::Any) -b-@ ()) -> (a::Any) -b-@ ()
+
+Unrestricted closure cannot capture a linear function
+var f = linfun() { 42 }; fun call() { f() } call()
+stderr : @.*Type error: Variable f of linear type .* was used in a non-linear function definition.*
+exit : 1

@@ -134,7 +134,7 @@ and typ =
   | ForAll of (Quantifier.t list * typ)
   (* Effect *)
   | Effect of row
-  | Operation of (typ * typ * DeclaredLinearity.t)
+  | Operation of (typ * typ)
   (* Row *)
   | Row of (field_spec_map * row_var)
   | Closed
@@ -198,8 +198,7 @@ type tycon_environment  = tycon_spec Env.String.t
 type typing_environment = { var_env    : environment ;
                             rec_vars   : Utility.StringSet.t ;
                             tycon_env  : tycon_environment ;
-                            effect_row : row ;
-                            cont_lin   : int }
+                            effect_row : row }
 
 val empty_typing_environment : typing_environment
 

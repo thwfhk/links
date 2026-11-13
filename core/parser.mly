@@ -55,10 +55,6 @@ open ParserConstructors
 
 let default_fixity = 9
 
-let lincont_enabled = Settings.get Basicsettings.CTLinearity.enabled
-
-let default_effect_lin = if lincont_enabled then lin_any else lin_unl
-
 let primary_kind_of_string p =
   function
   | "Type"     -> pk_type
@@ -71,7 +67,6 @@ let linearity_of_string p =
   function
   | "Any" -> lin_any
   | "Unl" -> lin_unl
-  | "Lin" -> lin_unl (* for effect vars *)
   | lin   ->
      raise (ConcreteSyntaxError (pos p, "Invalid kind linearity: " ^ lin))
 
@@ -80,6 +75,7 @@ let restriction_of_string p =
   | "Any"     -> res_any
   | "Base"    -> res_base
   | "Mono"    -> res_mono
+  | "Eff"     -> res_effect
   | rest      ->
      raise (ConcreteSyntaxError (pos p, "Invalid kind restriction: " ^ rest))
 
@@ -89,23 +85,10 @@ let full_kind_of pos prim lin rest =
   let r = restriction_of_string  pos rest in
   (Some p, Some (l, r))
 
-(* The Row(Lin) and Row(Any) syntactic sugars for linear effect vars.
-   Note that these two syntactic sugars should only be used for effect
-   row variables, not for value row variables.  *)
-let linrow_kind_of pos prim lin =
-  let p = primary_kind_of_string pos prim in
-  let l = if lincont_enabled then linearity_of_string pos lin else lin_unl in
-  let r = res_any in
-  (Some p, Some (l, r))
-
 let full_subkind_of pos lin rest =
   let l = linearity_of_string   pos lin  in
   let r = restriction_of_string pos rest in
   Some (l, r)
-
-(* Currently "Any" means Any,Any, but it is probably advisable to
-change "Any" to something more evocative of linearity - "Lin"
-perhaps. *)
 
 let kind_of p =
   function
@@ -116,16 +99,15 @@ let kind_of p =
   (* subkind of type abbreviations *)
   | "Any"      -> (Some pk_type, Some (lin_any, res_any))
   | "Base"     -> (Some pk_type, Some (lin_unl, res_base))
-  | "Eff"      -> (Some pk_row , Some (default_effect_lin, res_effect))
+  | "Eff"      -> (Some pk_row , Some (lin_unl, res_effect))
   | k          -> raise (ConcreteSyntaxError (pos p, "Invalid kind: " ^ k))
 
 let subkind_of p =
   function
   (* subkind abbreviations *)
   | "Any"     -> Some (lin_any, res_any)
-  | "Lin"     -> Some (lin_unl, res_any) (* for linear effect vars *)
   | "Base"    -> Some (lin_unl, res_base)
-  | "Eff"     -> Some (default_effect_lin, res_effect)
+  | "Eff"     -> Some (lin_unl, res_effect)
   | sk        -> raise (ConcreteSyntaxError (pos p, "Invalid subkind: " ^ sk))
 
 let named_quantifier name kind freedom = SugarQuantifier.mk_unresolved name kind freedom
@@ -209,7 +191,6 @@ let make_effect_var : is_dot:bool -> ParserPosition.t -> Datatype.row_var
       else Datatype.Closed
     end
 
-let dummy_phrase pos = with_pos pos (Sugartypes.RecordLit ([], None))
 
 module MutualBindings = struct
 
@@ -288,14 +269,13 @@ let any = any_pat dp
 
 %token EOF
 %token EQ IN
-%token FUN LINFUN FROZEN_FUN FROZEN_LINFUN RARROW LOLLI FATRARROW FATLOLLI VAR OP
+%token FUN LINFUN FROZEN_FUN FROZEN_LINFUN RARROW LOLLI FATRARROW VAR OP
 %token SQUIGRARROW SQUIGLOLLI TILDE
 %token IF ELSE
 %token MINUS MINUSDOT
 %token SWITCH CASE
 %token HANDLE SHALLOWHANDLE
-%token DOOP LINDOOP
-%token LINFLAG
+%token DOOP
 %token LPAREN RPAREN
 %token LBRACE RBRACE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
@@ -471,8 +451,6 @@ typeargs_opt:
 kind:
 | COLONCOLON CONSTRUCTOR LPAREN CONSTRUCTOR COMMA CONSTRUCTOR RPAREN
                                                                { full_kind_of $loc $2 $4 $6 }
-| COLONCOLON CONSTRUCTOR LPAREN CONSTRUCTOR RPAREN
-                                                               { linrow_kind_of $loc $2 $4 }
 | COLONCOLON CONSTRUCTOR                                       { kind_of $loc($2) $2        }
 
 subkind:
@@ -566,9 +544,7 @@ unary_expression:
 | MINUSDOT unary_expression                                    { unary_appl ~ppos:$loc UnaryOp.FloatMinus $2 }
 | OPERATOR unary_expression                                    { unary_appl ~ppos:$loc (UnaryOp.Name $1)  $2 }
 | postfix_expression | constructor_expression                  { $1 }
-| DOOP CONSTRUCTOR loption(arg_spec)                           { with_pos $loc (DoOperation (with_pos $loc($2) (Operation $2), $3, None, DeclaredLinearity.Unl)) }
-| LINDOOP CONSTRUCTOR loption(arg_spec)                        { with_pos $loc (DoOperation (with_pos $loc($2) (Operation $2), $3, None,
-  if lincont_enabled then DeclaredLinearity.Lin else DeclaredLinearity.Unl)) }
+| DOOP CONSTRUCTOR loption(arg_spec)                           { with_pos $loc (DoOperation (with_pos $loc($2) (Operation $2), $3, None)) }
 
 infix_appl:
 | unary_expression                                             { $1 }
@@ -639,12 +615,7 @@ perhaps_orderby:
 escape_expression:
 | ESCAPE VARIABLE IN exp                                       { with_pos $loc (Escape (binder ~ppos:$loc($2) $2, $4)) }
 
-seq_expression:
-// | LBRACKETBAR exp BARRBRACKET                                  { with_pos $loc (Unlet $2) }
-| LINFLAG                                                      { with_pos $loc (Linlet (dummy_phrase $loc)) }
-
 exp:
-| seq_expression
 | case_expression
 | conditional_expression
 | escape_expression
@@ -739,9 +710,7 @@ squiggly_arrow:
 | parenthesized_datatypes SQUIGLOLLI datatype                  { Datatype.Lolli    ($1, row_with_wp fresh_effects, $3) }
 
 fat_arrow:
-| parenthesized_datatypes FATRARROW datatype                   { Datatype.Operation ($1, $3, DeclaredLinearity.Unl) }
-| parenthesized_datatypes FATLOLLI datatype                    { Datatype.Operation ($1, $3,
-  if lincont_enabled then DeclaredLinearity.Lin else DeclaredLinearity.Unl) }
+| parenthesized_datatypes FATRARROW datatype                   { Datatype.Operation ($1, $3) }
 
 mu_datatype:
 | MU VARIABLE DOT mu_datatype                                  { Datatype.Mu (named_typevar $2 `Rigid, with_pos $loc($4) $4) }
@@ -1001,14 +970,11 @@ typed_effect_pattern:
 
 resumable_operation_pattern:
 | operation_pattern FATRARROW pattern
-    { with_pos $loc (Pattern.Operation (fst $1, snd $1, $3, DeclaredLinearity.Unl)) }
-| operation_pattern FATLOLLI pattern
-    { with_pos $loc (Pattern.Operation (fst $1, snd $1, $3,
-      if lincont_enabled then DeclaredLinearity.Lin else DeclaredLinearity.Unl)) }
+    { with_pos $loc (Pattern.Operation (fst $1, snd $1, $3)) }
 | operation_pattern RARROW pattern
-    { with_pos $loc (Pattern.Operation (fst $1, snd $1, $3, DeclaredLinearity.Unl)) }
+    { with_pos $loc (Pattern.Operation (fst $1, snd $1, $3)) }
 | operation_pattern
-    { with_pos $loc (Pattern.Operation (fst $1, snd $1, any, DeclaredLinearity.Unl)) }
+    { with_pos $loc (Pattern.Operation (fst $1, snd $1, any)) }
 
 operation_pattern:
 | CONSTRUCTOR                                                  { ($1, []) }

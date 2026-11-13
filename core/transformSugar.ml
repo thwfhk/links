@@ -396,9 +396,9 @@ class transform (env : Types.typing_environment) =
           let (o, e, _) = option o (fun o -> o#phrase) e in
           let (o, t) = o#datatype t in
           (o, ConstructorLit (name, e, Some t), t)
-      | DoOperation (name, ps, Some t, b) ->
+      | DoOperation (name, ps, Some t) ->
          let (o, ps, _) = list o (fun o -> o#phrase) ps in
-         (o, DoOperation (name, ps, Some t, b), t)
+         (o, DoOperation (name, ps, Some t), t)
       | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
          let (input_row, input_t, output_row, output_t) = sh_descr.shd_types in
          let (o, expr, _) = o#phrase sh_expr in
@@ -474,10 +474,10 @@ class transform (env : Types.typing_environment) =
       | Variant (name, p) ->
           let (o, p) = optionu o (fun o -> o#pattern) p
           in (o, Variant (name, p))
-      | Operation (name, ps, k, b) ->
+      | Operation (name, ps, k) ->
          let (o, ps) = listu o (fun o -> o#pattern) ps in
          let (o, k)  = o#pattern k in
-         (o, Operation (name, ps, k, b))
+         (o, Operation (name, ps, k))
       | Negative name -> (o, Negative name)
       | Record (fields, rest) ->
           let (o, fields) =

@@ -358,14 +358,13 @@ let cleanup_effects tycon_env =
        let open Datatype in
        let open SourceCode in
        let open WithPos in
-       (* Elaborates `Op : a' to `Op : () {}-> a' *)
+       (* Elaborates `Op : a' to `Op : () => a' *)
        let rec elaborate_op dt =
          let { node ; pos } = dt in
          WithPos.make ~pos (match node with
              | Datatype.Operation _     -> node
              | Datatype.Forall (qs, dt) -> Datatype.Forall (qs, elaborate_op dt)
-             | _                        -> Datatype.Operation ([], dt, DeclaredLinearity.Unl))
-             (* nullary operations without =@ are unlimited *)
+             | _                        -> Datatype.Operation ([], dt))
        in
        let fields = List.map (function
            | name, Present dt when not (TypeUtils.is_builtin_effect name) ->
@@ -389,7 +388,7 @@ let cleanup_effects tycon_env =
                   SugarTypeVar.mk_resolved_row
                     (let var = Types.fresh_raw_variable () in
                      Unionfind.fresh
-                       (Types.Var (var, (PrimaryKind.Row, (default_effect_lin, res_effect)), `Flexible)))
+                       (Types.Var (var, (PrimaryKind.Row, (lin_unl, res_effect)), `Flexible)))
                 in
                 let name, (_, sk), fr = gue stv in
                 if has_effect_sugar
@@ -1178,7 +1177,7 @@ class main_traversal simple_tycon_env =
               ({ node = t, args, b; pos } as tn) =
             if StringMap.find t implicits then
               let var = Types.fresh_raw_variable () in
-              let q = (var, (PrimaryKind.Row, (default_effect_lin, res_effect))) in
+              let q = (var, (PrimaryKind.Row, (lin_unl, res_effect))) in
               (* Add the new quantifier to the argument list and rebind. *)
               (* let qs = List.map (snd ->- OptionUtils.val_of) args @ [q] in *)
               let args = args @ [ SugarQuantifier.mk_resolved q ] in
@@ -1192,7 +1191,7 @@ class main_traversal simple_tycon_env =
               let tycon_env = SEnv.bind t (env_args, true, None) tycon_env in
               let shared_effect_var : Types.meta_row_var Lazy.t =
                 lazy
-                  (Unionfind.fresh (Types.Var (var, (PrimaryKind.Row, (default_effect_lin, res_effect)), `Rigid)))
+                  (Unionfind.fresh (Types.Var (var, (PrimaryKind.Row, (lin_unl, res_effect)), `Rigid)))
               in
               let shared_var_env =
                 StringMap.add t (Some shared_effect_var) shared_var_env
