@@ -3,16 +3,6 @@ Incomplete expression
 stderr : @..*
 exit : 1
 
-Incomplete start element
-<a
-stderr : @..*
-exit : 1
-
-Incomplete attribute
-<a b="
-stderr : @..*
-exit : 1
-
 Incomplete regexp (1)
 "abc" =~ /ab
 stderr : @..*

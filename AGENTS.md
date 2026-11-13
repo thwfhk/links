@@ -7,11 +7,10 @@ OCaml.
 ## Repository shape
 
 - Local worktrees should be at `.worktrees/<name>`.
-- `core/` contains parsing, type checking, compiler passes, evaluation,
-  and the web server. Database query compilation is in `core/query/`.
+- `core/` contains parsing, type checking, compiler passes and evaluation.
+  Database query compilation is in `core/query/`.
 - `bin/` contains the command-line driver and REPL.
 - `lib/stdlib/` and `prelude.links` contain the Links standard library.
-- `lib/js/` contains the JavaScript runtime.
 - `lens/` contains relational lenses.
 - `tests/` contains regression tests and OCaml unit tests.
 - `examples/` contains Links programs; `doc/` contains documentation.

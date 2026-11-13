@@ -50,10 +50,6 @@ Typecheck example file examples/AIPL14/Solutions/Problem4.links
 examples/AIPL14/Solutions/Problem4.links
 filemode : true
 
-Typecheck example file examples/buttons.links
-examples/buttons.links
-filemode : true
-
 Typecheck example file examples/channels.links
 examples/channels.links
 filemode : true
@@ -62,18 +58,6 @@ Typecheck example file examples/church.links
 examples/church.links
 filemode : true
 ignore : broken example
-
-Typecheck example file examples/citations.links
-examples/citations.links
-filemode : true
-
-Typecheck example file examples/crop.links
-examples/crop.links
-filemode : true
-
-Typecheck example file examples/date.links
-examples/date.links
-filemode : true
 
 Typecheck example file examples/dictionary/dictSuggest.links
 examples/dictionary/dictSuggest.links
@@ -87,48 +71,12 @@ Typecheck example file examples/dictionary/dictSuggestUpdate.links
 examples/dictionary/dictSuggestUpdate.links
 filemode : true
 
-Typecheck example file examples/document-replace.links
-examples/document-replace.links
-filemode : true
-
-Typecheck example file examples/draggable.links
-examples/draggable.links
-filemode : true
-
-Typecheck example file examples/draggableDb.links
-examples/draggableDb.links
-filemode : true
-
-Typecheck example file examples/draw.links
-examples/draw.links
-filemode : true
-
 Typecheck example file examples/extensible-case.links
 examples/extensible-case.links
 filemode : true
 
 Typecheck example file examples/factorial.links
 examples/factorial.links
-filemode : true
-
-Typecheck example file examples/filter.links
-examples/filter.links
-filemode : true
-
-Typecheck example file examples/formsTest.links
-examples/formsTest.links
-filemode : true
-
-Typecheck example file examples/games/breakout.links
-examples/games/breakout.links
-filemode : true
-
-Typecheck example file examples/games/tetris.links
-examples/games/tetris.links
-filemode : true
-
-Typecheck example file examples/games/twentyfortyeight.links
-examples/games/twentyfortyeight.links
 filemode : true
 
 Typecheck example file examples/handlers/aop.links
@@ -253,10 +201,6 @@ Typecheck example file examples/handlers/u2_puzzle.links
 examples/handlers/u2_puzzle.links
 filemode : true
 
-Typecheck example file examples/href-test.links
-examples/href-test.links
-filemode : true
-
 Typecheck example file examples/initialise-list.links
 examples/initialise-list.links
 filemode : true
@@ -265,32 +209,12 @@ Typecheck example file examples/insert-factorials.links
 examples/insert-factorials.links
 filemode : true
 
-Typecheck example file examples/mandelbrot.links
-examples/mandelbrot.links
-filemode : true
-
 Typecheck example file examples/mandelcolor.links
 examples/mandelcolor.links
 filemode : true
 
-Typecheck example file examples/mandelopt.links
-examples/mandelopt.links
-filemode : true
-
-Typecheck example file examples/multiple.links
-examples/multiple.links
-filemode : true
-
-Typecheck example file examples/page-test.links
-examples/page-test.links
-filemode : true
-
 Typecheck example file examples/paginate.links
 examples/paginate.links
-filemode : true
-
-Typecheck example file examples/progress.links
-examples/progress.links
 filemode : true
 
 Typecheck example file examples/progressiveQuery.links
@@ -359,11 +283,6 @@ examples/sessions/counter.links
 filemode : true
 ignore : broken example
 
-Typecheck example file examples/sessions/draggable-boring.links
-examples/sessions/draggable-boring.links
-filemode : true
-ignore : broken example
-
 Typecheck example file examples/sessions/Elvina/Bookshop_1.links
 examples/sessions/Elvina/Bookshop_1.links
 filemode : true
@@ -378,14 +297,6 @@ filemode : true
 
 Typecheck example file examples/sessions/Elvina/Bookshop_CP.links
 examples/sessions/Elvina/Bookshop_CP.links
-filemode : true
-
-Typecheck example file examples/sessions/Elvina/Draggable_Lists_1.links
-examples/sessions/Elvina/Draggable_Lists_1.links
-filemode : true
-
-Typecheck example file examples/sessions/Elvina/Draggable_Lists_2.links
-examples/sessions/Elvina/Draggable_Lists_2.links
 filemode : true
 
 Typecheck example file examples/sessions/Elvina/Extended_Calculator.links
@@ -526,28 +437,8 @@ examples/shredding4.links
 filemode : true
 ignore : broken example
 
-Typecheck example file examples/silly-progress.links
-examples/silly-progress.links
-filemode : true
-
-Typecheck example file examples/test-prims.links
-examples/test-prims.links
-filemode : true
-
-Typecheck example file examples/todo.links
-examples/todo.links
-filemode : true
-
-Typecheck example file examples/todoDb.links
-examples/todoDb.links
-filemode : true
-
 Typecheck example file examples/TicTacToe-Console.links
 examples/TicTacToe-Console.links
-filemode : true
-
-Typecheck example file examples/validate.links
-examples/validate.links
 filemode : true
 
 Typecheck example file examples/sierpinski_bits.links

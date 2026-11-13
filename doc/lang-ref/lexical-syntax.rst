@@ -35,45 +35,11 @@ Keywords
 The following keywords are reserved and are unavailable for use as identifiers::
 
   as by case database default delete delete_left
-  determined do else escape false for forall from fun formlet
+  determined do else escape false for forall from fun
   handle if in lens lensdrop lensget lensput lensselect lensjoin
-  lenscheck yields import insert linfun module mu mutual
-  nu offer on orderby op open otherwise page prefix query raise
+  lenscheck import insert linfun module mu mutual
+  nu offer on orderby op open otherwise prefix query raise
   readonly receive returning select set shallowhandle sig
   spawn spawnClient spawnAt spawnAngel spawnAngelAt spawnWait
   switch table TableHandle true try typename update unsafe
   values var where with tablekeys
-
-XML
----
-
-Links supports parsing XML literal notation. An XML expression is introduced by an
-XML start-tag such as ``<foo>``. Inside the XML, you may escape from the XML
-mode back into Links syntax by enclosing the Links code within braces ``{ }``.
-When the literal is evaluated, all its escaped expressions will be
-evaluated, and their values will be embedded within the constructed
-XML value. For example::
-
-    <html>
-      <ul>
-        <li> First item: {item1} </li>
-        <li> Second item: {item2} </li>
-      </ul>
-    </html>
-
-To introduce a *forest* of XML nodes that have no mutually enclosing
-XML element, use the ``<#>...</#>`` syntax::
-
-    <#>
-      Name: <b>{name}</b>
-    </#>
-
-Here, a *sequence* of nodes (first, an XML text node, and then a ``<b>``
-element) becomes as a single expression. This value can be included
-directly in other XML expressions::
-
-    var nameLine = <#> Name: <b>{name}</b> </#>;
-    <div>
-      {nameLine} <br />
-      The Links Team
-    </div>

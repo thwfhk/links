@@ -253,42 +253,6 @@ module SugarConstructors (Position : Pos)
   let unary_appl ?(ppos=dp) op arg =
     with_pos ppos (UnaryAppl (([], op), arg))
 
-  (** XML *)
-  let validate_xml ?tags e = match e with
-    | {node=Xml (name, attr_list, blk_opt, _); pos} ->
-       (* check whether opening and closing tags match *)
-       let () = match tags with
-         | Some (opening, closing) when opening = closing -> ()
-         | Some (opening, closing) ->
-            raise (ConcreteSyntaxError (pos,
-                Printf.sprintf "Closing tag '%s' does not match start tag '%s'."
-                  closing opening))
-         | _ -> () in
-       (* Check uniqueness of attributes *)
-       let xml_sugar_error pos message =
-         let open Errors in
-         raise (desugaring_error ~pos ~stage:CheckXML ~message) in
-
-       let () =
-         let attr_names = fst (List.split attr_list) in
-         if ListUtils.has_duplicates attr_names then
-           xml_sugar_error pos
-            (Printf.sprintf "XML tag '%s' has duplicate attributes" name) in
-       (* Check that XML forests don't have attributes *)
-       let () =
-         if name = "#" && (List.length attr_list != 0 || blk_opt <> None) then
-           xml_sugar_error pos
-            "XML forest literals cannot have attributes" in
-       ()
-    | _ -> assert false
-
-  (* Create an XML tree.  Raise an exception if opening and closing tags don't
-     match. *)
-  let xml ?(ppos=dp) ?tags name attr_list blk_opt contents =
-    let node = with_pos ppos (Xml (name, attr_list, blk_opt, contents)) in
-    let ()   = validate_xml ?tags node in
-    node
-
   (** Handlers *)
   let untyped_handler ?parameters expr (val_cases, eff_cases) depth =
     { sh_expr         = expr;

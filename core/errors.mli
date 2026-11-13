@@ -6,12 +6,7 @@ type synerrspec = {filename : string; linespec : string;
                    marker : string}
 
 type sugar_error_stage =
-  | DesugarFormlets
   | DesugarRegexes
-  | CheckQuasiquotes
-  | DesugarLAttributes
-  | DesugarPages
-  | CheckXML
   | DesugarInners
   | DesugarModules
   | DesugarSwitchFuns
@@ -59,7 +54,6 @@ val driver_locate_failure : string -> exn
 val illformed_plugin_description : string -> exn
 val dependency_load_failure : string -> Dynlink.error -> exn
 val load_failure : string -> Dynlink.error -> exn
-val forbidden_client_call : string -> string -> exn
 val rethrow_errors_if_better_position : Position.t -> ('a -> 'b) -> 'a -> 'b
 val type_application_kind_mismatch : Position.t -> string -> int -> string -> string -> exn
 val type_application_global_kind_mismatch : Position.t -> string -> string -> string -> exn

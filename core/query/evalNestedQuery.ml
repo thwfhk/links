@@ -32,7 +32,6 @@ let tag_query : QL.t -> QL.t =
         | Project (e, l) -> Project (tag e, l)
         | Erase (e, fields) -> Erase (tag e, fields)
         | Variant (l, e) -> Variant (l, tag e)
-        | XML v -> XML v
         | Apply (u, vs) -> Apply (tag u, List.map tag vs)
         | Closure ((xs, body), env) -> Closure ((xs, body), env)
         | Case (u, cs, d) -> Case (tag u, StringMap.map (fun (x,y) -> (x, tag y)) cs, opt_app (fun (x,y) -> Some (x, tag y)) None d)

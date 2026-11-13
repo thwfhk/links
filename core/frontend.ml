@@ -108,12 +108,10 @@ module Untyped = struct
   (* Collection of transformers. *)
   let transformers : transformer array
     = [| (module ResolvePositions)
-       ; (module CheckXmlQuasiquotes)
        ; (module DesugarSwitchFuns)
        ; (module DesugarModules)
        ; (module Shunting)
        ; only_if Basicsettings.Sessions.exceptions_enabled (module DesugarSessionExceptions)
-       ; (module DesugarLAttributes)
        ; (module LiftRecursive)
        ; (module DesugarTypeVariables)
        ; (module DesugarEffects)
@@ -191,8 +189,6 @@ module Typeability_preserving = struct
        ; (module DesugarProcesses)
        ; (module DesugarFors)
        ; (module DesugarRegexes)
-       ; (module DesugarFormlets)
-       ; (module DesugarPages)
        ; (module DesugarFuns) |]
 
   (* Run program transformers. *)

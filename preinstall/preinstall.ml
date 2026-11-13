@@ -42,8 +42,6 @@ let write_content filename =
 
 
 let config libdir = [
-  "jsliburl=/lib/js";
-  Printf.sprintf "jslibdir=%s/js" libdir;
   Printf.sprintf "stdlib_path=%s/stdlib" libdir ]
 
 let write_config libdir =

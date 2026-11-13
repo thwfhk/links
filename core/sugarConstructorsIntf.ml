@@ -152,14 +152,6 @@ module type SugarConstructorsSig = sig
   val infix_appl  : ?ppos:t -> phrase -> string     -> phrase -> phrase
   val unary_appl  : ?ppos:t ->           UnaryOp.t  -> phrase -> phrase
 
-  (* XML *)
-  val validate_xml
-      : ?tags:(string * string) -> phrase -> unit
-  val xml
-      : ?ppos:t -> ?tags:(string * string) -> Name.t
-     -> (Name.t * (phrase list)) list -> phrase option -> phrase list
-     -> phrase
-
   (* Handlers *)
   val untyped_handler
       :?parameters:((Pattern.with_pos * phrase) list)

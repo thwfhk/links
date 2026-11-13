@@ -40,8 +40,7 @@ open Var
   - check that we're doing the right thing with tyvars
 *)
 
-(* It would be nice to use primitive functions to construct XML nodes
-   and table handles. Then they could be moved to a frontend
+(* It would be nice to use primitive functions to construct table handles. Then they could be moved to a frontend
    transformation.
 
    We should either use escape in the frontend and IR or call/cc in
@@ -129,7 +128,6 @@ sig
   val letvar : (var_info * tail_computation sem * tyvar list *
                (var -> tail_computation sem)) -> tail_computation sem
 
-  val xml : value sem * string * (Name.t * (value sem) list) list * (value sem) list -> value sem
   val record : (Name.t * value sem) list * (value sem) option -> value sem
 
   val project : value sem * Name.t -> value sem
@@ -173,7 +171,6 @@ sig
   (*   tail_computation sem *)
   val case_zero : value sem * datatype -> tail_computation sem
 
-  val concat : (value sem * value sem * (value sem) list) -> value sem
 
   val database : value sem -> tail_computation sem
 
@@ -386,38 +383,6 @@ struct
 
   let condition (s, s1, s2) =
     bind s (fun v -> lift (If (v, reify s1, reify s2), sem_type s1))
-
-  let concat (nil, append, ss) =
-    match ss with
-      | [] -> nil
-      | [s] -> s
-      | s::ss ->
-          List.fold_left (fun s s' -> apply_pure (append, [s; s'])) s ss
-
-  let string_concat (string_append, ss) =
-    match ss with
-      | [] -> lift (Constant (Constant.String ""), Types.string_type)
-      | [s] -> s
-      | s::ss ->
-          List.fold_left (fun s s' -> apply_pure (string_append, [s; s'])) s ss
-
-  let xml (string_append, name, attrs, children) =
-    let lift_attrs attrs =
-      List.fold_right
-        (fun (name, ss) attrs ->
-           bind (string_concat (string_append, ss))
-             (fun v ->
-                M.bind attrs
-                  (fun bs -> lift ((name, v) :: bs))))
-        attrs (lift []) in
-    let attrs = lift_attrs attrs in
-    let children = lift_list children in
-      M.bind attrs
-        (fun attrs ->
-           M.bind children
-             (fun children ->
-                let attrs = StringMap.from_alist attrs in
-                  lift (XmlNode (name, attrs, children), Types.xml_type)))
 
   let record (fields, r) =
     let field_types =
@@ -1094,29 +1059,6 @@ struct
               I.table_handle (ev tbl_database, ev tbl_name, ev tbl_keys,
                 (tmp, readtype, writetype, neededtype), tbl_temporal_fields)
 (*          (name, (_, Some (readtype, writetype, neededtype)), _constraints, keys, db) -> *)
-          | Xml (tag, attrs, attrexp, children) ->
-               if tag = "#" then
-                 cofv (I.concat (instantiate "Nil"
-                                   [(Type, Types.Primitive Primitive.XmlItem)],
-                                 instantiate "Concat"
-                                   [ (Type, Types.Primitive Primitive.XmlItem)
-                                   ; (Row, eff)],
-                                 List.map ev children))
-                else
-                  let attrs    = alistmap (List.map ev) attrs in
-                  let children = List.map ev children in
-                  let body     = I.xml (instantiate "^^" [(Row, eff)], tag, attrs,
-                                        children) in
-                  begin match attrexp with
-                  | None   -> cofv body
-                  | Some e -> cofv (I.apply_pure (instantiate_mb "addAttributes",
-                                                 [body; ev e]))
-                  end
-          | TextNode name ->
-              cofv
-                (I.apply_pure
-                   (instantiate_mb "stringToXml",
-                    [ev (WithPos.make ~pos (Sugartypes.Constant (Constant.String name)))]))
           | Block (bs, e) -> eval_bindings Scope.Local env bs e
           | Query (range, policy, e, _) ->
               I.query (opt_map (fun (limit, offset) -> (ev limit, ev offset)) range, policy, ec e)
@@ -1200,11 +1142,6 @@ struct
           | Iteration _
           | InfixAppl ((_, BinaryOp.RegexMatch _), _, _)
           | Regex _
-          | Formlet _
-          | Page _
-          | FormletPlacement _
-          | PagePlacement _
-          | FormBinding _
           | ListLit _
           | Escape _
           | Upcast _

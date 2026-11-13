@@ -1,7 +1,6 @@
 open Links_core
 open Utility
 open List
-open CommonTypes
 
 (** Set this to [true] to print types when printing results. *)
 let printing_types =
@@ -319,15 +318,8 @@ let handle previous_context current_context = function
               let v = Value.Env.find var valenv in
               let t = Env.String.find name var_env' in
               v, t
-           | Some (finfo, _, None, location) ->
-              let v =
-                match location with
-                | Location.Server | Location.Unknown ->
-                   `FunctionPtr (var, None)
-                | Location.Client ->
-                   `ClientFunction (Js.var_name_var var)
-              in
-              let t = Var.info_type finfo in v, t
+           | Some (finfo, _, None, _) ->
+              `FunctionPtr (var, None), Var.info_type finfo
            | _ -> assert false
          in
          Printf.printf "%s = %s : %s\n%!"

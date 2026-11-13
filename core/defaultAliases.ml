@@ -23,11 +23,8 @@ let alias_env : Types.tycon_environment =
       AliasEnv.bind name t env)
     AliasEnv.empty
     [ (* "String"  , `Alias ([], `Application (Types.list, [`Type (`Primitive Primitive.Char)])); *)
-      "Xml"     , `Alias (pk_type, [], Types.Application (Types.list, [(PrimaryKind.Type, Types.Primitive Primitive.XmlItem)]));
-      "Event"   , `Abstract Types.event;
       "List"    , `Abstract Types.list;
       "Process" , `Abstract Types.process;
-      "DomNode" , `Abstract Types.dom_node;
       "AP"      , `Abstract Types.access_point;
       "EndBang" , `Alias (pk_type, [], Types.make_endbang_type);
       "Socket"  , `Abstract Types.socket;

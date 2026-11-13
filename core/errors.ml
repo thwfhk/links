@@ -8,23 +8,13 @@ type synerrspec = {filename : string; linespec : string;
                    marker : string}
 
 type sugar_error_stage =
-  | DesugarFormlets
   | DesugarRegexes
-  | CheckQuasiquotes
-  | DesugarLAttributes
-  | DesugarPages
-  | CheckXML
   | DesugarInners
   | DesugarModules
   | DesugarSwitchFuns
 
 let string_of_stage = function
-  | DesugarFormlets    -> "compiling formlets"
   | DesugarRegexes     -> "compiling regular expressions"
-  | CheckQuasiquotes   -> "checking quasiquotes"
-  | DesugarLAttributes -> "compiling attributes"
-  | DesugarPages       -> "compiling page expressions"
-  | CheckXML           -> "checking XML"
   | DesugarInners      -> "desugaring inner types"
   | DesugarModules     -> "desugaring modules"
   | DesugarSwitchFuns    -> "desugaring pattern-matching"
@@ -53,7 +43,6 @@ exception SettingsError of string
 exception DynlinkError of string
 exception ModuleError of string * Position.t option
 exception DisabledExtension of Position.t option * (string * bool) option * string option * string
-exception ForbiddenClientCall of string * string
 exception MissingBuiltinType of string
 exception MissingSSLCertificate
 
@@ -187,8 +176,6 @@ let format_exception =
      pos_prefix (Printf.sprintf "Error: Cannot load plugin dependency '%s' (link error: %s)\n" file (Dynlink.error_message err))
   | LoadFailure (file, err) ->
      pos_prefix (Printf.sprintf "Error: Cannot load plugin '%s' (link error: %s)\n" file (Dynlink.error_message err))
-  | ForbiddenClientCall (fn, reason) ->
-     pos_prefix (Printf.sprintf "Error: Cannot call client side function '%s' because of %s\n" fn reason)
   | MissingBuiltinType alias -> Printf.sprintf "Error: Missing builtin type with alias '%s'. Is it defined in the prelude?" alias
   | MissingSSLCertificate -> "Error: SSL mode requires both a valid certificate and key\n"
   | Sys.Break -> "Caught interrupt"
@@ -236,7 +223,6 @@ let dynlink_error message = (DynlinkError message)
 let module_error ?pos message = (ModuleError (message, pos))
 let disabled_extension ?pos ?setting ?flag name =
   DisabledExtension (pos, setting, flag, name)
-let forbidden_client_call fn reason = ForbiddenClientCall (fn, reason)
 let type_application_kind_mismatch pos name tyarg_number expected provided =
     TypeApplicationKindMismatch { pos; name; tyarg_number; expected; provided }
 let type_application_global_kind_mismatch pos name expected provided =

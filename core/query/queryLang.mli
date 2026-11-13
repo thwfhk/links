@@ -37,7 +37,6 @@ type t =
     | Project   of t * string
     | Erase     of t * StringSet.t
     | Variant   of string * t
-    | XML       of Value.xmlitem
     | Apply     of t * t list
     | Closure   of (Ir.var list * Ir.computation) * env
     | Case      of t * (Var.binder * t) StringMap.t * (Var.binder * t) option
@@ -61,7 +60,6 @@ val check_policies_compatible : CommonTypes.QueryPolicy.t -> CommonTypes.QueryPo
 
 val field_types_of_row : Types.datatype -> Types.datatype StringMap.t
 
-val unbox_xml : t -> Value.xmlitem
 
 val unbox_string : t -> string
 

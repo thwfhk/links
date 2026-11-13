@@ -23,9 +23,6 @@ let variables_in_computation comp =
     | TApp (value, _)
     | Coerce (value, _)
     | Erase (_, value) -> traverse_value value
-    | XmlNode (_, v_map, vs) ->
-        traverse_stringmap (traverse_value) v_map;
-        List.iter traverse_value vs
     | ApplyPure (v, vs) ->
         traverse_value v;
         List.iter traverse_value vs

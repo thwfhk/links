@@ -9,7 +9,6 @@
 ;;;    * (un)comment-region
 ;;;
 ;;; Things that don't work:
-;;;    * syntax highlighting of XML quasis.
 ;;;
 (require 'compile)
 
@@ -48,11 +47,9 @@
 ;; TODO We should do that automatically as part of the build process somehow.
 (defconst links-keywords
   '(
-    "alien"
     "as"
     "by"
     "case"
-    "client"
     "database"
     "default"
     "delete"
@@ -68,14 +65,12 @@
     "forall"
     "from"
     "fun"
-    "formlet"
     "handle"
     "if"
     "import"
     "in"
     "on"
     "open"
-    "yields"
     "insert"
     "lens"
     "lensget"
@@ -92,13 +87,11 @@
     "offer"
     "orderby"
     "op"
-    "page"
     "query"
     "readonly"
     "receive"
     "returning"
     "select"
-    "server"
     "set"
     "shallowhandle"
     "sig"
@@ -125,12 +118,6 @@
   (list
    ;; comments
    '("\\(^\\|[^</]\\)#.*$" . font-lock-comment-face)
-   ;; XML forests
-   '("<#>.*</#>" . font-lock-function-name-face)
-   ;; XML tags
-   '("</?[a-z][^>]*>" 0 font-lock-function-name-face t)
-   ;; XML escapes (attributes)
-   '("\"{[^}]*}\"" 0 'default t)
    ;; special operations
    `(,(regexp-opt links-keywords 'words) . font-lock-keyword-face)
    ;; types & variant tags

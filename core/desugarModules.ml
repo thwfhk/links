@@ -382,11 +382,6 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
       | Receive (cases, dt) ->
         let cases' = self#cases cases in
         Receive (cases', dt)
-      | FormBinding (body, pat) ->
-        let visitor = self#clone in
-        let body' = visitor#phrase body in
-        let pat' = visitor#pattern pat in
-        FormBinding (body', pat')
       | Offer (expr, cases, dt) ->
         let expr' = self#phrase expr in
         let cases' = self#cases cases in

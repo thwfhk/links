@@ -423,14 +423,6 @@ and phrasenode =
   | LensGetLit       of phrase * Types.datatype option
   | LensCheckLit     of phrase * Lens.Type.t option
   | LensPutLit       of phrase * phrase * Types.datatype option
-  | Xml              of Name.t * (Name.t * (phrase list)) list * phrase option *
-                          phrase list
-  | TextNode         of string
-  | Formlet          of phrase * phrase
-  | Page             of phrase
-  | FormletPlacement of phrase * phrase * phrase
-  | PagePlacement    of phrase
-  | FormBinding      of phrase * Pattern.with_pos
   (* choose *)
   | Select           of Name.t * phrase
   (* choice *)
@@ -568,11 +560,6 @@ struct
     | HasType (pat, _)      -> pattern pat
 
 
-  let rec formlet_bound (phrase : phrase) : StringSet.t = match WithPos.node phrase with
-    | Xml (_, _, _, children) -> union_map formlet_bound children
-    | FormBinding (_, pat) -> pattern pat
-    | _ -> empty
-
   let rec phrase (p : phrase) : StringSet.t =
     let p = WithPos.node p in
     match p with
@@ -582,17 +569,13 @@ struct
     | FreezeSection (Section.Name n) -> singleton n
 
     | Constant _
-    | TextNode _
     | Section (Section.Minus|Section.FloatMinus|Section.Project _) -> empty
     | FreezeSection (Section.Minus|Section.FloatMinus|Section.Project _) -> empty
 
     | Spawn (_, _, p, _)
     | TAbstr (_, p)
     | TAppl (p, _)
-    | FormBinding (p, _)
     | Projection (p, _)
-    | Page p
-    | PagePlacement p
     | Upcast (p, _, _)
     | Instantiate p
     | Generalise p
@@ -619,7 +602,6 @@ struct
        union_all [phrase limit; phrase offset; phrase p]
 
     | Escape (v, p) -> diff (phrase p) (singleton (Binder.to_name v))
-    | FormletPlacement (p1, p2, p3)
     | Conditional (p1, p2, p3) -> union_map phrase [p1;p2;p3]
     | Block b -> block b
     | InfixAppl ((_, BinaryOp.Name n), p1, p2) ->
@@ -642,14 +624,6 @@ struct
         union_all [phrase p1; phrase p2; option_map phrase popt]
     | TableLit { tbl_name; tbl_database; _ } ->
         union (phrase tbl_name) (phrase tbl_database)
-    | Xml (_, attrs, attrexp, children) ->
-        union_all
-          [union_map (snd ->- union_map phrase) attrs;
-           option_map phrase attrexp;
-           union_map phrase children]
-    | Formlet (xml, yields) ->
-        let binds = formlet_bound xml in
-          union (phrase xml) (diff (phrase yields) binds)
     | FunLit (_, _, fnlit, _) -> funlit fnlit
     | Iteration (generators, body, where, orderby) ->
         let xs = union_map (function

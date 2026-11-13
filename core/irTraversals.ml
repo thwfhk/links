@@ -222,15 +222,6 @@ struct
                        (Types.string_of_datatype t)
                        (String.concat "," (List.map (fun t -> Types.string_of_type_arg t) ts))))
               end
-        | XmlNode (tag, attributes, children) ->
-            let (o, attributes, _) = o#name_map (fun o -> o#value) attributes in
-            let (o, children  , _) = o#list (fun o -> o#value) children in
-
-              (*
-                let _ = assert (StringMap.for_all (fun t -> t=string_type) attribute_types) in
-                let _ = assert (List.for_all (fun t -> t=xml_type) children_types) in
-              *)
-              o, XmlNode (tag, attributes, children), xml_type
         | ApplyPure (f, args) ->
             let (o, f, ft) = o#value f in
             let (o, args, _) = o#list (fun o -> o#value) args in

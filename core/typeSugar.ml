@@ -79,7 +79,6 @@ struct
     | FunLit _
     | DatabaseLit _
     | TableLit _
-    | TextNode _
     | Section _
     | FreezeSection _ -> true
 
@@ -107,19 +106,9 @@ struct
         is_pure p1
      && is_pure p2
      && is_pure p3
-    | Xml (_, attrs, attrexp, children) ->
-        List.for_all (snd ->- List.for_all is_pure) attrs
-     && opt_generalisable attrexp
-     && List.for_all (is_pure) children
-    | Formlet (p1, p2) ->
-        is_pure p1 && is_pure p2
     | Regex r -> is_pure_regex r
     | Iteration _ (* could do a little better in some of these cases *)
-    | Page _
-    | FormletPlacement _
-    | PagePlacement _
     | UnaryAppl _
-    | FormBinding _
     | InfixAppl _
     | Spawn _
     | Query _
@@ -313,22 +302,6 @@ sig
   val type_apply : Position.t -> string -> Types.datatype -> Types.type_arg list -> 'a
 
   val generalise_value_restriction : Position.t -> string -> 'a
-
-  val xml_attribute : griper
-  val xml_attributes : griper
-  val xml_child : griper
-
-  val formlet_body : griper
-  val page_body : griper
-
-  val render_formlet : griper
-  val render_handler : griper
-  val render_attributes : griper
-
-  val page_placement : griper
-
-  val form_binding_body : griper
-  val form_binding_pattern : griper
 
   val iteration_unl_effect : griper
   val iteration_ambient_effect : griper
@@ -1066,53 +1039,6 @@ end
                "while we're trying to instantiate it with"    ^ nl  () ^
                 String.concat (nl() ^ "and" ^ nl()) ppr_types ^ nl  ())
 
-    let xml_attribute ~pos ~t1:l ~t2:(_,t) ~error:_ =
-      build_tyvar_names [snd l; t];
-      fixed_type pos "XML attributes" t l
-
-    let xml_attributes ~pos ~t1:l ~t2:(_,t) ~error:_ =
-      build_tyvar_names [snd l; t];
-      fixed_type pos "A list of XML attributes" t l
-
-    let xml_child ~pos ~t1:l ~t2:(_,t) ~error:_ =
-      build_tyvar_names [snd l; t];
-      fixed_type pos "XML child nodes" t l
-
-    let formlet_body ~pos ~t1:l ~t2:(_,t) ~error:_ =
-      build_tyvar_names [snd l; t];
-      fixed_type pos "Formlet bodies" t l
-
-    let page_body ~pos ~t1:l ~t2:(_,t) ~error:_ =
-      build_tyvar_names [snd l; t];
-      fixed_type pos "Page bodies" t l
-
-    let render_formlet ~pos ~t1:l ~t2:(_,t) ~error:_ =
-      build_tyvar_names [snd l; t];
-      fixed_type pos "Formlets" t l
-
-    let render_handler ~pos ~t1:l ~t2:r ~error:_ =
-      build_tyvar_names [snd l; snd r];
-      with_but2 pos
-        "The formlet must match its handler in a formlet placement" l r
-
-    let render_attributes ~pos ~t1:l ~t2:(_,t) ~error:_ =
-      build_tyvar_names [snd l; t];
-      fixed_type pos "A list of XML attributes" t l
-
-    let page_placement ~pos ~t1:l ~t2:(_,t) ~error:_ =
-      build_tyvar_names [snd l; t];
-      fixed_type pos "Page antiquotes" t l
-
-    let form_binding_body ~pos ~t1:l ~t2:(_,t) ~error:_ =
-      build_tyvar_names [snd l; t];
-      fixed_type pos "Formlets" t l
-
-    let form_binding_pattern ~pos ~t1:l ~t2:(rexpr, rt) ~error:_ =
-      build_tyvar_names [snd l; rt];
-        with_but2things pos
-          ("The binding must match the formlet in a formlet binding")
-          ("pattern", l) ("expression", (rexpr, rt))
-
     let iteration_unl_effect ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
       build_tyvar_names [lt; rt];
       let ppr_rt = show_type rt in
@@ -1634,11 +1560,8 @@ type context = Types.typing_environment = {
   (* variables which are recursive in the current scope *)
   rec_vars : StringSet.t;
 
-  (* mapping from type alias names to the types they name.  We don't
-     use this to resolve aliases in the code, which is done before
-     type inference.  Instead, we use it to resolve references
-     introduced here to aliases defined in the prelude such as "Page"
-     and "Formlet". *)
+  (* Map type alias names to the types they name. Aliases in the
+     source are resolved before type inference. *)
   tycon_env : Types.tycon_environment;
 
   (* the current effects *)
@@ -2566,16 +2489,6 @@ let update_pattern_vars env =
          | As (b, p)  -> As (update b, self#pattern p)
          | _ -> super#patternnode n
  end)#pattern
-
-let rec extract_formlet_bindings : phrase -> Types.datatype Env.t = fun p ->
-  match p.node with
-  | FormBinding (_, pattern) -> pattern_env pattern
-  | Xml (_, _, _, children) ->
-      List.fold_right
-        (fun child env ->
-           Env.extend env (extract_formlet_bindings child))
-        children Env.empty
-  | _ -> Env.empty
 
 (* make a function type constructor based on declared linearity *)
 let make_ftcon declared_linearity p =
@@ -3835,76 +3748,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                 TAbstr (tyvars, e), t, u
            else
              Gripers.generalise_value_restriction pos (uexp_pos e)
-
-        (* xml *)
-        | Xml (tag, attrs, attrexp, children) ->
-            let attrs = alistmap (List.map (tc)) attrs
-            and attrexp = opt_map tc attrexp
-            and children = List.map (tc) children in
-            let () = List.iter
-              (snd ->-
-                 List.iter (fun attr -> unify ~handle:Gripers.xml_attribute
-                              (pos_and_typ attr, no_pos Types.string_type))) attrs
-            and () =
-              opt_iter
-                (fun e ->
-                   unify ~handle:Gripers.xml_attributes
-                     (pos_and_typ e, no_pos (
-                        (Instantiate.alias "Attributes" [] context.tycon_env)))) attrexp
-            and () =
-              List.iter (fun child ->
-                           unify ~handle:Gripers.xml_child (pos_and_typ child, no_pos Types.xml_type)) children in
-              Xml (tag,
-                   List.map (fun (x,p) -> (x, List.map erase p)) attrs,
-                   opt_map erase attrexp,
-                   List.map erase children),
-              Types.xml_type,
-              Usage.combine_many (List.concat [ List.concat (List.map snd (alistmap (List.map usages) attrs))
-                                              ; [ from_option Usage.empty (opt_map usages attrexp) ]
-                                              ;  List.map usages children ] )
-        | TextNode _ as t -> t, Types.xml_type, Usage.empty
-        | Formlet (body, yields) ->
-           let body = type_check context body in
-           let env = extract_formlet_bindings (erase body) in
-           let vs = Env.domain env in
-           let context' = { context with effect_row = Types.closed_wild_row } ++ env in
-           let yields = type_check context' yields in
-           unify ~handle:Gripers.formlet_body (pos_and_typ body, no_pos Types.xml_type);
-           (Formlet (erase body, erase yields),
-            Instantiate.alias "Formlet" [PrimaryKind.Type, typ yields] context.tycon_env,
-            Usage.combine (usages body) (Usage.restrict (usages yields) vs))
-        | Page e ->
-            let e = tc e in
-              unify ~handle:Gripers.page_body (pos_and_typ e, no_pos Types.xml_type);
-              Page (erase e), Instantiate.alias "Page" [] context.tycon_env, usages e
-        | FormletPlacement (f, h, attributes) ->
-            let t = Types.fresh_type_variable (lin_any, res_any) in
-
-            let f = tc f
-            and h = tc h
-            and attributes = tc attributes in
-            let () = unify ~handle:Gripers.render_formlet
-              (pos_and_typ f, no_pos (Instantiate.alias "Formlet" [PrimaryKind.Type, t] context.tycon_env)) in
-            let () = unify ~handle:Gripers.render_handler
-              (pos_and_typ h, (exp_pos f,
-                               Instantiate.alias "Handler" [PrimaryKind.Type, t] context.tycon_env)) in
-            let () = unify ~handle:Gripers.render_attributes
-              (pos_and_typ attributes, no_pos (Instantiate.alias "Attributes" [] context.tycon_env))
-            in
-              FormletPlacement (erase f, erase h, erase attributes), Types.xml_type, Usage.combine_many [usages f; usages h; usages attributes]
-        | PagePlacement e ->
-            let e = tc e in
-            let pt = Instantiate.alias "Page" [] context.tycon_env in
-              unify ~handle:Gripers.page_placement (pos_and_typ e, no_pos pt);
-              PagePlacement (erase e), Types.xml_type, usages e
-        | FormBinding (e, pattern) ->
-            let e = tc e
-            and pattern = tpc pattern in
-            let a = Types.fresh_type_variable (lin_unl, res_any) in
-            let ft = Instantiate.alias "Formlet" [PrimaryKind.Type, a] context.tycon_env in
-              unify ~handle:Gripers.form_binding_body (pos_and_typ e, no_pos ft);
-              unify ~handle:Gripers.form_binding_pattern (ppos_and_typ pattern, (exp_pos e, a));
-              FormBinding (erase e, erase_pat pattern), Types.xml_type, usages e
 
         (* various expressions *)
         | Iteration (generators, body, where, orderby) ->

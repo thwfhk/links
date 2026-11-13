@@ -46,14 +46,6 @@ val db_connect : string -> string -> database * string
 val parse_db_string : string -> string * string
 val reconstruct_db_string : string * string -> string
 
-type xmlitem =   Text of string
-               | Attr of (string * string)
-               | Node of (string * xml)
-               | NsAttr of (string * string * string)
-               | NsNode of (string * string * xml)
-and xml = xmlitem list
-  [@@deriving show,yojson]
-
 module Table: sig
   type t = {
   database: (database * string);
@@ -83,7 +75,6 @@ type primitive_value_basis =  [
   | `Char of char
   | `Float of float
   | `Int of int
-  | `XML of xmlitem
   | `String of string ]
   [@@deriving show]
 
@@ -244,7 +235,6 @@ type t = [
 | `Variant of string * t
 | `FunctionPtr of (Ir.var * t option)
 | `PrimitiveFunction of string * Var.var option
-| `ClientDomRef of int
 | `ClientFunction of string
 | `ClientClosure of int
 | `Continuation of continuation
@@ -273,8 +263,6 @@ val box_float : 'a -> [> `Float of 'a ]
 val unbox_float : t -> float
 val box_char : 'a -> [> `Char of 'a ]
 val unbox_char : t -> char
-val box_xml : 'a -> [> `XML of 'a ]
-val unbox_xml : t -> xmlitem
 val box_string : string -> t
 val unbox_string : t -> string
 val box_list : t list -> t
@@ -305,23 +293,12 @@ val unbox_datetime : t -> Timestamp.t
 val intmap_of_record : t -> t Utility.intmap option
 
 val string_of_value : t -> string
-val string_of_xml : ?close_tags:bool -> xml -> string
 val string_of_calendar_utc : Utility.CalendarShow.t -> string
 
 val p_value: Format.formatter -> t -> unit
 
 (* Given a value, retreives a list of channels that are contained inside *)
 val get_contained_channels : t -> chan list
-
-val value_of_xmlitem : xmlitem -> t
-val value_of_xml : xml -> t
-val xml_of_variants : t -> xml
-val xmlitem_of_variant : t -> xmlitem
-
-val is_attr : xmlitem -> bool
-val is_node : xmlitem -> bool
-
-val split_html : xml -> xml * xml
 
 val is_channel : t -> bool
 

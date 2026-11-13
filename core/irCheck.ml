@@ -623,14 +623,6 @@ struct
            let o, v, t = o#value v in
            let t = Instantiate.apply_type t ts in
            o, TApp (v, ts), t
-        | XmlNode (tag, attributes, children) ->
-            let (o, attributes, attribute_types) = o#name_map (fun o -> o#value) attributes in
-            let (o, children  , children_types) = o#list (fun o -> o#value) children in
-
-            let _ = StringMap.iter (fun _ t -> o#check_eq_types  (Primitive Primitive.String) t (SVal orig)) attribute_types in
-            let _ = List.iter (fun t -> o#check_eq_types  Types.xml_type t (SVal orig)) children_types in
-              o, XmlNode (tag, attributes, children), Types.xml_type
-
         | ApplyPure (f, args) ->
             let rec is_pure_function = function
               | TApp (v, _)

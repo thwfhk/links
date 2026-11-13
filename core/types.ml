@@ -69,17 +69,6 @@ let mapentry = {
                ;pk_type, (lin_unl, res_any)] ;
 }
 
-let event    = {
-  Abstype.id = "Event" ;
-  name       = "Event" ;
-  arity      = [] ;
-}
-let dom_node = {
-  Abstype.id = "DomNode" ;
-  name       = "DomNode" ;
-  arity      = [] ;
-}
-
 let access_point = {
   Abstype.id = "AP" ;
   name       = "AP" ;
@@ -1716,7 +1705,6 @@ let bool_type     = Primitive Primitive.Bool
 let int_type      = Primitive Primitive.Int
 let float_type    = Primitive Primitive.Float
 let datetime_type = Primitive Primitive.DateTime
-let xml_type      = Alias (pk_type, ("Xml", [], [], false), Application (list, [(PrimaryKind.Type, Primitive Primitive.XmlItem)]))
 let database_type = Primitive Primitive.DB
 let wrong_type    = Application (wrong, [])
 (* Empty type, used for exceptions *)

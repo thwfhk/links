@@ -1033,17 +1033,6 @@ let decode_escapes s =
         | other -> String.make 1 (read_octal (String.sub other 1 3)) in
     Str.global_substitute escape_regexp unquoter s
 
-(** [xml_escape], [xml_unescape]
-    Escape/unescape for XML escape sequences (e.g. &amp;)
-*)
-let xml_escape s =
-  Str.global_replace (Str.regexp "<") "&lt;"
-    (Str.global_replace (Str.regexp "&") "&amp;" s)
-
-let xml_unescape s =
-  Str.global_replace (Str.regexp "&amp;") "&"
-    (Str.global_replace (Str.regexp "&lt;") "<" s)
-
 (** (0 base64 Routines) *)
 let base64decode s =
   try Base64.decode_exn (Str.global_replace (Str.regexp " ") "+" s)

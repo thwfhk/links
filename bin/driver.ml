@@ -69,7 +69,7 @@ module Phases = struct
   end
 
   module Evaluate = struct
-    module Eval = Evalir.Eval(Webserver.Webserver)
+    module Eval = Evalir.Eval
 
     let run : Backend.result -> (Context.t * Types.datatype * Value.t)
       = fun Backend.({ context; program; datatype }) ->

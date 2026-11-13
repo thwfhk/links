@@ -40,11 +40,8 @@
            ANSITerminal
           (lwt (>= 5.0.0))
            cohttp
-           cohttp-lwt
            cohttp-lwt-unix
-           conduit-lwt-unix
            uri
-           tls
            websocket
            websocket-lwt-unix
            safepass

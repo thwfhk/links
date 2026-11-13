@@ -18,10 +18,6 @@ Anonymous application function (#693)
 fun (f) {fun (x){f (x)}}
 stdout : fun : forall a::(Any,Any),b::Row,c::(Any,Any),d::Row.((a::Any) -b-> c::Any) -d-> (a::Any) -b-> c::Any
 
-XML typing (#693)
-fun (x) {<a>{x}</a>}
-stdout : fun : forall a::Row.(Xml) -a-> Xml
-
 ConcatMap (#368)
 tests/typed_ir/T368.links
 filemode : true

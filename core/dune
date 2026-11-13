@@ -1,8 +1,8 @@
 (ocamllex
-  (modules lexer xmlLexer timestampLexer))
+  (modules lexer timestampLexer))
 
 (menhir
-  (modules parser xmlParser timestampParser)
+  (modules parser timestampParser)
   (flags "--table") ;; slower parser, but compilation *much* faster
 )
 
@@ -14,8 +14,7 @@
   (libraries str linenoise base64 safepass unix result
              yojson ppx_deriving_yojson.runtime
              lwt lwt.unix
-             cohttp cohttp-lwt-unix cohttp-lwt
-             conduit-lwt-unix uri
+             cohttp cohttp-lwt-unix uri
              websocket websocket-lwt-unix.cohttp
              findlib menhirLib links.lens calendar
              dynlink

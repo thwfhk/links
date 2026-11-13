@@ -39,7 +39,6 @@ let rec freshen_for_bindings : Var.var Env.Int.t -> Q.t -> Q.t =
       | Q.Prom t -> Q.Prom (ffb t)
       | Q.Record fields -> Q.Record (StringMap.map ffb fields)
       | Q.Variant (name, v) -> Q.Variant (name, ffb v)
-      | Q.XML xmlitem -> Q.XML xmlitem
       | Q.Project (v, name) -> Q.Project (ffb v, name)
       | Q.Erase (v, names) -> Q.Erase (ffb v, names)
       | Q.Apply (u, vs) -> Q.Apply (ffb u, List.map ffb vs)
@@ -260,8 +259,7 @@ module Eval =
 struct
 
   let reduce_artifacts = function
-  | Q.Apply (Q.Primitive "stringToXml", [u]) ->
-    Q.Singleton (Q.XML (Value.Text (Q.unbox_string u)))
+
   | Q.Apply (Q.Primitive "AsList", [xs])
   | Q.Apply (Q.Primitive "AsListT", [xs])
   | Q.Apply (Q.Primitive "AsListV", [xs]) -> xs
@@ -357,23 +355,6 @@ struct
     | Inject (label, v, _) -> Q.Variant (label, xlate env v)
     | TAbs (_, v) -> xlate env v
     | TApp (v, _) -> xlate env v
-
-    | XmlNode (tag, attrs, children) ->
-        (* TODO: deal with variables in XML *)
-        let children =
-          List.fold_right
-            (fun v children ->
-               let v = xlate env v in
-               List.map Q.unbox_xml (Q.unbox_list v) @ children)
-            children [] in
-        let children =
-          StringMap.fold
-            (fun name v attrs ->
-               Value.Attr (name, Q.unbox_string (xlate env v)) :: attrs)
-            attrs children
-        in
-          Q.Singleton (Q.XML (Value.Node (tag, children)))
-
     | ApplyPure (f, ps) ->
         reduce_artifacts (Q.Apply (xlate env f, List.map (xlate env) ps))
     | Closure (f, _, v) ->

@@ -24,11 +24,7 @@ fun main() {
   close(s);
   var (y, s) = receive(request(c));
   close(s);
-
-  page
-    <html><body>
-      Hey, hi.  Also {stringToXml(intToString(x))} and {stringToXml(intToString(y))}.
-    </body></html>
+  (x, y)
 }
 
 main()

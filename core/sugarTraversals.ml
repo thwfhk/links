@@ -494,31 +494,6 @@ class map =
                  let _x_i1 = o#phrase _x_i1 in (_x, _x_i1))
               _x_i3
           in DBUpdate ((_upd, _x, _x_i1, _x_i2, _x_i3))
-      | Xml ((_x, _x_i1, _x_i2, _x_i3)) ->
-          let _x = o#name _x in
-          let _x_i1 =
-            o#list
-              (fun o (_x, _x_i1) ->
-                 let _x = o#name _x in
-                 let _x_i1 = o#list (fun o -> o#phrase) _x_i1 in (_x, _x_i1))
-              _x_i1 in
-          let _x_i2 = o#option (fun o -> o#phrase) _x_i2 in
-          let _x_i3 = o#list (fun o -> o#phrase) _x_i3
-          in Xml ((_x, _x_i1, _x_i2, _x_i3))
-      | TextNode _x -> let _x = o#string _x in TextNode _x
-      | Formlet ((_x, _x_i1)) ->
-          let _x = o#phrase _x in
-          let _x_i1 = o#phrase _x_i1 in Formlet ((_x, _x_i1))
-      | Page _x -> let _x = o#phrase _x in Page _x
-      | FormletPlacement ((_x, _x_i1, _x_i2)) ->
-          let _x = o#phrase _x in
-          let _x_i1 = o#phrase _x_i1 in
-          let _x_i2 = o#phrase _x_i2
-          in FormletPlacement ((_x, _x_i1, _x_i2))
-      | PagePlacement _x -> let _x = o#phrase _x in PagePlacement _x
-      | FormBinding ((_x, _x_i1)) ->
-          let _x = o#phrase _x in
-          let _x_i1 = o#pattern _x_i1 in FormBinding ((_x, _x_i1))
       | TryInOtherwise (_p1, _pat, _p2, _p3, _ty) ->
           let _p1 = o#phrase _p1 in
           let _pat = o#pattern _pat in
@@ -1281,26 +1256,6 @@ class fold =
                  let o = o#name _x in let o = o#phrase _x_i1 in o)
               _x_i3
           in o
-      | Xml ((_x, _x_i1, _x_i2, _x_i3)) ->
-          let o = o#name _x in
-          let o =
-            o#list
-              (fun o (_x, _x_i1) ->
-                 let o = o#name _x in
-                 let o = o#list (fun o -> o#phrase) _x_i1 in o)
-              _x_i1 in
-          let o = o#option (fun o -> o#phrase) _x_i2 in
-          let o = o#list (fun o -> o#phrase) _x_i3 in o
-      | TextNode _x -> let o = o#string _x in o
-      | Formlet ((_x, _x_i1)) ->
-          let o = o#phrase _x in let o = o#phrase _x_i1 in o
-      | Page _x -> let o = o#phrase _x in o
-      | FormletPlacement ((_x, _x_i1, _x_i2)) ->
-          let o = o#phrase _x in
-          let o = o#phrase _x_i1 in let o = o#phrase _x_i2 in o
-      | PagePlacement _x -> let o = o#phrase _x in o
-      | FormBinding ((_x, _x_i1)) ->
-          let o = o#phrase _x in let o = o#pattern _x_i1 in o
       | TryInOtherwise (_p1, _pat, _p2, _p3, _ty) ->
           let o = o#phrase _p1 in
           let o = o#pattern _pat in
@@ -2117,34 +2072,6 @@ class fold_map =
                  let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1)))
               _x_i3
           in (o, (DBUpdate ((_upd, _x, _x_i1, _x_i2, _x_i3))))
-      | Xml ((_x, _x_i1, _x_i2, _x_i3)) ->
-          let (o, _x) = o#name _x in
-          let (o, _x_i1) =
-            o#list
-              (fun o (_x, _x_i1) ->
-                 let (o, _x) = o#name _x in
-                 let (o, _x_i1) = o#list (fun o -> o#phrase) _x_i1
-                 in (o, (_x, _x_i1)))
-              _x_i1 in
-          let (o, _x_i2) = o#option (fun o -> o#phrase) _x_i2 in
-          let (o, _x_i3) = o#list (fun o -> o#phrase) _x_i3
-          in (o, (Xml ((_x, _x_i1, _x_i2, _x_i3))))
-      | TextNode _x -> let (o, _x) = o#string _x in (o, (TextNode _x))
-      | Formlet ((_x, _x_i1)) ->
-          let (o, _x) = o#phrase _x in
-          let (o, _x_i1) = o#phrase _x_i1 in (o, (Formlet ((_x, _x_i1))))
-      | Page _x -> let (o, _x) = o#phrase _x in (o, (Page _x))
-      | FormletPlacement ((_x, _x_i1, _x_i2)) ->
-          let (o, _x) = o#phrase _x in
-          let (o, _x_i1) = o#phrase _x_i1 in
-          let (o, _x_i2) = o#phrase _x_i2
-          in (o, (FormletPlacement ((_x, _x_i1, _x_i2))))
-      | PagePlacement _x ->
-          let (o, _x) = o#phrase _x in (o, (PagePlacement _x))
-      | FormBinding ((_x, _x_i1)) ->
-          let (o, _x) = o#phrase _x in
-          let (o, _x_i1) = o#pattern _x_i1
-          in (o, (FormBinding ((_x, _x_i1))))
       | TryInOtherwise (_p1, _pat, _p2, _p3, _ty) ->
           let (o, _p1) = o#phrase _p1 in
           let (o, _pat) = o#pattern _pat in

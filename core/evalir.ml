@@ -1,5 +1,4 @@
 open CommonTypes
-open Webserver_types
 open Ir
 open Lwt
 open Utility
@@ -34,8 +33,7 @@ end
 module Evaluator = functor (ContEval : Value.CONTINUATION_EVALUATOR with type v = Value.t
                                                                     and type result = Proc.thread_result Lwt.t
                                                                     and type 'v t := 'v Value.Continuation.t
-                                                                    and type 'v resumption := 'v Value.Continuation.resumption)
-                   (Webs : WEBSERVER) ->
+                                                                    and type 'v resumption := 'v Value.Continuation.resumption) ->
 struct
   type v = Value.t
   type result = Proc.thread_result Lwt.t
@@ -68,17 +66,8 @@ struct
   let lookup_fun_def f =
     match lookup_fun f with
     | None -> None
-    | Some (_finfo, _, None, location) ->
-      begin
-        match location with
-        | Location.Server | Location.Unknown ->
-          (* TODO: perhaps we should actually use env here - and make
-             sure we only call this function when it is sufficiently
-             small *)
-          Some (`FunctionPtr (f, None))
-        | Location.Client ->
-          Some (`ClientFunction (Js.var_name_var f))
-      end
+    | Some (_finfo, _, None, _location) ->
+        Some (`FunctionPtr (f, None))
     | _ -> assert false
 
   let find_fun_def f =
@@ -95,52 +84,13 @@ struct
         Value.Env.find var env
       | Some v -> v
 
-   let serialize_call_to_client req_data ((continuation : continuation), name, args) =
-     let open Json in
-     let client_id = RequestData.get_client_id req_data in
-     let conn_url =
-       if (Webs.is_accepting_websocket_requests ()) then
-         Some (Webs.get_websocket_url ())
-       else
-         None
-     in
-     let st = List.fold_left
-       (fun st_acc arg -> ResolveJsonState.add_value_information arg st_acc)
-       (JsonState.empty client_id conn_url) args in
-     let st = ResolveJsonState.add_ap_information client_id st in
-     let st = ResolveJsonState.add_process_information client_id st in
-     let st = ResolveJsonState.add_channel_information client_id st in
-     Json.jsonize_call st (Serialisation.MarshalSerialiser.Continuation.save continuation) name args
-      |> Json.json_to_string
-
-   let client_call :
-     RequestData.request_data ->
-     string ->
-     Value.continuation ->
-     Value.t list ->
-     result =
-
-       fun req_data name cont args ->
-         if not(Settings.get webs_running) then
-           raise (Errors.forbidden_client_call name "outside of web mode");
-         if not(RequestData.is_ajax_call (RequestData.get_cgi_parameters req_data)) then
-           raise (Errors.forbidden_client_call name "before server page is ready");
-         (*if not(Proc.singlethreaded()) then
-           raise (internal_error "Remaining procs on server at client call!"); *)
-         Debug.print("Making client call to " ^ name);
-  (*        Debug.print("Call package: "^serialize_call_to_client (cont, name, args)); *)
-         let call_package =
-           Utility.base64encode @@
-             serialize_call_to_client req_data (cont, name, args) in
-         Proc.abort ("text/plain", call_package)
-
-    let handle_session_exception raise_env frames =
-      let affected_channels =
-        ChannelVarUtils.affected_channels raise_env frames in
-      (* List.iter (fun c -> Printf.printf "%s\n" (Value.string_of_value c)) affected_channels *)
-      List.fold_left (fun acc v -> acc >>= (fun _ -> Value.unbox_channel v |> Session.cancel))
-        (Lwt.return ())
-        affected_channels
+  let handle_session_exception raise_env frames =
+    let affected_channels =
+      ChannelVarUtils.affected_channels raise_env frames in
+    (* List.iter (fun c -> Printf.printf "%s\n" (Value.string_of_value c)) affected_channels *)
+    List.fold_left (fun acc v -> acc >>= (fun _ -> Value.unbox_channel v |> Session.cancel))
+      (Lwt.return ())
+      affected_channels
 
   (** {0 Evaluation} *)
   let rec value env : Ir.value -> Value.t Lwt.t = fun v ->
@@ -198,19 +148,6 @@ struct
         value env v >>= fun v -> Lwt.return (`Variant (label, v))
     | TAbs (_, v) -> value env v
     | TApp (v, _) -> value env v
-    | XmlNode (tag, attrs, children) ->
-          LwtHelpers.foldr_lwt
-            (fun v children ->
-              value env v >>= fun v ->
-               Lwt.return (List.map Value.unbox_xml (Value.unbox_list v) @ children))
-            children (Lwt.return []) >>= fun children ->
-          let attrs = StringMap.bindings attrs in
-          LwtHelpers.foldr_lwt
-            (fun (name, v) attrs ->
-               value env v >>= fun str ->
-               Lwt.return (Value.Attr (name, Value.unbox_string str) :: attrs))
-            (List.rev attrs) (Lwt.return children) >>= fun children ->
-          Lwt.return (Value.box_list [Value.box_xml (Value.Node (tag, children))])
     | ApplyPure (f, args) ->
       value env f >>= fun f ->
       (LwtHelpers.sequence (List.map (value env) args)) >>= fun args ->
@@ -249,9 +186,6 @@ struct
         List.fold_right2 (fun x p -> Value.Env.bind x (p, Scope.Local)) xs ps env
       in
       computation_yielding env cont body
-    | `PrimitiveFunction ("registerEventHandlers",_), [hs] ->
-      let key = EventHandlers.register hs in
-      apply_cont cont env (`String (string_of_int key))
     (* start of mailbox stuff *)
     | `PrimitiveFunction ("Send",_), [pid; msg] ->
         let unboxed_pid = Value.unbox_pid pid in
@@ -473,17 +407,11 @@ struct
     | `PrimitiveFunction (_, Some code), args ->
        Lib.apply_pfun_by_code code args (Value.Env.request_data env) >>= fun v ->
        apply_cont cont env v
-    | `ClientFunction name, args ->
-        let req_data = Value.Env.request_data env in
-        client_call req_data name cont args
     | `Continuation c,      [p] -> apply_cont c env p
     | `Continuation _,       _  ->
        eval_error "Continuation applied to multiple (or zero) arguments"
     | `Resumption r, vs ->
        resume env cont r vs
-    | `ClientClosure index, vs ->
-       let req_data = Value.Env.request_data env in
-       client_call req_data "_$ClosureTable.apply" cont (`Int index :: vs)
     | v, _ -> type_error ~action:"apply" "function" v
   and resume env (cont : continuation) (r : resumption) vs =
     Proc.yield (fun () -> K.Eval.resume ~env cont r vs)
@@ -1003,12 +931,4 @@ struct
         | Not_found  -> raise (internal_error ("Not_found while interpreting."))
 end
 
-module type EVAL = functor (Webs : WEBSERVER) -> sig
-    include EVALUATOR
-end
-module Eval : EVAL = functor (Webs : WEBSERVER) ->
-struct
-  module rec Eval : EVALUATOR
-    with type result = Proc.thread_result Lwt.t = Evaluator(Value.Continuation.Evaluation(Eval))(Webs)
-  include Eval
-end
+module rec Eval : EVALUATOR = Evaluator (Value.Continuation.Evaluation (Eval))

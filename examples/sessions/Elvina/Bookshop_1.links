@@ -8,14 +8,14 @@ fun waitForClient(s)
     offer(s) {
         case Add(s)      ->
             var (item, s) = receive(s);
-            appendChildren(stringToXml("Book name received: " ^^ item), getNodeById("items"));
+            println("Book name received: " ^^ item);
             waitForClient(s)
 
         case Checkout(s) ->
             var (card, s)    = receive(s);
-            appendChildren(stringToXml(", card number received: " ^^ intToString(card)), getNodeById("items"));
+            println(", card number received: " ^^ intToString(card));
             var (address, s) = receive(s);
-            appendChildren(stringToXml(", address received: " ^^ address), getNodeById("items"));
+            println(", address received: " ^^ address);
             close(s)
     }
 }
@@ -34,15 +34,4 @@ fun main()
     orderBooks(fork(waitForClient))
 }
 
-
-page
-    <html>
-    <head><title>From Academic Papers</title></head>
-    <body>
-    <form l:onsubmit="{main()}">
-    <h3>Example 1 from "Linear type theory for asynchronous session types":</h3>
-    <button type="submit">Start communication</button>
-    </form>
-    <p id="items"></p>
-    </body>
-    </html>
+main()

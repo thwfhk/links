@@ -37,7 +37,7 @@ type primitive =
 
 type pure = PURE | IMPURE
 
-type located_primitive = [ `Client | `Server of primitive | primitive ]
+type located_primitive = [ `Server of primitive | primitive ]
 
 let pure_pfun fn = `PFun(fun _ xs -> Lwt.return (fn xs))
 
@@ -71,10 +71,6 @@ let conversion_op ~from ~unbox ~conv ~(box :'a->Value.t) ~into pure : located_pr
       (ForAll ([q], Function (make_tuple_type [from], r, into)) : datatype)),
    pure)
 
-let string_to_xml : Value.t -> Value.t = function
-  | `String s -> `List [`XML (Value.Text s)]
-  | _ -> raise (runtime_type_error "non-string value passed to xml conversion routine")
-
 (* The following functions expect 1 argument. Assert false otherwise. *)
 let float_fn fn pure =
   (pure_pfun (fun args ->
@@ -84,8 +80,7 @@ let float_fn fn pure =
    datatype "(Float) -> Float",
   pure)
 
-(* Functions which also take the request data as an argument --
- * for example those which set cookies, change the headers, etc. *)
+(* Functions that also take request data. *)
 let p1D fn =
   `PFun (fun req_data args ->
       match args with
@@ -176,28 +171,6 @@ and less_lists = function
   | (_::l), (_::r) -> less_lists (l, r)
 
 let less_or_equal l r = less l r || equal l r
-
-let add_attribute : Value.t * Value.t -> Value.t -> Value.t =
-  let rec filter = fun name -> function
-    | [] -> []
-    | Value.Attr (s, _) :: nodes when s = name -> filter name nodes
-    | Value.NsAttr (ns, s, _) :: nodes when ns ^ ":" ^ s = name -> filter name nodes
-    | node :: nodes -> node :: filter name nodes
-  in
-  fun (name,value) ->
-    let name = Value.unbox_string name
-    and value = Value.unbox_string value
-    in let new_attr = match String.split_on_char ':' name with
-          | [ n ] -> Value.Attr(n, value)
-          | [ ns; n ] -> Value.NsAttr(ns, n, value)
-          | _ -> runtime_error ("Attribute-name con only contain one colon for namespacing. Multiple found: " ^ name)
-    in function
-    | `XML (Value.Node (tag, children))       -> `XML (Value.Node (tag, new_attr :: filter name children))
-    | `XML (Value.NsNode (ns, tag, children)) -> `XML (Value.NsNode (ns, tag, new_attr :: filter name children))
-    | r -> raise (runtime_type_error ("cannot add attribute to " ^ Value.string_of_value r))
-
-let add_attributes : (Value.t * Value.t) list -> Value.t -> Value.t =
-  List.fold_right add_attribute
 
 (* Applies a projection function to a boxed timestamp, after converting via a given UTC offset. *)
 let project_datetime_conv (f: CalendarShow.t -> int) : located_primitive * Types.datatype * pure =
@@ -331,21 +304,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                                  ~into:(Types.Primitive Primitive.Float)
                                  IMPURE;
 
-  "stringToXml",
-  ((p1 string_to_xml),
-   datatype "(String) -> Xml",
-  PURE);
-
-  "intToXml",
-  (pure_pfun (string_to_xml -<- (conversion_op' ~unbox:Value.unbox_int ~conv:(string_of_int) ~box:Value.box_string)),
-   datatype "(Int) -> Xml",
-  PURE);
-
-  "floatToXml",
-  (pure_pfun (string_to_xml -<- (conversion_op' ~unbox:Value.unbox_float ~conv:(string_of_float') ~box:Value.box_string)),
-   datatype "(Float) -> Xml",
-   PURE);
-
   "sysexit",
   (p1 (fun ret -> exit (Value.unbox_int ret)),
    datatype "(Int) ~> a",
@@ -363,17 +321,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      if (test) exit(1) else 42 *)
    datatype "(a) ~> b",
   IMPURE);
-
-  (* Adds a list of attributes (represented as pairs of strings) to
-     each of the root nodes of an XML forest. *)
-  "addAttributes",
-  (p2 (fun xml attrs -> match xml, attrs with
-         | `List xmlitems, `List attrs ->
-             let attrs = List.map (fun p -> Value.unbox_pair p) attrs in
-               `List (List.map (add_attributes attrs) xmlitems)
-         | _ -> raise (runtime_type_error "addAttributes takes an XML forest and a list of attributes")),
-   datatype "(Xml, [(String, String)]) -> Xml",
-   PURE);
 
   "Send",
   (p2 (fun _pid _msg ->
@@ -661,59 +608,10 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "(DateTime, DateTime) ~> DateTime",
   PURE);
 
-  (* XML *)
-  "itemChildNodes",
-  (p1 (function
-         | `XML (Value.Node (_, children)) ->
-           let children = List.filter Value.is_node children in
-           `List (List.map (fun x -> `XML x) children)
-         | `XML (Value.NsNode (_, _, children)) ->
-           let children = List.filter Value.is_node children in
-           `List (List.map (fun x -> `XML x) children)
-         | `XML (_) -> `List []
-         | _ -> raise (runtime_type_error "non-XML given to itemChildNodes")),
-   datatype "(XmlItem) -> Xml",
-  IMPURE);
-
-  "objectType",
-  (`Client, datatype "(a) ~> String",
-  IMPURE);
-
-  "attribute",
-  (p2 (fun elem attr ->
-    let attr = Value.unbox_string attr
-    in let find_attr = fun cs -> (try match List.find (function
-      | Value.Attr (k, _) when k = attr -> true
-      | Value.NsAttr (ns, k, _) when ns ^ ":" ^ k = attr -> true
-      | _ -> false
-    ) cs with
-      | Value.Attr (_, v) -> `Variant ("Just", Value.box_string v)
-      | Value.NsAttr (_, _, v) -> `Variant ("Just", Value.box_string v)
-      | _ -> raise (runtime_type_error "Incorrect arguments to `attribute' function")
-    with NotFound _ -> `Variant ("Nothing", `Record []))
-    in match elem with
-      | `List [ `XML (Value.Node (_, children)) ] -> find_attr children
-      | `List [ `XML (Value.NsNode (_, _, children)) ] -> find_attr children
-      | _ -> raise (runtime_type_error  "Non-element node given to attribute function")),
-  datatype "(Xml, String) -> [| Just: String | Nothing |]",
-  PURE);
-
   "debug",
   (p1 (fun message -> Debug.print (Value.unbox_string message);
                       `Record []),
    datatype "(String) ~> ()",
-  IMPURE);
-
-  "debugObj",
-  (`Client, datatype "(a) ~> ()",
-  IMPURE);
-
-  "dump",
-  (`Client, datatype "(a) ~> ()",
-  IMPURE);
-
-  "textContent",
-  (`Client, datatype "(DomNode) ~> String",
   IMPURE);
 
   "print",
@@ -721,10 +619,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    (* datatype "(String) ~> ()", *)
    datatype "(String) ~> ()",
   IMPURE);
-
-  "javascript",
-  (`Bool false, datatype "Bool",
-  PURE);
 
   "not",
   (p1 (Value.unbox_bool ->- not ->- Value.box_bool),
@@ -743,312 +637,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (p1 (Value.unbox_string ->- runtime_error), datatype "(String) ~> a",
   IMPURE);
 
-  (* HACK *)
-  (*   [DEACTIVATED] *)
-  (*   "callForeign", *)
-  (*    (`Client, datatype "((a) -> b) -> (a) -> b"); *)
-
-  (* DOM API *)
-
-  "isElementNode",
-  (`Client, datatype "(DomNode) ~> Bool",
-  PURE);
-
-
-  (* [DEACTIVATED] *)
-  (*   "domOp", *)
-  (*   (p1 (fun message -> failwith("`domOp' is only available on the client."); *)
-  (*          `Record []), *)
-  (*    datatype "(a) -> ()"); *)
-
-  "insertBefore",
-  (`Client, datatype "(Xml, DomNode) ~> ()",
-  IMPURE);
-
-  "appendChildren",
-  (`Client, datatype "(Xml, DomNode) ~> ()",
-  IMPURE);
-
-  "replaceNode",
-  (`Client, datatype "(Xml, DomNode) ~> ()",
-  IMPURE);
-
-  "replaceDocument",
-  (`Client, datatype "(Xml) ~> ()",
-  IMPURE);
-
-  "domInsertBeforeRef",
-  (`Client, datatype "(DomNode, DomNode) ~> ()",
-  IMPURE);
-
-  "domAppendChildRef",
-  (`Client, datatype "(DomNode, DomNode) ~> ()",
-  IMPURE);
-
-  "removeNode",
-  (`Client, datatype "(DomNode) ~> ()",
-  IMPURE);
-
-  "cloneNode",
-  (`Client, datatype "(DomNode, Bool) ~> (DomNode)",
-  IMPURE);
-
-  "domReplaceChildren",
-  (`Client, datatype "(Xml, DomNode) ~> ()",
-  IMPURE);
-
-  "swapNodes",
-  (`Client, datatype "(DomNode, DomNode) ~> ()",
-  IMPURE);
-
-  "getDocumentNode",
-  (`Client, datatype "() ~> DomNode",
-  IMPURE);
-
-  "getNodeById",
-  (`Client, datatype "(String) ~> DomNode",
-  IMPURE);
-
-  "getValue",
-  (`Client, datatype "(DomNode) ~> Xml",
-  IMPURE);
-
-  "isNull",
-  (`Client, datatype "(DomNode) ~> Bool",
-  PURE);
-
-  (* Create XML element from string, attributes and children *)
-  "makeXml",
-  (p3 (fun name attrList children -> match (attrList, children) with
-    | (`List attrs, `List cs) -> `XML (Value.Node (Value.unbox_string(name), List.map (function
-        | (`XML x) -> x
-        | _ -> raise (runtime_type_error "non-XML in makeXml")
-      ) cs @ (List.map (function
-          | `Record [ ("1", key); ("2", value) ] -> Value.Attr (Value.unbox_string(key), Value.unbox_string(value))
-        | _ -> raise (runtime_type_error "non-attr in makeXml")
-      ) attrs))
-    )
-    | _ -> raise (runtime_type_error "non-XML in makeXml")),
-  datatype "(String, [(String, String)], Xml) -> XmlItem",
-  IMPURE);
-
-  (* XML <-> variant conversion *)
-
-  "xmlToVariant",
-  (p1 (fun v ->
-        match v with
-          | `List xs ->
-              `List (List.map
-                (function
-                   | (`XML x) -> Value.value_of_xmlitem x
-                   | _ -> raise (runtime_type_error "non-XML passed to xmlToVariant")) xs)
-          | _ -> raise (runtime_type_error "non-XML passed to xmlToVariant")),
-  datatype "(Xml) ~> mu n.[ [|Text:String | Attr:(String, String) | Node:(String, n) | NsAttr: (String, String, String) | NsNode: (String, String, n) |] ]",
-  IMPURE);
-
-  "xmlItemToVariant",
-  (p1 (fun v ->
-      match v with
-        | (`XML x) -> Value.value_of_xmlitem x
-        | _ -> raise (runtime_type_error "non-XML passed to xmlItemToVariant")),
-    datatype "(XmlItem) ~> mu n. [|Text:String | Attr:(String, String) | Node:(String, [ n ]) | NsAttr: (String, String, String) | NsNode: (String, String, [ n ]) |]",
-    IMPURE);
-
-  "variantToXml",
-  (p1 (fun v -> `List (List.map (fun i -> `XML (i)) (Value.xml_of_variants v))),
-   datatype "(mu n.[ [|Text:String | Attr:(String, String) | Node:(String, n) | NsAttr: (String, String, String) | NsNode: (String, String, n) |] ]) ~> Xml",
-   IMPURE);
-
-  "variantToXmlItem",
-  (p1 (fun v -> `XML (Value.xmlitem_of_variant v)),
-    datatype "(mu n. [| Text: String | Attr: (String, String) | Node: (String, [ n ]) | NsAttr: (String, String, String) | NsNode: (String, String, [ n ]) |]) ~> XmlItem",
-    IMPURE);
-
-  (* Section: Accessors for XML *)
-
-  "getTagName",
-  (p1 (fun v ->
-         match v with
-           | `List [ `XML (Value.Node (name, _)) ]      -> Value.box_string name
-           | `List [ `XML (Value.NsNode (_, name, _)) ] -> Value.box_string name
-           | _ -> raise (runtime_type_error "non-element passed to getTagName")),
-  datatype "(Xml) ~> String",
-  IMPURE);
-
-  "getNamespace",
-  (p1 (fun v -> match v with
-    | `List [ `XML (Value.NsNode (ns, _, _)) ] -> Value.box_string ns
-    | `List [ `XML (Value.Node (_, _)) ]       -> Value.box_string ""
-    | _ -> raise (runtime_type_error "non-element passed to getNamespace")),
-  datatype "(Xml) ~> String",
-  IMPURE);
-
-
-  "itemTextContent",
-  (p1 (function
-         | `XML (Value.Text str) -> Value.box_string str
-         | _ -> raise (runtime_type_error "non-text node given to textContent")),
-   datatype "(XmlItem) ~> String",
-  IMPURE);
-
-  "getAttributes",
-  (p1 (fun v ->
-    let attr_to_record = function
-      | (Value.Attr (name, value)) -> `Record [("1", Value.box_string name); ("2", Value.box_string value)]
-      | (Value.NsAttr (ns, name, value)) -> `Record [ ("1", Value.box_string (ns ^ ":" ^ name)); ("2", Value.box_string value) ]
-      | _ -> assert false
-    in match v with
-      | `List [ `XML (Value.Node (_, children)) ]      -> `List (List.map attr_to_record (List.filter Value.is_attr children))
-      | `List [ `XML (Value.NsNode (_, _, children)) ] -> `List (List.map attr_to_record (List.filter Value.is_attr children))
-      | _ -> raise (runtime_type_error "non-element given to getAttributes")),
-  datatype "(Xml) ~> [(String,String)]",
-  IMPURE);
-
-  "hasAttribute",
-  (`Client, datatype "(Xml, String) ~> Bool",
-  PURE);
-
-  "getAttribute",
-  (`Client, datatype "(Xml, String) ~> String",
-  IMPURE);
-
-  "not",
-  (p1 (Value.unbox_bool ->- not ->- Value.box_bool),
-   datatype "(Bool) -> Bool",
-  PURE);
-
-
-  (* Section: Accessors for DomNodes *)
-
-  "domGetNodeValueFromRef",
-  (`Client, datatype "(DomNode) ~> String",
-  IMPURE);
-
-  "domGetTagNameFromRef",
-  (`Client, datatype "(DomNode) ~> String",
-  IMPURE);
-
-  "domGetPropertyFromRef",
-  (`Client, datatype "(DomNode, String) ~> String",
-  IMPURE);
-
-  "domSetPropertyFromRef",
-  (`Client, datatype "(DomNode, String, String) ~> ()",
-  IMPURE);
-
-  "domHasAttribute",
-  (`Client, datatype "(DomNode, String) ~> Bool",
-  IMPURE);
-
-  "domRemoveAttributeFromRef",
-  (`Client, datatype "(DomNode, String) ~> ()",
-  IMPURE);
-
-  "domGetAttributeFromRef",
-  (`Client, datatype "(DomNode, String) ~> String",
-  IMPURE);
-
-  "domSetAttributeFromRef",
-  (`Client, datatype "(DomNode, String, String) ~> ()",
-  IMPURE);
-
-  "domGetStyleAttrFromRef",
-  (`Client, datatype "(DomNode, String) ~> String",
-  IMPURE);
-
-  "domGetChildrenFromRef",
-  (`Client, datatype "(DomNode) ~> [ DomNode ]",
-  IMPURE);
-
-  "domSetStyleAttrFromRef",
-  (`Client, datatype "(DomNode, String, String) ~> ()",
-  IMPURE);
-
-  (* Section:  Navigation for DomNodes *)
-  "parentNode",
-  (`Client, datatype "(DomNode) ~> DomNode",
-  IMPURE);
-
-  "firstChild",
-  (`Client, datatype "(DomNode) ~> DomNode",
-  IMPURE);
-
-  "nextSibling",
-  (`Client, datatype "(DomNode) ~> DomNode",
-  IMPURE);
-
-  (* Section: DOM Event API *)
-  "getTarget",
-  (`Client, datatype "(Event) ~> DomNode",
-  PURE);
-
-  "getTargetValue",
-  (`Client, datatype "(Event) ~> String",
-  PURE);
-
-  "getTargetElement",
-  (`Client, datatype "(Event) ~> DomNode",
-  PURE);
-
-  (* event handlers *)
-  (* what effect annotation should the inner arrow have? *)
-  "registerEventHandlers",
-  (`PFun (fun _ -> assert false),
-  datatype "([(String, (Event) { |e}~> ())]) ~> String",
-  IMPURE);
-
-  (* getPageX : (Event) -> Int *)
-  "getPageX",
-  (`Client, datatype "(Event) ~> Int",
-  PURE);
-
-  (* getPageY : (Event) -> Int *)
-  "getPageY",
-  (`Client, datatype "(Event) ~> Int",
-  PURE);
-
-  (* getFromElement : (Event) -> DomNode *)
-  "getFromElement",
-  (`Client, datatype "(Event) ~> DomNode",
-  PURE);
-
-  (* getToElement : (Event) -> DomNode *)
-  "getToElement",
-  (`Client, datatype "(Event) ~> DomNode",
-  PURE);
-
-  (* getTime : (Event) -> Int *)
-  "getTime",
-  (`Client, datatype "(Event) ~> Int",
-  PURE);
-
-  (* getCharCode : (Event) -> Int *)
-  "getCharCode",
-  (`Client, datatype "(Event) ~> Int",
-  PURE);
-
-  "getInputValue",
-  (`Client, datatype "(String) ~> String",
-  PURE);
-
-  "getRadioGroupValue",
-  (`Client, datatype "([String]) ~> String",
-  PURE);
-
-  "event",
-  (`Client, datatype "Event",
-  PURE);
-
-
-  (* domSetAnchor : String -> () *)
-  "domSetAnchor",
-  (`Client, datatype "(String) ~> ()",
-  IMPURE);
-
-  "domGetAnchor",
-  (`Client, datatype "() ~> String",
-  IMPURE);
-
   "sleep",
   (p1 (fun _ ->
          (* FIXME: This isn't right : it freezes all threads *)
@@ -1060,16 +648,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   IMPURE);
 
   (* Date / time functions *)
-
-  "clientTime",
-  (`Client,
-   datatype "() ~> Int",
-   IMPURE);
-
-  "clientTimeMilliseconds",
-  (`Client,
-   datatype "() ~> Int",
-   IMPURE);
 
   "serverTime",
   (`Server
@@ -1308,15 +886,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "exp",     float_fn exp PURE;
   "sqrt",    float_fn sqrt PURE;
 
-  ("environment",
-   (`PFun (fun req_data _ ->
-             let cgi_params = RequestData.get_cgi_parameters req_data in
-             let makestrpair (x1, x2) = `Record [("1", Value.box_string x1); ("2", Value.box_string x2)] in
-             let is_internal s = Str.string_match (Str.regexp "^_") s 0 in
-               Lwt.return (`List (List.map makestrpair (List.filter (not -<- is_internal -<- fst) cgi_params)))),
-    datatype "() ~> [(String,String)]",
-    IMPURE));
-
   (* regular expression matching *)
   ("tilde",
    (p2 (fun s r ->
@@ -1440,145 +1009,17 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     datatype ("(String) ~> [Char]"),
     PURE));
 
-  ("unsafePickleCont",
-   (*
-     HACK:
-
-     really we want this to be pickleCont, and to give it the type:
-
-     (() -> Page) ~> String
-
-     but the Page type is defined in the prelude, so pickleCont is also defined
-     in the prelude and is just a wrapper for this function.
-   *)
-   (`Server (p1 (Serialisation.MarshalSerialiser.Value.save ->- Value.box_string)),
-    datatype "(() { |e}-> a) ~> String",
-    IMPURE));
-
   (* HACK *)
   ("unsafe_cast",
    (`Server (p1 (fun v -> v)),
     datatype "(a) ~> b",
     PURE));
 
-  (* xml parser *)
-  "parseXml",
-  (`Server (p1 (fun v ->
-                  `List [`XML(ParseXml.parse_xml (Value.unbox_string v))])),
-   datatype "(String) -> Xml",
-   IMPURE);
-
   (* non-deterministic random number generator *)
   "random",
   (pure_pfun (fun _ -> (Value.box_float (Random.float 1.0))),
    datatype "() -> Float",
    IMPURE);
-
-    (* LINKS GAME LIBRARY *)
-
-    (* GENERAL JAVASCRIPT / EVENTS *)
-
-    "jsSetInterval",
-    (`Client, datatype "(() ~e~> (), Int) ~e~> ()", IMPURE);
-
-    "jsRequestAnimationFrame",
-    (`Client, datatype "(() ~e~> ()) ~e~> ()", IMPURE);
-
-    "jsSave",
-    (`Client, datatype "(a) ~> ()", IMPURE);
-
-    "jsRestore",
-    (`Client, datatype "(a) ~> ()", IMPURE);
-
-    "jsSetOnKeyDown",
-    (`Client, datatype "(DomNode, (Event) ~e~> ()) ~e~> ()", IMPURE);
-
-    "jsSetOnEvent",
-    (`Client, datatype "(DomNode, String, (Event) ~e~> (), Bool) ~e~> ()", IMPURE);
-
-    "jsSetWindowEvent",
-    (`Client, datatype "(String, (Event) ~e~> (), Bool) ~e~> ()", IMPURE);
-
-    "jsSetOnLoad",
-    (`Client, datatype "((Event) ~e~> ()) ~e~> ()", IMPURE);
-
-    (* GLOBAL STATE MANIPULATION *)
-
-    "jsSaveGlobalObject",
-    (`Client, datatype "(String, a) ~> ()", IMPURE);
-
-    "jsLoadGlobalObject",
-    (`Client, datatype "(String) ~> a", IMPURE);
-
-    (* CANVAS SPECIFIC *)
-
-    "jsGetContext2D",
-    (`Client, datatype "(DomNode) ~> a", IMPURE); (* the a here should be something like Context2D *)
-
-    "jsFillText",
-    (`Client, datatype "(a, String, Float, Float) ~> ()", IMPURE);
-
-    "jsCanvasFont",
-    (`Client, datatype "(a, String) ~> ()", IMPURE);
-
-    "jsDrawImage",
-    (`Client, datatype "(a, DomNode, Float, Float) ~> ()", IMPURE);
-
-    "jsFillRect",
-    (`Client, datatype "(a, Float, Float, Float, Float) ~> ()", IMPURE);
-
-    "jsFillCircle",
-    (`Client, datatype "(a, Float, Float, Float) ~> ()", IMPURE);
-
-    "jsBeginPath",
-    (`Client, datatype "(a) ~> ()", IMPURE);
-
-    "jsClosePath",
-    (`Client, datatype "(a) ~> ()", IMPURE);
-
-    "jsFill",
-    (`Client, datatype "(a) ~> ()", IMPURE);
-
-    "jsArc",
-    (`Client, datatype "(a, Float, Float, Float, Float, Float, Bool) ~> ()", IMPURE);
-
-    "jsMoveTo",
-    (`Client, datatype "(a, Float, Float) ~> ()", IMPURE);
-
-    "jsLineTo",
-    (`Client, datatype "(a, Float, Float) ~> ()", IMPURE);
-
-    "jsLineWidth",
-    (`Client, datatype "(a, Float) ~> ()", IMPURE);
-
-    "jsScale",
-    (`Client, datatype "(a, Float, Float) ~> ()", IMPURE);
-
-    "jsTranslate",
-    (`Client, datatype "(a, Float, Float) ~> ()", IMPURE);
-
-    "jsStrokeStyle",
-    (`Client, datatype "(a, a) ~> ()", IMPURE);
-
-    "jsStroke",
-    (`Client, datatype "(a) ~> ()", IMPURE);
-
-    "jsSetFillColor",
-    (`Client, datatype "(a, String) ~> ()", IMPURE);
-
-    "jsClearRect",
-    (`Client, datatype "(a, Float, Float, Float, Float) ~> ()", IMPURE);
-
-    "jsCanvasWidth",
-    (`Client, datatype "(a) ~> Float", IMPURE);
-
-    "jsCanvasHeight",
-    (`Client, datatype "(a) ~> Float", IMPURE);
-
-    "jsSaveCanvas",
-    (`Client, datatype "(DomNode, DomNode, String) ~> ()", IMPURE);
-
-    (* END OF LINKS GAME LIBRARY *)
 
     "gensym",
     (let idx = ref 0 in
@@ -1668,7 +1109,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 ]
 
 let impl : located_primitive -> primitive option = function
-  | `Client -> None
   | `Server p
   | (#primitive as p) -> Some p
 
@@ -1683,13 +1123,6 @@ let venv =
     (fun name var venv ->
        Env.Int.bind var name venv)
     nenv
-    Env.Int.empty
-
-let value_env : primitive option Env.Int.t =
-  List.fold_right
-    (fun (name, (p, _, _)) env ->
-       Env.Int.bind (Env.String.find name nenv) (impl p) env)
-    env
     Env.Int.empty
 
 let maxvar =
@@ -1727,25 +1160,6 @@ let primitive_vars = Env.String.fold (fun _name var vars -> IntSet.add var vars)
 
 let primitive_name n = Env.Int.find n venv
 
-let primitive_location (name:string) =
-  match fst3 (List.assoc name env) with
-    | `Client    -> Location.Client
-    | `Server _  -> Location.Server
-    | #primitive -> Location.Unknown
-
-let rec function_arity =
-  let open Types in
-  function
-    | Function (Record row, _, _) ->
-        let (l, _, _) = TypeUtils.extract_row_parts row in
-        (Some (StringMap.size l))
-    | ForAll (_, t) -> function_arity t
-    | _ -> None
-
-let primitive_arity (name : string) =
-  let _, t, _ = List.assoc name env in
-    function_arity t
-
 (*let primitive_by_code var = Env.Int.lookup value_env var*)
 (* use array instead? seems faster for primop-intensive code *)
 let primitive_by_code var = Array.get value_array var
@@ -1759,7 +1173,7 @@ let primitive_stub (name : string) : Value.t =
           match primitive_by_code var with
             | Some (#Value.t as r) -> r
             | Some _ -> `PrimitiveFunction (name,Some var)
-            | None -> `ClientFunction name
+            | None -> assert false
         end
     | None -> assert false
 
@@ -1769,7 +1183,7 @@ let primitive_stub_by_code (var : Var.var) : Value.t =
   match primitive_by_code var with
   | Some (#Value.t as r) -> r
   | Some _ -> `PrimitiveFunction (name,Some var)
-  | None -> `ClientFunction name
+  | None -> assert false
 
 
 (* jcheney: added to expose lookup by var *)
@@ -1802,28 +1216,3 @@ let is_pure_primitive name =
     arguments [args]. *)
 let prim_appln name args = Ir.Apply( Ir.Variable(Env.String.find name nenv),
                                   args)
-
-let cohttp_server_response headers body req_data =
-  let open Lwt in
-  (* Debug.print (Printf.sprintf "Attempting to return:\n%s\n" body); *)
-  let resp_headers = RequestData.get_http_response_headers req_data in
-  let resp_code = RequestData.get_http_response_code req_data in
-  let h = Cohttp.Header.add_list (Cohttp.Header.init ()) (headers @ resp_headers) in
-  Cohttp_lwt_unix.Server.respond_string
-    ?headers:(Some h)
-    ~status:(Cohttp.Code.status_of_code resp_code)
-    ~body:body
-    () >>= fun resp -> Lwt.return (`Response resp)
-
-(** Output the headers and content to stdout *)
-let print_http_response headers body req_data =
-  let resp_headers = RequestData.get_http_response_headers req_data in
-  let resp_code = RequestData.get_http_response_code req_data in
-  let headers = headers @ resp_headers  @
-    if (resp_code <> 200) then
-      [("Status", string_of_int resp_code)] else []
-  in
-    for_each headers
-      (fun (name, value) -> print_endline(name ^ ": " ^ value));
-    print_endline "";
-    print_string body

@@ -41,26 +41,4 @@ fun main(op1, op2, operation) {
   user(fork(calc), stringToInt(op1), stringToInt(op2), operation)
 }
 
-page
-  <html>
-  <head><title>[10] Cool Calculator </title></head>
-  <body>
-  <h3>Cool Integer Calculator</h3>
-
-   <form l:onsubmit="{domReplaceChildren(stringToXml(intToString(main(op1, op2, operation))), getNodeById("result"))}">
-    <input type="text" size="5" l:name="op1"/>
-    <select l:name="operation">
-     <option value="add">+</option>
-      <option value="mult">*</option>
-    <option value="sub">-</option>
-      <option value="div">/</option>
-   </select>
-    <input type="text" size="5" l:name="op2"/>
-    <button type="submit">Get Result!</button>
-   </form>
-
-   <p>The result is:</p>
-   <p id="result"></p>
-
-  </body>
-  </html>
+main("6", "7", "mult")

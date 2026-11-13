@@ -45,8 +45,6 @@ type value =
   | TAbs       of tyvar list * value       (* type abstraction: /\xs.v *)
   | TApp       of value * tyarg list       (* type application: v ts *)
 
-  | XmlNode    of Name.t * value name_map * value list
-                                       (* XML node construction: <tag attributes>body</tag> *)
   | ApplyPure  of value * value list   (* non-side-effecting application: v ws *)
 
   | Closure    of var * tyarg list * value           (* closure creation: f env *)

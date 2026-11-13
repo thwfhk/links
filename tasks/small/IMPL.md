@@ -83,8 +83,14 @@ signatures; the `gen` helpers use effect upcasts.
    points from Links source. Former location keywords become ordinary
    identifiers. Keep internal locations while XML and process code
    still uses them. The retained page tests use `renderPage` directly.
-   In **2.3**, remove the XML, formlet and page paths and their prelude
-   and primitive entries, then delete the browser backend and library.
+   In **2.3**, remove XML, formlets and pages, including the browser
+   backend and JavaScript library. The native driver uses `Evalir.Eval`
+   directly. Keep the ordinary state and `Maybe` combinators and the
+   `Either` alias from the former formlet section of the prelude.
+   Without XML literals, the lexer handles angle brackets as ordinary
+   operators, including the brackets in handler patterns. The process
+   runtime still contains WebSocket and serialisation code, due for
+   removal in 2.5.
 3. **2.4.** Remove special cases for session exceptions in handler inference,
    pattern compilation and trap dispatch. Delete `desugarCP`,
    `desugarSessionExceptions` and channel utilities after their callers

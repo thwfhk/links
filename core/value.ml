@@ -9,9 +9,6 @@ module E = Env
 let internal_error message =
   Errors.internal_error ~filename:"value.ml" ~message
 
-let runtime_error message =
-  Errors.runtime_error message
-
 (** Set this to [true] to print the body and environment of a
     function. When [false], functions are simply printed as [fun] *)
 let printing_functions
@@ -142,44 +139,6 @@ end
 
 let _ = register_driver ("null", fun args -> new null_database, reconstruct_db_string ("null", args))
 
-type xmlitem =   Text of string
-               | Attr of (string * string)
-               | Node of (string * xml)
-               | NsAttr of (string * string * string)
-               | NsNode of (string * string * xml)
-and xml = xmlitem list
-    [@@deriving show,yojson]
-
-
-let is_attr = function
-  | Attr _   -> true
-  | NsAttr _ -> true
-  | _        -> false
-
-let is_node = function
-  | Node _   -> true
-  | NsNode _ -> true
-  | _        -> false
-
-let attrs = List.filter is_attr
-and nodes = List.filter (not -<- is_attr)
-
-(* split top-level HTML into head and body components *)
-let split_html : xml -> xml * xml =
-  function
-  | [Node ("html", xs)] ->
-    List.fold_left
-      (fun (hs, bs) ->
-         function
-         | Node ("body", ys) ->
-           hs, bs @ ys
-         | Node ("head", ys) ->
-           hs @ ys, bs
-         | x -> hs, bs @ [x])
-      ([], []) xs
-  | [Node ("body", xs)] -> [], xs
-  | xs -> [], xs
-
 module Table = struct
   type t = {
   database: (database * string);
@@ -203,7 +162,6 @@ type primitive_value_basis =  [
 | `Char of char
 | `Float of float
 | `Int of int
-| `XML of xmlitem
 | `String of string ]
   [@@deriving show,yojson]
 
@@ -740,7 +698,6 @@ type t = [
 | `Variant of string * t
 | `FunctionPtr of (Ir.var * t option)
 | `PrimitiveFunction of string * Var.var option
-| `ClientDomRef of int
 | `ClientFunction of string
 | `ClientClosure of int
 | `Continuation of continuation
@@ -781,12 +738,9 @@ let rec p_value (ppf : formatter) : t -> 'a = function
         fprintf ppf "(@[<hv 0>%a@])" p_record_fields (List.sort (fun (l,_) (r, _) -> compare l r) fields) end
   | `Entry (k,v) -> fprintf ppf "@{<key>%a@}(@[%a)@]" p_value k p_value v
   | `List [] -> fprintf ppf "[]"
-  | `List ((`XML _)::_ as elems) ->
-     fprintf ppf "@[<hv>%a@]" (pp_print_list p_value) elems
   | `List [v] -> fprintf ppf "[%a]" p_value v
   | `List l -> fprintf ppf "[@[<hov 0>";
                p_list_elements ppf l
-  | `ClientDomRef i -> fprintf ppf "%i" i
   | `ClientClosure _
   | `ClientFunction _ -> fprintf ppf "fun"
   | `PrimitiveFunction (name, _op) -> fprintf ppf "%s" name
@@ -812,7 +766,6 @@ let rec p_value (ppf : formatter) : t -> 'a = function
      fprintf ppf "Spawn location: client %s" (ClientID.to_string cid)
   | `SpawnLocation `ServerSpawnLoc ->
      fprintf ppf "Spawn location: server"
-  | `XML xml -> fprintf ppf "@[<hv>%a@]" (p_xmlitem ~close_tags:false) xml
   | `Continuation cont -> fprintf ppf "Continuation%s" (Continuation.to_string cont)
   | `Resumption _res -> fprintf ppf "Resumption"
   | `AccessPointID (`ClientAccessPoint (cid, apid)) ->
@@ -877,37 +830,6 @@ and p_tuple_elements ppf = function
   | [v] -> fprintf ppf "%a" p_value v
   | v::vs -> fprintf ppf "%a,@ " p_value v;
              p_tuple_elements ppf vs
-(* Is this function needed? *)
-and p_xml ?(close_tags=false) ppf = fun (xml: xml) ->
-  pp_print_list (p_xmlitem ~close_tags:close_tags) ppf xml
-and p_xmlitem ?(close_tags=false) ppf: xmlitem -> unit = function
-  | Attr (k, v) -> let escape = Str.global_replace (Str.regexp "\"") "\\\"" in
-                   fprintf ppf "%s=\"%s\"" k (escape v)
-  | Text s -> fprintf ppf "%s" (xml_escape s)
-  | Node (tag, children) ->
-     begin
-       match attrs children, nodes children with
-       | [], [] when not close_tags ->
-          fprintf ppf "<%s/>" tag
-       | attrs, [] when not close_tags ->
-          fprintf ppf "<%s %a/>"
-                  tag
-                  (pp_print_list ~pp_sep:pp_print_space (p_xmlitem ~close_tags:close_tags)) attrs
-       | [], nodes ->
-          fprintf ppf "<%s>%a</%s>"
-                  tag
-                  (p_xml ~close_tags:close_tags) nodes
-                  tag
-       | attrs, nodes ->
-          fprintf ppf "<%s %a>%a</%s>"
-                  tag
-                  (pp_print_list ~pp_sep:pp_print_space (p_xmlitem ~close_tags:close_tags)) attrs
-                  (p_xml ~close_tags:close_tags) nodes
-                  tag
-      end
-  | NsAttr (ns, k, v) -> p_xmlitem ppf (Attr (ns ^ ":" ^ k, v))
-  | NsNode (ns, tag, children) -> p_xmlitem ppf (Node (ns ^ ":" ^ tag, children))
-
 let string_of_pretty pretty_fun arg : string =
   let b = Buffer.create 200 in
   let f = Format.formatter_of_buffer b in
@@ -945,9 +867,6 @@ let string_of_calendar_utc cal =
     You might want to use `p_value` on a suitable output stream/formatter instead. *)
 let string_of_value: t -> string =
   string_of_pretty p_value
-
-let string_of_xml ?(close_tags = false): xml -> string =
-  string_of_pretty (p_xml ~close_tags:close_tags)
 
 (* and string_of_dist_pid = function *)
 (*   | `ServerPid i -> "Server (" ^ (ProcessID.to_string i) ^ ")" *)
@@ -1012,10 +931,6 @@ and unbox_float : t -> float = function
 and box_char c = `Char c
 and unbox_char :  t -> char = function
   | `Char f -> f
-  | v -> raise (type_error "char" v)
-and box_xml x = `XML x
-and unbox_xml  :  t -> xmlitem = function
-  | `XML x -> x
   | v -> raise (type_error "char" v)
 and box_string s = `String s
 and unbox_string : t -> string = function
@@ -1098,50 +1013,6 @@ let rec get_contained_channels v =
     | `FunctionPtr (_, (Some x)) -> get_contained_channels x
     | `SessionChannel c -> [c]
     | _ -> []
-
-let rec value_of_xml xs = `List (List.map value_of_xmlitem xs)
-and value_of_xmlitem =
-  function
-    | Text s -> `Variant ("Text", box_string s)
-    | Attr (name, value) -> `Variant ("Attr", `Record [("1", box_string name); ("2", box_string value)])
-    | Node (name, children) -> `Variant ("Node", `Record [("1", box_string name); ("2", value_of_xml children)])
-    | NsAttr (ns, name, value) -> `Variant ("NsAttr", `Record [("1", box_string ns); ("2", box_string name); ("3", box_string value)])
-    | NsNode (ns, name, children) -> `Variant ("NsNode", `Record [("1", box_string ns); ("2", box_string name); ("3", value_of_xml children)])
-
-let rec xml_of_variants vs = match vs with
-  | (`List variant_items) -> List.map xmlitem_of_variant variant_items
-  | v -> raise (type_error ~action:"construct XML from" "list" v)
-and xmlitem_of_variant =
-  function
-    | `Variant ("Text", boxed_string) ->
-        Text (unbox_string(boxed_string))
-    | `Variant ("Attr", `Record([ ("1", boxed_name); ("2", boxed_value) ])) ->
-        Attr(unbox_string(boxed_name), unbox_string(boxed_value))
-    | `Variant ("Node", `Record([ ("1", boxed_name); ("2", variant_children) ])) ->
-        let name = unbox_string(boxed_name) in
-        if (String.contains name ':')
-        then raise (runtime_error "Illegal character in tagname")
-        else Node(unbox_string(boxed_name), xml_of_variants variant_children)
-    | `Variant ("NsAttr", `Record([ ("1", boxed_ns); ("2", boxed_name); ("3", boxed_value) ])) ->
-        let ns = unbox_string(boxed_ns) in
-        let name = unbox_string(boxed_name) in
-        if (String.contains ns ':')
-        then raise (runtime_error "Illegal character in namespace")
-        else if (String.contains name ':')
-        then raise (runtime_error "Illegal character in attrname")
-        else NsAttr(ns, name, unbox_string(boxed_value))
-    | `Variant ("NsNode", `Record([ ("1", boxed_ns); ("2", boxed_name); ("3", variant_children) ])) ->
-        let ns = unbox_string(boxed_ns) in
-        let name = unbox_string(boxed_name) in
-        if (String.contains ns ':')
-        then raise (runtime_error "Illegal character in namespace")
-        else if (String.contains name ':')
-        then raise (runtime_error "Illegal character in tagname")
-        else NsNode(ns, name, xml_of_variants variant_children)
-    | v ->
-        raise (type_error ~action:"construct XML from" "variant" v)
-
-(* Some utility functions for databases used by insertion *)
 
 let row_columns_values v =
   let row_columns : t -> string list = function

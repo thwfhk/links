@@ -146,23 +146,17 @@ class transform (env : Types.typing_environment) =
   object (o : 'self_type)
     val var_env = env.Types.var_env
     val tycon_env = env.Types.tycon_env
-    val formlet_env = TyEnv.empty
     val effect_row = fst (Types.unwrap_row env.Types.effect_row)
 
     method get_var_env : unit -> Types.environment = fun () -> var_env
     method get_tycon_env : unit -> Types.tycon_environment = fun () -> tycon_env
-    method get_formlet_env : unit -> Types.environment = fun () -> formlet_env
 
-    method backup_envs = var_env, tycon_env, formlet_env, effect_row
-    method restore_envs (var_env, tycon_env, formlet_env, effect_row) =
-      {< var_env = var_env; tycon_env = tycon_env; formlet_env = formlet_env;
-         effect_row = effect_row >}
+    method backup_envs = var_env, tycon_env, effect_row
+    method restore_envs (var_env, tycon_env, effect_row) =
+      {< var_env = var_env; tycon_env = tycon_env; effect_row = effect_row >}
 
     method with_var_env var_env =
       {< var_env = var_env >}
-
-    method with_formlet_env formlet_env =
-      {< formlet_env = formlet_env >}
 
     method bind_tycon name tycon =
       {< tycon_env = TyEnv.bind name tycon tycon_env >}
@@ -667,45 +661,6 @@ class transform (env : Types.typing_environment) =
           let (o, body, _) = o#phrase body in
           let (o, t) = o#datatype t in
             (o, DBTemporalJoin (mode, body, Some t), t)
-      | Xml (tag, attrs, attrexp, children) ->
-          let (o, attrs) =
-            listu o
-              (fun o (name, value) ->
-                 let (o, value, _) = list o (fun o -> o#phrase) value in
-                   (o, (name, value)))
-              attrs in
-          let (o, attrexp, _) = option o (fun o -> o#phrase) attrexp in
-          let (o, children, _) = list o (fun o -> o#phrase) children in
-            (o, Xml (tag, attrs, attrexp, children), Types.xml_type)
-      | TextNode s -> (o, TextNode s, Types.xml_type)
-      | Formlet (body, yields) ->
-         let envs = o#backup_envs in
-         let (o, body, _) = o#phrase body in
-         (* ensure that the formlet bindings are only in scope in the
-            yields clause *)
-         let o = o#with_var_env (TyEnv.extend (o#get_var_env ()) (o#get_formlet_env ())) in
-         let (o, yields, t) = o#phrase yields in
-         let o = o#restore_envs envs in
-         (o, Formlet (body, yields), Instantiate.alias "Formlet" [(Type, t)] tycon_env)
-      | Page e -> let (o, e, _) = o#phrase e in (o, Page e, Instantiate.alias "Page" [] tycon_env)
-      | FormletPlacement (f, h, attributes) ->
-          let (o, f, _) = o#phrase f in
-          let (o, h, _) = o#phrase h in
-          let (o, attributes, _) = o#phrase attributes in
-            (o, FormletPlacement (f, h, attributes), Types.xml_type)
-      | PagePlacement e ->
-          let (o, e, _) = o#phrase e in (o, PagePlacement e, Types.xml_type)
-      | FormBinding (f, p) ->
-         let envs = o#backup_envs in
-         let (o, f, _) = o#phrase f in
-         (* HACK: add the formlet bindings to the formlet environment *)
-         let o = o#with_var_env TyEnv.empty in
-         let (o, p) = o#pattern p in
-         let formlet_env = TyEnv.extend formlet_env (o#get_var_env()) in
-         let o = o#restore_envs envs in
-         let o = o#with_formlet_env formlet_env in
-         (* let o = {< formlet_env=TyEnv.extend formlet_env (o#get_var_env()) >} in *)
-         (o, FormBinding (f, p), Types.xml_type)
       | e -> raise (internal_error ("oops: "^show_phrasenode  e))
 
     method phrase : phrase -> ('self_type * phrase * Types.datatype) =

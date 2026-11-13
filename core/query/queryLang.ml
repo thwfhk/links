@@ -53,7 +53,6 @@ type t =
     | Project   of t * string
     | Erase     of t * StringSet.t
     | Variant   of string * t
-    | XML       of Value.xmlitem
     | Apply     of t * t list
     | Closure   of (Ir.var list * Ir.computation) * env
     | Case      of t * (binder * t) StringMap.t * (binder * t) option
@@ -84,7 +83,6 @@ struct
     | Project   of pt * string
     | Erase     of pt * StringSet.t
     | Variant   of string * pt
-    | XML       of Value.xmlitem
     | Apply     of pt * pt list
     | Lam       of Ir.var list * Ir.computation
     | Case      of pt * (binder * pt) StringMap.t * (binder * pt) option
@@ -110,7 +108,6 @@ let rec pt_of_t : 't -> S.pt = fun v ->
       | Prom q -> S.Prom (bt q)
       | Record fields -> S.Record (StringMap.map bt fields)
       | Variant (name, v) -> S.Variant (name, bt v)
-      | XML xmlitem -> S.XML xmlitem
       | Project (v, name) -> S.Project (bt v, name)
       | Erase (v, names) -> S.Erase (bt v, names)
       | Apply (u, vs) -> S.Apply (bt u, List.map bt vs)
@@ -158,7 +155,6 @@ let rec value_of_expression = fun v ->
       | Table t -> `Table t
       | Concat vs -> `List (List.map value_of_singleton vs)
       | Variant (name, v) -> `Variant (name, ve v)
-      | XML xmlitem -> `XML xmlitem
       | Record fields ->
           `Record (List.rev (StringMap.fold (fun name v fields ->
                                                 (name, ve v)::fields)
@@ -201,11 +197,6 @@ let table_field_types Value.Table.{ row = (fields, _, _); temporal_fields; _ } =
     let declared_fields = field_types_of_spec_map fields in
     (* Add metadata fields *)
     StringMap.superimpose (StringMap.from_alist metadata_fields) declared_fields
-
-let unbox_xml =
-  function
-    | XML xmlitem -> xmlitem
-    | _ -> raise (runtime_type_error "failed to unbox XML")
 
 let unbox_pair =
   function
@@ -550,7 +541,7 @@ let lookup_fun env (f, fvs) =
               Closure ((xs, body), env_of_value_env env.policy env')
           | Location.Client ->
             raise (Errors.runtime_error ("Attempt to use client function: " ^
-              Js.var_name_binder (Var.make_binder f finfo) ^ " in query"))
+              Var.name_of_binder (Var.make_binder f finfo) ^ " in query"))
         end
     end
   | None -> None
@@ -581,7 +572,6 @@ let rec expression_of_value : env -> Value.t -> t = fun env v ->
               StringMap.empty
               fields)
     | `Variant (name, v) -> Variant (name, expression_of_value env v)
-    | `XML xmlitem -> XML xmlitem
     | `FunctionPtr (f, fvs) -> find_fun env (f, fvs)
     | `PrimitiveFunction (f,_) -> Primitive f
     | `DateTime dt -> Constant (Constant.DateTime dt)
@@ -980,7 +970,6 @@ struct
       | Variant (v, x) ->
           let (o, x) = o#query x in
           (o, Variant (v, x))
-      | XML x -> (o, XML x)
       | Apply (f, args) ->
           let (o, f) = o#query f in
           let (o, args) = o#list (fun o -> o#query) args in

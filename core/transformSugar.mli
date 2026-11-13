@@ -36,13 +36,11 @@ object ('self)
 
   method get_var_env     : unit -> Types.environment
   method get_tycon_env   : unit -> Types.tycon_environment
-  method get_formlet_env : unit -> Types.environment
 
-  method backup_envs     :  Types.environment * Types.tycon_environment * Types.environment * Types.row
-  method restore_envs    : (Types.environment * Types.tycon_environment * Types.environment * Types.row) -> 'self
+  method backup_envs     :  Types.environment * Types.tycon_environment * Types.row
+  method restore_envs    : (Types.environment * Types.tycon_environment * Types.row) -> 'self
 
   method with_var_env     : Types.environment -> 'self
-  method with_formlet_env : Types.environment -> 'self
 
   method bind_tycon      : string -> Types.tycon_spec -> 'self
   method bind_binder     : Binder.with_pos -> 'self

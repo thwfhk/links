@@ -60,7 +60,7 @@ module Env = struct
           | Location.Client ->
               raise
                 (Errors.runtime_error
-                   (Js.var_name_binder (Var.make_binder f finfo)
+                   (Var.name_of_binder (Var.make_binder f finfo)
                    |> Format.asprintf
                         "Attempt to use client function: %s in query"))
         in

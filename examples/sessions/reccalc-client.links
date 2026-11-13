@@ -32,8 +32,4 @@ fun main() {
   user(fork(calc))
 }
 
-
-page
-  <html><body>
-    Hey, hi.  Also {stringToXml(intToString(main()))}.
-  </body></html>
+main()

@@ -86,9 +86,9 @@ result, the following code may not do what you expect::
         var x = 2;
         ()
     }
-    alert(x);
+    print(intToString(x));
 
-The value printed by ``alert`` will be 0, because the other two
+The value printed by ``print`` will be 0, because the other two
 bindings only bind x within the corresponding clauses of the
 conditional. This may come as a surprise to programmers used to
 imperative languages.

@@ -43,7 +43,6 @@ type value =
   | TAbs       of tyvar list * value
   | TApp       of value * tyarg list
 
-  | XmlNode    of Name.t * value name_map * value list
   | ApplyPure  of value * value list
 
   | Closure    of var * tyarg list * value

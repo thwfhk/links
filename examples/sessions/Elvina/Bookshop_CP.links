@@ -134,33 +134,4 @@ fun orderBooks(c)
 
 }
 
-# Creates a new access point and binds the ends of the channel to appropriate functions.
-sig main : () ~> ()
-fun main()
-{
-    var order = <| nu s.({waitForClient(s, [], "")}|{orderBooks(s)}) |>;
-
-    appendChildren(stringToXml(order!!0), getNodeById("items"));
-    appendChildren(stringToXml(order!!1), getNodeById("removed"));
-    appendChildren(stringToXml(order!!2), getNodeById("cardNo"));
-    appendChildren(stringToXml(order!!3), getNodeById("address"))
-
-}
-
-page
-    <html>
-    <head><title>From Academic Papers</title></head>
-    <body bgcolor="#E6E6FA">
-    <form l:onsubmit="{main()}">
-    <h3>Finished example from "Linear type theory for asynchronous session types":</h3>
-    <button type="submit">Start communication</button>
-    </form>
-    <p><b>Products ordered:</b></p>
-    <p id="items"></p>
-    <p><b>Products removed:</b></p>
-    <p id="removed"></p>
-    <p><b>Payment details:</b></p>
-    <p id="cardNo">Card number: </p>
-    <p id="address">Address: </p>
-    </body>
-    </html>
+<| nu s.({waitForClient(s, [], "")}|{orderBooks(s)}) |>

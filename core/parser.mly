@@ -7,7 +7,7 @@ It might happen that after modifying the grammar Menhir reports new conflicts.
 To debug these go to core/dune file and add flags --dump and --explain:
 
   (menhir
-    (modules parser jsonparse xmlParser)
+    (modules parser timestampParser)
     (flags "--table" "--dump" "--explain")
   )
 
@@ -335,15 +335,15 @@ let any = any_pat dp
 %token DOOP LINDOOP
 %token LINFLAG
 %token LPAREN RPAREN
-%token LBRACE RBRACE LBRACEBAR BARRBRACE LQUOTE RQUOTE
+%token LBRACE RBRACE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
 %token LBRACKETPLUSBAR BARPLUSRBRACKET
 %token LBRACKETAMPBAR BARAMPRBRACKET
 %token LEFTTRIANGLE RIGHTTRIANGLE NU
-%token FOR LARROW LLARROW WHERE FORMLET PAGE
+%token FOR LARROW LLARROW WHERE
 %token LRARROW
 %token COMMA VBAR DOT DOTDOT COLON COLONCOLON
-%token TABLE TEMPORALTABLE TABLEKEYS FROM DATABASE QUERY WITH YIELDS ORDERBY
+%token TABLE TEMPORALTABLE TABLEKEYS FROM DATABASE QUERY WITH ORDERBY
 %token UPDATE DELETE INSERT VALUES SET RETURNING
 %token LENS LENSDROP LENSSELECT LENSJOIN DETERMINED BY ON DELETE_LEFT
 %token LENSPUT LENSGET LENSCHECK LENSSERIAL
@@ -354,11 +354,9 @@ let any = any_pat dp
 %token BARBAR AMPAMP
 %token <int> UINTEGER
 %token <float> UFLOAT
-%token <string> STRING CDATA REGEXREPL
+%token <string> STRING REGEXREPL
 %token <char> CHAR
 %token <string> VARIABLE CONSTRUCTOR KEYWORD PERCENTVAR
-%token <string> LXML ENDTAG
-%token RXML SLASHRXML
 %token MU FORALL SIG UNSAFE
 %token MODULE MUTUAL OPEN IMPORT
 %token BANG QUESTION
@@ -398,8 +396,6 @@ let any = any_pat dp
 %type <Sugartypes.phrase> primary_expression
 %type <Sugartypes.phrase> atomic_expression
 %type <Constant.t> constant
-%type <(string * Sugartypes.phrase list) list> attr_list
-%type <Sugartypes.phrase list> attr_val
 %type <Sugartypes.binding> binding
 
 %%
@@ -607,7 +603,6 @@ primary_expression:
 | atomic_expression                                            { $1 }
 | LBRACKET perhaps_exps RBRACKET                               { list ~ppos:$loc $2 }
 | LBRACKET exp DOTDOT exp RBRACKET                             { with_pos $loc (RangeLit($2, $4))   }
-| xml                                                          { $1 }
 | linearity arg_lists block                                    { fun_lit ~ppos:$loc $1 $2 $3 }
 | linearity arg_lists switch_funlit_body                       { switch_fun_lit ~ppos:$loc $1 $2 $3 }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { with_pos $loc (CP $2) }
@@ -761,48 +756,6 @@ db_expression:
 | delete_expression                                            { $1 }
 | update_expression                                            { $1 }
 
-/* XML */
-xmlid:
-| VARIABLE                                                     { $1 }
-
-attr_list:
-| attr*                                                        { $1 }
-
-attr:
-| xmlid EQ LQUOTE attr_val RQUOTE                              { ($1, $4) }
-| xmlid EQ LQUOTE RQUOTE                                       { ($1, [constant_str ~ppos:$loc($3) ""]) }
-
-attr_val:
-| attr_val_entry+                                              { $1 }
-
-attr_val_entry:
-| block                                                        { $1 }
-| STRING                                                       { constant_str ~ppos:$loc $1 }
-
-xml:
-| LXML attr_list block? SLASHRXML                              { xml ~ppos:$loc $1 $2 $3 []                }
-| LXML attr_list block? RXML xml_contents* ENDTAG              { xml ~ppos:$loc $1 $2 $3 $5 ~tags:($1, $6) }
-
-xml_contents:
-| block                                                        { $1 }
-| formlet_binding | formlet_placement | page_placement
-| xml                                                          { $1 }
-| CDATA                                                        { with_pos $loc (TextNode (Utility.xml_unescape $1)) }
-
-formlet_binding:
-| LBRACE logical_expression RARROW pattern RBRACE              { with_pos $loc (FormBinding($2, $4)) }
-
-formlet_placement:
-| LBRACE logical_expression
-         FATRARROW logical_expression RBRACE                   { with_pos $loc (FormletPlacement ($2, $4,
-                                                                                                   list ~ppos:$loc [])) }
-| LBRACE logical_expression
-         FATRARROW logical_expression
-         WITH logical_expression RBRACE                        { with_pos $loc (FormletPlacement ($2, $4, $6)) }
-
-page_placement:
-| LBRACEBAR exp BARRBRACE                                      { with_pos $loc($2) (PagePlacement $2) }
-
 session_expression:
 | SELECT field_label exp                                       { with_pos $loc (Select ($2, $3))      }
 | OFFER LPAREN exp RPAREN LBRACE case* RBRACE                  { with_pos $loc (Offer ($3, $6, None)) }
@@ -868,10 +821,6 @@ perhaps_orderby:
 escape_expression:
 | ESCAPE VARIABLE IN exp                                       { with_pos $loc (Escape (binder ~ppos:$loc($2) $2, $4)) }
 
-formlet_expression:
-| FORMLET xml YIELDS exp                                       { with_pos $loc (Formlet ($2, $4)) }
-| PAGE xml                                                     { with_pos $loc (Page $2)          }
-
 temporality:
 | VARIABLE                                                     { temporality_of_string $loc $1 }
 
@@ -921,7 +870,6 @@ exp:
 | database_expression
 | db_expression
 | escape_expression
-| formlet_expression
 | iteration_expression
 | lens_expression
 | session_expression
@@ -1136,7 +1084,6 @@ primary_datatype:
                                                                    | "Int"     -> Primitive Primitive.Int
                                                                    | "Char"    -> Primitive Primitive.Char
                                                                    | "Float"   -> Primitive Primitive.Float
-                                                                   | "XmlItem" -> Primitive Primitive.XmlItem
                                                                    | "String"  -> Primitive Primitive.String
                                                                    | "DateTime" -> Primitive Primitive.DateTime
                                                                    | "Database"-> DB

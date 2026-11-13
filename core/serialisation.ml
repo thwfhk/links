@@ -106,7 +106,6 @@ module Compressible = struct
       | `Char of char
       | `Float of float
       | `Int of int
-      | `XML of xmlitem
       | `String of string
       | `Table of
           string (* database name *) *
@@ -129,7 +128,6 @@ module Compressible = struct
       | `Entry of compressed_t * compressed_t
       | `FunctionPtr of (Ir.var * compressed_t option)
       | `PrimitiveFunction of string
-      | `ClientDomRef of int
       | `ClientFunction of string
       | `ClientClosure of int
       | `Continuation of K.compressed_t
@@ -142,7 +140,6 @@ module Compressible = struct
       | `Char c -> `Char c
       | `Float f -> `Float f
       | `Int i -> `Int i
-      | `XML x -> `XML x
       | `String s -> `String s
       | `Table Value.Table.({ database = (_, db); name; keys; temporality; temporal_fields; row }) ->
           let type_str =
@@ -167,7 +164,6 @@ module Compressible = struct
       | `FunctionPtr(x, fvs) ->
          `FunctionPtr (x, Utility.opt_map compress fvs)
       | `PrimitiveFunction (f, _op) -> `PrimitiveFunction f
-      | `ClientDomRef i -> `ClientDomRef i
       | `ClientFunction f -> `ClientFunction f
       | `ClientClosure i  -> `ClientClosure i
       | `Continuation cont -> `Continuation (K.compress cont)
@@ -211,7 +207,6 @@ module Compressible = struct
       | `Entry (k, v) -> `Entry (decompress k, decompress v)
       | `FunctionPtr (x, fvs) -> `FunctionPtr (x, Utility.opt_map decompress fvs)
       | `PrimitiveFunction f -> `PrimitiveFunction (f,None)
-      | `ClientDomRef i -> `ClientDomRef i
       | `ClientFunction f -> `ClientFunction f
       | `ClientClosure i -> `ClientClosure i
       | `Continuation cont -> `Continuation (K.decompress ~globals cont)
@@ -564,38 +559,6 @@ module UnsafeJsonSerialiser : SERIALISER with type s := Yojson.Basic.t = struct
       | `Assoc [("_table", nonsense)] ->
          raise (error (
                     "table should be an assoc list. Got: " ^ (Yojson.Basic.to_string nonsense)))
-      | `Assoc [("_xml", `Assoc xs)] ->
-         let elem_type = assoc_string "type" xs in
-         begin
-           match elem_type with
-           | "TEXT" -> `XML (Text (assoc_string "text" xs))
-           | "ELEMENT" ->
-              let tag = assoc_string "tagname" xs in
-              let attrs = List.assoc "attributes" xs in
-              let attrs = match attrs with
-                | `Assoc attrs -> attrs
-                | _ ->
-                   raise (error ("xml attributes should be an assoc list")) in
-              let attrs = List.fold_left (fun attrs (label, value) ->
-                              Attr (label, unwrap_string value) :: attrs) [] attrs in
-              let body = List.assoc "body" xs |> unwrap_list in
-              let body = List.map (fun x ->
-                             let val_body = from_json x in
-                             match val_body with
-                             | `XML body -> body
-                             | _ -> raise (error ("xml body should be a list of xmlitems"))
-                           ) body
-              in `XML (Node (tag, attrs @ body))
-           | _ -> raise
-                    (error ("xml of unknown type in jsonparse. Got type " ^ elem_type))
-         end
-      | `Assoc [("_xml", nonsense)] ->
-         raise (error (
-                    "xml should be an assoc list. Got: " ^ (Yojson.Basic.to_string nonsense)))
-      | `Assoc ["_domRefKey", `Int id] -> `ClientDomRef id
-      | `Assoc ["_domRefKey", nonsense] ->
-         raise (error (
-                    "dom ref key should be an integer. Got: " ^ (Yojson.Basic.to_string nonsense)))
       | `Assoc xs ->
          (* For non-singleton assoc lists, try each of these in turn.
           * If all else fails, parse as a record. *)

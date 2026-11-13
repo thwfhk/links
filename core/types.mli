@@ -87,8 +87,6 @@ end
 val process      : Abstype.t
 val list         : Abstype.t
 val mapentry     : Abstype.t
-val event        : Abstype.t
-val dom_node     : Abstype.t
 val access_point : Abstype.t
 val socket       : Abstype.t
 val spawn_location : Abstype.t
@@ -246,7 +244,6 @@ val int_type : datatype
 val float_type : datatype
 val datetime_type : datatype
 val database_type : datatype
-val xml_type : datatype
 val empty_type : datatype
 val wrong_type : datatype
 val wild : Label.t

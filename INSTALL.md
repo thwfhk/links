@@ -22,7 +22,7 @@ active switch. Links files install to several locations inside an OPAM
 switch:
 
 * The executable is called `linx` and goes into `$OPAM_SWITCH_PREFIX/bin`
-* The Links prelude and JavaScript libraries go into `$OPAM_SWITCH_PREFIX/lib/links`
+* The Links prelude and standard library go into `$OPAM_SWITCH_PREFIX/lib/links`
 * The example Links programs go into `$OPAM_SWITCH_PREFIX/share/links`
 * Links configuration file goes into `$OPAM_SWITCH_PREFIX/etc/links`
 

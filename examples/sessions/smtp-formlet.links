@@ -245,33 +245,3 @@ sig startCommunication : (Message) ~> ()
 fun startCommunication(message) {
   mailClient(forkSync(mailServer), message)
 }
-
-var emailFormlet =
-  formlet
-    <#>
-      <div>Sender: {inputValue("foo@bar.com") -> sender}</div>
-      <div>Recipient: {input -> recipient}</div>
-      <div>Subject: {inputValue("Links SMTP test") -> subject}</div>
-      <div>{textarea("Hello ABCD.\nHow are you?") -> body}</div>
-      <div>{submitButton("Send") -> _}</div>
-    </#>
-  yields
-    (sender=sender, recipients=[recipient], subject=subject, body=body);
-
-mutual {
-  fun renderer(message) {
-    startCommunication(message);
-    mailUI()
-  }
-
-
-  fun mailUI() {
-    page
-      <html>
-       <body>
-         {emailFormlet => renderer}
-       </body>
-      </html>
-  }
-}
-mailUI()

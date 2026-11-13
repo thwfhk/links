@@ -55,3 +55,45 @@ Redirect primitive is unavailable
 redirect("/")
 stderr : @.*redirect.*
 exit : 1
+
+XML literal is rejected
+<p>text</p>
+stderr : @.*Unknown variable p\..*
+exit : 1
+
+Formlet syntax is rejected
+formlet <p>text</p> yields ()
+stderr : @.*Unknown variable formlet\..*
+exit : 1
+
+Page syntax is rejected
+page <p>text</p>
+stderr : @.*Unknown variable page\..*
+exit : 1
+
+XML type is unavailable
+sig f : (Xml) -> () fun f(_) { () }
+stderr : @.*Unbound type constructor Xml.*
+exit : 1
+
+XML primitive is unavailable
+stringToXml("text")
+stderr : @.*stringToXml.*
+exit : 1
+
+Angle brackets still work in comparison operators
+(1<2, 2>1, 1<=1, 2>=2)
+stdout : (true, true, true, true) : (Bool, Bool, Bool, Bool)
+
+Handler patterns still accept adjacent angle brackets
+handle(do Ask) { case <Ask=>k> -> k(42) }
+stdout : 42 : Int
+args : --enable-handlers
+
+Angle brackets still work inside a regular expression
+"<tag>" =~ /<tag>/
+stdout : true : Bool
+
+Database generator still accepts a left arrow
+fun f(t) { query { for (x <-- t) [(a=x.a)] } } ()
+stdout : () : ()
