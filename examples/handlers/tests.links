@@ -94,6 +94,7 @@ fun runTests() {
                , exceptions
                , fringe
                , light_switch
+               , sat
                , pi
                , delim
                ];

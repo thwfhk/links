@@ -150,8 +150,11 @@ signatures; the `gen` helpers use effect upcasts.
    Required work includes resolving anonymous effect variables,
    elaborating operation types and checking alias kinds. Keep the
    effect upcasts and flexible row variables used by `gen0`–`gen2`.
-   Migrate examples before removing the optional policies and check
-   the effect and presence types they infer.
+5. **4.2.** Add explicit row parameters to the handler example aliases.
+   The migrated signatures name shared tails and presence variables
+   where the optional policy supplied them. `Fringe.step` keeps its
+   separate continuation tail. The handler example runner now calls
+   the SAT assertions and is included in the example type checks.
 
 ## Keep build and test files in step
 

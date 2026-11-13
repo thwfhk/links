@@ -26,12 +26,13 @@ fun walkTree(tree)() {
 }
 
 # Convenient type synonyms
-typename Continuation(a, r) = (a) ~> r;
-typename Status(a) = mu r . [|Done:()
-                            |Yielded:(a, Continuation((), r))|];
+typename Continuation(a, r, e::Eff) = (a) ~e~> r;
+typename Status(a, e::Eff) = mu r . [|Done:()
+                                   |Yielded:(a, Continuation((), r, { |e}))|];
 
 # Pauses evaluation of a computation whenever Yield occurs
-sig step : (Comp((), { Yield:(a) => () |_})) -> (()) { |_}~> Status(a)
+sig step : (Comp((), {Yield:(a) => ()|e})) ->
+           (()) {Yield{_}|e}~> Status(a, {wild{_}|f})
 fun step(f)(()) {
   handle (f()) {
     case () -> Done(())

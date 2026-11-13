@@ -100,10 +100,10 @@ constructs are rejected.
 
 ### 4. Simplify effect and row syntax
 
-- [x] **4.1** Remove control-flow linearity, including its settings and
-  source forms. Preserve linear functions, kinds and usage checks,
-  FreezeML and ordinary multi-shot resumptions.
-- [ ] **4.2** Migrate retained examples and tests away from optional
+- [x] **4.1** (`f888b2df`) Remove control-flow linearity, including its
+  settings and source forms. Preserve linear functions, kinds and usage
+  checks, FreezeML and ordinary multi-shot resumptions.
+- [x] **4.2** Migrate retained examples and tests away from optional
   effect sugar. Use explicit shared tails, alias arguments and
   presence fields where needed.
 - [ ] **4.3** Fix annotation rules to the current default and remove the
@@ -154,8 +154,20 @@ regressions and native IR unit tests pass, and source checks pass.
 
 ## Status
 
-Item 4.1 is complete. Next, migrate the retained examples and tests to
-the default effect annotation rules in 4.2. There are no blockers.
+Items 4.1 and 4.2 are complete. Next, remove the optional effect sugar
+and printing policies in 4.3. There are no blockers.
+
+Checks for 4.2 used the compiler at `f888b2df` with the item changes to
+the examples and their tests. Logs are under `/private/tmp/smalllinks-m4.Fx8PK2/`
+and `/private/tmp/smalllinks-4.2-fixtures.EjB2gU/`.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `./links --enable-handlers --path=examples/handlers examples/handlers/tests.links` | Passed, including the SAT assertions. | `4.2-runner.log` |
+| `./test-harness tests/handlers.tests` and `./test-harness tests/typecheck_examples.tests` | 140 passed, 1 ignored and 0 failed. | `4.2-handlers.log`, `4.2-typecheck_examples.log` |
+| `./links --enable-handlers --path=examples/handlers` with each handler example, with and without `--set=typecheck_only=true` | All 27 examples type checked and ran. | `shared-runtime-all-handlers.log`, `shared-typecheck-all-handlers.log` |
+| REPL `@typeenv` comparison before and after migration | Printed types match for all seven migrated examples with quantifiers shown. | `shared-typeenv-*.diff.log` |
+| `./tests/validate_typecheck_testfile.testscript`, `make rule-check` and `git diff --check` | Passed. The tabs check used `rg` because GNU find was unavailable. | `4.2-registration.log`, `4.2-rule.log`, `4.2-diff.log`, `4.2-tabs.log` |
 
 Checks for 4.1 used `7aa69b42` plus the item changes on OCaml 5.4.0.
 Logs are under `/private/tmp/smalllinks-m4.Fx8PK2/`.

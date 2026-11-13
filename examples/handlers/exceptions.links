@@ -45,7 +45,7 @@ fun catchFail(m)() {
   }
 }
 
-sig printResult : (Comp(Int)) ~> ()
+sig printResult : (Comp(Int, { |e})) ~e~> ()
 fun printResult(m) {
   handle(m()) {
     case x -> println("Sum is " ^^ intToString(x))

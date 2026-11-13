@@ -53,7 +53,7 @@ fun var_(x) {
   do Var(x)
 }
 
-sig lit : (a) -> Comp(a)
+sig lit : (a) -> Comp(a, { |_})
 fun lit(x)() { x }
 
 ## Elimination forms
