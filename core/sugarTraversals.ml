@@ -180,11 +180,6 @@ class map =
         let y = o#option (fun o -> o#typ) y in
         (x,y)
 
-    method given_spawn_location : given_spawn_location -> given_spawn_location =
-      function
-        | ExplicitSpawnLocation p -> ExplicitSpawnLocation (o#phrase p)
-        | l -> l
-
     method temporal_update : temporal_update -> temporal_update =
       function
         | ValidTimeUpdate (SequencedUpdate { validity_from; validity_to }) ->
@@ -217,11 +212,6 @@ class map =
           let _x_i1 = o#funlit _x_i1 in
           let _x_i2 = o#location _x_i2 in
           FunLit (_x, _x1, _x_i1, _x_i2)
-      | Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt) ->
-          let _given_spawn_location = o#given_spawn_location _given_spawn_location in
-          let _block_phr = o#phrase _block_phr in
-          let _dt = o#option (fun o -> o#type_row) _dt in
-          Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt)
       | Query (_x, _policy, _x_i1, _x_i2) ->
           let _x =
             o#option
@@ -363,15 +353,6 @@ class map =
               _x_i1 in
           let _x_i2 = o#option (fun o -> o#typ) _x_i2
           in Switch ((_x, _x_i1, _x_i2))
-      | Receive ((_x, _x_i1)) ->
-          let _x =
-            o#list
-              (fun o (_x, _x_i1) ->
-                 let _x = o#pattern _x in
-                 let _x_i1 = o#phrase _x_i1 in (_x, _x_i1))
-              _x in
-          let _x_i1 = o#option (fun o -> o#typ) _x_i1
-          in Receive (_x, _x_i1)
       | DatabaseLit ((_x, _x_i1)) ->
           let _x = o#phrase _x in
           let _x_i1 =
@@ -926,10 +907,6 @@ class fold =
         let o = o#unknown y in
           o
 
-    method given_spawn_location : given_spawn_location -> 'self_type = function
-      | ExplicitSpawnLocation p -> let o = o#phrase p in o
-      | _ -> o
-
     method temporal_update : temporal_update -> 'self_type =
       function
         | ValidTimeUpdate (SequencedUpdate { validity_from; validity_to }) ->
@@ -958,10 +935,6 @@ class fold =
       | QualifiedVar _xs ->
           let o = o#list (fun o -> o#name) _xs in o
       | FunLit (_x, _x1, _x_i1, _x_i2) -> let o = o#funlit _x_i1 in let _x_i2 = o#location _x_i2 in o
-      | Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt) ->
-         let o = o#given_spawn_location _given_spawn_location in
-         let o = o#phrase _block_phr in
-         o
       | Query (_x, _policy, _x_i1, _x_i2) ->
           let o =
             o#option
@@ -1075,14 +1048,6 @@ class fold =
                  let o = o#pattern _x in let o = o#phrase _x_i1 in o)
               _x_i1 in
           let o = o#option (fun o -> o#unknown) _x_i2
-          in o
-      | Receive ((_x, _x_i1)) ->
-          let o =
-            o#list
-              (fun o (_x, _x_i1) ->
-                 let o = o#pattern _x in let o = o#phrase _x_i1 in o)
-              _x in
-          let o = o#option (fun o -> o#unknown) _x_i1
           in o
       | DatabaseLit ((_x, _x_i1)) ->
           let o = o#phrase _x in
@@ -1620,10 +1585,6 @@ class fold_map =
         ~f_finish:(fun o v -> o#unknown v)
         ~f_code:(fun o v -> o#option (fun o -> o#unknown) v)
 
-    method given_spawn_location : given_spawn_location -> ('self_type * given_spawn_location) = function
-      | ExplicitSpawnLocation _p -> let (o, _p) = o#phrase _p in (o, ExplicitSpawnLocation _p)
-      | l -> (o, l)
-
     method temporal_update : temporal_update -> ('self_type * temporal_update) =
       function
         | ValidTimeUpdate (SequencedUpdate { validity_from; validity_to }) ->
@@ -1661,11 +1622,6 @@ class fold_map =
         in
         let (o, _x) = o#option (fun o -> o#list handle_funtype) _x in
         let (o, _x_i2) = o#location _x_i2 in (o, (FunLit (_x, _x1, _x_i1, _x_i2)))
-      | Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt) ->
-          let (o, _given_spawn_location) = o#given_spawn_location _given_spawn_location in
-          let (o, _block_phr) = o#phrase _block_phr in
-          let (o, _dt) = o#option (fun o -> o#type_row) _dt in
-          (o, (Spawn (_spawn_kind, _given_spawn_location, _block_phr, _dt)))
       | Query (_x, _policy, _x_i1, _x_i2) ->
           let (o, _x) =
             o#option
@@ -1814,15 +1770,6 @@ class fold_map =
               _x_i1 in
           let (o, _x_i2) = o#option (fun o -> o#typ) _x_i2
           in (o, (Switch ((_x, _x_i1, _x_i2))))
-      | Receive ((_x, _x_i1)) ->
-          let (o, _x) =
-            o#list
-              (fun o (_x, _x_i1) ->
-                 let (o, _x) = o#pattern _x in
-                 let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1)))
-              _x in
-          let (o, _x_i1) = o#option (fun o -> o#typ) _x_i1
-          in (o, (Receive ((_x, _x_i1))))
       | DatabaseLit ((_x, _x_i1)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) =

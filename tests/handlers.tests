@@ -427,9 +427,9 @@ fun(g : (() {A:a,B:(a) => b|_}~> b)) { g }(fun(){error("N/A")})
 stdout : fun : () {A:() => a,B:(a) => b|_}~> b
 args : --enable-handlers
 
-Effect type sugar (2)
-fun(g : (() {:a|_}~> a)) { g }(fun(){error("N/A")})
-stdout : fun : () {:a|_}~> a
+Effect type sugar for a nullary operation with a wild arrow
+fun(g : (() {Read:a|_}~> a)) { g }(fun(){error("N/A")})
+stdout : fun : () {Read:() => a|_}~> a
 args : --enable-handlers
 
 Effect type sugar (3)

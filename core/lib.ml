@@ -1,7 +1,6 @@
 open CommonTypes
 
 open Utility
-open Proc
 open Lwt
 
 (* Error functions *)
@@ -33,30 +32,28 @@ let datatype = DesugarDatatypes.read ~aliases:alias_env
 
 type primitive =
 [ Value.t
-| `PFun of RequestData.request_data -> Value.t list -> Value.t Lwt.t ]
+| `PFun of Value.t list -> Value.t Lwt.t ]
 
 type pure = PURE | IMPURE
 
-type located_primitive = [ `Server of primitive | primitive ]
-
-let pure_pfun fn = `PFun(fun _ xs -> Lwt.return (fn xs))
+let pure_pfun fn = `PFun(fun xs -> Lwt.return (fn xs))
 
 let mk_binop_fn impl unbox_fn constr = function
     | [x; y] -> Lwt.return (constr (impl (unbox_fn x) (unbox_fn y)))
     | _ -> raise (internal_error "arity error in integer operation")
 
-let int_op impl pure : located_primitive * Types.datatype * pure =
-  (`PFun (fun _ -> mk_binop_fn impl Value.unbox_int (fun x -> `Int x))),
+let int_op impl pure : primitive * Types.datatype * pure =
+  (`PFun (mk_binop_fn impl Value.unbox_int (fun x -> `Int x))),
   datatype "(Int, Int) -> Int",
   pure
 
-let float_op impl pure : located_primitive * Types.datatype * pure =
-  (`PFun (fun _ -> mk_binop_fn impl Value.unbox_float (fun x -> `Float x))),
+let float_op impl pure : primitive * Types.datatype * pure =
+  (`PFun (mk_binop_fn impl Value.unbox_float (fun x -> `Float x))),
   datatype "(Float, Float) -> Float",
   pure
 
-let string_op impl pure : located_primitive * Types.datatype * pure =
-  (`PFun (fun _ -> mk_binop_fn impl Value.unbox_string (fun x -> `String x))),
+let string_op impl pure : primitive * Types.datatype * pure =
+  (`PFun (mk_binop_fn impl Value.unbox_string (fun x -> `String x))),
   datatype "(String, String) -> String",
   pure
 
@@ -64,9 +61,9 @@ let conversion_op' ~unbox ~conv ~(box :'a->Value.t): Value.t list -> Value.t = f
     | [x] -> box (conv (unbox x))
     | _ -> assert false
 
-let conversion_op ~from ~unbox ~conv ~(box :'a->Value.t) ~into pure : located_primitive * Types.datatype * pure =
+let conversion_op ~from ~unbox ~conv ~(box :'a->Value.t) ~into pure : primitive * Types.datatype * pure =
   let open Types in
-  ((pure_pfun (fun x -> conversion_op' ~unbox ~conv:conv ~box:box x) : located_primitive),
+  ((pure_pfun (fun x -> conversion_op' ~unbox ~conv:conv ~box:box x) : primitive),
    (let q, r = fresh_row_quantifier (lin_any, res_any) in
       (ForAll ([q], Function (make_tuple_type [from], r, into)) : datatype)),
    pure)
@@ -80,29 +77,17 @@ let float_fn fn pure =
    datatype "(Float) -> Float",
   pure)
 
-(* Functions that also take request data. *)
-let p1D fn =
-  `PFun (fun req_data args ->
-      match args with
-        | ([a]) -> fn a req_data
-        | _ -> assert false)
+let p1 fn = pure_pfun (function
+  | [a] -> fn a
+  | _ -> assert false)
 
-let p2D fn =
-  `PFun (fun req_data args ->
-      match args with
-        | [a; b] -> fn a b req_data
-        | _ -> assert false)
+let p2 fn = pure_pfun (function
+  | [a; b] -> fn a b
+  | _ -> assert false)
 
-let p3D fn =
-  `PFun (fun req_data args ->
-      match args with
-        | [a;b;c] -> fn a b c req_data
-        | _ -> assert false)
-
-let p1 fn = p1D (fun x _ -> Lwt.return (fn x))
-let p2 fn = p2D (fun x y _ -> Lwt.return (fn x y))
-let p3 fn = p3D (fun x y z _ -> Lwt.return (fn x y z))
-
+let p3 fn = pure_pfun (function
+  | [a; b; c] -> fn a b c
+  | _ -> assert false)
 
 let rec equal l r =
   match l, r with
@@ -173,7 +158,7 @@ and less_lists = function
 let less_or_equal l r = less l r || equal l r
 
 (* Applies a projection function to a boxed timestamp, after converting via a given UTC offset. *)
-let project_datetime_conv (f: CalendarShow.t -> int) : located_primitive * Types.datatype * pure =
+let project_datetime_conv (f: CalendarShow.t -> int) : primitive * Types.datatype * pure =
   (p2 (fun dt offset ->
     match Value.unbox_datetime dt with
       | Timestamp.Infinity -> raise (runtime_error "Cannot project from 'forever'")
@@ -190,7 +175,7 @@ let project_datetime_conv (f: CalendarShow.t -> int) : located_primitive * Types
 (* Similar to the above, but for accessors  which do not need conversion offsets
    (i.e., minutes / seconds, which are below the level of UTC offset
    granularity. *)
-let project_datetime (f: CalendarShow.t -> int) : located_primitive * Types.datatype * pure =
+let project_datetime (f: CalendarShow.t -> int) : primitive * Types.datatype * pure =
   (p1 (fun dt ->
     match Value.unbox_datetime dt with
       | Timestamp.Infinity -> raise (runtime_error "Cannot project from 'forever'")
@@ -200,7 +185,7 @@ let project_datetime (f: CalendarShow.t -> int) : located_primitive * Types.data
   PURE)
 
 
-let env : (string * (located_primitive * Types.datatype * pure)) list = [
+let env : (string * (primitive * Types.datatype * pure)) list = [
   "+", int_op (+) PURE;
   "-", int_op (-) PURE;
   "*", int_op ( * ) PURE;
@@ -321,97 +306,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      if (test) exit(1) else 42 *)
    datatype "(a) ~> b",
   IMPURE);
-
-  "Send",
-  (p2 (fun _pid _msg ->
-         assert(false)), (* Now handled in evalir.ml *)
-   datatype "forall a::Type(Any, Any), e::Row(Any, Any), f::Row(Any, Any).(Process ({hear:a|e}), a) ~f~> ()",
-   IMPURE);
-
-  "self",
-  (pure_pfun (fun _ -> `Pid (`ServerPid (Proc.get_current_pid()))),
-   datatype "() {hear{a}|e}~> Process ({ hear{a} })",
-   IMPURE);
-
-  "here",
-  (pure_pfun (fun _ -> `SpawnLocation (`ServerSpawnLoc)),
-    datatype "() ~> Location",
-    IMPURE
-  );
-
-  "there",
-  (`PFun (fun req_data _ ->
-    let client_id = RequestData.get_client_id req_data in
-    Lwt.return (`SpawnLocation (`ClientSpawnLoc client_id))),
-    datatype "() ~> Location",
-    IMPURE
-  );
-
-  "haveMail",
-  (`PFun(fun _ _ ->
-           runtime_error "The haveMail function is not implemented on the server yet"),
-   datatype "() {:_|_}~> Bool",
-   IMPURE);
-
-  "recv",
-  (* This function is not used, as its application is a special case
-     in the interpreter. But we need it here (for now) to assign it a
-     type. Ultimately we should probably not special-case it, but
-     rather provide a way to implement this primitive from here.
-     (Ultimately, it should perhaps be a true primitive (an AST node),
-     because it uses a different evaluation mechanism from functions.
-     -- jdy) *)
-    (`PFun (fun (_) -> assert false),
-     datatype "() {:a|_}~> a",
-  IMPURE);
-
-  "spawn",
-  (`PFun (fun _ -> assert false),
-   datatype "(() ~e~@ _) ~> Process ({ |e })",
-  IMPURE);
-
-  "spawnAt",
-  (`PFun (fun _ -> assert false),
-   datatype "(Location, () ~e~@ _) ~> Process ({ |e })",
-   IMPURE);
-
-  "spawnClient",
-  (`PFun (fun _ -> assert false),
-   datatype "(() ~e~@ _) ~> Process ({ |e })",
-   IMPURE);
-
-  "spawnAngel",
-  (`PFun (fun _ -> assert false),
-   datatype "(() ~e~@ _) ~> Process ({ |e })",
-   IMPURE);
-
-  "spawnAngelAt",
-  (`PFun (fun _ -> assert false),
-   datatype "(Location, () ~e~@ _) ~> Process ({ |e })",
-   IMPURE);
-
-  "spawnWait",
-  (`PFun (fun _ -> assert false),
-   datatype "(() { |e}~> a) ~> a",
-   IMPURE);
-
-  "spawnWait'",
-  (`PFun (fun _ -> assert false),
-   datatype "() ~> a",
-   IMPURE);
-
-   (* If we add more effects then spawn and spawnWait shouldn't
-     necessarily mask them, so we might want to change their types to
-     something like this:
-
-     spawn : (() {wild{p},hear{q}:a|e}-> _) {hear{_}:_|e}~> Process({wild{p},hear{q}:a|e})
-     spawnWait : (() {wild{_},hear{_}:_|e}-> a) {hear{_}:_|e}~> a
-
-     We might even split spawnWait into spawn and wait:
-
-     spawn : (() {wild{p},hear{q}:b|e}-> a) {hear{_}:_|e}~> Process(a, {wild{p},hear{q}:b|e})
-     wait : Process (a, {wild{_},hear{_}:_|e}) {hear{_}:_}~> a
-  *)
 
   (* Lists and collections *)
   "Nil",
@@ -562,34 +456,29 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* Date / time functions *)
 
   "serverTime",
-  (`Server
-     (pure_pfun (fun _ ->
-               Value.box_int(int_of_float(Unix.time())))),
+  (pure_pfun (fun _ ->
+               Value.box_int(int_of_float(Unix.time()))),
    datatype "() ~> Int",
    IMPURE);
 
   "lensQueryTimeMilliseconds",
-  (`Server
-     (pure_pfun (fun _ -> Value.box_int (Lens.Statistics.get_query_time ()))),
+  (pure_pfun (fun _ -> Value.box_int (Lens.Statistics.get_query_time ())),
    datatype "() ~> Int",
    IMPURE);
 
   "lensQueryCount",
-  (`Server
-     (pure_pfun (fun _ -> Value.box_int (Lens.Statistics.get_query_count ()))),
+  (pure_pfun (fun _ -> Value.box_int (Lens.Statistics.get_query_count ())),
    datatype "() ~> Int",
    IMPURE);
 
   "lensQueryStatisticsReset",
-  (`Server
-     (pure_pfun (fun _ -> Value.box_unit (Lens.Statistics.reset ()))),
+  (pure_pfun (fun _ -> Value.box_unit (Lens.Statistics.reset ())),
    datatype "() ~> ()",
    IMPURE);
 
   "serverTimeMilliseconds",
-  (`Server
-     (pure_pfun (fun _ ->
-               Value.box_int(time_milliseconds()))),
+  (pure_pfun (fun _ ->
+               Value.box_int(time_milliseconds())),
    datatype "() ~> Int",
    IMPURE);
 
@@ -809,7 +698,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   (* regular expression matching with grouped matched results as a list *)
   ("ltilde",
-    (`Server (p2 (fun s r ->
+    (p2 (fun s r ->
         let (re, ngroups) = Linksregex.Regex.ofLinksNGroups r
         and string = Value.unbox_string s in
     let regex = Regex.compile_ocaml re in
@@ -824,13 +713,13 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
         accumMatches ((Value.box_string m)::l) (i - 1)
     with
        NotFound _ -> accumMatches ((`String "")::l) (i - 1)) in
-       accumMatches [] ngroups))),
+       accumMatches [] ngroups)),
      datatype "(String, Regex) ~> [String]",
    PURE));
 
   (* regular expression substitutions --- don't yet support global substitutions *)
   ("stilde",
-   (`Server (p2 (fun s r ->
+   (p2 (fun s r ->
         let open Regex in
         match Linksregex.Regex.ofLinks r with
     | Replace (l, t) ->
@@ -838,7 +727,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
            let string = Value.unbox_string s in
            Value.box_string (Utility.decode_escapes (Str.replace_first regex tmpl string))
         | Any | StartAnchor | EndAnchor | Simply _ | Seq _ | Quote _ | Group _
-          | Range _ | Alternate _ | Repeat _ -> assert false)),
+          | Range _ | Alternate _ | Repeat _ -> assert false),
     datatype "(String, Regex) ~> String",
     PURE));
 
@@ -923,7 +812,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   (* HACK *)
   ("unsafe_cast",
-   (`Server (p1 (fun v -> v)),
+   (p1 (fun v -> v),
     datatype "(a) ~> b",
     PURE));
 
@@ -940,7 +829,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
       IMPURE);
 
     "connectSocket",
-    (`Server (p2 (fun serverv portv ->
+    (p2 (fun serverv portv ->
                   try
                     let server = Value.unbox_string serverv in
                     let port = Value.unbox_int portv in
@@ -954,75 +843,73 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                     Unix.connect sock sockaddr;
                     Unix.set_nonblock sock;
                     `Variant ("Just", Value.box_socket (Unix.in_channel_of_descr sock, Unix.out_channel_of_descr sock))
-                  with _ -> `Variant ("Nothing", `Record []))),
+                  with _ -> `Variant ("Nothing", `Record [])),
      datatype "(String, Int) ~> [|Nothing|Just:Socket|]",
      IMPURE);
     "writeToSocket",
-    (`Server (p2 (fun messagev socketv ->
+    (p2 (fun messagev socketv ->
                   let message = Value.unbox_string messagev in
                   let (_, outc) = Value.unbox_socket socketv in
                   output_string outc message;
                   flush outc;
-                  `Record [])),
+                  `Record []),
      datatype "(String, Socket) ~> ()",
      IMPURE);
     "readFromSocket",
-    (`Server (p1 (fun socketv ->
+    (p1 (fun socketv ->
                   let (inc, _) = Value.unbox_socket socketv in
                   try
                     let r = input_line inc in
                     `Variant ("Just", Value.box_string r)
                   with
                     Sys_blocked_io ->
-                    `Variant ("Nothing", `Record []))),
+                    `Variant ("Nothing", `Record [])),
      datatype "(Socket) ~> [|Nothing|Just:String|]",
      IMPURE);
     "closeSocket",
-    (`Server (p1 (fun socketv ->
+    (p1 (fun socketv ->
                   let (inc, _) = Value.unbox_socket socketv in
                   Unix.shutdown (Unix.descr_of_in_channel inc) Unix.SHUTDOWN_SEND;
-                  `Record [])),
+                  `Record []),
      datatype "(Socket) ~> ()",
      IMPURE);
     (* Crypt API *)
 
     "crypt",
-    (`Server (p1 (Value.box_string -<- Bcrypt.string_of_hash -<- (fun s -> Bcrypt.hash ?count:None ?seed:None s) -<- Value.unbox_string)),
+    (p1 (Value.box_string -<- Bcrypt.string_of_hash -<- (fun s -> Bcrypt.hash ?count:None ?seed:None s) -<- Value.unbox_string),
     datatype "(String) ~> String",
     PURE);
 
     "verify",
-    (`Server (p2 (fun str -> Value.box_bool -<- (Bcrypt.verify (Value.unbox_string str)) -<- Bcrypt.hash_of_string -<- Value.unbox_string)),
+    (p2 (fun str -> Value.box_bool -<- (Bcrypt.verify (Value.unbox_string str)) -<- Bcrypt.hash_of_string -<- Value.unbox_string),
     datatype "(String, String) ~> Bool",
     PURE);
 
     (* CLI *)
     "getArgs",
-    (`Server
-       (pure_pfun (fun _ ->
-            Value.(box_list (List.map box_string (Settings.get_rest_arguments ()))))),
+    (pure_pfun (fun _ ->
+            Value.(box_list (List.map box_string (Settings.get_rest_arguments ())))),
      datatype "() ~> [String]",
      IMPURE);
 
     (* SPARQL *)
     "sparql",
-    (`Server
-       (p3D (fun base uri query _ ->
-                 let base = Iri.of_string (Value.unbox_string base) in
-                 let uri = Uri.of_string(Value.unbox_string uri) in
-                 let query = Value.unbox_string query in
-                 Sparql.select ~base uri query >>= fun result ->
-                 Lwt.return (Value.box_list (List.map (fun s ->
-                               Value.box_list (List.map (fun (k,v) ->
-                                       (Value.box_pair (Value.box_string k) (Value.box_string v))) s)) result)))),
+    (`PFun (function
+       | [base; uri; query] ->
+          let base = Iri.of_string (Value.unbox_string base) in
+          let uri = Uri.of_string (Value.unbox_string uri) in
+          let query = Value.unbox_string query in
+          Sparql.select ~base uri query >|= fun rows ->
+          Value.box_list (List.map
+            (fun row -> Value.box_list (List.map
+              (fun (k, v) -> Value.box_pair (Value.box_string k) (Value.box_string v))
+              row))
+            rows)
+       | _ -> assert false),
      datatype "(String,String,String) ~> [[(String,String)]]",
      IMPURE)
 
 ]
-
-let impl : located_primitive -> primitive option = function
-  | `Server p
-  | (#primitive as p) -> Some p
 
 let nenv =
   List.fold_left
@@ -1050,7 +937,7 @@ let minvar =
 let value_array : primitive option array =
   let array = Array.make (maxvar+1) None in
   List.iter (fun (name, (p, _, _)) ->
-    Array.set array (Env.String.find name nenv) (impl p)) env;
+    Array.set array (Env.String.find name nenv) (Some p)) env;
   array
 
 let is_primitive_var var =
@@ -1098,20 +985,20 @@ let primitive_stub_by_code (var : Var.var) : Value.t =
 
 
 (* jcheney: added to expose lookup by var *)
-let apply_pfun_by_code var args req_data =
+let apply_pfun_by_code var args =
   match primitive_by_code var with
   | Some #Value.t ->
       raise (runtime_type_error ("Attempt to apply primitive non-function "
            ^ "(#" ^string_of_int var^ ")."))
-  | Some (`PFun p) -> p req_data args
+  | Some (`PFun p) -> p args
   | None -> assert false
 
 
-let apply_pfun name args req_data =
+let apply_pfun name args =
   let var =
     Env.String.find name nenv
   in
-  apply_pfun_by_code var args req_data
+  apply_pfun_by_code var args
 
 let is_primitive name = List.mem_assoc name env
 
@@ -1122,8 +1009,3 @@ let is_pure_primitive name =
       | _ -> false
   else
     false
-
-(** Construct IR for application of the primitive [name] to the
-    arguments [args]. *)
-let prim_appln name args = Ir.Apply( Ir.Variable(Env.String.find name nenv),
-                                  args)

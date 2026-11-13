@@ -79,8 +79,6 @@ module Optable = struct
       ; "-"  , (6, Left)
       ; "-." , (6, Left)
 
-      ; "!"  , (6, Left)
-
       ; "++" , (5, Right)
 
       ; "=~" , (5, Right)

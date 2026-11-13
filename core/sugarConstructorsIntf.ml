@@ -86,7 +86,6 @@ module type SugarConstructorsSig = sig
 
   (* Rows *)
   val row_with_wp       : Datatype.row -> Datatype.row
-  val hear_arrow_prefix : Datatype.with_pos -> Datatype.row -> Datatype.row
 
   (* Various phrases *)
   val fun_lit
@@ -98,10 +97,6 @@ module type SugarConstructorsSig = sig
       : ?ppos:t -> ?args:((Types.datatype * Types.row) list)
      -> ?location:Location.t -> DeclaredLinearity.t
      -> Pattern.with_pos list list -> switch_funlit_body
-     -> phrase
-  val spawn
-      : ?ppos:t
-     -> ?row:Types.row -> spawn_kind -> given_spawn_location -> phrase
      -> phrase
   val fn_appl_node
       : ?ppos:t -> Name.t -> tyarg list -> phrase list -> phrasenode

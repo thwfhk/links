@@ -1033,19 +1033,6 @@ let decode_escapes s =
         | other -> String.make 1 (read_octal (String.sub other 1 3)) in
     Str.global_substitute escape_regexp unquoter s
 
-(** (0 base64 Routines) *)
-let base64decode s =
-  try Base64.decode_exn (Str.global_replace (Str.regexp " ") "+" s)
-  with Invalid_argument s as e ->
-    if s = "B64.decode" then
-      raise (Invalid_argument ("base64 decode gave error: " ^ s))
-    else
-      raise e
-
-let base64encode s =
-  (* We may want to use Base64.uri_safe_alphabet rather than the default alphabet *)
-  Base64.encode_exn ~alphabet:Base64.default_alphabet ~pad:true s
-
 let gensym_counter = ref 0
 
 (** Any two calls to [gensym] return distinct strings.  The optional

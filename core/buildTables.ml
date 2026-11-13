@@ -34,48 +34,6 @@ struct
   let program = computation
 end
 
-module ScopesAndContDefs =
-struct
-  class visitor tyenv scopes cont_defs =
-  object (_)
-    inherit IrTraversals.Transform.visitor(tyenv) as super
-
-    method bind_scope xb =
-      Hashtbl.add scopes (Var.var_of_binder xb) (Var.scope_of_binder xb)
-
-    method bind_cont (xb, e) =
-      Hashtbl.add cont_defs (Var.var_of_binder xb) e
-
-    method! binder =
-      fun b ->
-        let o, b = super#binder b in
-        o#bind_scope b;
-        o, b
-
-    method! computation =
-      fun e ->
-        let o, (bs, main), t = super#computation e in
-        let rec bind o =
-          function
-            | [] -> o
-            | (Let (x, _))::bs ->
-              o#bind_cont (x, (bs, main));
-              bind o bs
-            | _::bs -> bind o bs
-        in
-          bind o bs, (bs, main), t
-  end
-
-  let primitives scopes =
-    IntSet.iter (fun x -> Hashtbl.add scopes x Scope.Global) Lib.primitive_vars
-
-  let bindings tyenv scopes cont_defs bs =
-    let _ = (new visitor tyenv scopes cont_defs)#bindings bs in ()
-
-  let program tyenv scopes cont_defs e =
-    let _ = (new visitor tyenv scopes cont_defs)#program e in ()
-end
-
 (** Compute free variables *)
 module FreeVars =
 struct
@@ -261,6 +219,4 @@ let program state program =
   let tenv = Context.variable_environment (context state) in
   let globals = state.primitive_vars in
   FunDefs.program Tables.fun_defs program;
-  ScopesAndContDefs.primitives Tables.scopes;
-  ScopesAndContDefs.program tenv Tables.scopes Tables.cont_defs program;
   ClosureTable.program tenv globals Tables.cont_vars program

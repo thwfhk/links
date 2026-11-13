@@ -11,15 +11,14 @@
   (public_name links.core)
   (synopsis "Links compiler library")
   (modes native)
-  (libraries str linenoise base64 safepass unix result
-             yojson ppx_deriving_yojson.runtime
+  (libraries str linenoise safepass unix result
+             yojson
              lwt lwt.unix
-             cohttp cohttp-lwt-unix uri
-             websocket websocket-lwt-unix.cohttp
+             uri
              findlib menhirLib links.lens calendar
              dynlink
              rdf rdf_lwt iri)
-  (preprocess (pps ppx_deriving.std ppx_deriving_yojson)))
+  (preprocess (pps ppx_deriving.std)))
 
 
 ;; Generate the Linkspath module.

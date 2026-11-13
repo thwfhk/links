@@ -23,6 +23,7 @@ extension and update. List comprehensions support `where` and `orderby`.
 Programs can import or open modules and use qualified names for terms
 and types. The prelude provides common functions and aliases, including
 `map`, `Maybe` and `Either`. Operation labels are unqualified.
+Programs can declare `!` as an ordinary operator.
 
 ## Types and inference
 
@@ -127,6 +128,9 @@ has clauses for operation calls and for the value returned by its
 computation. With no value clause, the handler returns the value
 unchanged. An operation can pass through handlers until it reaches
 one with a clause for it.
+
+`SessionFail` is an ordinary operation label. An explicit effect field
+such as `hear:() => Int` follows the same rules as other effect fields.
 
 ```links
 handle(if (do Choose) 1 else 2) {

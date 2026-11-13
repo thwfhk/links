@@ -95,58 +95,46 @@ fun checkIfWon(player : Player, gameState){
 }
 
 mutual {
-  sig x: ([Maybe(Player)]) {hear:Int|_} ~> ()
-  fun x(gameState){
-      var index = recv();
-      switch(gameState !! index){
-          case Nothing -> {
-              print("Setting X.");
-              var newGameState = addMove(X, index, gameState);
-              printState(newGameState);
-              if (checkIfWon(X, newGameState))
-                  print("X won")
-              else
-                  o(newGameState)
-
-          }
-          case Just(player) -> {
-             print("Already full")
-          }
-      }
+  sig x : ([Maybe(Player)], [Int]) ~> ()
+  fun x(gameState, moves) {
+    switch (moves) {
+      case [] -> ()
+      case index :: rest ->
+        switch (gameState !! index) {
+          case Nothing ->
+            print("Setting X.");
+            var newGameState = addMove(X, index, gameState);
+            printState(newGameState);
+            if (checkIfWon(X, newGameState))
+              print("X won")
+            else
+              o(newGameState, rest)
+          case Just(_) -> print("Already full")
+        }
+    }
   }
 
-  sig o: ([Maybe(Player)]) {hear:Int|_} ~> ()
-  fun o(gameState){
-      var index = recv();
-      switch(gameState !! index){
-          case Nothing -> {
-              print("Setting O.");
-              var newGameState = addMove(O, index, gameState);
-              printState(newGameState);
-              if (checkIfWon(O, newGameState))
-                  print("O won")
-              else
-                  x(newGameState)
-
-          }
-          case Just(player) -> {
-             print("Already full")
-          }
-      }
+  sig o : ([Maybe(Player)], [Int]) ~> ()
+  fun o(gameState, moves) {
+    switch (moves) {
+      case [] -> ()
+      case index :: rest ->
+        switch (gameState !! index) {
+          case Nothing ->
+            print("Setting O.");
+            var newGameState = addMove(O, index, gameState);
+            printState(newGameState);
+            if (checkIfWon(O, newGameState))
+              print("O won")
+            else
+              x(newGameState, rest)
+          case Just(_) -> print("Already full")
+        }
+    }
   }
 }
 
 sig playGame : ([Int]) ~> ()
-fun playGame(moveList){
-    var gameId = spawnAngel{x(initialState)};
-    fun nextMove(moveList){
-        switch(moveList){
-            case [] -> ()
-            case move::moveList -> {
-                gameId ! move;
-                nextMove(moveList)
-            }
-        }
-    }
-    nextMove(moveList)
+fun playGame(moveList) {
+  x(initialState, moveList)
 }

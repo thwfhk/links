@@ -72,12 +72,6 @@ let lookup_name_and_type name (nenv, tenv, _eff) =
 let lookup_effects (_, _, eff) = eff
 let with_effects (x, y, _) eff = (x, y, eff)
 
-(* Hmm... shouldn't we need to use something like this? *)
-
-(* let with_mailbox_type t (nenv, tenv) = *)
-(*   let mb_var = NEnv.lookup nenv "_MAILBOX_" in *)
-(*     (nenv, TEnv.bind tenv (mb_var, t)) *)
-
 module type MONAD =
 sig
   type 'a sem
@@ -833,8 +827,6 @@ struct
               cofv (I.apply_pure (instantiate op tyargs, [ev e1; ev e2]))
           | InfixAppl ((tyargs, BinaryOp.Name "++"), e1, e2) ->
               cofv (I.apply_pure (instantiate "Concat" tyargs, [ev e1; ev e2]))
-          | InfixAppl ((tyargs, BinaryOp.Name "!"), e1, e2) ->
-              I.apply (instantiate "Send" tyargs, [ev e1; ev e2])
           | InfixAppl ((tyargs, BinaryOp.Name n), e1, e2) when Lib.is_pure_primitive n ->
               cofv (I.apply_pure (instantiate n tyargs, [ev e1; ev e2]))
           | InfixAppl ((tyargs, BinaryOp.Name n), e1, e2) ->
@@ -1098,8 +1090,6 @@ struct
                 I.db_delete env (del, p, source, where)
           | DBTemporalJoin (mode, e, _) -> I.temporal_join (mode, ec e)
                   (* These things should all have been desugared already *)
-          | Spawn _
-          | Receive _
           | Section (Section.Project _)
           | FreezeSection (Section.Project _)
           | FunLit _

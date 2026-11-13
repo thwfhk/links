@@ -11,6 +11,5 @@ This manual informally describes the syntax and type system of Links.
   lang-ref/lexical-syntax.rst
   lang-ref/expressions.rst
   lang-ref/modules.rst
-  lang-ref/concurrency.rst
   lang-ref/database.rst
   lang-ref/typing.rst

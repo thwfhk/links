@@ -39,7 +39,6 @@ The following keywords are reserved and are unavailable for use as identifiers::
   handle if in lens lensdrop lensget lensput lensselect lensjoin
   lenscheck import insert linfun module mu mutual
   on orderby op open prefix query
-  readonly receive returning set shallowhandle sig
-  spawn spawnClient spawnAt spawnAngel spawnAngelAt spawnWait
+  readonly returning set shallowhandle sig
   switch table TableHandle true typename update unsafe
   values var where with tablekeys

@@ -1,44 +1,11 @@
-Links: Linking Theory to Practice for the Web
----------------------------------------------
+# SmallLinks
 
-![Build status](https://github.com/links-lang/links/actions/workflows/default.yml/badge.svg?branch=master)
+SmallLinks is a native subset of Links for developing modal effect
+types. It keeps Links type inference, row polymorphism, FreezeML,
+linear functions and algebraic effect handlers.
 
-Links helps to build modern Ajax-style applications: those with
-significant client- and server-side components.
+Build from source with `make no-db`. Run `./links` for the REPL, pass
+`-e` to evaluate an expression, or pass a source file to run it.
 
-A typical, modern web program involves many "tiers": part of the
-program runs in the web browser, part runs on a web server, and part
-runs in specialized systems such as a relational database. To create
-such a program, the programmer must master a myriad of languages: the
-logic is written in a mixture of Java, Python, and Perl; the
-presentation in HTML; the GUI behavior in Javascript; and the queries
-are written in SQL or XQuery. There is no easy way to link these: to
-be sure, for example, that an HTML form or an SQL query produces the
-type of data that the Java code expects. This is called the impedance
-mismatch problem.
-
-Links eases the impedance mismatch problem by providing a single
-language for all three tiers. The system is responsible for
-translating the code into suitable languages for each tier: for
-instance, translating some code into Javascript for the browser, some
-into Java for the server, and some into SQL to use the database.
-
-Links incorporates ideas proven in other programming languages:
-database-query support from Kleisli, web-interaction proposals from
-PLT Scheme, and distributed-computing support from Erlang. On top of
-this, it adds some new web-centric features of its own.
-
-FEATURES
-
- * Allows web programs to be written in a single programming language
- * Call-by-value functional language
- * Server / Client annotations
- * AJAX
- * Scalability through defunctionalised server continuations.
- * Statically typed database access a la Kleisli
- * Concurrent processes on the client and the server
- * Statically typed Erlang-esque message passing
- * Polymorphic records and variants
- * An effect system for supporting abstraction over database queries
-whilst guaranteeing that they can be efficiently compiled to SQL
- * Handlers for algebraic effects on the server-side and the client-side
+See the [language draft](tasks/small/SPEC.md) and
+[implementation plan](tasks/small/PLAN.md).

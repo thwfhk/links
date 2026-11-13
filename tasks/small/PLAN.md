@@ -66,16 +66,17 @@ reproduced; existing failures are recorded separately.
 ### 2. Separate the native runtime
 
 - [x] **2.1** (`4dd4748a`) Remove external database driver packages and
-  their build and CI targets. Keep the shared database code until milestone 3.
-- [x] **2.2** (`2639b06b`) Remove the web and JavaScript entry points and foreign code.
-  Keep file execution, `-e`, the REPL and type checking.
-- [x] **2.3** (`68c19606`) Remove formlets, pages and XML paths and their prelude and
-  primitive definitions. Delete the browser backend and library when
-  their callers are gone.
-- [x] **2.4** Remove session types, session exceptions and CP syntax.
-  Preserve value linearity and ordinary handler dispatch. Update
-  session-dependent tests whose purpose still applies.
-- [ ] **2.5** Remove native processes and mailboxes. Replace the
+  their build and CI targets. Keep the shared database code until
+  milestone 3.
+- [x] **2.2** (`2639b06b`) Remove the web and JavaScript entry points
+  and foreign code. Keep file execution, `-e`, the REPL and type checking.
+- [x] **2.3** (`68c19606`) Remove formlets, pages and XML paths and their
+  prelude and primitive definitions. Delete the browser backend and
+  library when their callers are gone.
+- [x] **2.4** (`aadfb528`) Remove session types, session exceptions and
+  CP syntax. Preserve value linearity and ordinary handler dispatch.
+  Update session-dependent tests whose purpose still applies.
+- [x] **2.5** Remove native processes and mailboxes. Replace the
   evaluator's scheduler calls and delete the unused process and web
   runtime, request data and serialisation.
 
@@ -152,8 +153,26 @@ regressions and native IR unit tests pass, and source checks pass.
 
 ## Status
 
-Milestone 2 is in progress. Items 2.1 to 2.4 are complete. Next, remove
-processes, mailboxes and the remaining web runtime in 2.5.
+Milestone 2 is complete. The prelude, native entry points, handlers,
+continuations and rejection checks passed. Next, remove relational
+lenses in 3.1. There are no blockers for 3.1.
+
+Checks for 2.5 used `aadfb528` plus the item changes on OCaml 5.4.0.
+Logs are under `/private/tmp/smalllinks-m2.B3p5xp/`.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make no-db` and `make all-ci` | Passed. | `2.5-build.log`, `2.5-ci.log` |
+| `opam exec -- dune build --build-dir=/private/tmp/smalllinks-m2.B3p5xp/clean-build @install` | Clean build passed. | `2.5-clean-build.log` |
+| `make tests` | 46 suites, 1,148 passed, 11 existing ignores and 0 failures. | `2.5-regressions.log` |
+| `opam exec -- ./run-tests nodb-unit-tests` | 44 passed. | `2.5-unit.log` |
+| Native expression, handler file with imports, typecheck-only file and REPL checks | All passed. | `2.5-expr.log`, `2.5-file.log`, `2.5-typecheck.log`, `2.5-repl.log` |
+| `./links --set=typecheck_only=true -e 'error("evaluated")'` | Exited successfully without evaluating the expression. | `2.5-typecheck-expr.log` |
+| `./links -e 'fun down(n) { if (n == 0) 42 else down(n - 1) } down(100000)'` | Printed `42 : Int`. | `2.5-depth.log` |
+| Arithmetic and list length in two resumptions of a handler | Printed `45 : Int`. | `2.5-pure.log` |
+| `./links examples/TicTacToe-Console.links` | Ran successfully. | `2.5-tic-tac-toe.log` |
+| `./tests/validate_typecheck_testfile.testscript` | Passed. | `2.5-registration.log` |
+| `make rule-check` and `git diff --check` | Passed. GNU find was unavailable for the tabs rule. | `2.5-rule.log`, `2.5-diff.log` |
 
 Checks for 2.4 used `68c19606` plus the item changes on OCaml 5.4.0.
 Logs are under `/private/tmp/smalllinks-m2.B3p5xp/`.

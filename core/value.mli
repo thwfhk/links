@@ -1,6 +1,5 @@
 (* Values and environments *)
 open CommonTypes
-open ProcessTypes
 
 class type otherfield
  = object method show : string end
@@ -85,24 +84,10 @@ type primitive_value = [
   | `DateTime of Timestamp.t ]
   [@@deriving show]
 
-type spawn_location = [
-  | `ClientSpawnLoc of client_id
-  | `ServerSpawnLoc (* Will need to add in a server address when we go to n-tier *)
-]
-  [@@deriving show]
-
-type dist_pid = [
-  | `ClientPid of (client_id * process_id)
-  | `ServerPid of process_id (* Again, will need a server address here later *)
-]
-  [@@deriving show]
-
 module type ENV =
 sig
   type 'a t
      [@@deriving show]
-  val set_request_data : 'a t -> RequestData.request_data -> 'a t
-  val request_data : 'a t -> RequestData.request_data
   val empty : 'a t
   val bind  : Ir.var -> ('a * Ir.scope) -> 'a t -> 'a t
   val find : Ir.var -> 'a t -> 'a
@@ -112,8 +97,6 @@ sig
   val shadow : 'a t -> by:'a t -> 'a t
   val fold : (Ir.var -> ('a * Ir.scope) -> 'b -> 'b) -> 'a t -> 'b -> 'b
   val globals : 'a t -> 'a t
-  (* used only by json.ml, webif.ml ... *)
-  val get_parameters : 'a t -> ('a * Ir.scope) Utility.intmap
   val extend : 'a t -> ('a * Ir.scope) Utility.intmap -> 'a t
   val localise : 'a t -> Ir.var -> 'a t
 end
@@ -123,9 +106,7 @@ module Env : ENV
 module type FRAME = sig
   type 'v t
 
-  val of_expr : 'v Env.t -> Ir.tail_computation -> 'v t
   val make : Ir.scope -> Ir.var -> 'v Env.t -> Ir.computation -> 'v t
-  val decompose : 'v t -> (Ir.scope * Ir.var * 'v Env.t * Ir.computation)
 end
 
 module type CONTINUATION_EVALUATOR = sig
@@ -189,18 +170,7 @@ module type CONTINUATION = sig
 
   val to_string : 'v t -> string
 
-  module Inspection: sig
-    type persistence =
-      | Persistent
-      | Intermittent
-    type 'v result =
-      | Frame of 'v Frame.t
-      | Trap of { env: 'v Env.t;
-                  name: Ir.var;
-                  persistence: persistence }
 
-    val inspect : ('v result -> 'a -> 'a) -> 'v t -> 'a -> 'a
-  end
 end
 
 module Continuation : CONTINUATION
@@ -214,13 +184,9 @@ type t = [
 | `Variant of string * t
 | `FunctionPtr of (Ir.var * t option)
 | `PrimitiveFunction of string * Var.var option
-| `ClientFunction of string
-| `ClientClosure of int
 | `Continuation of continuation
 | `Resumption of resumption
-| `Pid of dist_pid
 | `Socket of in_channel * out_channel
-| `SpawnLocation of spawn_location
 ]
 and continuation = t Continuation.t
 and resumption = t Continuation.resumption
@@ -251,14 +217,10 @@ val box_pair : t -> t -> t
 val unbox_pair : t -> (t * t)
 val box_variant : string -> t -> t
 val unbox_variant : t -> (string * t)
-val box_pid : dist_pid -> t
-val unbox_pid : t -> dist_pid
 val box_socket : in_channel * out_channel -> t
 val unbox_socket : t -> in_channel * out_channel
 val box_op : t list -> t -> t
 val box    : t list -> t
-val box_spawn_loc : spawn_location -> t
-val unbox_spawn_loc : t -> spawn_location
 val box_datetime : Timestamp.t -> t
 val unbox_datetime : t -> Timestamp.t
 

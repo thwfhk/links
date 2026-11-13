@@ -24,10 +24,8 @@ let alias_env : Types.tycon_environment =
     AliasEnv.empty
     [ (* "String"  , `Alias ([], `Application (Types.list, [`Type (`Primitive Primitive.Char)])); *)
       "List"    , `Abstract Types.list;
-      "Process" , `Abstract Types.process;
       "Socket"  , `Abstract Types.socket;
       "ValidTime", `Abstract Types.valid_time_data;
       "TransactionTime", `Abstract Types.transaction_time_data;
-      "Location", `Abstract Types.spawn_location;
       "TableHandle", th_alias_type
     ]

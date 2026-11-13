@@ -10,7 +10,7 @@ end
 
 (** Term variables *)
 type var = int
-  [@@deriving show,eq,yojson]
+  [@@deriving show,eq]
 type var_info
   [@@deriving show]
 type binder

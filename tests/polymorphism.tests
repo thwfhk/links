@@ -63,9 +63,10 @@ sig f : (a) -> a var f = id(id); f
 stderr : @..*
 exit : 1
 
-Value restriction [2]
-sig foo : () {:a|r}~> a fun foo() {var x = recv(); x} foo
-stdout : fun : () {:a|_}~> a
+Polymorphic result of an operation in a function
+sig foo : () {Read:() => a|r}~> a fun foo() {var x = do Read; x} (handle(foo()) {case <Read => k> -> k(42)}, handle(foo()) {case <Read => k> -> k(true)})
+stdout : (42, true) : (Int, Bool)
+args : --enable-handlers
 
 Overly general signatures
 sig id : (a) -> b fun id(x) {x}

@@ -379,9 +379,6 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
         let expr' = self#phrase expr in
         let cases' = self#cases cases in
         Switch (expr', cases', dt)
-      | Receive (cases, dt) ->
-        let cases' = self#cases cases in
-        Receive (cases', dt)
       | p -> super#phrasenode p
 
     method! datatypenode = let open Datatype in function

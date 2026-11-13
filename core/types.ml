@@ -46,12 +46,6 @@ struct
   let compare l r = String.compare l.id r.id
 end
 
-let process  = {
-  Abstype.id = "Process" ;
-  name       = "Process" ;
-  arity      = [pk_row, (lin_any, res_effect)] ;
-}
-
 (* Lists are currently unlimited because the only deconstructors are
    hd and tl. There's nothing to stop us rolling our own potentially
    linear lists, though. *)
@@ -72,12 +66,6 @@ let mapentry = {
 let socket = {
   Abstype.id = "Socket";
   name = "Socket";
-  arity = []
-}
-
-let spawn_location = {
-  Abstype.id = "Location";
-  name = "Location";
   arity = []
 }
 
@@ -1441,12 +1429,9 @@ let wrong_type    = Application (wrong, [])
 (* Empty type, used for exceptions *)
 let empty_type    = Variant (make_empty_closed_row ())
 let wild = "wild"
-let hear = "hear"
 let wild_present   = (wild, Present unit_type)
-let hear_present t = (hear, Present t)
 
-let is_builtin_effect lbl =
-  lbl = wild || lbl = hear
+let is_builtin_effect lbl = lbl = wild
 
 
 (* precondition: the row is unwrapped *)
@@ -2210,7 +2195,7 @@ struct
       (* Pretty-prints function spaces.
          `ah` argument stands for "arrow head", either ">" (for normal function
               space) or "@" (for linear types' space). *)
-      let ppr_function_type args effects t ah ht =
+      let ppr_function_type args effects t ah =
         let (fields, row_var) =
           match unwrap effects with
           | Row (fields, row_var) ->
@@ -2233,12 +2218,6 @@ struct
            ppr_eff_var ~args ~allows_shared row_var ("{}~" ^ ah)
                ("~%~" ^ ah, fun name -> "~%" ^ name ^ "~" ^ ah)
                ("~" ^ ah,   fun name -> "~"  ^ name ^ "~" ^ ah)
-         else if fields_present [hear; wild]
-         then
-           let ht' = ht fields in
-           ppr_eff_var ~args ~allows_shared row_var ("{:" ^ ht' ^ "}~" ^ ah)
-               ("{:" ^ ht' ^ "|%}~" ^ ah, fun name -> "{:" ^ ht' ^ "|%" ^ name ^ "}~" ^ ah)
-               ("{:" ^ ht' ^ "|_}~" ^ ah, fun name -> "{:" ^ ht' ^ "|"  ^ name ^ "}~" ^ ah)
          else
              (* to guarantee termination it's crucial that we
                 invoke row on the original wrapped version of
@@ -2312,18 +2291,8 @@ struct
             end
          (* Types *)
          | Primitive p     -> Primitive.to_string p
-         | Function (args, effects, t) ->
-            let ht fields =
-              match FieldEnv.find hear fields with
-              | Present t -> sd t
-              | _          -> assert false in
-            ppr_function_type args effects t ">" ht
-         | Lolli    (args, effects, t) ->
-            let ht fields =
-              sd (match FieldEnv.find hear fields with
-                  | Present t -> t
-                  | _          -> assert false)
-            in ppr_function_type args effects t "@" ht
+         | Function (args, effects, t) -> ppr_function_type args effects t ">"
+         | Lolli (args, effects, t) -> ppr_function_type args effects t "@"
          | Record r ->
             let ur = unwrap r in
             let r = match r with
@@ -2876,12 +2845,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                   = fun effect_vid label field (o, kept) ->
                   if is_builtin_effect label
                   then
-                    (* builtin effects are preserved here (TODO also hear?; TODO a new
-                       option for this);
-
-                       TODO2 (Act 3): remove this check and give wild|hear the same
-                       behaviour as everything else, this will be useful for desugaring
-                       with all fresh arrows shared *)
+                    (* Preserve wild when omitting fresh presence variables. *)
                     (o, FieldEnv.add label field kept)
                   else begin
                       let pre = match field with
@@ -3373,19 +3337,11 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
   and row_parts : row' printer
     = let open Printer in
       Printer (fun ctx (rfields, rvar) buf ->
-          let hide_primitive_labels = Context.is_ambient_effect ctx in
+          let hide_wild = Context.is_ambient_effect ctx in
 
           let field_printer lbl pre printers =
-            (* this allows function types like this:
-             *   absent wild|hear:
-             *     (a) {wild-,hear-}-> b
-             *   polymorphic in the presence of wild|hear (note the arrow is tame here,
-             *   wild information is available in the fields):
-             *     (a) {wild{_},head{_}}-> b *)
-            if lbl = wild && is_present pre && hide_primitive_labels
-            then printers (* do not print wild:() *)
-            else if lbl = hear && is_present pre && hide_primitive_labels
-            then (Printer (fun ctx () buf -> Printer.apply presence ctx pre buf)) :: printers
+            if lbl = wild && is_present pre && hide_wild
+            then printers
             else if Context.is_ambient_tuple ctx
             then with_value presence pre :: printers
             else (Printer (fun ctx () buf ->
@@ -4257,11 +4213,7 @@ let is_sub_type, is_sub_row =
       | ForAll _, ForAll _ ->
           raise (internal_error "not implemented subtyping on forall types yet")
       | _, _ -> false
-  (* This is like standard row sub-typing, but the field types must be invariant.
-     Ultimately we might want more flexibility. For instance, we might expect
-     contravariance in the type of heard messages (the 'hear' effect is only
-     associated with input).
-  *)
+  (* Effect rows require invariant field types. *)
   and is_sub_eff =
     fun rec_vars (lrow, rrow) ->
     match lrow, rrow with
@@ -4344,7 +4296,6 @@ let make_tuple_type (ts : datatype list) : datatype =
 let make_list_type t = Application (list, [PrimaryKind.Type, t])
 let make_mapentry_type t t' =
         Application (mapentry, [PrimaryKind.Type, t; PrimaryKind.Type, t'])
-let make_process_type r = Application (process, [PrimaryKind.Row, r])
 
 let make_transaction_time_data_type typ =
   Application (transaction_time_data, [PrimaryKind.Type, typ])

@@ -127,7 +127,6 @@ module Typeability_preserving = struct
   (* Collection of transformers. *)
   let transformers : transformer array
     = [| (module DesugarInners) (* this must always be done first after type inference *)
-       ; (module DesugarProcesses)
        ; (module DesugarFors)
        ; (module DesugarRegexes)
        ; (module DesugarFuns) |]

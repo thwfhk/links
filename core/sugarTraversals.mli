@@ -45,7 +45,6 @@ class map :
     method position        : Position.t -> Position.t
     method temporal_update : temporal_update -> temporal_update
     method temporal_deletion : temporal_deletion -> temporal_deletion
-    method given_spawn_location : given_spawn_location -> given_spawn_location
     method phrasenode      : phrasenode -> phrasenode
     method phrase          : phrase -> phrase
     method patternnode     : Pattern.t -> Pattern.t
@@ -125,7 +124,6 @@ class fold :
     method regexflag       : regexflag -> 'self
     method regex           : regex -> 'self
     method position        : Position.t -> 'self
-    method given_spawn_location : given_spawn_location -> 'self
     method temporal_update : temporal_update -> 'self
     method temporal_deletion : temporal_deletion -> 'self
     method phrasenode      : phrasenode -> 'self
@@ -209,7 +207,6 @@ object ('self)
   method phrase          : phrase -> 'self * phrase
   method temporal_update : temporal_update -> ('self * temporal_update)
   method temporal_deletion : temporal_deletion -> ('self * temporal_deletion)
-  method given_spawn_location : given_spawn_location -> 'self * given_spawn_location
   method phrasenode      : phrasenode -> 'self * phrasenode
   method position        : Position.t -> 'self * Position.t
   method program         : program -> 'self * program

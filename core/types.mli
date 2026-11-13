@@ -84,11 +84,9 @@ module Policy : sig
   val set_effect_sugar : bool -> t -> t
 end
 
-val process      : Abstype.t
 val list         : Abstype.t
 val mapentry     : Abstype.t
 val socket       : Abstype.t
-val spawn_location : Abstype.t
 val transaction_time_data : Abstype.t
 val valid_time_data : Abstype.t
 
@@ -232,9 +230,7 @@ val database_type : datatype
 val empty_type : datatype
 val wrong_type : datatype
 val wild : Label.t
-val hear : Label.t
 val wild_present : Label.t * datatype
-val hear_present : datatype -> (Label.t * datatype)
 val is_builtin_effect : string -> bool
 
 (** get type variables *)
@@ -361,7 +357,6 @@ val extract_tuple : row -> datatype list
 val make_tuple_type : datatype list -> datatype
 val make_list_type : datatype -> datatype
 val make_mapentry_type : datatype -> datatype -> datatype
-val make_process_type : row -> datatype
 val make_record_type  : datatype field_env -> datatype
 val make_variant_type : datatype field_env -> datatype
 val make_table_type : Temporality.t * datatype * datatype * datatype -> datatype

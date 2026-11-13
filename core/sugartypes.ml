@@ -259,9 +259,6 @@ module Pattern = struct
    [@@deriving show]
 end
 
-type spawn_kind = Angel | Demon | Wait
-    [@@deriving show]
-
 type fn_dep = string * string
     [@@deriving show]
 
@@ -271,10 +268,6 @@ type handler_depth = Deep | Shallow
 type replace_rhs =
   | Literal     of string
   | SpliceExpr  of phrase
-and given_spawn_location =
-  | ExplicitSpawnLocation of phrase (* spawnAt function *)
-  | SpawnClient (* spawnClient function *)
-  | NoSpawnLocation (* spawn function *)
 and regex =
   | Range     of char * char
   | Simply    of string
@@ -356,10 +349,6 @@ and phrasenode =
   | QualifiedVar     of Name.t list
   | FunLit           of ((Types.datatype * Types.row) list) option *
                           DeclaredLinearity.t * funlit * Location.t
-  (* Spawn kind, expression referring to spawn location (client n, server...),
-      spawn block, row opt *)
-  | Spawn            of spawn_kind * given_spawn_location * phrase *
-                          Types.row option
   | Query            of (phrase * phrase) option * QueryPolicy.t * phrase *
                           Types.datatype option
   | RangeLit         of phrase * phrase
@@ -394,7 +383,6 @@ and phrasenode =
   | Linlet           of phrase
   | Switch           of phrase * (Pattern.with_pos * phrase) list *
                           Types.datatype option
-  | Receive          of (Pattern.with_pos * phrase) list * Types.datatype option
   | DatabaseLit      of phrase * (phrase option * phrase option)
   | TableLit         of table_lit
   | DBDelete         of temporal_deletion option * Pattern.with_pos * phrase * phrase option
@@ -545,7 +533,6 @@ struct
     | Section (Section.Minus|Section.FloatMinus|Section.Project _) -> empty
     | FreezeSection (Section.Minus|Section.FloatMinus|Section.Project _) -> empty
 
-    | Spawn (_, _, p, _)
     | TAbstr (_, p)
     | TAppl (p, _)
     | Projection (p, _)
@@ -622,7 +609,6 @@ struct
                                                     params.shp_bindings)
                           descr.shd_params) params_bound]
     | Switch (p, cases, _) -> union (phrase p) (union_map case cases)
-    | Receive (cases, _) -> union_map case cases
     | DBDelete (del, pat, p, where) ->
         let del =
           match del with

@@ -105,12 +105,10 @@ struct
     | Iteration _ (* could do a little better in some of these cases *)
     | UnaryAppl _
     | InfixAppl _
-    | Spawn _
     | Query _
     | FnAppl _
     | Handle _
     | Switch _
-    | Receive _
     | LensLit _
     | LensSerialLit _
     | LensKeysLit _
@@ -274,16 +272,8 @@ sig
   val range_bound : griper
   val range_wild : griper
 
-  val spawn_outer : griper
-  val spawn_wait_outer : griper
-  val spawn_location : griper
-  val spawn_inconsistent : griper
-
   val query_outer : griper
   val query_base_row : griper
-
-  val receive_mailbox : griper
-  val receive_patterns : griper
 
   val unary_apply : griper
   val infix_apply : griper
@@ -860,36 +850,6 @@ end
                "but the currently allowed effects are" ^ nli () ^
                 code ppr_lt)
 
-    let spawn_location ~pos ~t1:l ~t2:(_, t) ~error:_ =
-      fixed_type pos "Spawn locations" t l
-
-    let spawn_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      build_tyvar_names [lt; rt];
-      let ppr_rt = show_type rt in
-      let ppr_lt = show_type lt in
-      die pos ("Spawn blocks are wild"                 ^ nli () ^
-                code ppr_rt                            ^ nl  () ^
-               "but the currently allowed effects are" ^ nli () ^
-                code ppr_lt)
-
-    let spawn_wait_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      build_tyvar_names [lt; rt];
-      let ppr_rt = show_type rt in
-      let ppr_lt = show_type lt in
-      die pos ("Spawn wait blocks are wild"            ^ nli () ^
-                code ppr_rt                            ^ nl  () ^
-               "but the currently allowed effects are" ^ nli () ^
-                code ppr_lt)
-
-    let spawn_inconsistent  ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      build_tyvar_names [lt; rt];
-      let ppr_pr = show_type rt in
-      let ppr_ir = show_type lt in
-      die pos ("Spawn blocks has inconsistent effects. Previously" ^ nli () ^
-                code ppr_ir                             ^ nl  () ^
-               "but the currently inferred effects are" ^ nli () ^
-                code ppr_pr)
-
     let query_outer ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
       build_tyvar_names [lt; rt];
       let ppr_rt = show_type rt in
@@ -902,26 +862,6 @@ end
     let query_base_row ~pos ~t1:(lexpr, lt) ~t2:_ ~error:_ =
       build_tyvar_names [lt];
       with_but pos ("Flat query blocks must return a list of records of base type") (lexpr, lt)
-
-    let receive_mailbox ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      build_tyvar_names [lt; rt];
-      let ppr_rt = show_type rt in
-      let ppr_lt = show_type lt in
-      die pos ("The current mailbox must always have a mailbox type" ^ nli () ^
-                code ppr_rt                                          ^ nl  () ^
-               "but the currently allowed effects are"               ^ nli () ^
-                code ppr_lt)
-
-    let receive_patterns ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      build_tyvar_names [lt; rt];
-      let ppr_lt = show_type lt in
-      let ppr_rt = show_type rt in
-      die pos ("The current mailbox type should match the type of the " ^
-               "patterns in a receive, but the current mailbox takes "  ^
-               "messages of type"             ^ nli () ^
-                code ppr_lt                   ^ nl  () ^
-               "while the patterns have type" ^ nli () ^
-                code ppr_rt)
 
     let unary_apply ~pos ~t1:(lexpr, lt) ~t2:(_,rt) ~error:_ =
       let arg_hd = List.hd (TypeUtils.arg_types rt) in
@@ -1695,7 +1635,6 @@ let type_binary_op pos ctxt =
         ([(PrimaryKind.Type, a); (PrimaryKind.Row, eff)],
          Function (Types.make_tuple_type [a; a], eff, Primitive Primitive.Bool),
          Usage.empty)
-  | Name "!"     -> add_empty_usages (Utils.instantiate ctxt.var_env "Send")
   | Name n       ->
      try
        add_usages (Utils.instantiate ctxt.var_env n) (Usage.singleton n)
@@ -3213,79 +3152,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                      unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape)
             in
             Query (range, policy, erase p, Some (typ p)), typ p, Usage.combine (range_usages) (usages p)
-        (* mailbox-based concurrency *)
-        | Spawn (Wait, l, p, old_inner) ->
-            assert (l = NoSpawnLocation);
-            (* (() -{b}-> d) -> d *)
-            let inner_effects = Types.make_empty_open_row default_effect_subkind in
-            (* TODO: check if pid_type is actually needed somewhere *)
-            (* let pid_type = Application (Types.process, [Row inner_effects]) in *)
-            let () =
-              let outer_effects =
-                Types.(open_row default_effect_subkind closed_wild_row)
-              in
-                unify ~handle:Gripers.spawn_wait_outer
-                  (no_pos (T.Record context.effect_row), no_pos (T.Record outer_effects)) in
-            let p = type_check (bind_effects context inner_effects) p in
-
-            begin
-              match old_inner with
-              | None -> ()
-              | Some old_inner ->
-                 unify ~handle:Gripers.spawn_inconsistent (no_pos (T.Effect inner_effects), no_pos (T.Effect old_inner))
-            end;
-
-            let return_type = typ p in
-              Spawn (Wait, l, erase p, Some inner_effects), return_type, usages p
-        | Spawn (k, given_loc, p, old_inner) ->
-            (* Location -> (() ~e~@ _) -> Process (e) *)
-            (match given_loc with
-              | ExplicitSpawnLocation loc_phr ->
-                  let target_ty = T.Application (Types.spawn_location, []) in
-                  let t = tc loc_phr in
-                  let _ = unify ~handle:Gripers.spawn_location (pos_and_typ t, no_pos target_ty) in ()
-              | _ -> ());
-
-            let pid_effects = Types.make_empty_open_row default_effect_subkind in
-
-            let inner_effects = Types.row_with Types.wild_present pid_effects in
-            let pid_type = T.Application (Types.process, [PrimaryKind.Row, pid_effects]) in
-            let () =
-              let outer_effects =
-                Types.(open_row default_effect_subkind closed_wild_row)
-              in
-                unify ~handle:Gripers.spawn_outer
-                  (no_pos (T.Record context.effect_row), no_pos (T.Record outer_effects)) in
-            let p = type_check (bind_effects context inner_effects) p in
-            if not (Types.Unl.can_type_be (typ p)) then
-              Gripers.die pos ("Spawned processes cannot produce values of linear type (here " ^ Types.string_of_datatype (typ p) ^ ")");
-
-            (* If we've previously typed this spawn block, ensure we've inferred the
-               same types this time round.
-
-               This is mostly used to ensure desugaring passes generate the correct
-               type. *)
-            begin match old_inner with
-            | None -> ()
-            | Some old_inner ->
-               unify ~handle:Gripers.spawn_inconsistent (no_pos (T.Effect pid_effects), no_pos (T.Effect old_inner))
-            end;
-
-            Spawn (k, given_loc, erase p, Some pid_effects), pid_type, usages p
-        | Receive (binders, _) ->
-            let mb_type = Types.fresh_type_variable (lin_any, res_any) in
-            let effects =
-              Types.(open_row default_effect_subkind (row_with (hear_present mb_type) closed_wild_row))
-            in
-            let () = unify ~handle:Gripers.receive_mailbox
-              (no_pos (T.Record context.effect_row), no_pos (T.Record effects)) in
-
-            let binders, pattern_type, body_type = type_cases binders in
-            let () = unify ~handle:Gripers.receive_patterns
-              (no_pos mb_type, no_pos pattern_type)
-            in
-              Receive (erase_cases binders, Some body_type), body_type, usages_cases binders
-
         (* applications of various sorts *)
         | UnaryAppl ((_, op), p) ->
             let tyargs, opt, op_usage = type_unary_op pos context op
@@ -3566,8 +3432,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                generalising will mean accepting programs that have an
                invalid type in the IR (although they're guaranteed not
                to "go wrong".)
-
-               (Also, should the mailbox type be generalised?)
             *)
             let name = Binder.to_name bndr in
             let f = Types.fresh_type_variable (lin_any, res_any) in

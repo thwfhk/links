@@ -30,20 +30,15 @@
 (package
  (name links)
  (synopsis "The Links Programming Language")
- (description "Links is a functional programming language designed to make web programming easier.")
+ (description "SmallLinks is a native interpreter for a subset of Links.")
  (depends (ocaml (>= 5.3.0))
           (dune-configurator (>= 3.8))
            ppx_deriving
-          (ppx_deriving_yojson (>= 3.3))
-           base64
+           yojson
            linenoise
            ANSITerminal
           (lwt (>= 5.0.0))
-           cohttp
-           cohttp-lwt-unix
            uri
-           websocket
-           websocket-lwt-unix
            safepass
            result
            ocamlfind
@@ -52,8 +47,7 @@
           (calendar (>= 2.0.4))
           (rdf_lwt (>= 0.13.0)))
  (tags
-  ("web programming" "tierless" "multi-tier" "effect handlers" "effect typing" "session types"
-   "concurrency" "webpage" "extensible data types" "language-integrated queries")))
+  ("effect handlers" "effect typing" "extensible data types" "language-integrated queries")))
 
 ; See the complete stanza docs at https://dune.readthedocs.io/en/stable/dune-files.html#dune-project
 

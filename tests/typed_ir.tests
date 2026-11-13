@@ -99,10 +99,15 @@ function pattern matching has right effects (#691)
 sig f : ([a]) {}-> a fun f ([x]) { x }
 stdout : () : ()
 
-Generalisation obeys value restriction / Freshening of generalised type variables when turning lambda into named fun (#871)
-var foo = spawn { () }; ()
+Freshen type variables when turning a lambda into a named function (#871)
+var foo = (fun(f) { f })(fun(x) { x }); ()
 exit : 0
 stdout : () : ()
+
+The result of an application cannot be generalised
+var foo = (fun(f) { f })(fun(x) { x }); (foo(1), foo(true))
+stderr : @.*Type error:.*
+exit : 1
 
 Apply an unrestricted callback with shared effects
 sig apply : forall a,b,e::Row. ((a) ~e~> b, a) ~e~> b fun apply(f, x) { f(x) } apply(fun(x) { x + 1 }, 41)

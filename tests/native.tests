@@ -153,3 +153,41 @@ Former session exception operation can be resumed
 handle(do SessionFail) { case <SessionFail => k> -> k(42) }
 stdout : 42 : Int
 args : --enable-handlers
+
+Spawn syntax is rejected
+spawn { () }
+stderr : @.*
+exit : 1
+
+Mailbox receive syntax is rejected
+receive { case x -> x }
+stderr : @.*Parse error:.*
+exit : 1
+
+Mailbox receive primitive is unavailable
+recv()
+stderr : @.*recv.*
+exit : 1
+
+Process type is unavailable
+sig f : (Process({})) -> () fun f(_) { () }
+stderr : @.*Unbound type constructor Process.*
+exit : 1
+
+Process location type is unavailable
+sig f : (Location) -> () fun f(_) { () }
+stderr : @.*Unbound type constructor Location.*
+exit : 1
+
+Mailbox effect shorthand is rejected
+sig f : () {:Int}-> Int fun f() { 42 }
+stderr : @.*Parse error:.*
+exit : 1
+
+Hear is an ordinary labelled effect field
+sig f : () {hear:Int|_}-> Int fun f() { 42 } f
+stdout : fun : () {hear:() => Int|_}-> Int
+
+Exclamation mark can be defined as an operator
+infixl 6 !; op a ! b { a + b } 19 ! 23
+stdout : 42 : Int

@@ -320,9 +320,8 @@ let any = any_pat dp
 %token SQUIGRARROW SQUIGLOLLI TILDE
 %token IF ELSE
 %token MINUS MINUSDOT
-%token SWITCH RECEIVE CASE
+%token SWITCH CASE
 %token HANDLE SHALLOWHANDLE
-%token SPAWN SPAWNAT SPAWNANGELAT SPAWNCLIENT SPAWNANGEL SPAWNWAIT
 %token DOOP LINDOOP
 %token LINFLAG
 %token LPAREN RPAREN
@@ -346,7 +345,7 @@ let any = any_pat dp
 %token <string> VARIABLE CONSTRUCTOR KEYWORD PERCENTVAR
 %token MU FORALL SIG UNSAFE
 %token MODULE MUTUAL OPEN IMPORT
-%token BANG QUESTION
+%token QUESTION
 %token CAPITAL_LAMBDA
 %token PERCENT EQUALSTILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR AT
 %token <char*char> RANGE
@@ -581,20 +580,12 @@ sigop:
 op:
 | OPERATOR                                                     { with_pos $loc $1 }
 
-spawn_expression:
-| SPAWNAT LPAREN exp COMMA block RPAREN                        { spawn ~ppos:$loc Demon (ExplicitSpawnLocation $3) $5 }
-| SPAWN block                                                  { spawn ~ppos:$loc Demon  NoSpawnLocation           $2 }
-| SPAWNANGELAT LPAREN exp COMMA block RPAREN                   { spawn ~ppos:$loc Angel (ExplicitSpawnLocation $3) $5 }
-| SPAWNANGEL  block                                            { spawn ~ppos:$loc Angel  NoSpawnLocation           $2 }
-| SPAWNCLIENT block                                            { spawn ~ppos:$loc Demon  SpawnClient               $2 }
-| SPAWNWAIT   block                                            { spawn ~ppos:$loc Wait   NoSpawnLocation           $2 }
-
 query_policy:
 | VARIABLE                                                     { query_policy_of_string $loc $1 }
 | /* empty */                                                  { QueryPolicy.Flat }
 
 postfix_expression:
-| primary_expression | spawn_expression                        { $1 }
+| primary_expression                                           { $1 }
 | block                                                        { $1 }
 | TTJOIN block                                                 { temporal_join ~ppos:$loc Temporality.transaction $2 }
 | VTJOIN block                                                 { temporal_join ~ppos:$loc Temporality.valid $2 }
@@ -635,7 +626,6 @@ infix_appl:
 | unary_expression MINUS infix_appl                            { infix_appl' ~ppos:$loc $1 BinaryOp.Minus $3 }
 | unary_expression MINUSDOT infix_appl                         { infix_appl' ~ppos:$loc $1 BinaryOp.FloatMinus $3 }
 | unary_expression DOLLAR infix_appl                           { infix_appl' ~ppos:$loc $1 (BinaryOp.Name "$") $3 }
-| unary_expression BANG infix_appl                             { infix_appl' ~ppos:$loc $1 (BinaryOp.Name "!") $3 }
 | unary_expression EQUALSTILDE regex                           { let r, flags = $3 in
                                                                  infix_appl' ~ppos:$loc $1 (BinaryOp.RegexMatch flags) r }
 logical_expression:
@@ -714,7 +704,6 @@ case:
 
 case_expression:
 | SWITCH LPAREN exp RPAREN LBRACE case* RBRACE                 { with_pos $loc (Switch ($3, $6, None)) }
-| RECEIVE LBRACE case* RBRACE                                  { with_pos $loc (Receive ($3, None)) }
 | SHALLOWHANDLE LPAREN exp RPAREN LBRACE handle_cases RBRACE   { with_pos $loc (Handle (untyped_handler $3 $6 Shallow)) }
 | HANDLE LPAREN exp RPAREN LBRACE handle_cases RBRACE          { with_pos $loc (Handle (untyped_handler $3 $6 Deep   )) }
 | HANDLE LPAREN exp RPAREN LPAREN handle_params RPAREN LBRACE handle_cases RBRACE
@@ -930,20 +919,14 @@ arrow_prefix:
 | LBRACE erow RBRACE                                           { $2            }
 
 straight_arrow_prefix:
-| hear_arrow_prefix | arrow_prefix                             { $1       }
+| arrow_prefix                                                 { $1       }
 | MINUS nonrec_eff_var | MINUS kinded_nonrec_row_var           { ([], $2) }
 | MINUS effect_app                                             { ([], $2) }
 
 squig_arrow_prefix:
-| hear_arrow_prefix | arrow_prefix                             { $1       }
+| arrow_prefix                                                 { $1       }
 | TILDE nonrec_eff_var | TILDE kinded_nonrec_row_var           { ([], $2) }
 | TILDE effect_app                                             { ([], $2) }
-
-hear_arrow_prefix:
-| LBRACE COLON datatype COMMA efields RBRACE                   { hear_arrow_prefix $3 $5                    }
-| LBRACE COLON datatype RBRACE                                 { hear_arrow_prefix $3 ([], Datatype.Closed) }
-| LBRACE COLON datatype VBAR nonrec_eff_var RBRACE
-| LBRACE COLON datatype VBAR kinded_nonrec_row_var RBRACE      { hear_arrow_prefix $3 ([], $5)              }
 
 straight_arrow:
 | parenthesized_datatypes

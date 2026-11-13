@@ -2,10 +2,6 @@
 config: tests/examples_default.config
 ---
 
-Typecheck example file examples/channels.links
-examples/channels.links
-filemode : true
-
 Typecheck example file examples/church.links
 examples/church.links
 filemode : true

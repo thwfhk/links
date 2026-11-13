@@ -118,15 +118,12 @@ module SugarConstructors (Position : Pos)
 
   let present        = Datatype.Present (WithPos.dummy Datatype.Unit)
   let wild_present   = (Types.wild, present)
-  let hear_present p = (Types.hear, Datatype.Present p)
 
 
   (** Rows *)
 
   let row_with    field (fields, row_var) = (field::fields, row_var)
   let row_with_wp fields                  = row_with wild_present fields
-  let hear_arrow_prefix presence fields =
-    row_with wild_present (row_with (hear_present presence) fields)
 
 
   (** Various phrases *)
@@ -137,10 +134,6 @@ module SugarConstructors (Position : Pos)
 
   let switch_fun_lit ?(ppos=dp) ?args ?(location=loc_unknown) linearity pats switch_funlit_body =
     with_pos ppos (FunLit (args, linearity, SwitchFunlit (pats, switch_funlit_body), location))
-
-  (* Create a Spawn. *)
-  let spawn ?(ppos=dp) ?row spawn_kind location blk =
-    with_pos ppos (Spawn (spawn_kind, location, blk, row))
 
   let fn_appl_node ?(ppos=dp) name tyvars vars =
     FnAppl (with_pos ppos (tappl (FreezeVar name, tyvars)), vars)

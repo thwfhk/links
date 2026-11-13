@@ -679,10 +679,6 @@ fun applyE (f, x) {
 
 typename Either (a,b) = [|Left:a | Right : b|];
 
-#### CONCURRENCY ####
-
-typename Pid(a::Type) = Process({hear: a});
-
 ####
 sig lf : ((a) -e-> b) -> (a) -e-@ b
 fun lf(f) {

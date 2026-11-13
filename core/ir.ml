@@ -6,7 +6,7 @@ type scope = Var.Scope.t
   [@@deriving show]
 (* term variables *)
 type var = Var.var
-  [@@deriving show,eq,yojson]
+  [@@deriving show,eq]
 type var_info = Var.var_info
   [@@deriving show]
 type binder = Var.binder

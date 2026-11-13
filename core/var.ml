@@ -17,7 +17,7 @@ end
 
 (** Term variables *)
 type var = int
-  [@@deriving show,eq,yojson]
+  [@@deriving show,eq]
 type var_info = Types.datatype * string * Scope.t
   [@@deriving show]
 type binder = var * var_info

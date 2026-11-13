@@ -74,17 +74,10 @@ let keywords = [
  "open"     , OPEN;
  "query"    , QUERY;
  "readonly" , READONLY;
- "receive"  , RECEIVE;
  "returning", RETURNING;
  "set"      , SET;
  "shallowhandle", SHALLOWHANDLE;
  "sig"      , SIG;
- "spawn"    , SPAWN;
- "spawnClient" , SPAWNCLIENT;
- "spawnAt"  , SPAWNAT;
- "spawnAngel" , SPAWNANGEL;
- "spawnAngelAt" , SPAWNANGELAT;
- "spawnWait", SPAWNWAIT;
  "switch"   , SWITCH;
  "table"    , TABLE;
  "TemporalTable", TEMPORALTABLE;
@@ -174,7 +167,6 @@ rule lex ctxt nl = parse
   | ".."                                { DOTDOT }
   | "::"                                { COLONCOLON }
   | ':'                                 { COLON }
-  | '!'                                 { BANG }
   | '?'                                 { QUESTION }
   | '$'                                 { DOLLAR }
   | '@'                                 { AT }

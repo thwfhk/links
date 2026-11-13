@@ -33,10 +33,19 @@ continuation typing [5]
 { escape y in { var _ = ("" == y(1), "asdf" == y(1)); 2 } }
 stdout : 1 : Int
 
-continuation mailbox typing (see r321)
-fun () {(escape e in {spawn { e(self()) }}) ! ""; 1 + recv(); }
+Escape through a higher-order function
+escape done in { fun invoke(k) { k(42) } 1 + invoke(done) }
+stdout : 42 : Int
+
+Escape through a higher-order function rejects the wrong result type
+escape done in { fun invoke(k) { k("wrong") } 1 + invoke(done) }
 exit : 1
-stderr : @..*
+stderr : @.*Type error: The argument to escape.*
+
+Escape from a handler clause
+escape done in { handle(do Get) { case <Get => k> -> done(42) }; 0 }
+stdout : 42 : Int
+args : --enable-handlers
 
 Escape body [1]
 escape k in A

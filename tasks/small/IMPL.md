@@ -99,14 +99,16 @@ signatures; the `gen` helpers use effect upcasts.
    record of monomorphic fields and rejects a frozen polymorphic
    function in the new FreezeML cases. Retained linearity fixtures use
    linear closures in place of channels.
-4. **2.5.** [`proc.ml`](../../core/proc.ml) combines the scheduler,
-   mailboxes, session channels and WebSocket code. Replace the evaluator's
-   calls to `Proc.start`, `Proc.finish`, `Proc.yield` and `Proc.atomically`.
-   Remove the evaluator's web argument and request data plumbing before
-   deleting the remaining process and web modules and serialisation.
-   Keep Lwt for the first native evaluator. Preserve how `ApplyPure`
-   runs with an empty continuation. Check deep recursion and repeated
-   resumptions when changing the scheduler's periodic yield.
+4. **2.5.** The native evaluator keeps Lwt and pauses every 100 steps at
+   the former scheduler yield points to bound OCaml stack use.
+   `ApplyPure` evaluates with an empty continuation and returns its
+   value. Function definitions and continuation local variables still
+   use the tables built by `BuildTables`. Request data, serialisation
+   and the tables used only by serialisation are gone. The source
+   `Location` type is gone. The compiler's function location field
+   remains and uses its existing `Unknown` value for native functions.
+   Keep Yojson for the shared database loader until milestone 3.
+   Retained mailbox fixtures use algebraic operations and handlers.
 5. **3.1–3.3.** With web and JS gone, remove query and lens constructs
    across parsing, inference, IR and evaluation before deleting
    `core/query/`, `lens/` and the remaining database modules. Remove the

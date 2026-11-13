@@ -2,7 +2,6 @@ open CommonTypes
 open Ir
 open Lwt
 open Utility
-open Proc
 open Var
 
 let internal_error message =
@@ -13,7 +12,7 @@ let find_fun = Tables.find Tables.fun_defs
 
 module type EVALUATOR = sig
   type v = Value.t
-  type result = Proc.thread_result Lwt.t
+  type result = (Value.env * Value.t) Lwt.t
 
   val reify : Value.resumption -> v
   val error : string -> 'a
@@ -31,12 +30,12 @@ module Exceptions = struct
 end
 
 module Evaluator = functor (ContEval : Value.CONTINUATION_EVALUATOR with type v = Value.t
-                                                                    and type result = Proc.thread_result Lwt.t
+                                                                    and type result = (Value.env * Value.t) Lwt.t
                                                                     and type 'v t := 'v Value.Continuation.t
                                                                     and type 'v resumption := 'v Value.Continuation.resumption) ->
 struct
   type v = Value.t
-  type result = Proc.thread_result Lwt.t
+  type result = (Value.env * Value.t) Lwt.t
   type continuation = Value.continuation
   type resumption = Value.resumption
 
@@ -83,6 +82,18 @@ struct
       | None ->
         Value.Env.find var env
       | Some v -> v
+
+  (* Break the OCaml call stack during long evaluations. *)
+  let steps_between_pauses = 100
+  let steps_until_pause = ref steps_between_pauses
+
+  let yield next =
+    decr steps_until_pause;
+    if !steps_until_pause = 0 then begin
+      steps_until_pause := steps_between_pauses;
+      Lwt.pause () >>= next
+    end else
+      next ()
 
   (** {0 Evaluation} *)
   let rec value env : Ir.value -> Value.t Lwt.t = fun v ->
@@ -143,7 +154,7 @@ struct
     | ApplyPure (f, args) ->
       value env f >>= fun f ->
       (LwtHelpers.sequence (List.map (value env) args)) >>= fun args ->
-      Proc.atomically (fun () -> apply K.empty env (f, args))
+      apply K.empty env (f, args) >|= snd
     | Closure (f, _, v) ->
       value env v >>= fun v ->
       Lwt.return (`FunctionPtr (f, Some v))
@@ -166,103 +177,11 @@ struct
         List.fold_right2 (fun x p -> Value.Env.bind x (p, Scope.Local)) xs ps env
       in
       computation_yielding env cont body
-    (* start of mailbox stuff *)
-    | `PrimitiveFunction ("Send",_), [pid; msg] ->
-        let unboxed_pid = Value.unbox_pid pid in
-        (try
-           match unboxed_pid with
-           (* Send a message to a process which lives on the server *)
-           | `ServerPid serv_pid ->
-              Lwt.return @@ Mailbox.send_server_message msg serv_pid
-           (* Send a message to a process which lives on another client *)
-           | `ClientPid (client_id, process_id) ->
-              Mailbox.send_client_message msg client_id process_id
-         with
-           UnknownProcessID id ->
-           Debug.print (
-               "Couldn't deliver message because destination process " ^
-                 (ProcessTypes.ProcessID.to_string id) ^ " has no mailbox.");
-           Lwt.return ()) >>= fun _ ->
-        apply_cont cont env (`Record [])
-    | `PrimitiveFunction ("spawnAt",_), [loc; func] ->
-        begin match loc with
-          | `SpawnLocation (`ClientSpawnLoc client_id) ->
-             Proc.create_client_process client_id func >>= fun new_pid ->
-             apply_cont cont env (`Pid (`ClientPid (client_id, new_pid)))
-          | `SpawnLocation (`ServerSpawnLoc) ->
-             let var = Var.dummy_var in
-             let frame = K.Frame.make Scope.Local var Value.Env.empty ([], Apply (Variable var, [])) in
-             Proc.create_process false
-               (fun () -> apply_cont K.(frame &> empty) env func) >>= fun new_pid ->
-             apply_cont cont env (`Pid (`ServerPid new_pid))
-          | _ -> assert false
-        end
-    | `PrimitiveFunction ("spawnAngelAt",_), [loc; func] ->
-        begin match loc with
-        | `SpawnLocation (`ClientSpawnLoc client_id) ->
-           Proc.create_client_process client_id func >>= fun new_pid ->
-           apply_cont cont env (`Pid (`ClientPid (client_id, new_pid)))
-        | `SpawnLocation (`ServerSpawnLoc) ->
-           let var = Var.dummy_var in
-           let frame = K.Frame.make Scope.Local var Value.Env.empty ([], Apply (Variable var, [])) in
-           Proc.create_process true
-             (fun () -> apply_cont K.(frame &> empty) env func) >>= fun new_pid ->
-           apply_cont cont env (`Pid (`ServerPid new_pid))
-        | _ -> assert false
-        end
-    | `PrimitiveFunction ("spawnWait", _), [func] ->
-        let our_pid = Proc.get_current_pid () in
-        (* Create the new process *)
-        let var = Var.dummy_var in
-        let frame = K.Frame.make Scope.Local var Value.Env.empty ([], Apply (Variable var, [])) in
-        Proc.create_spawnwait_process our_pid
-          (fun () -> apply_cont K.(frame &> empty) env func) >>= fun child_pid ->
-        (* Now, we need to block this process until the spawned process has evaluated to a value.
-         * The idea here is that we have a second function, spawnWait', which grabs the result
-         * from proc.ml. *)
-        let fresh_var = Var.fresh_raw_var () in
-        let extended_env =
-          Value.Env.bind fresh_var (Value.box_pid (`ServerPid child_pid), Scope.Local) env in
-        let grab_frame =
-          K.Frame.of_expr extended_env
-                          (Lib.prim_appln "spawnWait'" [Variable fresh_var]) in
-
-        (* Now, check to see whether we already have the result; if so, we can
-         * grab and continue. Otherwise, we need to block. *)
-        begin
-          match Proc.get_spawnwait_result child_pid with
-            | Some v -> apply_cont cont env v
-            | None ->
-                Proc.block (fun () -> apply_cont K.(grab_frame &> cont) env (`Record []))
-        end
-    | `PrimitiveFunction ("spawnWait'", _), [child_pid] ->
-        let unboxed_pid = Value.unbox_pid child_pid in
-        begin
-        match unboxed_pid with
-          | `ServerPid server_pid ->
-              let v = OptionUtils.val_of @@ Proc.get_spawnwait_result server_pid in
-              apply_cont cont env v
-          | _ -> assert false
-        end
-    | `PrimitiveFunction ("recv",_), [] ->
-        (* If there are any messages, take the first one and apply the
-           continuation to it.  Otherwise, block the process (put its
-           continuation in the blocked_processes table) and let the
-           scheduler choose a different thread.  *)
-        begin match Mailbox.pop_message () with
-          Some message ->
-           Debug.print("delivered message.");
-           apply_cont cont env message
-        | None ->
-           let recv_frame = K.Frame.of_expr env (Lib.prim_appln "recv" []) in
-           Proc.block (fun () -> apply_cont K.(recv_frame &> cont) env (`Record []))
-        end
-    (* end of mailbox stuff *)
     | `PrimitiveFunction (n,None), args ->
-       Lib.apply_pfun n args (Value.Env.request_data env) >>= fun v ->
+       Lib.apply_pfun n args >>= fun v ->
        apply_cont cont env v
     | `PrimitiveFunction (_, Some code), args ->
-       Lib.apply_pfun_by_code code args (Value.Env.request_data env) >>= fun v ->
+       Lib.apply_pfun_by_code code args >>= fun v ->
        apply_cont cont env v
     | `Continuation c,      [p] -> apply_cont c env p
     | `Continuation _,       _  ->
@@ -271,11 +190,11 @@ struct
        resume env cont r vs
     | v, _ -> type_error ~action:"apply" "function" v
   and resume env (cont : continuation) (r : resumption) vs =
-    Proc.yield (fun () -> K.Eval.resume ~env cont r vs)
+    yield (fun () -> K.Eval.resume ~env cont r vs)
   and apply_cont (cont : continuation) env v =
-    Proc.yield (fun () -> K.Eval.apply ~env cont v)
+    yield (fun () -> K.Eval.apply ~env cont v)
   and computation_yielding env cont body =
-    Proc.yield (fun () -> computation env cont body)
+    yield (fun () -> computation env cont body)
   and computation env (cont : continuation) (bindings, tailcomp) : result =
     match bindings with
       | [] -> tail_computation env cont tailcomp
@@ -710,7 +629,7 @@ struct
              Lwt.return (Value.box vs)
        end >>= fun v ->
        K.Eval.trap cont (name, v)
-  and finish env v = Proc.finish (env, v)
+  and finish env v = Lwt.return (env, v)
     (*****************)
 
   let reify (r : resumption) = `Resumption r
@@ -720,7 +639,8 @@ struct
   let run_program : Value.env -> Ir.program -> (Value.env * Value.t) =
     fun env program ->
       try (
-        Proc.start (fun () -> eval env program)
+        steps_until_pause := steps_between_pauses;
+        Lwt_main.run (eval env program)
       ) with
         | NotFound s ->
             raise (internal_error ("NotFound " ^ s ^
