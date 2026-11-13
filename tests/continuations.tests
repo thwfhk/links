@@ -45,7 +45,6 @@ stderr : @.*Type error: The argument to escape.*
 Escape from a handler clause
 escape done in { handle(do Get) { case <Get => k> -> done(42) }; 0 }
 stdout : 42 : Int
-args : --enable-handlers
 
 Escape body [1]
 escape k in A
@@ -53,6 +52,11 @@ stdout : A : [|A|_::Any|]
 
 Escape body [2]
 escape k in A(k)
+stdout : A(Continuationgeneralised_continuation) : [|A:(mu a.[|A:(a) ~b~> c::Any|d::Any|]) ~b~> c::Any|d::Any|]
+
+Escape with handlers disabled
+escape k in A(k)
+args : --set=enable_handlers=false
 stdout : A(Continuationpure_continuation) : [|A:(mu a.[|A:(a) ~b~> c::Any|d::Any|]) ~b~> c::Any|d::Any|]
 
 Escape body [3]

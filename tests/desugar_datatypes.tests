@@ -126,13 +126,11 @@ stderr : @.*Unbound anonymous type variable.*
 Type alias row arguments use their declared kinds
 typename Reader(r::Row,e::Eff) = ((|r)) -e-> Int; fun(r) { r.x + do Ask } : Reader({x:Int}, {Ask:Int})
 stdout : fun : Reader ({x:Int},{Ask:() => Int})
-args : --enable-handlers
 
 Effect aliases require their row arguments
 effectname E(e::Eff) = {Ask:Int|e}; sig f : () -E-> Int fun f() { do Ask }
 stderr : @.*Arity mismatch: Type E expects 1 type arguments, but 0 arguments were provided.*
 exit : 1
-args : --enable-handlers
 
 An effect alias cannot use an anonymous tail
 effectname E = {Ask:Int|_};

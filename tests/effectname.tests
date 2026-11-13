@@ -42,7 +42,6 @@ exit : 1
 Effectname aliases in handlers signatures
 ./tests/effectname/handler.links
 filemode : true
-args : --enable-handlers
 stdout : (((), 42), (0, 42), (0, 42)) : (((), Int), (Int, Int), (Int, Int))
 
 Twice the same effect label in the row
@@ -58,5 +57,4 @@ stdout : () : ()
 Underscore in effect alias application
 ./tests/effectname/underscore.links
 filemode : true
-args : --enable-handlers
 stdout : true : Bool

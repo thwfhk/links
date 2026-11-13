@@ -66,7 +66,6 @@ stdout : (false, 1, "two") : Bar (Bool,Int,String)
 Type alias with an operation parameter
 typename F(a,b,e::Eff) = (a) {Read:() => b|e}~> a; sig f : F(Int,Int,{}) fun f(x) {do Read + x} sig g : F(Int,String,{}) fun g(x) {stringToInt(do Read) + x} (handle(f(1)) {case <Read => k> -> k(41)}, handle(g(2)) {case <Read => k> -> k("40")})
 stdout : (42, 42) : (Int, Int)
-args : --enable-handlers
 
 Nested closures
 ./tests/functions/nested-closures.links

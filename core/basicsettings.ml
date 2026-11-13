@@ -24,9 +24,9 @@ end
 
 module Handlers = struct
   let enabled =
-    Settings.(flag "enable_handlers"
+    Settings.(flag ~default:true "enable_handlers"
               |> privilege `System
-              |> synopsis "Enables the effect handlers extension"
+              |> synopsis "Enables effect handlers"
               |> convert parse_bool
               |> CLI.(add (long "enable-handlers"))
               |> sync)

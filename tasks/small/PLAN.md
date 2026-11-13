@@ -106,11 +106,12 @@ constructs are rejected.
 - [x] **4.2** (`9d1b400d`) Migrate retained examples and tests away from
   optional effect sugar. Use explicit shared tails, alias arguments
   and presence fields where needed.
-- [x] **4.3** Fix annotation rules to the former default and remove the
-  optional effect sugar policies. Keep operation type elaboration and
-  anonymous row resolution. Replace tests of the removed policies with
-  tests of the retained syntax, including `~>`, `x{:T}` and `x{-}`, and
-  tests of rejected forms. Check that printed types can be parsed again.
+- [x] **4.3** (`7aa53e07`) Fix annotation rules to the former default
+  and remove the optional effect sugar policies. Keep operation type
+  elaboration and anonymous row resolution. Replace tests of the
+  removed policies with tests of the retained syntax, including `~>`,
+  `x{:T}` and `x{-}`, and tests of rejected forms. Check that printed
+  types can be parsed again.
 
 Completion check: handler, polymorphism, FreezeML, row, value linearity,
 type printing and typed IR tests pass. Recheck the retained examples
@@ -119,7 +120,7 @@ parsed again.
 
 ### 5. Verify the subset
 
-- [ ] **5.1** Enable handlers by default and check handler programs in
+- [x] **5.1** Enable handlers by default and check handler programs in
   all three native entry points without `--enable-handlers`.
 - [ ] **5.2** Align the build, installation, CI and test runner with
   SmallLinks. Verify the installed executable finds its prelude and
@@ -154,10 +155,23 @@ regressions and native IR unit tests pass, and source checks pass.
 
 ## Status
 
+Item 5.1 is complete. Next, align the build, installation and test
+commands in 5.2. There are no blockers.
+
+Checks for 5.1 used `7aa53e07` plus the item changes on OCaml 5.4.0.
+Logs are under `/private/tmp/smalllinks-m5.sodOj9/`.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make no-db` | Passed. | `5.1-build.log` |
+| `make tests` | 40 suites, 925 passed, 4 ignored and 0 failed. The REPL, print and reparse, and registration checks passed. | `5.1-regressions.log` |
+| `./links -e`, `./links --path=examples/handlers examples/handlers/tests.links`, the same file with `--set=typecheck_only=true`, and `./tests/repl_handlers.testscript` | All four passed with handlers on by default. | `5.1-expr.log`, `5.1-file.log`, `5.1-typecheck.log`, `5.1-repl.log` |
+| `opam exec -- ./run-tests nodb-unit-tests` | 44 passed. | `5.1-unit.log` |
+| `make rule-check` and `git diff --check` | Passed. The tabs check used `rg` because GNU find was unavailable. | `5.1-rule.log`, `5.1-diff.log`, `5.1-tabs.log` |
+
 Milestone 4 is complete. The retained tests and examples pass with the
 fixed effect annotation rules. The default printer's output is checked
-by using it again as a type annotation. Next, enable handlers by default
-in 5.1. There are no blockers or open design questions for milestone 4.
+by using it again as a type annotation.
 
 Checks for 4.3 used `9d1b400d` plus the item changes on OCaml 5.4.0.
 Logs are under `/private/tmp/smalllinks-m4.Fx8PK2/`. The macOS `xcrun`

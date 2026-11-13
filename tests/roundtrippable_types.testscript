@@ -7,7 +7,7 @@ roundtrip() {
     shift 3
 
     local printed printed_type reparsed
-    if ! printed=$(./links --enable-handlers "$@" -e "$bindings $expression"); then
+    if ! printed=$(./links "$@" -e "$bindings $expression"); then
         echo "FAILURE: $name could not be printed"
         return 1
     fi
@@ -17,7 +17,7 @@ roundtrip() {
             echo "FAILURE: $name printed an unexpected result: $printed"
             return 1 ;;
     esac
-    if ! reparsed=$(./links --enable-handlers "$@" -e "$bindings (($expression) : $printed_type)"); then
+    if ! reparsed=$(./links "$@" -e "$bindings (($expression) : $printed_type)"); then
         echo "FAILURE: $name could not reparse $printed_type"
         return 1
     fi

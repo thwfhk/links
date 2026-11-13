@@ -16,24 +16,20 @@ exit : 1
 A handler shares an explicit effect tail with its input computation
 sig f : (() {E:()|e}~> ()) -> () {E{_}|e}~> () fun f(g) { fun() { handle(g()) { case <E => res> -> res(()) }}} f
 stdout : fun : (() {E:() => ()|a}~> ()) -> () {E{_}|a}~> ()
-args : --enable-handlers
 
 Anonymous effect tails are independent in a handler signature
 sig f : (() {E:()|_}~> ()) -> () { |_}~> () fun f(g) { fun() { handle(g()) { case <E => res> -> res(()) }}} f
 stderr : @.*Type error: The non-recursive function definition has return type.*
 exit : 1
-args : --enable-handlers
 
 An operation omitted from a row is unavailable
 sig apply : (() {Ask:Int|e}-> Int) -e-> Int fun apply(f) { f() } apply
 stderr : @.*Type error: The function.*currently allowed effects.*
 exit : 1
-args : --enable-handlers
 
 Named effect presences can be shared across rows
 sig h : (() {Ask:() => Int,Other{p}|e}~> Int) {Ask{q},Other{p}|e}~> Int fun h(f) { handle(f()) { case <Ask => k> -> k(42) } } h
 stdout : fun : (() {Ask:() => Int,Other{a}|b}~> Int) {Ask{_},Other{a}|b}~> Int
-args : --enable-handlers
 
 Flexible effect tail and presence variables
 fun(f : (() {Ask{%p},Tell{%}|%}-> Int)) { f() }
@@ -50,18 +46,15 @@ stdout : fun : ((x:Int,y-,z{_}|_)) -> Int
 Braced effect presence and absence
 fun() { do Ask } : () {Ask{:Int},Tell{-}|e}-> Int
 stdout : fun : () {Ask:() => Int,Tell-|_}-> Int
-args : --enable-handlers
 
 An absent operation cannot be invoked
 fun() { do Tell } : () {Ask{:Int},Tell{-}|e}-> Int
 stderr : @.*Type error: The inferred type of the expression.*but it is annotated with type.*
 exit : 1
-args : --enable-handlers
 
 Polymorphic nullary operation shorthand
 sig f : () {Ask:forall a. a}-> Int fun f(){ do Ask + 0 } f
 stdout : fun : () {Ask:forall a.() => a}-> Int
-args : --enable-handlers
 
 Linear arrows can have open or closed wild rows
 (linfun(x) { print(x); x } : (String) ~@ String, linfun(x) { print(x); x } : (String) {}~@ String)

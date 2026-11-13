@@ -183,6 +183,13 @@ signatures; the `gen` helpers use effect upcasts.
    moving any retained cases. Update the native IR unit test runner
    when its database configuration sample goes.
 
+## Verify the subset
+
+1. **5.1.** Handlers are on by default. Keep `enable_handlers` and
+   `--enable-handlers` as existing controls. The default evaluator uses
+   handler continuations, including for `escape`. The explicit off
+   setting still selects the pure evaluator. Test both settings.
+
 ## Baseline fixtures to migrate
 
 1. Move tests for ordinary linear functions and generalisation from

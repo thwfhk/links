@@ -88,7 +88,6 @@ stdout : (true, true, true, true) : (Bool, Bool, Bool, Bool)
 Handler patterns still accept adjacent angle brackets
 handle(do Ask) { case <Ask=>k> -> k(42) }
 stdout : 42 : Int
-args : --enable-handlers
 
 Angle brackets still work inside a regular expression
 "<tag>" =~ /<tag>/
@@ -148,7 +147,6 @@ exit : 1
 Former session exception operation can be resumed
 handle(do SessionFail) { case <SessionFail => k> -> k(42) }
 stdout : 42 : Int
-args : --enable-handlers
 
 Spawn syntax is rejected
 spawn { () }
@@ -317,25 +315,21 @@ Linear operation invocation syntax is rejected
 fun() { lindo Ask }
 stderr : @.*Parse error:.*
 exit : 1
-args : --enable-handlers
 
 Linear continuation marker is rejected
 fun() { xlin; 42 }
 stderr : @.*Unknown variable xlin\..*
 exit : 1
-args : --enable-handlers
 
 Linear operation type arrow is rejected
 sig f : () {Ask:() =@ Int|e}-> Int fun f() { do Ask }
 stderr : @.*Parse error:.*
 exit : 1
-args : --enable-handlers
 
 Linear operation pattern arrow is rejected
 handle(do Ask) { case <Ask =@ k> -> k(42) }
 stderr : @.*Parse error:.*
 exit : 1
-args : --enable-handlers
 
 Linear effect row subkind is rejected
 sig f : () { |e::Lin}-> Int fun f() { 42 }

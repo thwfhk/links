@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+if ! output=$(./links <<'EOF'
+fun ask() { do Ask };
+handle(ask()) { case <Ask => k> -> k(42) };
+EOF
+); then
+    echo "FAILURE: The handler REPL session exited with an error"
+    exit 1
+fi
+
+if [[ "$output" != *$'\nask = fun : '*$'\n42 : Int' ]]; then
+    echo "FAILURE: The REPL did not return 42 from the handler"
+    printf '%s\n' "$output"
+    exit 1
+fi
+
+echo "SUCCESS: The REPL ran a handler with default settings"
