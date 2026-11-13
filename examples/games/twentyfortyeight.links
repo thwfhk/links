@@ -76,7 +76,7 @@ fun isMoveLeft(grid) {
     sum(allChoices) > 0
 }
 
-fun showRowHelper(r) client {
+fun showRowHelper(r) {
     for (x <- r)
         <#>
             <div class="{ implode(explode("tile tile-") ++ explode(intToString(x))) }">
@@ -85,13 +85,13 @@ fun showRowHelper(r) client {
         </#>
 }
 
-fun showRow(r) client {
+fun showRow(r) {
     <div style="clear:both">
         { showRowHelper(r) }
     </div>
 }
 
-fun printGrid(grid) client {
+fun printGrid(grid) {
     replaceNode(
         <div id="grid">
             { concatMap(showRow, grid) }

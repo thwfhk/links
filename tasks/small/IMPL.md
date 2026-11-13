@@ -76,11 +76,15 @@ signatures; the `gen` helpers use effect upcasts.
    the tree for milestone 3 with the runners and build stanzas removed.
    The native IR unit runner remains available. The shared database
    loader and query code remain in the compiler until milestone 3.
-2. **2.2–2.3.** Remove web and JS modes from [`bin/links.ml`](../../bin/links.ml),
-   the corresponding driver branches and foreign code support. Keep the
-   REPL mode used by module renaming and plain-text type errors. Remove
-   web-only primitive entries and the XML, formlet and page paths. Keep
-   `lib/js/` and the browser backend until their callers are gone.
+2. **2.2.** Files and `-e` use the native driver. The REPL keeps its
+   separate module renaming setting. Remove `alien`, the `client` and
+   `server` function annotations, the web and JavaScript CLI modes, and
+   the route and HTTP response primitives that provided web entry
+   points from Links source. Former location keywords become ordinary
+   identifiers. Keep internal locations while XML and process code
+   still uses them. The retained page tests use `renderPage` directly.
+   In **2.3**, remove the XML, formlet and page paths and their prelude
+   and primitive entries, then delete the browser backend and library.
 3. **2.4.** Remove special cases for session exceptions in handler inference,
    pattern compilation and trap dispatch. Delete `desugarCP`,
    `desugarSessionExceptions` and channel utilities after their callers

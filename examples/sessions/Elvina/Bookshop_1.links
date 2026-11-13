@@ -3,7 +3,7 @@ typename ShopSelect = mu a.[+|Add:!String.a, Checkout:!Int.!String.End|+];
 
 
 sig waitForClient : (ShopOffer) ~> ()
-fun waitForClient(s) client
+fun waitForClient(s)
 {
     offer(s) {
         case Add(s)      ->
@@ -21,7 +21,7 @@ fun waitForClient(s) client
 }
 
 sig orderBooks : (ShopSelect) ~> ()
-fun orderBooks(c) client
+fun orderBooks(c)
 {
     var c = send("Alice in Wonderland", select Add c);
     var c = send("Summerhall Square", send(8753, select Checkout c));
@@ -29,7 +29,7 @@ fun orderBooks(c) client
 }
 
 sig main : () ~> ()
-fun main() client
+fun main()
 {
     orderBooks(fork(waitForClient))
 }

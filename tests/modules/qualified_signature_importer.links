@@ -1,0 +1,2 @@
+open import Qualified_signature_dependency;
+identity(42)

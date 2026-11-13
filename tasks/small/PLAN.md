@@ -65,9 +65,9 @@ reproduced; existing failures are recorded separately.
 
 ### 2. Separate the native runtime
 
-- [x] **2.1** Remove external database driver packages and their build
-  and CI targets. Keep the shared database code until milestone 3.
-- [ ] **2.2** Remove the web and JavaScript entry points and foreign code.
+- [x] **2.1** (`4dd4748a`) Remove external database driver packages and
+  their build and CI targets. Keep the shared database code until milestone 3.
+- [x] **2.2** Remove the web and JavaScript entry points and foreign code.
   Keep file execution, `-e`, the REPL and type checking.
 - [ ] **2.3** Remove formlets, pages and XML paths and their prelude and
   primitive definitions. Delete the browser backend and library when
@@ -152,8 +152,26 @@ regressions and native IR unit tests pass, and source checks pass.
 
 ## Status
 
-Milestone 2 is in progress. Item 2.1 is complete. Next, remove the web
-and JavaScript entry points and foreign code in 2.2.
+Milestone 2 is in progress. Items 2.1 and 2.2 are complete. Next, remove
+formlets, pages, XML and the browser backend in 2.3.
+
+Checks for 2.2 used `4dd4748a` plus the item changes on OCaml 5.4.0.
+Logs are under `/private/tmp/smalllinks-m2.B3p5xp/`.
+
+| Command | Result | Log |
+| --- | --- | --- |
+| `make no-db` | Passed. | `2.2-build.log` |
+| Native expression, file with imports, typecheck-only file, REPL and extensible case example checks | All passed. | `2.2-expr.log`, `2.2-file.log`, `2.2-typecheck.log`, `2.2-repl.log`, `2.2-extensible-case.log` |
+| `./test-harness tests/<suite>.tests` for the suites below | 541 passed and 13 were ignored. | One `2.2-<suite>.log` per suite |
+| `opam exec -- ./run-tests nodb-unit-tests` | 44 passed. | `2.2-unit.log` |
+| `./tests/validate_typecheck_testfile.testscript` | Passed. | `2.2-registration.log` |
+| `make rule-check` and `git diff --check` | Passed. GNU find was unavailable for the tabs rule. | `2.2-rule.log`, `2.2-diff.log` |
+
+Suites for 2.2: `booleans`, `cliArgs`, `continuations`, `effect_sugar`,
+`functions`, `handlers`, `modules`, `native`, `page`, `polymorphism`,
+`records`, `recheck_frontend_transformations`, `session-exceptions`,
+`sessions`, `typecheck_examples`, `typecheck_examples_with_cfl_on`,
+`typed_ir`.
 
 Checks for 2.1 used `f0a027bc` plus the item changes on OCaml 5.4.0.
 Logs are under `/private/tmp/smalllinks-m2.B3p5xp/`.

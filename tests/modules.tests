@@ -172,8 +172,8 @@ args : --path=tests/modules
 stderr : @.*
 exit : 1
 
-Import alien functions
-./tests/modules/alien_blocks_importer.links
+Import a function with a type signature
+./tests/modules/qualified_signature_importer.links
 filemode : true
 args : --path=tests/modules
 stdout : 42 : Int

@@ -265,95 +265,6 @@ module Pattern = struct
    [@@deriving show]
 end
 
-module Alien: sig
-  type 'a t [@@deriving show]
-  type single [@@deriving show]
-  type multi [@@deriving show]
-
-  val object_file : 'a t -> string
-  val object_name : single t -> string
-  val declarations : 'a t -> (Binder.with_pos * datatype') list
-  val declaration : single t -> (Binder.with_pos * datatype')
-  val language : 'a t -> ForeignLanguage.t
-  val modify : ?declarations:(Binder.with_pos * datatype') list -> ?language:ForeignLanguage.t -> ?object_file:string -> 'a t -> 'a t
-
-  val multi : ForeignLanguage.t -> string -> (Binder.with_pos * datatype') list -> multi t
-  val single : ForeignLanguage.t -> string -> Binder.with_pos -> datatype' -> single t
-end = struct
-  (* Ideally we would use a GADT and have `single` and `multi` be
-     fully abstract types, however we cannot, since we insist on using
-     `ppx_deriving show` which does not support either. Instead we
-     simulate a GADT here by making use of phantom types. *)
-  type single = unit
-  and multi = unit
-  and common =
-    { language: ForeignLanguage.t;
-      object_file: string }
-  and 'a t =
-    | Single of { common: common;
-                  binder: Binder.with_pos;
-                  datatype: datatype';
-                  object_name: string }
-    | Multi of { common: common;
-                 declarations: (Binder.with_pos * datatype') list }
-  [@@deriving show]
-
-  let object_file : type a. a t -> string = function
-    | Single { common; _ } -> common.object_file
-    | Multi { common; _ } -> common.object_file
-
-  let object_name : single t -> string = function
-    | Single { object_name; _ } -> object_name
-    | _ -> assert false
-
-  let language : type a. a t -> ForeignLanguage.t = function
-    | Single { common; _ } -> common.language
-    | Multi { common; _ } -> common.language
-
-  let declarations : type a. a t -> (Binder.with_pos * datatype') list = function
-    | Single { binder; datatype; _ } -> [(binder, datatype)]
-    | Multi { declarations; _ } -> declarations
-
-  let declaration : single t -> (Binder.with_pos * datatype') = function
-    | Single { binder; datatype; _ } -> (binder, datatype)
-    | _ -> assert false
-
-  let modify : type a. ?declarations:(Binder.with_pos * datatype') list -> ?language:ForeignLanguage.t -> ?object_file:string -> a t -> a t
-    = fun ?declarations ?language ?object_file alien ->
-    let common : type a. a t -> common = function
-      | Single { common; _ } -> common
-      | Multi { common; _ } -> common
-    in
-    let common =
-      let common = common alien in
-      match language, object_file with
-      | Some language, Some object_file ->
-         { language; object_file }
-      | Some language, None ->
-         { common with language }
-      | None, Some object_file ->
-         { common with object_file }
-      | None, None ->
-         common
-    in
-    match alien, declarations with
-    | Single payload, Some [(binder, datatype)] ->
-       Single { payload with common; binder; datatype }
-    | Multi _, Some declarations ->
-       Multi { common; declarations }
-    | _, _ ->
-       raise (Errors.internal_error ~filename:"sugartypes.ml" ~message:"Invalid arguments (Alien.modify)")
-
-  let multi : ForeignLanguage.t -> string -> (Binder.with_pos * datatype') list -> multi t
-    = fun language object_file declarations ->
-    Multi { common = { language; object_file }; declarations }
-
-  let single : ForeignLanguage.t -> string -> Binder.with_pos -> datatype' -> single t
-    = fun language object_file binder datatype ->
-    let object_name = Binder.to_name binder in
-    Single { common = { language; object_file }; binder; datatype; object_name }
-end
-
 type spawn_kind = Angel | Demon | Wait
     [@@deriving show]
 
@@ -535,7 +446,6 @@ and bindingnode =
                  datatype' option
   | Fun     of function_definition
   | Funs    of recursive_function list
-  | Foreign of Alien.single Alien.t
   | Import of { pollute: bool; path : Name.t list }
   | Open of Name.t list
   | Aliases of alias list
@@ -544,7 +454,6 @@ and bindingnode =
                  name: string }
   | Exp     of phrase
   | Module  of { binder: Binder.with_pos; members: binding list }
-  | AlienBlock of Alien.multi Alien.t
 and binding = bindingnode WithPos.t
 and block_body = binding list * phrase
 and cp_phrasenode =
@@ -833,24 +742,6 @@ struct
        probably be treated as bound rather than free. *)
     | Infix { name; _ } -> empty, singleton name
     | Exp p -> empty, phrase p
-    | Foreign alien ->
-       let bound_foreigns =
-         List.fold_left
-           (fun acc (bndr, _) ->
-             StringSet.add (Binder.to_name bndr) acc)
-           (StringSet.empty)
-           (Alien.declarations alien)
-       in
-       bound_foreigns, empty
-    | AlienBlock alien ->
-        let bound_foreigns =
-          List.fold_left
-            (fun acc (bndr, _) ->
-              StringSet.add (Binder.to_name bndr) acc)
-            (StringSet.empty)
-            (Alien.declarations alien)
-        in
-        bound_foreigns, empty
     | Module { members; _ } ->
        List.fold_left
          (fun (bnd, fvs) b ->

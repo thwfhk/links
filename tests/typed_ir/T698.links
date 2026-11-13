@@ -8,6 +8,6 @@ fun concatMap(f, l) {
 
 
 #The function we are actually interested in
-fun asList(t) server {
+fun asList(t) {
   for (x <-- t) [x]
 }

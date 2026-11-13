@@ -462,8 +462,6 @@ struct
                              ". This should have been closure-converted."))
               | Rec _ ->
                   Q.query_error "Recursive function"
-              | Alien _ -> (* just skip it *)
-                  computation env (bs, tailcomp)
               | Module _ -> raise (internal_error "Not implemented modules yet")
           end
   and tail_computation env : Ir.tail_computation -> Q.t = let open Ir in function

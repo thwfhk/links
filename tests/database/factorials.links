@@ -44,7 +44,7 @@ fun updateTwoThree() {
   set (f=3)
 }
 
-fun lookupFactorials(n) server {
+fun lookupFactorials(n) {
   query {
     for (row <-- factorials)
     where (row.i <= n)
@@ -53,22 +53,22 @@ fun lookupFactorials(n) server {
   }
 }
 
-fun unwrappedLookup(n) server {
+fun unwrappedLookup(n) {
   for (row <-- factorials)
   where (row.i <= n)
   orderby (row.i)
     [(i=row.i, f=row.f)]
 }
 
-fun trivialNested1() server {
+fun trivialNested1() {
   query { for (y <- for (x <-- factorials) [(b=[])]) [(a=0)]}
 }
 
-fun trivialNested2() server {
+fun trivialNested2() {
   query { for (y <- for (x <- asList( factorials)) [(b=[])]) [(a=0)]}
 }
 
-fun tableLength() server {
+fun tableLength() {
   hd(query {
     [(len = length(for (x <-- factorials) [x]))]
   }).len

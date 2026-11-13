@@ -1381,10 +1381,6 @@ struct
             o, Rec defs
 
 
-        | Alien { binder; object_name; language } ->
-           let o, x = o#binder binder in
-           o, Alien { binder = x; object_name; language }
-
         | Module (name, defs) ->
             let o, defs =
               match defs with
@@ -1429,7 +1425,6 @@ struct
                   o#remove_function_closure_binder f)
                 o
                 fundefs
-      | Alien { binder; _ } -> o#remove_binder binder
       | Module _ -> o
 
     method remove_bindings : binding list -> 'self_type =

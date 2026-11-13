@@ -152,13 +152,11 @@ struct
       (* need to check that pattern matching cannot fail *)
     | Import _
     | Open _
-    | AlienBlock _
     | Module _
     | Fun _
     | Funs _
     | Infix _
-    | Aliases _
-    | Foreign _ -> true
+    | Aliases _ -> true
     | Exp p -> is_pure p
     | Val (pat, (_, rhs), _, _) ->
         is_safe_pattern pat && is_pure rhs
@@ -434,25 +432,9 @@ end
       error:Unify.error ->
       unit
 
-    let wm () = Settings.get  Webserver_types.webs_running
-
-    let code s =
-      if wm () then
-        "<code>" ^ s ^ "</code>"
-      else
-        "`"^ s ^ "'"
-
-    let nl () =
-      if wm () then
-        "<br />\n"
-      else
-        "\n"
-
-    let tab () =
-      if wm () then
-        "&nbsp;&nbsp;&nbsp;&nbsp;"
-      else
-        "    "
+    let code s = "`" ^ s ^ "'"
+    let nl () = "\n"
+    let tab () = "    "
 
     (* New line with indentation *)
     let nli () = nl () ^ tab ()
@@ -5191,21 +5173,6 @@ and type_binding : context -> binding -> binding * context * Usage.t =
           in
           Funs defs, {empty_context with var_env = outer_env}, Usage.restrict (Usage.combine_many used) defined
 
-      | Foreign alien ->
-         let binder, dt, datatype =
-           match Alien.declaration alien with
-           | (b, (dt, Some datatype)) -> (b, dt, datatype)
-           | _ -> assert false
-         in
-         ignore (if String.contains (Binder.to_name binder) '\''
-                 then raise (Errors.prime_alien pos));
-         (* Ensure that we quantify FTVs *)
-         let (_tyvars, _args), datatype = Utils.generalise context.var_env datatype in
-         let datatype = Instantiate.freshen_quantifiers datatype in
-         let binder = Binder.set_type binder datatype in
-         ( Foreign (Alien.modify ~declarations:[(binder, (dt, Some datatype))] alien)
-         , bind_var empty_context (Binder.to_name binder, datatype)
-         , Usage.empty )
       | Aliases ts ->
           let env = List.fold_left (fun env {node=(name, vars, b); _} ->
               match b with
@@ -5224,7 +5191,6 @@ and type_binding : context -> binding -> binding * context * Usage.t =
           Exp (erase e), empty_context, usages e
       | Import _
       | Open _
-      | AlienBlock _
       | Module _ -> assert false
     in
       WithPos.make ~pos typed, ctxt, usage

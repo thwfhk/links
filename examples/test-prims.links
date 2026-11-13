@@ -132,7 +132,6 @@ ignore(dump(xml));
 
 ignore(print("monkeys"));
 
-# javascript       : Bool
 
 # not              : (Bool) -> Bool
 
@@ -221,19 +220,6 @@ swapNodes(getNodeById("item:1"),getNodeById("item:2"));
 # getTime          : (Event) -> Int
 # getCharCode      : (Event) -> Char
 # event            : Event
-# setCookie        : (String, String) -> a
-
-setCookie("username","frobulous t. vanderbilt");
-
-# getCookie        : (String) -> String
-
-#ignore(alertDialog("username cookie is: " ^^ getCookie("username")));
-ignore(getCookie("username"));
-
-# redirect         : (String) -> ()
-
-# redirect("http://www.google.com/");
-
 # reifyK           : ((d) -> b) -> String
 
 # ignore(escape e in { reifyK(e) }); # not avail. on client

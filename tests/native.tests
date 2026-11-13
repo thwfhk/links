@@ -1,0 +1,57 @@
+Foreign function declaration is rejected
+alien javascript "fun.js" f : () ~> (); f()
+stderr : @.*Parse error:.*
+exit : 1
+
+Foreign declaration block is rejected
+alien javascript "fun.js" { f : () ~> (); }
+stderr : @.*Parse error:.*
+exit : 1
+
+Client function annotation is rejected
+fun f() client { 42 } f()
+stderr : @.*Parse error:.*
+exit : 1
+
+Server function annotation is rejected
+fun f() server { 42 } f()
+stderr : @.*Parse error:.*
+exit : 1
+
+Former location keywords are identifiers
+var client = 40; var server = 2; client + server
+stdout : 42 : Int
+
+Web mode is rejected
+()
+args : --mode=web
+stderr : @.*Unknown option '--mode'.*
+exit : 1
+
+JavaScript compile flag is rejected
+()
+args : --compile
+stderr : @.*Unknown option '--compile'.*
+exit : 1
+
+JavaScript output flag is rejected
+()
+args : --output=output.js
+stderr : @.*Unknown option '--output'.*
+exit : 1
+
+Web routing primitive is unavailable
+addRoute("/", fun(_) { () })
+stderr : @.*addRoute.*
+exit : 1
+
+Web server entry point is unavailable
+servePages()
+args : --set=typecheck_only=true
+stderr : @.*servePages.*
+exit : 1
+
+Redirect primitive is unavailable
+redirect("/")
+stderr : @.*redirect.*
+exit : 1

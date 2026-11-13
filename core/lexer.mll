@@ -81,12 +81,10 @@ let bump_lines lexbuf n =
 let count_newlines = StringUtils.count '\n'
 
 let keywords = [
- "alien"    , ALIEN;
  "as"       , AS;
  "between"  , BETWEEN;
  "by"       , BY;
  "case"     , CASE;
- "client"   , CLIENT;
  "database" , DATABASE;
  "default"  , DEFAULT;
  "delete_left", DELETE_LEFT;
@@ -134,7 +132,6 @@ let keywords = [
  "receive"  , RECEIVE;
  "returning", RETURNING;
  "select"   , SELECT;
- "server"   , SERVER;
  "set"      , SET;
  "shallowhandle", SHALLOWHANDLE;
  "sig"      , SIG;

@@ -142,7 +142,6 @@ let rec jsonize_value' : Value.t -> Yojson.Basic.t =
      lit ~tag:"ClientSpawnLoc" [ ("_clientSpawnLoc", ClientID.to_json client_id) ]
   | `SpawnLocation (`ServerSpawnLoc) ->
      lit ~tag:"ServerSpawnLoc" [ ("_serverSpawnLoc", `List []) ]
-  | `Alien -> raise (Errors.runtime_error "Can't jsonize alien")
 and jsonize_primitive : Value.primitive_value -> Yojson.Basic.t  = function
   | `Bool value -> lit ~tag:"Bool" [ ("_value", `Bool value) ]
   | `Int value -> lit ~tag:"Int"  [ ("_value", `Int value) ]

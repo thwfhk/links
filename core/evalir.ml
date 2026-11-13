@@ -12,13 +12,6 @@ let internal_error message =
 let lookup_fun = Tables.lookup Tables.fun_defs
 let find_fun = Tables.find Tables.fun_defs
 
-let dynamic_static_routes
-  = Settings.(flag "dynamic_static_routes"
-              |> convert parse_bool
-              |> sync)
-let allow_static_routes = ref true
-
-
 module type EVALUATOR = sig
   type v = Value.t
   type result = Proc.thread_result Lwt.t
@@ -474,46 +467,6 @@ struct
         Session.close (Value.unbox_channel chan);
         apply_cont cont env (`Record [])
     (* end of session stuff *)
-    | `PrimitiveFunction ("unsafeAddRoute", _), [pathv; handler; error_handler] ->
-       let path = Value.unbox_string pathv in
-       let is_dir_handler = String.length path > 0 && path.[String.length path - 1] = '/' in
-       let path = if String.length path == 0 || path.[0] <> '/' then "/" ^ path else path in
-       let path =
-         match Settings.get (Webserver_types.internal_base_url) with
-         | None -> path
-         | Some base_url ->
-            let base_url = Utility.strip_slashes base_url in
-            "/" ^ base_url ^ path
-       in
-       Webs.add_route is_dir_handler path (Right {Webs.request_handler = (env, handler); Webs.error_handler = (env, error_handler)});
-       apply_cont cont env (`Record [])
-    | `PrimitiveFunction ("addStaticRoute", _), [uriv; pathv; mime_typesv] ->
-       if not (!allow_static_routes) then
-         eval_error "Attempt to add a static route after they have been disabled";
-       let uri = Value.unbox_string uriv in
-       let uri = if String.length uri == 0 || uri.[0] <> '/' then "/" ^ uri else uri in
-       let uri =
-         match Webs.get_internal_base_url () with
-         | None -> uri
-         | Some base_uri ->
-            let base_uri = Utility.strip_slashes base_uri in
-            "/" ^ base_uri ^ uri
-       in
-       let path = Value.unbox_string pathv in
-       let mime_types = List.map (fun v -> let (x, y) = Value.unbox_pair v in (Value.unbox_string x, Value.unbox_string y)) (Value.unbox_list mime_typesv) in
-       Webs.add_route true uri (Left (path, mime_types));
-       apply_cont cont env (`Record [])
-    | `PrimitiveFunction ("servePages", _), [] ->
-       if not (Settings.get (dynamic_static_routes)) then
-         allow_static_routes := false;
-       begin
-         Webs.start env >>= fun () ->
-         apply_cont cont env (`Record [])
-       end
-    | `PrimitiveFunction ("serveWebsockets", _), [] ->
-        Webs.set_accepting_websocket_requests true;
-        apply_cont cont env (`Record [])
-    (*****************)
     | `PrimitiveFunction (n,None), args ->
        Lib.apply_pfun n args (Value.Env.request_data env) >>= fun v ->
        apply_cont cont env v
@@ -528,7 +481,6 @@ struct
        eval_error "Continuation applied to multiple (or zero) arguments"
     | `Resumption r, vs ->
        resume env cont r vs
-    | `Alien, _ -> eval_error "Cannot make alien call on the server.";
     | `ClientClosure index, vs ->
        let req_data = Value.Env.request_data env in
        client_call req_data "_$ClosureTable.apply" cont (`Int index :: vs)
@@ -557,10 +509,6 @@ struct
             computation env cont (bs, tailcomp)
          | Rec _ ->
             computation env cont (bs, tailcomp)
-         | Alien { binder; _ } ->
-            let var = Var.var_of_binder binder in
-            let scope = Var.scope_of_binder binder in
-            computation (Value.Env.bind var (`Alien, scope) env) cont (bs, tailcomp)
          | Module _ -> raise (internal_error "Not implemented interpretation of modules yet")
   and tail_computation env (cont : continuation) : Ir.tail_computation -> result = function
     | Ir.Return v   ->

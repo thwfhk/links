@@ -2,7 +2,7 @@ typename CalcSelect = [+|Add:!Int.!Int.?Int.End, Mul:!Int.!Int.?Int.End, Sub:!In
 typename CalcOffer = [&|Add:?Int.?Int.!Int.End, Mul:?Int.?Int.!Int.End, Sub:?Int.?Int.!Int.End, Div:?Int.?Int.!Int.End|&];
 
 sig calc : (CalcOffer) ~> ()
-fun calc(s) client {
+fun calc(s) {
   offer (s) {
     case Add(s) ->
       var (x,s) = receive(s);
@@ -25,7 +25,7 @@ fun calc(s) client {
 }
 
 sig user : (CalcSelect, Int, Int, String) ~> Int
-fun user(s, op1, op2, operation) client {
+fun user(s, op1, op2, operation) {
   fun recvAndClose(s) { var (x, s) = receive(s); close(s); x}
 
     switch(operation) {
@@ -37,7 +37,7 @@ fun user(s, op1, op2, operation) client {
 }
 
 sig main : (String, String, String) ~> Int
-fun main(op1, op2, operation) client {
+fun main(op1, op2, operation) {
   user(fork(calc), stringToInt(op1), stringToInt(op2), operation)
 }
 

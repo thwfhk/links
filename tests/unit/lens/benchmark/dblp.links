@@ -28,7 +28,7 @@ var newRecs =
     else
       [(t)];
 
-fun doTime() server {
+fun doTime() {
   lensQueryStatisticsReset();
 
   var t1 = serverTimeMilliseconds();

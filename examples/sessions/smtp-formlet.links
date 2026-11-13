@@ -242,7 +242,7 @@ mutual {
 ###
 
 sig startCommunication : (Message) ~> ()
-fun startCommunication(message) server {
+fun startCommunication(message) {
   mailClient(forkSync(mailServer), message)
 }
 

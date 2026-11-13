@@ -207,7 +207,6 @@ sig
     (var list -> tail_computation sem) ->
     tail_computation sem
 
-  val alien : var_info * string * ForeignLanguage.t * (var -> tail_computation sem) -> tail_computation sem
 
   val select : Name.t * value sem -> tail_computation sem
 
@@ -297,8 +296,6 @@ struct
        * location * bool) list ->
       (Var.var list) M.sem
 
-    val alien_binding : var_info * string * ForeignLanguage.t -> var M.sem
-
     val value_of_untyped_var : var M.sem * datatype -> value sem
   end =
   struct
@@ -350,10 +347,6 @@ struct
                   fundef)
                 defs))
           fs
-
-    let alien_binding (x_info, object_name, language) =
-      let xb, x = Var.fresh_var x_info in
-      lift_binding (Alien { binder = xb; object_name; language }) x
 
     let value_of_untyped_var (s, t) =
       M.bind s (fun x -> lift (Variable x, t))
@@ -567,9 +560,6 @@ struct
                         lift (Special (LensPut (lens, data, rtype)), Types.make_list_type rtype)))
 
   let wrong t = lift (Special (Wrong t), t)
-
-  let alien (x_info, object_name, language, rest) =
-    M.bind (alien_binding (x_info, object_name, language)) rest
 
   let select (l, e) =
     let t = TypeUtils.select_type l (sem_type e) in
@@ -1328,22 +1318,13 @@ struct
                         (nodes_of_list defs)
                     in
                     I.letrec defs (fun vs -> eval_bindings scope (extend fs (List.combine vs outer_fts) env) bs e)
-                | Foreign alien ->
-                   let binder =
-                     fst (Alien.declaration alien)
-                   in
-                   assert (Binder.has_type binder);
-                   let x  = Binder.to_name binder in
-                   let xt = Binder.to_type binder in
-                   I.alien (Var.make_info xt x scope, Alien.object_name alien, Alien.language alien,
-                            fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e)
                 | Aliases _
                 | Infix _ ->
                     (* Ignore type alias and infix declarations - they
                        shouldn't be needed in the IR *)
                     eval_bindings scope env bs e
                 | Import _ | Open _ | Fun _
-                | AlienBlock _ | Module _  -> assert false
+                | Module _  -> assert false
             end
 
   and evalv env e =
@@ -1400,11 +1381,6 @@ struct
                    | Scope.Local ->
                       partition (globals, b::locals, nenv) bs
                  end
-              | Alien { binder; _ }
-                   when Var.Scope.is_global (Var.scope_of_binder binder) ->
-                 let f = Var.var_of_binder binder in
-                 let f_name = Var.name_of_binder binder in
-                 partition (b::locals @ globals, [], Env.String.bind f_name f nenv) bs
               | _ -> partition (globals, b::locals, nenv) bs
             end in
     let globals, locals, nenv = partition ([], [], Env.String.empty) bs in

@@ -6,5 +6,3 @@ Library Reference
   :caption: Library Documentation:
 
   library-docs/prelude
-  library-docs/mvu
-

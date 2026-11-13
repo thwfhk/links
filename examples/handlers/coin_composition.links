@@ -21,43 +21,43 @@ fun showToss(toss) {
   }
 }
 
-fun positive(m) client {
+fun positive(m) {
   handle(m()) {
     case x -> x
     case <Choose => k> -> k(true)
   }
 }
 
-fun allChoices(m)() client {
+fun allChoices(m)() {
   handle(m()) {
     case x -> [x]
     case <Choose => k> -> k(true) ++ k(false)
   }
 }
 
-fun failure(m)() client {
+fun failure(m)() {
   handle(m()) {
     case x -> [x]
     case <Fail => k> -> []
   }
 }
 
-# fun allChoicesShallow(m)() client {
+# fun allChoicesShallow(m)() {
 #   shallowhandle(m()) {
 #     case x -> [x]
 #     case <Choose -> k> -> allChoicesShallow(fun() {k(true)})() ++ allChoicesShallow(fun() {k(false)})()
 #   }
 # }
 
-fun toss() client {
+fun toss() {
   if (do Choose) Heads else Tails
 }
 
-fun drunkToss() client {
+fun drunkToss() {
   if (do Choose) toss() else do Fail
 }
 
-fun run() client {
+fun run() {
   var xs = allChoices(failure(drunkToss))();
   println(showList(showList(showToss))(xs));
   var ys = failure(allChoices(drunkToss))();
@@ -67,22 +67,4 @@ fun run() client {
   # print(showList(showToss)(zs))
 }
 
-# Page
-fun mainPage(_) {
-  page
-    <html>
-      <body>
-         <form l:onsubmit="{run()}">
-          <input type="submit" value="Click me" />
-        </form>
-      </body>
-    </html>
-}
-
-
-fun main() {
-  addRoute("/", mainPage);
-  servePages()
-}
-
-main()
+run()

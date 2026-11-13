@@ -20,7 +20,6 @@ struct
     | Let _ -> ()
     | Fun def -> add fs def
     | Rec defs -> List.iter (add fs) defs
-    | Alien _ -> ()
     | Module _ ->
         raise (Errors.internal_error
           ~filename:"buildTables.ml"
@@ -236,10 +235,6 @@ struct
                 defs in
 
             o#close_cont (IntSet.union fvs fvs') bs
-        | Alien { binder; _ } :: bs ->
-           let f = Var.var_of_binder binder in
-           let fvs = IntSet.remove f fvs in
-           o#close_cont fvs bs
         | Module _::_ ->
             assert false
 

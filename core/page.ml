@@ -23,10 +23,8 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
   let script_tag body =
     "<script type='text/javascript'>\n'use strict';\n" ^ body ^ "\n</script>\n"
 
-  let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(html="") ?(head="") ?(external_files=[]) () =
+  let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(html="") ?(head="") () =
     let in_tag tag str = "<" ^ tag ^ ">\n" ^ str ^ "\n</" ^ tag ^ ">" in
-    let custom_ext_script_tag str = "<script type='text/javascript' src='" ^ str ^ "'></script>" in
-    let ffiLibs = String.concat "\n" (List.map custom_ext_script_tag external_files) in
     let debug_flag onoff = "\n    <script type='text/javascript'>var DEBUGGING=" ^
       string_of_bool onoff ^ ";</script>"
     in
@@ -50,7 +48,6 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
     in_tag "html" (in_tag "head"
                      (  debug_flag (Settings.get Debug.enabled)
                         ^ ext_script_tag "jslib.js" ^ "\n"
-                        ^ ffiLibs ^ "\n"
                         ^ db_config_script
                         ^ env
                         ^ "<meta charset=\"utf-8\">"
@@ -84,8 +81,8 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
   let page : ?cgi_env:(string * string) list ->
              wsconn_url:(Webserver_types.websocket_url option) ->
              (Var.var Env.String.t * Types.typing_environment) ->
-             Ir.binding list -> (Value.env * Value.t) -> string list -> string
-    = fun ?(cgi_env=[]) ~wsconn_url (nenv, _tyenv) defs (valenv, v) deps ->
+             Ir.binding list -> (Value.env * Value.t) -> string
+    = fun ?(cgi_env=[]) ~wsconn_url (nenv, _tyenv) defs (valenv, v) ->
     let open Json in
     let req_data = Value.Env.request_data valenv in
     let client_id = RequestData.get_client_id req_data in
@@ -145,7 +142,6 @@ const _idy = _$K.idy;
               ^ script_tag("  var _jsonState = " ^ escaped_state_string ^ "\n" ^ init_vars)
               ^ Value.string_of_xml ~close_tags:true hs)
       ~onload:"_isRuntimeReady() && _startRealPage()"
-      ~external_files:deps
       ()
 end
 

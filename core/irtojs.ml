@@ -1366,8 +1366,7 @@ end = functor (K : CONTINUATION) -> struct
              let fs = List.map (fun {Ir.fn_binder = fb; _} -> name_binder fb) defs in
              let env', rest = gbs (List.fold_left (fun env (x, n) -> VEnv.bind x n env) env fs) kappa bs in
              (env', LetRec (List.map (generate_function env fs) defs, rest))
-          | Ir.Module _ :: bs
-          | Ir.Alien _ :: bs -> gbs env kappa bs
+          | Ir.Module _ :: bs -> gbs env kappa bs
           | [] -> (env, generate_tail_computation env tc kappa)
       in
       gbs env kappa bs
@@ -1472,17 +1471,6 @@ end = functor (K : CONTINUATION) -> struct
           varenv fs
       in
       (state, varenv, None, fun code -> LetRec (List.map (generate_function varenv fs) defs, code))
-    | Ir.Alien { binder; object_name; language } ->
-      begin
-        let open ForeignLanguage in
-        (* TODO(dhil): If the foreign language isn't JavaScript,
-           then I think a server-call should be generated. *)
-        match language with
-        | JavaScript ->
-          let (a, _a_name) = name_binder binder in
-          let varenv = VEnv.bind a object_name varenv in
-          state, varenv, None, Code.MetaContinuation.identity
-      end
     | Ir.Module _ -> state, varenv, None, Code.MetaContinuation.identity
 
   let rec generate_toplevel_bindings : Value.env -> Json.json_state -> venv -> Ir.binding list -> Json.json_state * venv * string list * Code.MetaContinuation.t =

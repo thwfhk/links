@@ -34,12 +34,12 @@ Keywords
 
 The following keywords are reserved and are unavailable for use as identifiers::
 
-  alien as by case client database default delete delete_left
+  as by case database default delete delete_left
   determined do else escape false for forall from fun formlet
   handle if in lens lensdrop lensget lensput lensselect lensjoin
-  lenscheck yields import insert linfun module mu mutual native
+  lenscheck yields import insert linfun module mu mutual
   nu offer on orderby op open otherwise page prefix query raise
-  readonly receive returning select server set shallowhandle sig
+  readonly receive returning select set shallowhandle sig
   spawn spawnClient spawnAt spawnAngel spawnAngelAt spawnWait
   switch table TableHandle true try typename update unsafe
   values var where with tablekeys
@@ -60,9 +60,6 @@ XML value. For example::
         <li> Second item: {item2} </li>
       </ul>
     </html>
-
-Within an XML literal, a variety of special features can be used to
-handle browser events. These are described in the pages on :ref:`web_ref`.
 
 To introduce a *forest* of XML nodes that have no mutually enclosing
 XML element, use the ``<#>...</#>`` syntax::

@@ -7,7 +7,7 @@ fun remove(item, items) {
 }
 
 
-fun dummy() client {
+fun dummy() {
   ()
 }
 

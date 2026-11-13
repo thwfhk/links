@@ -9,7 +9,7 @@ typename SMTPServer = [&|EHLO:?Domain.[+|REJECT:!Error.EndBang, ACCEPT:[&|MAIL:?
 
 
 sig mailServer : (SMTPServer) ~> EndBang
-fun mailServer(s) client {
+fun mailServer(s) {
 
 <| offer s {
     case EHLO -> s(domain). {
@@ -37,7 +37,7 @@ fun mailServer(s) client {
 }
 
 sig parseServerAnswer : (String) ~> Int
-fun parseServerAnswer(packet) client {
+fun parseServerAnswer(packet) {
     var charred = explode(packet);
     var charredStatus = [selectElem(charred, 0), selectElem(charred, 1), selectElem(charred, 2)];
     var intStatus = stringToInt(implode(charredStatus));
@@ -45,7 +45,7 @@ fun parseServerAnswer(packet) client {
 }
 
 sig mailClient : (~SMTPServer, !String.EndBang, (1:String, 2:String, 3:String, 4:String)) ~> EndBang
-fun mailClient(c, return, mail_form) client {
+fun mailClient(c, return, mail_form) {
 
 <| EHLO c.c["mydomain.com"].{
     <| offer c {
@@ -75,7 +75,7 @@ fun mailClient(c, return, mail_form) client {
 }
 
 sig startCommunication : (String, String, String, String) ~> String
-fun startCommunication(sender, recipient, subject, message) client {
+fun startCommunication(sender, recipient, subject, message) {
     var mail_form = (sender, recipient, subject, message);
     runSync (fun(return){<| nu s.({mailServer(s)}|{mailClient(s, return, mail_form)}) |>})
 }

@@ -72,12 +72,6 @@ Nested closures
 filemode : true
 stdout : true : Bool
 
-Quantification of alien functions (#280)
-./tests/functions/alien-quantification.links
-filemode : true
-exit : 1
-stderr : @.*
-
 Type annotation on inner function (correct, basic)
 ./tests/functions/innerfun1.links
 filemode : true

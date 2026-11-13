@@ -1,9 +1,9 @@
 ### DOM stuff ###
-fun domValue(id) client {
+fun domValue(id) {
   domGetNodeValueFromRef(getNodeById(id))
 }
 
-fun domContent(id) client {
+fun domContent(id) {
   childNodes(getValue(getNodeById(id)))
 }
 
@@ -55,7 +55,7 @@ fun atomicPredicate(a) {
   }
 }
 
-fun makePredicate(atomss) server {
+fun makePredicate(atomss) {
   fun clause(atoms) {
     switch (atoms) {
       case [] -> fun (_) {true}
@@ -109,7 +109,7 @@ fun renderAtom(pre, a) {
 ### making a query ###
 
 # fetch the results filtered by a predicate
-fun fetchResults(pred) server {
+fun fetchResults(pred) {
   var db = database "winestore";
   var wineTable = table "wine"
                   with (wine_id : Int, wine_name : String, wine_type : Int,
@@ -145,7 +145,7 @@ fun fetchResults(pred) server {
 }
 
 
-fun fetchResultsFactored(pred) server {
+fun fetchResultsFactored(pred) {
   var db = database "winestore";
   var wineTable = table "wine"
                   with (wine_id : Int, wine_name : String, wine_type : Int,
@@ -212,14 +212,14 @@ fun fetchResultsFactored(pred) server {
   }
 }
 
-fun makeQuery(atomss) server {
+fun makeQuery(atomss) {
   fetchResults(makePredicate(atomss))
 #  fetchResultsFactored(makePredicate(atomss))
 }
 
 ### interaction with the client ###
 
-fun showResults(wines) client {
+fun showResults(wines) {
   var r = getNodeById("results");
   var xml =
     for (w <- wines)
@@ -233,14 +233,14 @@ fun showResults(wines) client {
   domReplaceChildren(xml, r)
 }
 
-fun lookupRegion() client {
+fun lookupRegion() {
   var s = domValue("region-value");
   var id = stringToInt(s);
   var name = domContent("region" ^^ s);
   Just(Region(id, name))
 }
 
-fun lookupPrice() client {
+fun lookupPrice() {
   var s = domValue("price-value");
   var e = getNodeById("price-error");
 
@@ -255,7 +255,7 @@ fun lookupPrice() client {
   }
 }
 
-fun lookupYear() client {
+fun lookupYear() {
   var s = domValue("year-value");
   var e = getNodeById("year-error");
 
@@ -270,14 +270,14 @@ fun lookupYear() client {
   }
 }
 
-fun lookupType() client {
+fun lookupType() {
   var s = domValue("type-value");
   var id = stringToInt(s);
   var name = domContent("type" ^^ s);
   Just(Type(id, name))
 }
 
-fun manager(atoms, atomss) client {
+fun manager(atoms, atomss) {
   receive {
     case Constraint(connective, field) ->
       var a =
@@ -309,7 +309,7 @@ fun manager(atoms, atomss) client {
 }
 
 ### fetch the types and regions from the database for display in the dropdowns ###
-fun fetchTypesAndRegions() server {
+fun fetchTypesAndRegions() {
   var db = database "winestore";
   var wineTypeTable = table "wine_type"
                       with (wine_type_id : Int, wine_type : String)

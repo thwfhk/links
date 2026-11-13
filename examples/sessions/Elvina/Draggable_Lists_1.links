@@ -5,7 +5,7 @@ typename DragOffer  = mu a.[&|MouseDown:?DomNode.a, MouseOut:?DomNode.a, MouseUp
 
 mutual {
   sig waiting : (String, DragOffer) ~> ()
-  fun waiting(id, s) client {
+  fun waiting(id, s) {
    offer (s) {
     case MouseDown(s)  -> var (elem, s) = receive(s);
      if (isElementNode(elem) && (parentNode(elem) == getNodeById(id)))

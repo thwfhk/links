@@ -472,26 +472,6 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
          let pat' = self#pattern pat in
          let dt' = self#option (fun o -> o#datatype') dt in
          Val (pat', (tvs, body'), loc, dt')
-      | Foreign alien ->
-         let declarations =
-           self#list
-             (fun o (b, dt) ->
-               let dt = o#datatype' dt in
-               let b = o#binder b in
-               (b, dt))
-             (Alien.declarations alien)
-         in
-         Foreign (Alien.modify ~declarations alien)
-      | AlienBlock aliendecls ->
-         let decls' =
-           self#list
-             (fun o (bndr, dt) ->
-               let dt' = o#datatype' dt in
-               let bndr' = o#binder bndr in
-               (bndr', dt'))
-             Alien.(declarations aliendecls)
-         in
-         AlienBlock (Alien.modify ~declarations:decls' aliendecls)
       | Infix { name; assoc; precedence } ->
          Infix { name = self#fixity name; assoc; precedence }
       | Module _ | Import _ | Open _ -> assert false (* Should have been processed by this point. *)
@@ -537,7 +517,6 @@ let desugar_program : Sugartypes.program -> Sugartypes.program
   let interacting = Basicsettings.System.is_interacting () in
   (* TODO move to this logic to the loader. *)
   let program = Chaser.add_dependencies program in
-  let program = DesugarAlienBlocks.transform_alien_blocks program in
   (* Printf.fprintf stderr "Before elaboration:\n%s\n%!" (Sugartypes.show_program program); *)
   let renamer', scope' = if interacting then !renamer, !scope else Epithet.empty, Scope.empty in
   let desugar = desugar ~toplevel:true renamer' scope' in
@@ -550,7 +529,6 @@ let desugar_program : Sugartypes.program -> Sugartypes.program
 let desugar_sentence : Sugartypes.sentence -> Sugartypes.sentence
   = fun sentence ->
   let sentence = Chaser.add_dependencies_sentence sentence in
-  let sentence = DesugarAlienBlocks.sentence sentence in
   let visitor = desugar ~toplevel:true !renamer !scope in
   let result = visitor#sentence sentence in
   scope := visitor#get_scope; renamer := visitor#get_renamer; result

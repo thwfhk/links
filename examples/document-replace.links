@@ -1,4 +1,4 @@
-fun change() client {
+fun change() {
   replaceDocument(
    <html>
     <body>

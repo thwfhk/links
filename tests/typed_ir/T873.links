@@ -1,7 +1,7 @@
-# From Prelude
-sig freshResource : () ~> ()
-fun freshResource() {
-  escape esc in {
-    redirect("?_k=" ^^ unsafePickleCont(fun () {esc(())})); exit([])
+sig escapeFromClosure : () ~> Int
+fun escapeFromClosure() {
+  escape return in {
+    var resume = fun() { return(42) };
+    resume()
   }
 }

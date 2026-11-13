@@ -1,4 +1,4 @@
-fun lookupFactorials(n) server {
+fun lookupFactorials(n) {
  var db = database "factorials";
  var factorials = table "factorials" with (i : Int, f : Int) from db;
 
@@ -10,7 +10,7 @@ fun lookupFactorials(n) server {
  }
 }
 
-fun response(s) client {
+fun response(s) {
  var n = stringToInt(s);
 
  replaceDocument(

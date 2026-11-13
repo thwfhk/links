@@ -877,17 +877,6 @@ class transform (env : Types.typing_environment) =
          (* put the outer bindings in the environment *)
          let o, defs = o#rec_activate_outer_bindings defs in
          (o, (Funs defs))
-      | Foreign alien ->
-         let (o, declarations) =
-           listu o
-             (fun o (b, dt) ->
-               let o, b = o#binder b in
-               let o, dt = o#datatype' dt in
-               (o, (b, dt)))
-             (Alien.declarations alien)
-         in
-         let o, language = o#foreign_language (Alien.language alien) in
-         (o, Foreign (Alien.modify ~language ~declarations alien))
       | Aliases ts ->
           let (o, _) = listu o (fun o {node=(name, vars, b); pos} ->
               match b with
@@ -905,7 +894,6 @@ class transform (env : Types.typing_environment) =
       | (Infix _) as node ->
          (o, node)
       | Exp e -> let (o, e, _) = o#phrase e in (o, Exp e)
-      | AlienBlock _ -> assert false
       | Module _ -> assert false
       | Import _ -> assert false
       | Open _ -> assert false
@@ -988,7 +976,4 @@ class transform (env : Types.typing_environment) =
          let (o, right, t) = {< var_env = TyEnv.bind c (whiny_dual_type s) (o#get_var_env ()) >}#cp_phrase right in
          let o = o#restore_envs envs in
          o, CPComp (bndr, left, right), t
-
-    method foreign_language : ForeignLanguage.t -> ('self_type * ForeignLanguage.t)
-      = fun lang -> (o, lang)
   end

@@ -2,7 +2,7 @@
 
 sig evalState : (Comp(a, {Get:() => s ,Put:(s) => ()|e})) -> # Stateful computation
                 (s) {Get{_},Put{_} |e}~> a
-fun evalState(m)(st) client {
+fun evalState(m)(st) {
   var run =
     handle(m()) {
       case x      -> fun(_) { x }
@@ -13,36 +13,10 @@ fun evalState(m)(st) client {
 }
 
 sig count : Comp(Int, {Get:() => Int,Put:(Int) => ()|e})
-fun count() client {
+fun count() {
   var n = do Get();
   if (n == 0) n
   else { do Put(n-1); count() }
 }
 
-
-fun run(n) client {
-  var r = evalState(count)(n);
-  ignore $ domSetPropertyFromRef(getNodeById("result"), "value", intToString(r))
-}
-
-
-# Page
-fun mainPage(_) {
-  page
-    <html>
-      <body>
-        <form l:onsubmit="{run(1000000)}">
-          <input type="submit" value="Run" />
-          <input type="text" id="result" readonly="readonly" value="" />
-        </form>
-      </body>
-    </html>
-}
-
-
-fun main() {
-  addRoute("/", mainPage);
-  servePages()
-}
-
-main()
+evalState(count)(100)

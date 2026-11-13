@@ -1,4 +1,4 @@
-fun main() client {
+fun main() {
   fun giver(x,y,a) {
     var (res, a) = receive(send(y,send(x,request(a))));
     close(a);

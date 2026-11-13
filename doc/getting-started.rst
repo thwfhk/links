@@ -3,8 +3,7 @@
 Getting started
 ===============
 
-In this section, we will see how to get up and running with the Links REPL, as
-well as running the web examples.
+You can run Links programs from the command line or try expressions in the REPL.
 
 Running the REPL
 ----------------
@@ -81,14 +80,10 @@ Running the examples
 
 As described in :ref:`install`, the environment variable ``$OPAM_SWITCH_PREFIX``
 points to the currently-active OPAM switch, and the example Links programs are
-installed into into ``$OPAM_SWITCH_PREFIX/share/links``.
+installed into ``$OPAM_SWITCH_PREFIX/share/links``.
 
-To run the examples, run the following command at a terminal::
+Run the pattern matching example from a terminal::
 
-  $ linx -m --path=$OPAM_SWITCH_PREFIX/share/links/examples:$OPAM_SWITCH_PREFIX/share/links/examples/games $OPAM_SWITCH_PREFIX/share/links/examples/webserver/examples-nodb.links
+  $ linx "$OPAM_SWITCH_PREFIX/share/links/examples/extensible-case.links"
 
-The ``-m`` flag enables modules, and the ``--path`` flag sets the path of where
-to look for Links files.
-
-You should then be able to run the (non-database) examples by visiting
-``http://localhost:8080`` in a web browser.
+Use the ``--path`` flag to add directories where Links should look for modules.

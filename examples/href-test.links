@@ -1,5 +1,5 @@
 mutual {
-  fun f(n) client {
+  fun f(n) {
     var n = n + 1 - 1;
     page
      <body>
@@ -9,7 +9,7 @@ mutual {
      </body>
   }
 
-  fun g(n) server {
+  fun g(n) {
     page
      <body>
        on server

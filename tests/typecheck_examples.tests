@@ -67,10 +67,6 @@ Typecheck example file examples/citations.links
 examples/citations.links
 filemode : true
 
-Typecheck example file examples/client-server-prims.links
-examples/client-server-prims.links
-filemode : true
-
 Typecheck example file examples/crop.links
 examples/crop.links
 filemode : true
@@ -89,42 +85,6 @@ filemode : true
 
 Typecheck example file examples/dictionary/dictSuggestUpdate.links
 examples/dictionary/dictSuggestUpdate.links
-filemode : true
-
-Typecheck example file examples/distribution/clientProcessOnServer.links
-examples/distribution/clientProcessOnServer.links
-filemode : true
-
-Typecheck example file examples/distribution/clientProcessOnServer2.links
-examples/distribution/clientProcessOnServer2.links
-filemode : true
-
-Typecheck example file examples/distribution/clientToClient.links
-examples/distribution/clientToClient.links
-filemode : true
-
-Typecheck example file examples/distribution/clientToClientDeleg.links
-examples/distribution/clientToClientDeleg.links
-filemode : true
-
-Typecheck example file examples/distribution/clientToClientViaServerAP.links
-examples/distribution/clientToClientViaServerAP.links
-filemode : true
-
-Typecheck example file examples/distribution/clientToServerDeleg.links
-examples/distribution/clientToServerDeleg.links
-filemode : true
-
-Typecheck example file examples/distribution/serverToClient.links
-examples/distribution/serverToClient.links
-filemode : true
-
-Typecheck example file examples/distribution/serverToClient2.links
-examples/distribution/serverToClient2.links
-filemode : true
-
-Typecheck example file examples/distribution/simpleServerAP.links
-examples/distribution/simpleServerAP.links
 filemode : true
 
 Typecheck example file examples/document-replace.links
@@ -151,10 +111,6 @@ Typecheck example file examples/factorial.links
 examples/factorial.links
 filemode : true
 
-Typecheck example file examples/ffi.links
-examples/ffi.links
-filemode : true
-
 Typecheck example file examples/filter.links
 examples/filter.links
 filemode : true
@@ -167,20 +123,12 @@ Typecheck example file examples/games/breakout.links
 examples/games/breakout.links
 filemode : true
 
-Typecheck example file examples/games/pacman.links
-examples/games/pacman.links
-filemode : true
-
 Typecheck example file examples/games/tetris.links
 examples/games/tetris.links
 filemode : true
 
 Typecheck example file examples/games/twentyfortyeight.links
 examples/games/twentyfortyeight.links
-filemode : true
-
-Typecheck example file examples/handlers/alert.links
-examples/handlers/alert.links
 filemode : true
 
 Typecheck example file examples/handlers/aop.links
@@ -191,8 +139,8 @@ Typecheck example file examples/handlers/aop2.links
 examples/handlers/aop2.links
 filemode : true
 
-Typecheck example file examples/handlers/coins_web.links
-examples/handlers/coins_web.links
+Typecheck example file examples/handlers/coin_composition.links
+examples/handlers/coin_composition.links
 filemode : true
 
 Typecheck example file examples/handlers/choose.links
@@ -215,10 +163,9 @@ examples/handlers/coop.links
 filemode : true
 args : --set=enable_handlers=true
 
-Typecheck example file examples/handlers/count_web.links
-examples/handlers/count_web.links
+Typecheck example file examples/handlers/count.links
+examples/handlers/count.links
 filemode : true
-ignore : broken example
 
 Typecheck example file examples/handlers/deep_state.links
 examples/handlers/deep_state.links
@@ -257,10 +204,6 @@ examples/handlers/nim.links
 filemode : true
 args : --set=enable_handlers=true
 
-Typecheck example file examples/handlers/nim-webversion.links
-examples/handlers/nim-webversion.links
-filemode : true
-
 Typecheck example file examples/handlers/number_games.links
 examples/handlers/number_games.links
 filemode : true
@@ -271,10 +214,6 @@ filemode : true
 
 Typecheck example file examples/handlers/pipes.links
 examples/handlers/pipes.links
-filemode : true
-
-Typecheck example file examples/handlers/racing-lines.links
-examples/handlers/racing-lines.links
 filemode : true
 
 Typecheck example file examples/handlers/sat.links
@@ -292,11 +231,6 @@ examples/handlers/shallow_state.links
 filemode : true
 args : --set=effect_sugar=true
 
-Typecheck example file examples/handlers/sierpinski-triangle.links
-examples/handlers/sierpinski-triangle.links
-filemode : true
-args : --set=effect_sugar=true
-
 Typecheck example file examples/handlers/sudoku.links
 examples/handlers/sudoku.links
 filemode : true
@@ -310,19 +244,9 @@ ignore : broken example
 Typecheck example file examples/handlers/toggle.links
 examples/handlers/toggle.links
 filemode : true
-ignore : broken example
-
-Typecheck example file examples/handlers/toggle_web.links
-examples/handlers/toggle_web.links
-filemode : true
-ignore : broken example
 
 Typecheck example file examples/handlers/transaction.links
 examples/handlers/transaction.links
-filemode : true
-
-Typecheck example file examples/handlers/unhandled.links
-examples/handlers/unhandled.links
 filemode : true
 
 Typecheck example file examples/handlers/u2_puzzle.links
@@ -339,10 +263,6 @@ filemode : true
 
 Typecheck example file examples/insert-factorials.links
 examples/insert-factorials.links
-filemode : true
-
-Typecheck example file examples/loginFlow.links
-examples/loginFlow.links
 filemode : true
 
 Typecheck example file examples/mandelbrot.links
@@ -381,14 +301,6 @@ Typecheck example file examples/relational_lenses/cds.links
 examples/relational_lenses/cds.links
 filemode : true
 
-Typecheck example file examples/serverClientProcess.links
-examples/serverClientProcess.links
-filemode : true
-
-Typecheck example file examples/serverHandler.links
-examples/serverHandler.links
-filemode : true
-
 Typecheck example file examples/sessions/ap-multi-client.links
 examples/sessions/ap-multi-client.links
 filemode : true
@@ -403,10 +315,6 @@ filemode : true
 
 Typecheck example file examples/sessions/bookshop.links
 examples/sessions/bookshop.links
-filemode : true
-
-Typecheck example file examples/sessions/bookshopAppServer.links
-examples/sessions/bookshopAppServer.links
 filemode : true
 
 Typecheck example file examples/sessions/calc-client-server.links
@@ -433,16 +341,6 @@ Typecheck example file examples/sessions/calc.links
 examples/sessions/calc.links
 filemode : true
 
-Typecheck example file examples/sessions/chatserver/chatClient.links
-examples/sessions/chatserver/chatClient.links
-filemode : true
-args : --set=session_exceptions=true --path=examples/sessions/chatserver
-
-Typecheck example file examples/sessions/chatserver/chatServer.links
-examples/sessions/chatserver/chatServer.links
-filemode : true
-args : --set=session_exceptions=true --path=examples/sessions/chatserver
-
 Typecheck example file examples/sessions/chatserver/chatSessions.links
 examples/sessions/chatserver/chatSessions.links
 filemode : true
@@ -465,10 +363,6 @@ Typecheck example file examples/sessions/draggable-boring.links
 examples/sessions/draggable-boring.links
 filemode : true
 ignore : broken example
-
-Typecheck example file examples/sessions/draggable.links
-examples/sessions/draggable.links
-filemode : true
 
 Typecheck example file examples/sessions/Elvina/Bookshop_1.links
 examples/sessions/Elvina/Bookshop_1.links
@@ -612,10 +506,6 @@ Typecheck example file examples/sessions/two-factor.links
 examples/sessions/two-factor.links
 filemode : true
 
-Typecheck example file  examples/Shopping-Cart.links
-examples/Shopping-Cart.links
-filemode : true
-
 Typecheck example file examples/shredding.links
 examples/shredding.links
 filemode : true
@@ -656,15 +546,6 @@ Typecheck example file examples/TicTacToe-Console.links
 examples/TicTacToe-Console.links
 filemode : true
 
-Typecheck example file examples/ToDo-List-Styles.links
-examples/ToDo-List-Styles.links
-filemode : true
-
-Typecheck example file examples/toggle.links
-examples/toggle.links
-filemode : true
-ignore : broken example
-
 Typecheck example file examples/validate.links
 examples/validate.links
 filemode : true
@@ -673,103 +554,11 @@ Typecheck example file examples/sierpinski_bits.links
 examples/sierpinski_bits.links
 filemode : true
 
-Typecheck example file examples/webserver/buttons.links
-examples/webserver/buttons.links
-filemode : true
-
-Typecheck example file examples/webserver/counter.links
-examples/webserver/counter.links
-filemode : true
-
-Typecheck example file examples/webserver/draggable-sessions.links
-examples/webserver/draggable-sessions.links
-filemode : true
-
-Typecheck example file examples/webserver/draggable.links
-examples/webserver/draggable.links
-filemode : true
-
-Typecheck example file examples/webserver/examples-nodb.links
-examples/webserver/examples-nodb.links
-filemode : true
-args : --path=examples:examples/games:examples/dictionary
-
-Typecheck example file examples/webserver/examples.links
-examples/webserver/examples.links
-filemode : true
-args : --path=examples:examples/games:examples/dictionary
-
-Typecheck example file examples/webserver/progress.links
-examples/webserver/progress.links
-filemode : true
-
-Typecheck example file examples/webserver/wsocket_conn.links
-examples/webserver/wsocket_conn.links
-filemode : true
-args : --set=session_exceptions=true
-
-Typecheck example file examples/wine.links
-examples/wine.links
-filemode : true
-
-Typecheck example file examples/sessions/mind/mindServer.links
-examples/sessions/mind/mindServer.links
-filemode : true
-args : --set=session_exceptions=true --path=examples/sessions/mind
-
 Typecheck example file examples/sessions/mind/linearList.links
 examples/sessions/mind/linearList.links
 filemode : true
-
-Typecheck example file examples/sessions/mind/mindClient.links
-examples/sessions/mind/mindClient.links
-filemode : true
-args : --path=examples/sessions/mind
 
 Typecheck example file examples/sessions/mind/mindSessions.links
 examples/sessions/mind/mindSessions.links
 filemode : true
 args : --path=examples/sessions/mind
-
-Typecheck example file examples/mvu/mousetest.links
-examples/mvu/mousetest.links
-filemode : true
-
-Typecheck example file examples/mvu/time.links
-examples/mvu/time.links
-filemode : true
-
-Typecheck example file examples/mvu/pong.links
-examples/mvu/pong.links
-filemode : true
-args : --path=examples/mvu/todomvc
-
-Typecheck example file examples/mvu/todomvc/todoMVC.links
-examples/mvu/todomvc/todoMVC.links
-filemode : true
-args : --path=examples/mvu/todomvc
-
-Typecheck example file examples/mvu/keypress.links
-examples/mvu/keypress.links
-filemode : true
-
-Typecheck example file examples/examplesPage.links
-examples/examplesPage.links
-filemode : true
-
-Typecheck example file examples/mvu/commands.links
-examples/mvu/commands.links
-filemode : true
-
-Typecheck example file examples/mvu/dates.links
-examples/mvu/dates.links
-filemode : true
-
-Typecheck example file examples/mvu/dispatch.links
-examples/mvu/dispatch.links
-filemode : true
-
-Typecheck example file examples/mvu/changePage.links
-examples/mvu/changePage.links
-filemode : true
-

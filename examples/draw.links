@@ -2,7 +2,7 @@
 
 # process associated with a canvas.  Receive Point messages and render
 # them on the screen using 2x2 div elements.
-fun draw(id) client {
+fun draw(id) {
   receive {
     case Point(x,y) -> {
      appendChildren(

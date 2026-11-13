@@ -1,4 +1,4 @@
-fun showProgress(wines) client {
+fun showProgress(wines) {
   appendChildren(
         for (w <- wines)
           <li>{stringToXml(w.winery)} {stringToXml(w.name)}
@@ -23,7 +23,7 @@ var wineryTable = table "winery" with
                    region_id : Int)
                   from db;
 
-fun wineriesByRegion(regionID) server {
+fun wineriesByRegion(regionID) {
   query { for (winery <-- wineryTable)
           where (winery.region_id == regionID)
             [winery]
@@ -52,7 +52,7 @@ fun foreach(xs, f) {
   }
 }
 
-fun progressiveSearch(wineries) server {
+fun progressiveSearch(wineries) {
   foreach(wineriesByRegion(wineries), fun (winery) {
     showProgress(winesByWinery(winery))
   })

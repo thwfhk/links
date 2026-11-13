@@ -30,7 +30,7 @@ fun mydebug(s) {
 
 mutual {
   sig eatWhitespace : (String) ~> (ParseResult, String)
-  fun eatWhitespace(n) server {
+  fun eatWhitespace(n) {
       fun whitespaceTag(s) {
           switch(s) {
   #         case "\x20" -> Space
@@ -59,7 +59,7 @@ mutual {
   }
 
   sig makeSentenceBlock : (String) ~> (ParseResult, String)
-  fun makeSentenceBlock(text) server {
+  fun makeSentenceBlock(text) {
       var word = (text =~ /^([^{"\x0d\x0a!"}\\<\\_\\^\\=~\\[\\#\\*-])+/l); #includes trailing punctuation like commas etc.
       switch (word) {
          case [] ->
@@ -72,7 +72,7 @@ mutual {
 
 
   sig makeWordBlock : (String) ~> (ParseResult, String)
-  fun makeWordBlock(text) server {
+  fun makeWordBlock(text) {
       fun mwb(text, wbs : [ParseTree]) {
         var word = (text =~ /^([^\ {"\x0d\x0a"}\\<\\_\\^\\~\\[\\#\\*-])+(\ |\\b)/l); #includes trailing punctuation like commas etc.
         switch (word) {
@@ -96,7 +96,7 @@ mutual {
      mwb(text, [])
   }
 
-  fun nth(n, l) server {
+  fun nth(n, l) {
     switch (l) {
       case ([]) -> None
       case (hd::tl) ->
@@ -108,7 +108,7 @@ mutual {
   }
 
   sig makeFormattedBlock : (String) ~> (ParseResult, String)
-  fun makeFormattedBlock(text) server {
+  fun makeFormattedBlock(text) {
      fun matchNth(f :[String], p) {
           switch(p) {
             case [] -> Error("matchNth reached the end of the match list") #should be impossible to reach the end of this without finding a match
@@ -155,7 +155,7 @@ mutual {
   }
 
   sig makeHref : (String) ~> (ParseResult, String)
-  fun makeHref(text) server {
+  fun makeHref(text) {
           #[Link text]  (http://foobar.com)  ... or <http://foobar.com/>
       var h =(text =~ /^{"["}(.*){"]"}\ *{"("}([^\ ]*){")"}|{"<"}([^\ <>]*){">"}/l);
 
@@ -174,7 +174,7 @@ mutual {
   }
 
   sig makeImageLink : (String) ~> (ParseResult, String)
-  fun makeImageLink(text) server {
+  fun makeImageLink(text) {
       #![Alt Text](http://foobar.com/image.gif)
       var h =(text =~ /^{"!["}(.*){"]"}\ *{"("}([^\ ]*){")"}/l);
       switch(h) {
@@ -188,7 +188,7 @@ mutual {
   }
 
   sig makeList : (String) ~> (ParseResult, String)
-  fun makeList(text) server {
+  fun makeList(text) {
      fun allListLines(t, lines) {
 
         var listLine = (t =~ /^({"\x0a"}(({"    "})*)\ *([0-9]+\.|[\\*\\+-])\ (.*)){"\x0a"}/l);
@@ -225,7 +225,7 @@ mutual {
   }
 
   sig makeBlockQuote : (String) ~> (ParseResult, String)
-  fun makeBlockQuote(text) server {
+  fun makeBlockQuote(text) {
      fun allQuoteLines(text, lines) {
           var bql = (text =~ /^({"\x0a"}\ *>(.*)){"\x0a"}/l);
           switch (bql) {
@@ -248,7 +248,7 @@ mutual {
 
 
   sig textToBlock : (String) ~> (ParseResult, String)
-  fun textToBlock(text) server {
+  fun textToBlock(text) {
        fun tryAllParsers(parsers, text) {
           switch(parsers) {
              case [] -> (None, text)
@@ -303,7 +303,7 @@ mutual {
 }
 
 sig parseWikibody : (String) ~> ParseTree
-fun parseWikibody(t) server {
+fun parseWikibody(t) {
     var b = textToBlock(t);
     switch(b) {
         case (Some(bb), _) -> bb
@@ -388,7 +388,7 @@ fun blockToText(b) {
 ################################################################################
 fun myfst (rs) { switch(rs) { case (f,s) -> f }}
 
-fun testProto(text, expect) server{
+fun testProto(text, expect){
     var bb : (ParseResult, String) = textToBlock(text);
     var blockOpt : ParseResult = myfst(bb);
     if(blockOpt == expect){
@@ -406,47 +406,47 @@ fun testProto(text, expect) server{
    }
 }
 
-fun test1 () server {
+fun test1 () {
     var expect =
        Some(FormattedBlock(None, Bold, WordBlock(None, "some bold text")));
     testProto("**some bold text**", expect)
 }
 
 
-fun test2 () server {
+fun test2 () {
     var expect =
        Some(FormattedBlock(None, Emph, WordBlock(None, " some emph text ")));
     testProto("_ some emph text _", expect)
 }
 
-fun test2_1 () server {
+fun test2_1 () {
     var expect =
        Some(FormattedBlock(None, Emph, WordBlock(None, " some emph text ")));
     testProto("* some emph text *", expect)
 }
 
 
-fun test3 () server {
+fun test3 () {
     var expect =
        Some(FormattedBlock(None, Sup, WordBlock(None, " some sup text2 ")));
     testProto("^ some sup text2 ^", expect)
 }
 
 
-fun test4 () server {
+fun test4 () {
     var expect =
        Some(FormattedBlock(None, Sub, WordBlock(None, " some sub text2 ")));
     testProto("~ some sub text2 ~", expect)
 }
 
-fun test5() server {
+fun test5() {
     var expect =
        Some(FormattedBlock(None, Hdr1, WordBlock(None, " some hdr text2 ")));
 
     testProto("# some hdr text2 #", expect)
 }
 
-fun test6() server {
+fun test6() {
     var expect =
        Some(FormattedBlock(None, Hdr2, WordBlock(None, " some hdr2 text2 ")));
 
@@ -454,20 +454,20 @@ fun test6() server {
 }
 
 
-fun test7() server {
+fun test7() {
     var expect =
        Some(FormattedBlock(None, Del, WordBlock(None, " some del text2 ")));
 
     testProto("- some del text2 -", expect)
 }
 
-fun test8() server {
+fun test8() {
     var expect =
        Some(FormattedBlock(None, WikiLink, WordBlock(None, " some link text ")));
     testProto("[[ some link text ]]", expect)
 }
 
-fun multiLineTest() server {
+fun multiLineTest() {
     var expect  =
     Some(CompoundBlock((None(), [WordBlock((None(), "Some plain text.")),
                              WordBlock((None(), "\x0a")),
@@ -482,7 +482,7 @@ fun multiLineTest() server {
 
 
 
-fun multiLineTest2() server {
+fun multiLineTest2() {
     var expect  =
     Some(CompoundBlock((None(), [WordBlock((None(), "Some plain text.")),
                              WordBlock((None(), "\x0a")),
@@ -499,7 +499,7 @@ fun multiLineTest2() server {
 }
 
 
-fun multiLineTest3() server {
+fun multiLineTest3() {
     var expect  =
 
     Some(CompoundBlock((None(), [WordBlock((None(), "Some plain text.")),
@@ -518,7 +518,7 @@ fun multiLineTest3() server {
     testProto("Some plain text.\x0a**some bold text**\x0a##hdr2 text##_emph text_.<http://foobar.com>\x0a------\x0a[another link]   (http://www.google.com)", expect)
 }
 
-fun multiLineTest4() server {
+fun multiLineTest4() {
   var expect  =
     Some(CompoundBlock(None, [WordBlock(None, "Some plain text."),
                               FormattedBlock(None, WS(Para), WordBlock(None, "\x0a\x0a")),
@@ -534,17 +534,17 @@ fun multiLineTest4() server {
 }
 
 
-fun hrefTest1() server {
+fun hrefTest1() {
     var expect = Some(FormattedBlock(None, Link("http://foobar.com"), WordBlock(None, "Link text")));
     testProto("[Link text] (http://foobar.com)", expect)
 }
 
-fun hrefTest2() server {
+fun hrefTest2() {
     var expect = Some(FormattedBlock(None, Link("http://foobar.com"), WordBlock(None, "http://foobar.com")));
     testProto("<http://foobar.com>", expect)
 }
 
-fun testList() server {
+fun testList() {
     var expect = Some(CompoundBlock(None, [WordBlock(None, "\x0a"),
                                            FormattedBlock(None, List(),
                                                CompoundBlock(None,
@@ -567,12 +567,12 @@ fun testList() server {
     testProto("\x0a1. This is line 1.\x0a    + Inner list.\x0a        - Inner inner list.\x0a 2. This is line 2\x0a", expect)
 }
 
-fun testImageLink() server {
+fun testImageLink() {
     var expect = Some(FormattedBlock(None, ImageLink("http://foobar.com/image?foobar.gif"), WordBlock(None, "Alt text")));
     testProto("![Alt text] (http://foobar.com/image?foobar.gif)", expect)
 }
 
-fun  testBlockQuote() server {
+fun  testBlockQuote() {
     var expect = Some(CompoundBlock(None,
                         [WordBlock(None, "\x0a"),
                          FormattedBlock(None, BlockQuote,
@@ -584,11 +584,11 @@ fun  testBlockQuote() server {
     testProto("\x0a > Quote line1. \x0a > Quote line 2. \x0a > Quote line 3\x0a", expect)
 }
 
-fun junkTest() server {
+fun junkTest() {
   textToBlock("9070adfh09ya0dpn23-------903-1-ad-1=ad-13713-\x0184\x84=d;h;kh34['u-=08=\x0a\x05\x93")
 }
 
-fun getList() server {
+fun getList() {
     var ll     =  (CompoundBlock(None, [WordBlock(None, "\x0a"),
                                            FormattedBlock(None, List(),
                                                CompoundBlock(None,
@@ -612,7 +612,7 @@ fun getList() server {
 }
 
 
-fun runTests(continue, t) server {
+fun runTests(continue, t) {
     fun rt(allsuccess, t) {
         switch(t) {
             case [] ->
@@ -642,7 +642,7 @@ fun runTests(continue, t) server {
 
 
 
-fun getWikiPage(i) server {
+fun getWikiPage(i) {
     var str="here's another page with some updated content.\x0a\x0aAnd another line for kicks.\x0a\x0aSome *formatting* _bits_.\x0a\x0aAnd a link [http://www.google.com](a)";
     (wikibody = str)
 }

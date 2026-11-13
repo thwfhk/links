@@ -10,10 +10,10 @@ let printing_types =
             |> convert parse_bool
             |> sync)
 
-(* Pretty print values (outside web mode) *)
+(* Pretty print values *)
 let print_pretty
   = Settings.(flag ~default:true "print_pretty"
-              |> synopsis "Pretty print values (outside web mode)"
+              |> synopsis "Pretty print values"
               |> convert parse_bool
               |> sync)
 
@@ -48,7 +48,7 @@ let ps1 = "links> "
 
 (** Print a value (including its type if `printing_types' is [true]). *)
 let print_value rtype value =
-  if Settings.get Webserver_types.webs_running || not (Settings.get print_pretty)
+  if not (Settings.get print_pretty)
   then begin
       print_string (Value.string_of_value value);
       print_endline (if Settings.get printing_types then

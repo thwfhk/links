@@ -151,13 +151,9 @@ struct
 
   let get_prelude () = !prelude
 
-  let external_files : (string list) ref = ref []
-
-  let init some_env some_globals some_external_files =
+  let init some_env some_globals =
     env := some_env;
-    globals := some_globals;
-    external_files := some_external_files;
-    ()
+    globals := some_globals
 
 
   let add_route is_directory path thread_starter =
@@ -244,7 +240,6 @@ struct
                * they should all end up in valenv... *)
               (!prelude @ !globals)
               (valenv, v)
-              !external_files
           in
           Lwt.return ("text/html", page) in
         try
@@ -261,8 +256,7 @@ struct
           ~wsconn_url:(if !accepting_websocket_requests then Some (get_websocket_url ()) else None)
           (Lib.nenv, Lib.typing_env)
           (!prelude @ !globals)
-          (valenv, v)
-          !external_files in
+          (valenv, v) in
 
       let serve_static base uri_path mime_types =
           let fname =

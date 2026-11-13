@@ -69,7 +69,7 @@ tests/typed_ir/T697b.links
 filemode : true
 stdout : () : ()
 
-Wild effect compatibility #3 (#873, 1)
+Wild effect compatibility with escape from a closure (#873, 1)
 tests/typed_ir/T873.links
 filemode : true
 exit : 0

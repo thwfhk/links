@@ -105,7 +105,7 @@ fun mandelMadness(x, y, r, i, pixSize,
 } mm(x,y,r,i,pixSize)
 }
 
-fun main() client {
+fun main() {
   replaceDocument(<body>
     <div id="p0x0" />
   </body>);

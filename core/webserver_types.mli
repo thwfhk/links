@@ -14,7 +14,7 @@ sig
   val get_internal_base_url : unit -> string option
   val get_external_base_url : unit -> string option
 
-  val init : (Value.env * Ir.var Env.String.t * Types.typing_environment) -> Ir.binding list -> string list -> unit
+  val init : (Value.env * Ir.var Env.String.t * Types.typing_environment) -> Ir.binding list -> unit
   val set_prelude : Ir.binding list -> unit
   val get_prelude : unit -> Ir.binding list (* TODO(dhil): This is a temporary hack to thread the prelude through the compiler. *)
   val add_route : bool -> string -> (string * (string * string) list, request_handler_fn) either -> unit

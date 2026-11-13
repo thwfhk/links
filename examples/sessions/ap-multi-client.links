@@ -1,11 +1,11 @@
-fun grabber(ap) client {
+fun grabber(ap) {
   var s = accept(ap);
   var t = accept(ap);
   <| s(x).t(y).s(z).t(w).s[x+y].t[z+w].{close(s); close(t)} |>;
   grabber(ap)
 }
 
-fun giver(x, y, a, b) client {
+fun giver(x, y, a, b) {
   var s = request(a);
   var (z, s) = receive(send(y,send(x,s)));
   close(s);
@@ -13,7 +13,7 @@ fun giver(x, y, a, b) client {
   close(send(z, t))
 }
 
-fun main() client {
+fun main() {
   var a = new();
   var _ = spawn { grabber(a) };
   var b = new ();

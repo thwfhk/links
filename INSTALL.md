@@ -26,25 +26,16 @@ switch:
 * The example Links programs go into `$OPAM_SWITCH_PREFIX/share/links`
 * Links configuration file goes into `$OPAM_SWITCH_PREFIX/etc/links`
 
-# Running Links.
+# Running Links
 
-Links supports running applications via a standalone application
-server.
+Run `linx` for the REPL, pass `-e` to evaluate an expression, or pass a
+source file to run it.
 
-## Examples
-
-To run the examples that don't use the database with the Links
-application server issue the following command:
 ```
-$ linx --path=$OPAM_SWITCH_PREFIX/share/links/examples --path=$OPAM_SWITCH_PREFIX/share/links/examples/games $OPAM_SWITCH_PREFIX/share/links/examples/webserver/examples-nodb.links
+$ linx -e '40 + 2'
+42 : Int
+$ linx "$OPAM_SWITCH_PREFIX/share/links/examples/extensible-case.links"
 ```
-(This version just displays the source code for examples that use the
-database.)
-
-The default port is 8080, so you should now be able to access the
-examples by pointing your browser at:
-
-  http://localhost:8080/
 
 # Documentation
 

@@ -42,8 +42,6 @@ exception DynlinkError of string
 exception ModuleError of string * Position.t option
 exception MissingBuiltinType of string
 exception MissingSSLCertificate
-exception CannotOpenFile of string * string
-exception ObjectFileWriteError of string * string
 
 val format_exception : exn -> string
 val format_exception_html : exn -> string
@@ -57,15 +55,12 @@ val runtime_error: string -> exn
 val dynlink_error: string -> exn
 val module_error : ?pos:Position.t -> string -> exn
 val disabled_extension : ?pos:Position.t -> ?setting:(string * bool) -> ?flag:string -> string -> exn
-val prime_alien : Position.t -> exn
 val driver_locate_failure : string -> exn
 val illformed_plugin_description : string -> exn
 val dependency_load_failure : string -> Dynlink.error -> exn
 val load_failure : string -> Dynlink.error -> exn
 val forbidden_client_call : string -> string -> exn
 val rethrow_errors_if_better_position : Position.t -> ('a -> 'b) -> 'a -> 'b
-val cannot_open_file : string -> string -> exn
-val object_file_write_error : string -> string -> exn
 val type_application_kind_mismatch : Position.t -> string -> int -> string -> string -> exn
 val type_application_global_kind_mismatch : Position.t -> string -> string -> string -> exn
 val unbound_tycon : Position.t -> string -> exn

@@ -91,9 +91,6 @@ and binding =
   | Let        of binder * (tyvar list * tail_computation)
   | Fun        of fun_def
   | Rec        of fun_def list
-  | Alien      of { binder: binder;
-                    language: ForeignLanguage.t;
-                    object_name: string }
   | Module     of string * binding list option
 and special =
   | Wrong      of Types.t
@@ -141,8 +138,7 @@ let binding_scope : binding -> scope =
   function
   | Let (binder, _)
   | Fun {fn_binder = binder; _}
-  | Rec ({fn_binder = binder; _}::_)
-  | Alien {binder; _ } -> Var.scope_of_binder binder
+  | Rec ({fn_binder = binder; _}::_) -> Var.scope_of_binder binder
   | Rec []
   | Module _ -> assert false
 

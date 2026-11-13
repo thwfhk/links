@@ -28,7 +28,7 @@ typename Son = [&|Choice:!Product.EndBang|&];
 
 # Removes given element.
 sig removeProduct : (Product, [Product]) ~> ([Product])
-fun removeProduct(item, products) client
+fun removeProduct(item, products)
 {
         switch (products) {
                 case []    -> []
@@ -38,7 +38,7 @@ fun removeProduct(item, products) client
 }
 
 # Convinces Links that any Product is also a String.
-fun turnProductToString(product) client
+fun turnProductToString(product)
 {
         switch(product) {
                 case Book(s) -> s
@@ -58,7 +58,7 @@ intToString(address.houseNo) ^^ ", City: " ^^ address.city].
 
 # Turns a list of products into a single string.
 sig concatenateProducts : ([Product], String) ~> (String)
-fun concatenateProducts(products, fullList) client
+fun concatenateProducts(products, fullList)
 {
         switch(products) {
                 case [] -> fullList
@@ -68,14 +68,14 @@ fun concatenateProducts(products, fullList) client
 
 # Turns order summary into a single readable string.
 sig summariseOrder : (Int, String, [Product], String) ~> ([String])
-fun summariseOrder(card, address, products, removed) client
+fun summariseOrder(card, address, products, removed)
 {
         [concatenateProducts(products, ""), removed, intToString(card), address]
 }
 
 # A shop. Accepts orders and allows checkout.
 #sig waitForClient : (Shop, [Product], String) ~> ()
-fun waitForClient(s, orderedProducts, removedProducts) client
+fun waitForClient(s, orderedProducts, removedProducts)
 {
  <| offer s {
         case Add -> s(item).{waitForClient(s, item::orderedProducts, removedProducts)}
@@ -95,7 +95,7 @@ fun waitForClient(s, orderedProducts, removedProducts) client
 
 # Waits for signal to be able to choose and picks out the product.
 #sig waitForSon : (Son) ~> ()
-fun waitForSon(c) client
+fun waitForSon(c)
 {
         <| offer c {
                 case Choice -> c[Gadget("LED Water Speakers")].c[]
@@ -111,7 +111,7 @@ fun getSonBook(s) {
 
 # Mom picks out the products, allows the son to do it, goes to checkout.
 sig orderBooks : (~Shop) ~> ([String])
-fun orderBooks(c) client
+fun orderBooks(c)
 {
         var myAddress = (street="Princes Street", houseNo=14, city="Edinburgh");
 
@@ -127,44 +127,4 @@ fun orderBooks(c) client
 
 }
 
-# Creates a new access point and binds the ends of the channel to appropriate functions.
-sig main : () ~> ()
-fun main() {
-        var order = <| nu s.({waitForClient(s, [], "")}|{orderBooks(s)}) |>;
-
-        appendChildren(stringToXml(order!!0), getNodeById("items"));
-        appendChildren(stringToXml(order!!1), getNodeById("removed"));
-        appendChildren(stringToXml(order!!2), getNodeById("cardNo"));
-        appendChildren(stringToXml(order!!3), getNodeById("address"))
-}
-
-
-fun mainPage(_) {
-  var pid = spawnClient { receive { case _ -> main() } };
-  fun trigger() { pid ! () }
-  page
-      <html>
-      <head><title>From Academic Papers</title></head>
-      <body bgcolor="#E6E6FA">
-      <form l:onsubmit="{trigger()}">
-      <h3>Finished example from "Linear type theory for asynchronous session types":</h3>
-      <button type="submit">Start communication</button>
-      </form>
-      <p><b>Products ordered:</b></p>
-      <p id="items"></p>
-      <p><b>Products removed:</b></p>
-      <p id="removed"></p>
-      <p><b>Payment details:</b></p>
-      <p id="cardNo">Card number: </p>
-      <p id="address">Address: </p>
-      </body>
-      </html>
-}
-
-
-fun setup() {
-  addRoute("/", mainPage);
-  servePages()
-}
-
-setup()
+<| nu s.({waitForClient(s, [], "")}|{orderBooks(s)}) |>

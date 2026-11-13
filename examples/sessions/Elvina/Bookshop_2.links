@@ -8,7 +8,7 @@ typename SonOffer  = [+|Choice:?String.End|+];
 
 
 sig waitForClient : (ShopOffer) ~> ()
-fun waitForClient(s) client
+fun waitForClient(s)
 {
     offer(s) {
         case Add(s)      ->
@@ -26,7 +26,7 @@ fun waitForClient(s) client
 }
 
 sig waitForSon : (SonSelect) ~> ()
-fun waitForSon(c) client
+fun waitForSon(c)
 {
     offer(c) {
         case Choice(c) -> close(send("Children's Book", c))
@@ -34,7 +34,7 @@ fun waitForSon(c) client
 }
 
 sig getSonBook : (SonOffer) ~> (String)
-fun getSonBook(s) client
+fun getSonBook(s)
 {
     var (choice, s) = receive(select Choice s);
   close(s);
@@ -42,7 +42,7 @@ fun getSonBook(s) client
 }
 
 sig orderBooks : (ShopSelect) ~> ()
-fun orderBooks(c) client
+fun orderBooks(c)
 {
     # "Mom's choice".
     var c = send("Alice in Wonderland", select Add c);
@@ -56,7 +56,7 @@ fun orderBooks(c) client
 }
 
 sig main : () ~> ()
-fun main() client
+fun main()
 {
     orderBooks(fork(waitForClient))
 }

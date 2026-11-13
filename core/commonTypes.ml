@@ -287,19 +287,6 @@ module Label = struct
     [@@deriving show]
 end
 
-module ForeignLanguage = struct
-  type t =
-    | JavaScript
-    [@@deriving show]
-
-  let of_string = function
-    | "javascript" -> JavaScript
-    | _ -> raise (Invalid_argument "of_string")
-
-  let to_string = function
-    | JavaScript -> "javascript"
-end
-
 module Primitive = struct
   type t = Bool | Int | Char | Float | XmlItem | DB | String | DateTime
     [@@deriving show]

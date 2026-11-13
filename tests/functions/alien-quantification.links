@@ -1,2 +1,0 @@
-alien javascript "test.js" identity : (a) -> a;
-identity(42)

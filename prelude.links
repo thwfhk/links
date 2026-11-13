@@ -568,11 +568,11 @@ sig isFloat : (String) -> Bool
 fun isFloat (x) { x =~ /-?[0-9]+(\.[0-9]+)?$/ }
 
 sig asList : (TableHandle((|a::Base),(|_::Base),(|_::Base))) {}-> [(|a::Base)]
-fun asList(t) server {
+fun asList(t) {
   for (x <-- t) [x]
 }
 
-fun dedup(l) server {
+fun dedup(l) {
   # an unsafe local definition of elem, only for use within dedup!
   # (ensures dedup is tame, while keeping the global def of elem wild)
   unsafe sig elem : (a,[a]) -b-> Bool
@@ -596,7 +596,7 @@ fun dedup(l) server {
   aux([]:[a], l)
 }
 
-fun distinct(t) server {
+fun distinct(t) {
 	dedup(asList(t))
 }
 
@@ -1301,35 +1301,8 @@ fun inputIntValue(v) {
 sig inputFloat : Formlet(Float)
 var inputFloat = fun (gen) {transform(input, isFloat, fun (s) {s ^^ " is not a float"}, stringToFloat)(gen)};
 
-#### WEB-RELATED ####
-
-# [freshResource] is a bit of magic that makes the subsequent actions a
-# new resource.  That is, it redirects the user to a new URL for the
-# continuation. If you call this immediately after doing a destructive
-# action (e.g. database updates) then reloading and the back button
-# are made "safe": the visible URL does not refer to the action, but
-# only to what follows the freshResource call.
-# Note: doesn't presently work in client context, but could.
-sig freshResource : () ~> ()
-fun freshResource() {
-  escape esc in {
-    redirect("?_k=" ^^ unsafePickleCont(fun () {esc(())})); exit([])
-  }
-}
-
-# [sendSuspend] generates a page, outputs it, and terminates. It
-# passes to pagef the continuation, which will resume at the place
-# of the sendSuspend call. This continuation can be used in l:action
-# for example, to pass form values through as the return value
-# of sendSuspend.
-sig sendSuspend : (((a) ~> Page) ~b~> Page) ~b~> a
-fun sendSuspend(pagef) {
-  escape returnf in {
-    exit(renderPage(pagef(returnf)))
-  }
-}
-
 #### CONCURRENCY ####
+
 typename Pid(a::Type) = Process({hear: a});
 
 #### SESSION TYPING STUFF ####
@@ -1549,7 +1522,7 @@ fun groupByFlat(project, ts) {
 
 ####
 sig assertEq : (a, a) ~> ()
-fun assertEq (actual, expected) server {
+fun assertEq (actual, expected) {
   if (expected == actual)
       ()
   else {
@@ -1560,42 +1533,6 @@ fun assertEq (actual, expected) server {
       print(show(actual));
       sysexit(2)
   }
-}
-
-#### APP SERVER ####
-
-sig defaultErrorPage : (String, String, Location) {}~> Page
-fun defaultErrorPage(_, error_string, _) {
-  bodyP(<html>
-        <body>
-        <h1>Wrong</h1>
-        <p>Links has encountered an internal error; the error message is <em>{stringToXml(error_string)}</em></p>
-        </body>
-        </html>)
-}
-
-sig addLocatedRouteWithErrors : (String, (String, Location) {hear{_}}~> Page, (String, String, Location) {hear{_}}~> Page) ~> ()
-fun addLocatedRouteWithErrors(path, f, error_handler) { unsafeAddRoute(path, f, error_handler) }
-
-sig addLocatedRouteHandler : (String, (String, Location) {hear{_}}~> Page) ~> ()
-fun addLocatedRouteHandler(path,f) { addLocatedRouteWithErrors(path, fun(p, l){f(p, l)}, defaultErrorPage) }
-
-sig addRoute : (String, (String) {hear{_}}~> Page) ~> ()
-fun addRoute(path, f) { addLocatedRouteHandler(path, fun(p, _){f(p)}) }
-
-sig addSimpleRouteHandler : (String, (String) {hear{_}}~> Page) ~> ()
-fun addSimpleRouteHandler(path,f) { addRoute(path,f) }
-
-sig serveThis : (() {hear{_}}~> Page) ~> ()
-fun serveThis(p) {
-  addRoute("/",fun (_) {p()});
-  servePages()
-}
-
-sig serveThese : ([(String,() {hear{_}}~> Page)]) ~> ()
-fun serveThese(routes) {
-  var _ = map(fun ((s,p)) {addRoute(s,fun (_) {p()})}, routes);
-  servePages()
 }
 
 # Operations on (ASCII) characters

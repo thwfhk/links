@@ -1,5 +1,5 @@
 mutual {
-  fun waiting(id) client {
+  fun waiting(id) {
    receive {
     case MouseDown(elem)  ->
      if (isElementNode(elem) && (parentNode(elem) == getNodeById(id)))
@@ -11,7 +11,7 @@ mutual {
    }
   }
 
-  fun dragging(id, elem) client {
+  fun dragging(id, elem) {
    receive {
     case MouseUp          -> waiting(id)
     case MouseDown(elem)  ->

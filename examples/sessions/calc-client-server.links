@@ -20,7 +20,7 @@ fun user(s) {
   x
 }
 
-fun main() server {
+fun main() {
   var a = new ();
   var _ = spawn { calc(accept(a)) };
   user(request(a))

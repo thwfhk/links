@@ -5,7 +5,7 @@ var max_iterations = 200;
 
 # process associated with a canvas.  Receive Point messages and render
 # them on the screen using 2x2 div elements.
-fun draw(colour, id) client {
+fun draw(colour, id) {
   receive {
     case Point(x,y) ->
      appendChildren(
@@ -57,7 +57,7 @@ fun mandelbrot(x, y) {
   loop(zr, zi, i)
 }
 
-fun makefreshname(colour, n) client {
+fun makefreshname(colour, n) {
   var name = colour ^^ intToString(n);
   if(isNull(getNodeById(name)))
     name
@@ -69,7 +69,7 @@ fun getfreshid(colour) {
   makefreshname(colour, 0)
 }
 
-fun iterate(colour) client {
+fun iterate(colour) {
   var id = getfreshid(colour);
   var c = canvas (80, 80, colour, id);
   for (y <- range(-39, 39)) {

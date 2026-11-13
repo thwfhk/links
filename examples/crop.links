@@ -2,7 +2,7 @@ fun setStyle(node, name, value) {ignore(domSetStyleAttrFromRef(node, name, value
 
 mutual{
   fun dragging(offsetLeft, offsetTop, left, top, width, height,
-               mdownX, mdownY) client {
+               mdownX, mdownY) {
     receive {
       case MouseMove(x, y) -> {
         var frame = getNodeById("cropping-frame");
@@ -31,7 +31,7 @@ mutual{
     }
   }
 
-  fun resizing(offsetLeft, offsetTop, left, top, width, height, corner) client {
+  fun resizing(offsetLeft, offsetTop, left, top, width, height, corner) {
     receive {
       case MouseMove(x, y) -> {
         var pictureFrame = getNodeById("picture-frame");
@@ -70,7 +70,7 @@ mutual{
     }
   }
 
-  fun frameMgr(offsetLeft, offsetTop, left, top, width, height) client {
+  fun frameMgr(offsetLeft, offsetTop, left, top, width, height) {
     receive {
       case MouseDown(x, y) ->
         dragging(offsetLeft, offsetTop, left, top, width, height, x, y)

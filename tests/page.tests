@@ -1,14 +1,14 @@
-Empty page
-addRoute("/", fun(_) { page <#></#> })
-stdout : () : ()
+Render a page
+renderPage(page <p>Text</p>)
+stdout : <p>Text</p> : Xml
 
-Unhandled operation
-addRoute("/", fun(_) {do Fail})
+Unhandled operation in a page
+renderPage(page <p>{do Fail}</p>)
 stderr : @..*
 args : --enable-handlers
 exit : 1
 
-Handled operation
-addRoute("/", fun(_) { handle({do Fail}) { case <Fail> -> page <#>{stringToXml("Caught")}</#> case _ -> page <#>{stringToXml("Success")}</#> } })
-stdout : () : ()
+Handle an operation and render the resulting page
+renderPage(handle({do Fail}) { case <Fail> -> page <p>Caught</p> case _ -> page <p>Success</p> })
+stdout : <p>Caught</p> : Xml
 args : --enable-handlers

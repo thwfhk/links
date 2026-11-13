@@ -319,12 +319,6 @@ module MutualBindings = struct
     type_binding mut_types @ fun_binding mut_funs
 end
 
-let parse_foreign_language pos lang =
-  try ForeignLanguage.of_string lang
-  with Invalid_argument _ ->
-    raise (ConcreteSyntaxError
-             (pos, Printf.sprintf "Unrecognised foreign language '%s'." lang))
-
 let any = any_pat dp
 %}
 
@@ -355,7 +349,6 @@ let any = any_pat dp
 %token LENSPUT LENSGET LENSCHECK LENSSERIAL
 %token READONLY DEFAULT
 %token ESCAPE
-%token CLIENT SERVER
 %token SEMICOLON
 %token TRUE FALSE
 %token BARBAR AMPAMP
@@ -366,7 +359,7 @@ let any = any_pat dp
 %token <string> VARIABLE CONSTRUCTOR KEYWORD PERCENTVAR
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
-%token MU FORALL ALIEN SIG UNSAFE
+%token MU FORALL SIG UNSAFE
 %token MODULE MUTUAL OPEN IMPORT
 %token BANG QUESTION
 %token CAPITAL_LAMBDA
@@ -467,14 +460,6 @@ declaration:
 | fun_declaration | nofun_declaration                          { $1 }
 
 nofun_declaration:
-| alien_block                                                  { $1 }
-| ALIEN VARIABLE STRING VARIABLE COLON datatype SEMICOLON      { let alien =
-                                                                   let binder = binder ~ppos:$loc($4) $4 in
-                                                                   let datatype = datatype $6 in
-                                                                   let language = parse_foreign_language (pos $loc($1)) $2 in
-                                                                   Alien.single language $3 binder datatype
-                                                                 in
-                                                                 with_pos $loc (Foreign alien) }
 | FIXITY UINTEGER? op SEMICOLON                                { let precedence = from_option default_fixity $2 in
                                                                  let node = Infix { name = WithPos.node $3; precedence; assoc = $1 } in
                                                                  with_pos $loc node }
@@ -483,18 +468,8 @@ nofun_declaration:
 | links_module | links_open SEMICOLON                          { $1 }
 | pollute = boption(OPEN) IMPORT CONSTRUCTOR SEMICOLON         { import ~ppos:$loc($2) ~pollute [$3] }
 
-alien_datatype:
-| VARIABLE COLON datatype SEMICOLON                            { (binder ~ppos:$loc($1) $1, datatype $3) }
-
-alien_datatypes:
-| alien_datatype+                                              { $1 }
-
 links_module:
 | MODULE name = CONSTRUCTOR members = moduleblock              { module_binding ~ppos:$loc($1) (binder ~ppos:$loc(name) name) members }
-
-alien_block:
-| ALIEN VARIABLE STRING LBRACE alien_datatypes RBRACE          { let lang = parse_foreign_language (pos $loc($1)) $2 in
-                                                                 with_pos $loc (AlienBlock (Alien.multi lang $3 $5)) }
 
 fun_declarations:
 | fun_declaration+                                             { $1 }
@@ -516,19 +491,19 @@ fun_kind:
 | FROZEN_LINFUN                                                { (dl_lin, true) }
 
 tlfunbinding:
-| fun_kind VARIABLE arg_lists perhaps_location block           { ($1, $2, $3, $4, $5)                }
-| OP pattern sigop pattern perhaps_location block              { ((dl_unl, false), WithPos.node $3, [[$2; $4]], $5, $6) }
-| OP OPERATOR pattern perhaps_location block                   { ((dl_unl, false), $2, [[$3]], $4, $5)          }
-| OP pattern OPERATOR perhaps_location block                   { ((dl_unl, false), $3, [[$2]], $4, $5)          }
+| fun_kind VARIABLE arg_lists block                            { ($1, $2, $3, loc_unknown, $4) }
+| OP pattern sigop pattern block                               { ((dl_unl, false), WithPos.node $3, [[$2; $4]], loc_unknown, $5) }
+| OP OPERATOR pattern block                                    { ((dl_unl, false), $2, [[$3]], loc_unknown, $4) }
+| OP pattern OPERATOR block                                    { ((dl_unl, false), $3, [[$2]], loc_unknown, $4) }
 
 switch_tlfunbinding:
-| fun_kind VARIABLE arg_lists perhaps_location switch_funlit_body     { ($1, $2, $3, $4, $5)   }
+| fun_kind VARIABLE arg_lists switch_funlit_body               { ($1, $2, $3, loc_unknown, $4) }
 
 switch_funlit_body:
 | SWITCH LBRACE case+ RBRACE                                   { $3 }
 
 tlvarbinding:
-| VAR VARIABLE perhaps_location EQ exp                         { (PatName $2, $5, $3) }
+| VAR VARIABLE EQ exp                                          { (PatName $2, $4, loc_unknown) }
 
 signatures:
 | signature                                                    { (Some $1, false) }
@@ -568,11 +543,6 @@ typearg:
 
 varlist:
 | separated_nonempty_list(COMMA, typearg)                      { $1 }
-
-perhaps_location:
-| SERVER                                                       { loc_server  }
-| CLIENT                                                       { loc_client  }
-| /* empty */                                                  { loc_unknown }
 
 constant:
 | UINTEGER                                                     { Constant.Int    $1  }
@@ -638,8 +608,8 @@ primary_expression:
 | LBRACKET perhaps_exps RBRACKET                               { list ~ppos:$loc $2 }
 | LBRACKET exp DOTDOT exp RBRACKET                             { with_pos $loc (RangeLit($2, $4))   }
 | xml                                                          { $1 }
-| linearity arg_lists perhaps_location block                   { fun_lit ~ppos:$loc ~location:$3 $1 $2 $4 }
-| linearity arg_lists perhaps_location switch_funlit_body      { switch_fun_lit ~ppos:$loc ~location:$3 $1 $2 $4 }
+| linearity arg_lists block                                    { fun_lit ~ppos:$loc $1 $2 $3 }
+| linearity arg_lists switch_funlit_body                       { switch_fun_lit ~ppos:$loc $1 $2 $3 }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { with_pos $loc (CP $2) }
 | DOLLAR primary_expression                                    { with_pos $loc (Generalise $2) }
 
@@ -1011,10 +981,10 @@ links_open:
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { val_binding ~ppos:$loc $2 $4 }
 | exp SEMICOLON                                                { with_pos $loc (Exp $1) }
-| signatures fun_kind VARIABLE arg_lists perhaps_location block { fun_binding ~ppos:$loc (fst $1) ~unsafe_sig:(snd $1) ($2, $3, $4, $5, $6) }
-| fun_kind VARIABLE arg_lists perhaps_location block           { fun_binding ~ppos:$loc None ($1, $2, $3, $4, $5) }
-| signatures fun_kind VARIABLE arg_lists perhaps_location switch_funlit_body    { switch_fun_binding ~ppos:$loc (fst $1) ~unsafe_sig:(snd $1) ($2, $3, $4, $5, $6) }
-| fun_kind VARIABLE arg_lists perhaps_location switch_funlit_body               { switch_fun_binding ~ppos:$loc None ($1, $2, $3, $4, $5) }
+| signatures fun_kind VARIABLE arg_lists block                 { fun_binding ~ppos:$loc (fst $1) ~unsafe_sig:(snd $1) ($2, $3, $4, loc_unknown, $5) }
+| fun_kind VARIABLE arg_lists block                            { fun_binding ~ppos:$loc None ($1, $2, $3, loc_unknown, $4) }
+| signatures fun_kind VARIABLE arg_lists switch_funlit_body     { switch_fun_binding ~ppos:$loc (fst $1) ~unsafe_sig:(snd $1) ($2, $3, $4, loc_unknown, $5) }
+| fun_kind VARIABLE arg_lists switch_funlit_body               { switch_fun_binding ~ppos:$loc None ($1, $2, $3, loc_unknown, $4) }
 | typedecl SEMICOLON | links_module
 | links_open SEMICOLON                                         { $1 }
 

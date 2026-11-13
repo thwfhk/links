@@ -320,11 +320,6 @@ module Desugar = struct
     let unlocated = WithPos.make Datatype.Unit in
     (ta, Some (type_arg alias_env ta unlocated))
 
-  (* Desugar a foreign function declaration. Foreign declarations cannot use type variables from
-     the context. Any type variables found are implicitly universally quantified at this point. *)
-  let foreign alias_env dt =
-    datatype' alias_env dt
-
   (* Desugar a table literal. No free variables are allowed here. We generate both read and write
      types by looking for readonly constraints *)
   let table_lit alias_env constraints dt =
@@ -500,11 +495,6 @@ object (self)
 
         ({< alias_env = alias_env >}, Aliases desugared_mutuals)
 
-    | Foreign alien ->
-       let binder, datatype = Alien.declaration alien in
-       let _, binder = self#binder binder in
-       let datatype = Desugar.foreign alias_env datatype in
-       self, Foreign (Alien.modify ~declarations:[(binder, datatype)] alien)
     | b -> super#bindingnode b
 
 

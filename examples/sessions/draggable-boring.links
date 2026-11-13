@@ -2,7 +2,7 @@ typename DragSelect = mu a.[+|MouseDown:!DomNode.a, MouseOut:!DomNode.a, MouseUp
 typename DragOffer  = mu a.[&|MouseDown:?DomNode.a, MouseOut:?DomNode.a, MouseUp:a|&];
 
 sig waiting : (String, DragOffer) ~> ()
-fun waiting(id, s) client {
+fun waiting(id, s) {
   offer (s) {
     case MouseDown(s) ->
       var (elem, s) = grab(s);

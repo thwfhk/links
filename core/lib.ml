@@ -1049,60 +1049,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`Client, datatype "() ~> String",
   IMPURE);
 
- (* Cookies *)
-  "setCookie",
-  (p2D (fun cookieName cookieVal req_data ->
-         let cookieName = Value.unbox_string cookieName in
-         let cookieVal = Value.unbox_string cookieVal in
-         let resp_headers = RequestData.get_http_response_headers req_data in
-         RequestData.set_http_response_headers req_data
-             (("Set-Cookie", cookieName ^ "=" ^ cookieVal) :: resp_headers);
-           Lwt.return (`Record [])
-             (* Note: perhaps this should affect cookies returned by
-                getcookie during the current request. *)),
-   datatype "(String, String) ~> ()",
-  IMPURE);
-
-
-  (* WARNING:
-
-     getCookie returns "" to indicate either that the cookie is not
-     present or that the header is ill-formed (in debug mode a warning
-     will also be sent to stderr if the header is ill-formed).
-
-     Ideally, perhaps, a malformed header from the client should
-     be ignored at this level (let the HTTP agents handle it).
-
-     An absent cookie should probably be indicated by a Nothing value in
-     the Maybe(String) type.
-  *)
-  "getCookie",
-  (p1D (fun name req_data ->
-         let name = Value.unbox_string name in
-         let cookies = RequestData.get_cookies req_data in
-         let value =
-           if List.mem_assoc name cookies then
-             List.assoc name cookies
-           else
-             ""
-         in
-           Lwt.return (Value.box_string value)),
-   datatype "(String) ~> String",
-  IMPURE);
-
-  "redirect",
-  (p1D (fun url req_data ->
-         let url = Value.unbox_string url in
-           (* This is all quite hackish, just testing an idea. --ez *)
-           let resp_headers = RequestData.get_http_response_headers req_data in
-           RequestData.set_http_response_headers req_data (("Location", url) :: resp_headers);
-           RequestData.set_http_response_code req_data 302;
-           Lwt.return (`Record [])
-      ), datatype "(String) ~> ()",
-  IMPURE);
-  (* Should this function really return?
-     I think not --ez*)
-
   "sleep",
   (p1 (fun _ ->
          (* FIXME: This isn't right : it freezes all threads *)
@@ -1685,27 +1631,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                   `Record [])),
      datatype "(Socket) ~> ()",
      IMPURE);
-    "addStaticRoute",
-    (`PFun (fun _ -> assert false),
-     datatype "(String, String, [(String, String)]) ~> ()",
-     IMPURE);
-    "unsafeAddRoute",
-    (`PFun (fun _ -> assert false),
-     (* The `hear' effects on the second argument (request handler)
-        and third argument (error handler) should have different
-        presence variables as they are executed in different
-        contexts. *)
-     datatype "(String, (String, Location) {hear{_}}~> a, (String, String, Location) {hear{_}}~> a) ~> ()",
-     IMPURE);
-    "servePages",
-    (`PFun (fun _ -> assert false),
-     datatype "() ~> ()",
-     IMPURE);
-    "serveWebsockets",
-    (`PFun (fun _ -> assert false),
-    datatype "() ~> ()",
-    IMPURE);
-
     (* Crypt API *)
 
     "crypt",

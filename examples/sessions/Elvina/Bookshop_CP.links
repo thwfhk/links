@@ -30,7 +30,7 @@ typename SonOffer  = [+|Choice:?Product.End|+];
 
 # Removes given element.
 sig removeProduct : (Product, [Product]) ~> ([Product])
-fun removeProduct(item, products) client
+fun removeProduct(item, products)
 {
     switch (products) {
              case []    -> []
@@ -41,7 +41,7 @@ fun removeProduct(item, products) client
 
 
 # Convinces Links that any Product is also a String.
-fun turnProductToString(product) client
+fun turnProductToString(product)
 {
     switch(product) {
         case Book(s) -> s
@@ -52,7 +52,7 @@ fun turnProductToString(product) client
 
 # Turns a list of products into a single string.
 sig concatenateProducts : ([Product], String) ~> (String)
-fun concatenateProducts(products, fullList) client
+fun concatenateProducts(products, fullList)
 {
     switch(products) {
         case [] -> fullList
@@ -62,7 +62,7 @@ fun concatenateProducts(products, fullList) client
 
 # Turns order summary into a single readable string.
 sig summariseOrder : (Int, String, [Product], String) ~> ([String])
-fun summariseOrder(card, address, products, removed) client
+fun summariseOrder(card, address, products, removed)
 {
     [concatenateProducts(products, ""), removed, intToString(card), address]
 }
@@ -78,7 +78,7 @@ intToString(address.houseNo) ^^ ", City: " ^^ address.city].
 
 # A shop. Accepts orders and allows checkout.
 #sig waitForClient : (ShopOffer, [Product], String) ~> ()
-fun waitForClient(s, orderedProducts, removedProducts) client
+fun waitForClient(s, orderedProducts, removedProducts)
 {
 
  <| offer s {
@@ -102,7 +102,7 @@ fun waitForClient(s, orderedProducts, removedProducts) client
 
 # Waits for signal to be able to choose and picks out the product.
 #sig waitForSon : (SonSelect) ~> ()
-fun waitForSon(c) client
+fun waitForSon(c)
 {
     <| offer c {
         case Choice -> c[Gadget("LED Water Speakers")].c[]
@@ -111,7 +111,7 @@ fun waitForSon(c) client
 
 # Sends a signal that it is time to choose a product.
 #sig getSonBook : (SonOffer) ~> (Product)
-fun getSonBook(s) client
+fun getSonBook(s)
 {
     <| Choice s.s(choice).s().{choice} |>
 }
@@ -119,7 +119,7 @@ fun getSonBook(s) client
 
 # Mom picks out the products, allows the son to do it, goes to checkout.
 sig orderBooks : (ShopSelect) ~> ([String])
-fun orderBooks(c) client
+fun orderBooks(c)
 {
     var myAddress = (street="Princes Street", houseNo=14, city="Edinburgh");
 
@@ -136,7 +136,7 @@ fun orderBooks(c) client
 
 # Creates a new access point and binds the ends of the channel to appropriate functions.
 sig main : () ~> ()
-fun main() client
+fun main()
 {
     var order = <| nu s.({waitForClient(s, [], "")}|{orderBooks(s)}) |>;
 

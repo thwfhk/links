@@ -14,7 +14,7 @@ typename SMTPServer = [&|EHLO:?Domain.[+|REJECT:!Error.EndBang, ACCEPT:[&|MAIL:?
 
 
 sig mailServer : (SMTPServer) ~> EndBang
-fun mailServer(s) client {
+fun mailServer(s) {
 
 offer (s) {
     case EHLO(s) ->
@@ -44,7 +44,7 @@ offer (s) {
 }
 
 sig mailClient : (~SMTPServer, (1:String, 2:String, 3:String)) ~> String
-fun mailClient(c, mail_form) client {
+fun mailClient(c, mail_form) {
 
 var c = send("inf.ed.ac.uk", select EHLO c);
 offer (c) {
@@ -84,7 +84,7 @@ offer (c) {
 }
 
 sig startCommunication : (String, String, String) ~> String
-fun startCommunication(sender, recipient, message) client {
+fun startCommunication(sender, recipient, message) {
     var mail_form = (sender, recipient, message);
     mailClient(forkSync(mailServer), mail_form)
 }

@@ -3,22 +3,22 @@ var defsTable =
   with (id:String, word:String, meaning:String)
   where id readonly from database "dictionary";
 
-fun newDef(def) server {
+fun newDef(def) {
   insert defsTable values (word, meaning) [def]
 }
 
-fun updateDef(def) server {
+fun updateDef(def) {
   update (d <-- defsTable)
    where (d.id == def.id)
     set (meaning=def.meaning)
 }
 
-fun deleteDef(id) server {
+fun deleteDef(id) {
   delete (def <-- defsTable)
    where (def.id == id)
 }
 
-fun completions(s) server {
+fun completions(s) {
   if (s == "") []
   else {
     query [10] {
@@ -35,7 +35,7 @@ fun redraw(xml, defId) {
 }
 
 mutual{
-  fun editDef(def) client {
+  fun editDef(def) {
     redraw(
       <div class="edit-def">
       <form method="POST"
@@ -82,7 +82,7 @@ fun format(defs) {
 }
 
 
-fun suggest(s) client {
+fun suggest(s) {
   domReplaceChildren(format(completions(s)), getNodeById("suggestions"))
 }
 

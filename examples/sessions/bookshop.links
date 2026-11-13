@@ -2,7 +2,7 @@ typename Shop = [&|Add:?String.Shop, Checkout:?Int.?String.End|&];
 
 
 sig waitForClient : (Shop) ~> ()
-fun waitForClient(s) client {
+fun waitForClient(s) {
   offer(s) {
     case Add(s) ->
       var (item, s) = receive(s);
@@ -19,14 +19,14 @@ fun waitForClient(s) client {
 }
 
 sig orderBooks : (~Shop) ~> ()
-fun orderBooks(c) client {
+fun orderBooks(c) {
   var c = send("Alice in Wonderland", select Add c);
   var c = send("Summerhall Square", send(8753, select Checkout c));
   close(c)
 }
 
 sig main : () ~> ()
-fun main() client {
+fun main() {
   var accessPoint = new();
   var _ = spawn { waitForClient(accept(accessPoint))};
   orderBooks(request(accessPoint))

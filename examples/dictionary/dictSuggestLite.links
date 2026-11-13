@@ -12,7 +12,7 @@ fun format(words) {
   </span>
 }
 
-fun completions(pre) server {
+fun completions(pre) {
  var wordlist = table "wordlist" with (
    word : String,
    type : String,
@@ -30,7 +30,7 @@ fun completions(pre) server {
  }
 }
 
-fun suggest(pre) client {
+fun suggest(pre) {
  domReplaceChildren(
   format(completions(lowercase(pre))),
   getNodeById("suggestions")

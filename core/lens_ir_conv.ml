@@ -257,7 +257,6 @@ let lens_sugar_phrase_of_ir p env =
         | I.Fun _ ->
             Result.error @@ Of_ir_error.Internal_error "Unexpected function."
         | I.Rec _ -> Result.error Of_ir_error.Recursive_function
-        | I.Alien _ -> computation env (bs, tailcomp)
         | I.Module _ -> Result.error Of_ir_error.Modules_unsupported)
   and unpack_phrase v =
     match v with

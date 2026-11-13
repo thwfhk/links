@@ -44,7 +44,7 @@ fun header(title) {
 }
 
 sig getPapersAndCollaborators : (Author) ~> ([Paper], [Author])
-fun getPapersAndCollaborators(author) server {
+fun getPapersAndCollaborators(author) {
   var papers =
     query {
       for (r <-- paperauthorTable)
@@ -106,7 +106,7 @@ fun getPapersAndCollaborators(author) server {
 
 
 sig getAuthors : (Paper) -> [Author]
-fun getAuthors(paper) server {
+fun getAuthors(paper) {
   query {
     for (r <-- paperauthorTable)
     where (paper.id == r.paperid)
@@ -118,12 +118,12 @@ fun getAuthors(paper) server {
 
 mutual {
   sig formatPaperList : ([Paper]) ~> Xml
-  fun formatPaperList(papers) server {
+  fun formatPaperList(papers) {
     for (p <- papers)
       <#><a l:href="{showPaperInfo(p)}">{renderPaper(p)}</a><br/></#>
   }
 
-  fun updateAuthor(author) server {
+  fun updateAuthor(author) {
     update (a <-- authorsTable)
      where (a.id == author.id)
      set (name=author.name);
@@ -132,7 +132,7 @@ mutual {
   }
 
   sig showAuthorInfo : (Author) ~> Page
-  fun showAuthorInfo(author) server {
+  fun showAuthorInfo(author) {
     var (papers, collaborators) = getPapersAndCollaborators(author);
 
     page
@@ -152,7 +152,7 @@ mutual {
      </html>
   }
 
-  fun updatePaper(paper) server {
+  fun updatePaper(paper) {
     update (p <-- papersTable)
      where (p.id == paper.id)
      set (title=paper.title);
@@ -161,7 +161,7 @@ mutual {
   }
 
   sig showPaperInfo : (Paper) ~> Page
-  fun showPaperInfo(paper) server {
+  fun showPaperInfo(paper) {
     var authors = getAuthors(paper);
 
     page
@@ -180,7 +180,7 @@ mutual {
   }
 
   sig formatAuthorList : ([Author]) ~> Xml
-  fun formatAuthorList(authors) server {
+  fun formatAuthorList(authors) {
     for (a <- authors)
       <#><a l:href="{showAuthorInfo(a)}">{renderAuthor(a)}</a><br/></#>
   }
@@ -188,7 +188,7 @@ mutual {
 
 
 sig completions : (String, String) ~> (Xml, Xml)
-fun completions(authorPrefix, paperPrefix) server {
+fun completions(authorPrefix, paperPrefix) {
   var authors =
     if (authorPrefix == "") []
     else {
@@ -242,7 +242,7 @@ fun completions(authorPrefix, paperPrefix) server {
 }
 
 sig suggest : (String, String) ~> ()
-fun suggest(authorPrefix, paperPrefix) client {
+fun suggest(authorPrefix, paperPrefix) {
   var (authorList, paperList) = completions(authorPrefix, paperPrefix);
   domReplaceChildren(
     authorList,

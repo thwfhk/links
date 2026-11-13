@@ -1,8 +1,6 @@
 open Links_core
 open Utility
 
-module BS = Basicsettings
-
 let to_evaluate
   = Settings.(multi_option "evaluate"
               |> synopsis "Evaluates an expression"
@@ -95,27 +93,12 @@ let run : string list -> string list -> unit
     let context' =
       for_each context process_expr to_evaluate
     in
-    let open Basicsettings.System in
-    match Settings.get mode with
-    | None | Some Interactive ->
-      let context'' =
-        for_each context' process_file file_list
-      in
-      begin match file_list, to_evaluate with
-        | [], [] -> Repl.interact context''
-        | _, _ -> ()
-      end
-    | Some Web ->
-      ignore (for_each context' process_file file_list)
-    | Some Compile ->
-      (* TODO(dhil): The following might behave unexpectedly if
-         |file_list| > 1 as the output file is repeatedly
-         overwritten. We need a better design here. *)
-      ignore(for_each context'
-        (fun context file ->
-           let output_file = val_of (Settings.get output_file) in
-           handle_errors (lazy (Driver.Phases.compile_js_only context file output_file)); context)
-        file_list)
+    let context'' =
+      for_each context' process_file file_list
+    in
+    match file_list, to_evaluate with
+    | [], [] -> Repl.interact context''
+    | _, _ -> ()
 
 let main () =
   (* Attempt to synchronise all settings. If any setting commands are

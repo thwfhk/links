@@ -599,9 +599,6 @@ class map =
       fun p ->
         WithPos.map2 ~f_pos:o#position ~f_node:o#patternnode p
 
-    method foreign_language : ForeignLanguage.t -> ForeignLanguage.t
-      = fun lang -> lang
-
     method name : Name.t -> Name.t = o#string
 
     method location : Location.t -> Location.t = o#unknown
@@ -764,17 +761,6 @@ class map =
       | Funs _x ->
           let _x = o#list (fun o -> o#recursive_function) _x in
           Funs _x
-      | Foreign alien ->
-         let declarations =
-           o#list
-             (fun o (b, dt) ->
-               let b = o#binder b in
-               let dt = o#datatype' dt in
-               (b, dt))
-             (Alien.declarations alien)
-         in
-         let language = o#foreign_language (Alien.language alien) in
-         Foreign (Alien.modify ~declarations ~language alien)
       | Import { pollute; path } ->
          Import { pollute; path = o#list (fun o -> o#name) path }
       | Open _xs ->
@@ -790,17 +776,6 @@ class map =
           let binder = o#binder binder in
           let members = o#list (fun o -> o#binding) members in
           Module { binder; members }
-      | AlienBlock alien ->
-         let declarations =
-           o#list
-             (fun o (b, dt) ->
-               let b = o#binder b in
-               let dt = o#datatype' dt in
-               (b, dt))
-             (Alien.declarations alien)
-         in
-         let language = o#foreign_language (Alien.language alien) in
-         AlienBlock (Alien.modify ~language ~declarations alien)
 
     method binding : binding -> binding =
       fun p ->
@@ -1398,9 +1373,6 @@ class fold =
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#patternnode v)
 
-    method foreign_language : ForeignLanguage.t -> 'self_type
-      = fun _ -> o
-
     method name : Name.t -> 'self_type = o#string
 
     method location : Location.t -> 'self_type = o#unknown
@@ -1552,15 +1524,6 @@ class fold =
       | Funs _x ->
           let o = o#list (fun o -> o#recursive_function) _x in
           o
-      | Foreign alien ->
-         let o =
-           o#list
-             (fun o (b, dt) ->
-               let o = o#binder b in
-               o#datatype' dt)
-             (Alien.declarations alien)
-         in
-         o#foreign_language (Alien.language alien)
       | Import { path; _ } ->
          let o = o#list (fun o -> o#name) path in
           o
@@ -1576,13 +1539,6 @@ class fold =
       | Module { binder; members } ->
           let o = o#binder binder in
           o#list (fun o -> o#binding) members
-      | AlienBlock alien ->
-         let o = o#foreign_language (Alien.language alien) in
-         o#list
-           (fun o (b, dt) ->
-             let o = o#binder b in
-             o#datatype' dt)
-           (Alien.declarations alien)
 
     method binding : binding -> 'self_type =
       WithPos.traverse
@@ -2299,9 +2255,6 @@ class fold_map =
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#patternnode v)
 
-    method foreign_language : ForeignLanguage.t -> ('self_type * ForeignLanguage.t)
-      = fun lang -> o, lang
-
     method name : Name.t -> ('self_type * Name.t) = o#string
 
     method location : Location.t -> ('self_type * Location.t) = o#unknown
@@ -2494,17 +2447,6 @@ class fold_map =
       | Funs _x ->
           let (o, _x) = o#list (fun o -> o#recursive_function) _x in
           (o, (Funs _x))
-      | Foreign alien ->
-         let o, declarations =
-           o#list
-             (fun o (b, dt) ->
-               let o, b = o#binder b in
-               let o, dt = o#datatype' dt in
-               o, (b, dt))
-             (Alien.declarations alien)
-         in
-         let o, language = o#foreign_language (Alien.language alien) in
-         o, Foreign (Alien.modify ~declarations ~language alien)
       | Import { pollute; path } ->
           let (o, path') = o#list (fun o n -> o#name n) path in
           (o, Import { pollute; path = path' })
@@ -2522,17 +2464,6 @@ class fold_map =
           let (o, binder) = o#binder binder in
           let (o, members) = o#list (fun o -> o#binding) members in
           (o, (Module { binder; members }))
-      | AlienBlock alien ->
-         let o, lang = o#foreign_language (Alien.language alien) in
-         let o, declarations =
-           o#list
-             (fun o (b, dt) ->
-               let o, b = o#binder b in
-               let o, dt = o#datatype' dt in
-               o, (b, dt))
-             (Alien.declarations alien)
-         in
-         o, AlienBlock (Alien.modify ~language:lang ~declarations alien)
 
     method binding : binding -> ('self_type * binding) =
       WithPos.traverse_map

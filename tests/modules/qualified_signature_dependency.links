@@ -1,0 +1,2 @@
+sig identity : (a') -> a'
+fun identity(x) { x }
