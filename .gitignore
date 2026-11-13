@@ -36,6 +36,9 @@ xmlParser.mli
 .vscode
 .#*
 
+# Local worktrees
+/.worktrees/
+
 # documentation
 quick-help.html
 doc/*.aux
