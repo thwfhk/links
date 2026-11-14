@@ -553,6 +553,13 @@ record captures at the declaration. A function literal records its
 captures when its value is evaluated, including when it occurs in an
 earlier operand interrupted by a later one.
 
+#### 5.16 Linear uses in generator sources
+
+Fresco checks free uses in each source after the first against the outer
+scope and requires their types to be unrestricted. It keeps all source
+uses in the comprehension's usage count, so a nested comprehension
+also reports its free uses to the enclosing check.
+
 ### Deferred optimisation issues
 
 Dead-definition elimination can remove unused calls to `crypt`, `chr`

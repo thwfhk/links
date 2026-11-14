@@ -1333,6 +1333,9 @@ List comprehensions use the bundled `concatMap`, `map` and `sortByBase`
 helpers regardless of which prelude is selected. Built-in `for` works
 with an empty prelude or a custom prelude that defines no list helpers.
 Explicit calls to these names follow ordinary lexical lookup.
+The first generator source runs once. A later source runs once for each
+combination of earlier elements and is skipped if there are none.
+Only the first source may use an outer linear binding.
 
 The prelude's `State(d,a)` holds a pure state computation. `runState`
 can run it in pure code. The callbacks passed to `>>=` and `fmap` are

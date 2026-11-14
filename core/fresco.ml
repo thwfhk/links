@@ -1673,9 +1673,15 @@ and infer_node ?(allow_intro = true) state mode phrase =
         (Usage.combine (usage value) uses)
   | Iteration (generators, body, where, orderby) ->
       let outer = state in
+      let require_unrestricted_captures pos uses =
+        Usage.iter (fun name _ ->
+          require_unrestricted pos name (lookup pos outer.terms name)) uses in
       let state, generators, scopes, generator_uses =
-        List.fold_left (fun (state, generators, scopes, generator_uses) (pat, generator) ->
+        List.fold_left (fun (state, checked, scopes, generator_uses) (pat, generator) ->
           let generator = infer outer Infer generator in
+          let uses = usage generator in
+          let source_pos = (term generator).pos in
+          if not (List.is_empty checked) then require_unrestricted_captures source_pos uses;
           let modality, list = Context.prefix (typ generator) in
           let item = match list_item (head list) with
             | Some item -> item
@@ -1683,10 +1689,10 @@ and infer_node ?(allow_intro = true) state mode phrase =
                 let item = fresh ~subkind:(lin_unl, res_any) () in
                 consistent pos list (make_list_type item);
                 item in
-          FrescoPatterns.require_unlimited (term generator).pos item;
+          FrescoPatterns.require_unlimited source_pos item;
           let pat, env = FrescoPatterns.check (Context.carry modality item) pat in
-          bind_all state env, (pat, term generator) :: generators, env :: scopes,
-          Usage.combine generator_uses (usage generator))
+          bind_all state env, (pat, term generator) :: checked, env :: scopes,
+          Usage.combine generator_uses uses)
           (state, [], [], Usage.empty) generators in
       let _, body_hint = Context.prefix (hint mode) in
       let body = match list_item (head body_hint) with
@@ -1703,8 +1709,7 @@ and infer_node ?(allow_intro = true) state mode phrase =
       let uses = Usage.combine_many [usage body; option_usage where; option_usage orderby] in
       let uses = List.fold_left (fun uses env ->
         use_binders pos env uses) uses scopes in
-      Usage.iter (fun name _ ->
-        require_unrestricted pos name (lookup pos outer.terms name)) uses;
+      require_unrestricted_captures pos uses;
       let uses = Usage.combine generator_uses uses in
       finish (Iteration (List.rev generators, term body, Option.map term where, Option.map term orderby))
         (typ body) uses

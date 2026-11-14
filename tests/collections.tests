@@ -177,6 +177,32 @@ for (x <- [1], y <- [x]) [x + y]
 stderr : @.*Unknown variable x.*
 exit : 1
 
+A first generator can use an outer linear value once
+{ var f = linfun() { 42 }; for (i <- [f()], j <- [1,2]) [(i,j)] }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : [(42, 1), (42, 2)] : List (Int, Int)
+
+A repeated generator can use a linear value bound in its source
+for (i <- [1,2], j <- { var f = linfun() { 42 }; [f()] }) [(i,j)]
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : [(1, 42), (2, 42)] : List (Int, Int)
+
+A repeated second generator cannot capture a linear value
+{ var f = linfun() { 42 }; for (i <- [1,2], j <- [f()]) [(i,j)] }
+stderr : @<string>:1: Type error: Variable f has a linear type.*In expression: \[f\(\)\]\.
+exit : 1
+
+A skipped third generator cannot capture a linear value
+{ var f = linfun() { 42 }; for (i <- [1], j <- ([] : List Int), k <- [f()]) [(i,j,k)] }
+stderr : @<string>:1: Type error: Variable f has a linear type.*In expression: \[f\(\)\]\.
+exit : 1
+
+A later source cannot capture a linear value through a nested comprehension
+{ var f = linfun() { 42 }; for (i <- [1,2], j <- (for (k <- [f()]) [k])) [(i,j)] }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stderr : @<string>:1: Type error: Variable f has a linear type.*In expression: .*for \(k <- \[f\(\)\]\) \[k\]
+exit : 1
+
 Linear list literals, cons and append preserve each element
 sig sumThunks : List (() -@ Int) -> Int fun sumThunks(xs) { switch (xs) { case [] -> 0 case f :: rest -> f() + sumThunks(rest) } } sumThunks((linfun() { 10 } :: [linfun() { 20 }]) ++ [linfun() { 12 }])
 args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true

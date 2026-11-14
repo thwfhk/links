@@ -117,6 +117,10 @@ set of values drawn, and the comprehension joins these lists. Use
 sort them by a key of a base type such as `Int`, `String` or
 `DateTime`. Separate multiple generators or sort keys with commas.
 Each generator's source uses the scope outside the comprehension.
+The first source runs once. Each later source runs once for each
+combination drawn from the preceding generators, and may run zero
+times. Later sources cannot use linear bindings from outside the
+comprehension.
 The body, filter and sort keys can use the names bound by all
 generators.
 
