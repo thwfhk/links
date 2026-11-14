@@ -634,7 +634,7 @@ class transform (env : Types.typing_environment) =
                 | _ -> raise (internal_error "Unannotated type alias")
             ) ts in
           (o, Aliases ts)
-      | (Infix _) as node ->
+      | (Infix _ | EffectInterface _) as node ->
          (o, node)
       | Exp e -> let (o, e, _) = o#phrase e in (o, Exp e)
       | Module _ -> assert false

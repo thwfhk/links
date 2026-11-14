@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+if ! output=$(./links 2>&1 <<'EOF'
+effect Reader { Ask : () => Missing; }
+effect Reader { Ask : () => Int; }
+effect Callback { Run : ([Reader] (() -> Int)) => Int; }
+effect Reader { Ask : () => Int; }
+EOF
+); then
+    echo "FAILURE: The effect interface REPL session exited with an error"
+    printf '%s\n' "$output"
+    exit 1
+fi
+
+if [[ "$output" != *"Unbound type constructor Missing"*"Module Error: Duplicate operation Ask"* ]] ||
+    [[ $(printf '%s\n' "$output" | grep -c '^<stdin>:') != 2 ]]; then
+    echo "FAILURE: The REPL did not accept the corrected declaration and reject the duplicate"
+    printf '%s\n' "$output"
+    exit 1
+fi
+
+echo "SUCCESS: The REPL accepted the corrected interface and rejected the duplicate operation"

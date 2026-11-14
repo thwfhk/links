@@ -217,8 +217,62 @@ module Typeability_preserving = struct
       program }
 end
 
+let legacy_types interfaces =
+  object (self)
+    inherit SugarTraversals.fold as super
+
+    val is_legacy =
+      let visitor = object
+        inherit Types.type_predicate as super
+        method! type_satisfies vars = function
+          | Types.Modal _ | Types.AmbientFunction _ -> false
+          | typ -> super#type_satisfies vars typ
+      end in
+      fst visitor#predicates
+
+    method! bindingnode = function
+      | Sugartypes.Aliases _ | Sugartypes.EffectInterface _ -> self
+      | binding -> super#bindingnode binding
+
+    method! datatype source =
+      (match SourceCode.WithPos.node source with
+      | Sugartypes.Datatype.Modal _ ->
+        raise (Errors.Type_error (SourceCode.WithPos.pos source,
+          "Checking expressions with modal types requires the modal type checker."))
+      | _ -> ());
+      super#datatype source
+
+    method! datatype' ((source, semantic) as annotation) =
+      if not (Option.fold ~none:true ~some:is_legacy semantic) then
+        raise (Errors.Type_error (SourceCode.WithPos.pos source,
+          "Checking expressions with modal types requires the modal type checker."));
+      super#datatype' annotation
+
+    method! type_arg' ((_, semantic) as argument) =
+      if not (Option.fold ~none:true ~some:(fun (_, typ) -> is_legacy typ) semantic) then
+        raise (Errors.Type_error (SourceCode.Position.dummy,
+          "Applying modal type arguments requires the modal type checker."));
+      super#type_arg' argument
+
+    method! phrase phrase =
+      (match SourceCode.WithPos.node phrase with
+      | Sugartypes.Operation name when Option.is_some (EffectInterfaces.find_operation name interfaces) ->
+          raise (Errors.Type_error (SourceCode.WithPos.pos phrase,
+            "Calling a declared operation requires the modal type checker."))
+      | _ -> ());
+      super#phrase phrase
+
+    method! pattern pattern =
+      (match SourceCode.WithPos.node pattern with
+      | Sugartypes.Pattern.Operation (name, _, _) when Option.is_some (EffectInterfaces.find_operation name interfaces) ->
+          raise (Errors.Type_error (SourceCode.WithPos.pos pattern,
+            "Handling a declared operation requires the modal type checker."))
+      | _ -> ());
+      super#pattern pattern
+  end
+
 (* Parametric transformation runner. *)
-let transform show untyped_run typeable_run typechecker_run context program =
+let transform show untyped_run check_legacy typeable_run typechecker_run context program =
   (* Dump the undecorated AST. *)
   Debug.if_set show_pre_frontend_ast
     (fun () -> Printf.sprintf "AST before frontend transformations:\n%s\n\n" (show program));
@@ -226,6 +280,7 @@ let transform show untyped_run typeable_run typechecker_run context program =
   let { program; context; _ } =
     untyped_run context program
   in
+  check_legacy context.Context.effect_interfaces program;
   (* Typechecking. *)
   let (program, datatype, tenv) =
     typechecker_run Context.(typing_environment context) program
@@ -242,7 +297,11 @@ let transform show untyped_run typeable_run typechecker_run context program =
   result
 
 let program =
-  transform Sugartypes.show_program Untyped.run_program Typeability_preserving.run_program TypeSugar.Check.program
+  transform Sugartypes.show_program Untyped.run_program
+    (fun interfaces program -> ignore ((legacy_types interfaces)#program program))
+    Typeability_preserving.run_program TypeSugar.Check.program
 
 let interactive =
-  transform Sugartypes.show_sentence Untyped.run_sentence Typeability_preserving.run_sentence TypeSugar.Check.sentence
+  transform Sugartypes.show_sentence Untyped.run_sentence
+    (fun interfaces sentence -> ignore ((legacy_types interfaces)#sentence sentence))
+    Typeability_preserving.run_sentence TypeSugar.Check.sentence

@@ -38,12 +38,49 @@ let reader_of_string ?pp string =
         current_pos := !current_pos + nchars;
         nchars
 
+(* Keep symbolic operators intact in terms. At a type boundary the parser
+   can instead read a run of angle brackets as separate modality delimiters. *)
+let parse start lexer lexbuf =
+  let module I = Parser.MenhirInterpreter in
+  let rec run pending = function
+    | I.InputNeeded _ as checkpoint ->
+        let (token, start_pos, end_pos), pending = match pending with
+          | next :: rest -> next, rest
+          | [] ->
+              let token = lexer lexbuf in
+              (token, Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf), [] in
+        let token, end_pos, pending = match token with
+          | Parser.OPERATOR text when not (I.acceptable checkpoint token start_pos) ->
+              let length = String.length text in
+              let first, width =
+                if String.starts_with ~prefix:"|>" text then Parser.BARGT, 2
+                else if String.starts_with ~prefix:"<>" text then Parser.NEQ, 2
+                else if String.starts_with ~prefix:">" text then Parser.GT, 1
+                else if String.starts_with ~prefix:"<" text then Parser.LT, 1
+                else token, length in
+              if width = length || not (I.acceptable checkpoint first start_pos) then
+                token, end_pos, pending
+              else
+                let split_pos = { start_pos with Lexing.pos_cnum = start_pos.Lexing.pos_cnum + width } in
+                let rest = match String.sub text width (length - width) with
+                  | ">" -> Parser.GT | "<" -> Parser.LT
+                  | "<>" -> Parser.NEQ | "|>" -> Parser.BARGT
+                  | text -> Parser.OPERATOR text in
+                first, split_pos, (rest, split_pos, end_pos) :: pending
+          | _ -> token, end_pos, pending in
+        run pending (I.offer checkpoint (token, start_pos, end_pos))
+    | (I.Shifting _ | I.AboutToReduce _) as checkpoint -> run pending (I.resume checkpoint)
+    | I.Accepted value -> value
+    | I.HandlingError _ | I.Rejected -> raise Parser.Error
+  in
+  run [] (start lexbuf.Lexing.lex_curr_p)
+
 let interactive : Sugartypes.sentence LinksLexer.grammar =
-  Parser.interactive
+  parse Parser.Incremental.interactive
 let program : (Sugartypes.binding list * Sugartypes.phrase option) LinksLexer.grammar =
-  Parser.file
+  parse Parser.Incremental.file
 let datatype : Sugartypes.Datatype.with_pos LinksLexer.grammar =
-  Parser.just_datatype
+  parse Parser.Incremental.just_datatype
 
 let normalize_pp = function
   | "" -> None

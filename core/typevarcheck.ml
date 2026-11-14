@@ -60,6 +60,9 @@ let rec is_guarded : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
             isg f && isgr m && isg t
         | Lolli (f, m, t) ->
             isg f && isgr m && isg t
+        | AmbientFunction (_, f, t) -> isg f && isg t
+        | Modal (modality, body) ->
+           isg body && ModalEffects.fold_arguments (fun valid arg -> valid && isg arg) true modality
         | Record row ->
            begin
              (* HACK: silly 1-tuple test *)
@@ -157,6 +160,10 @@ let rec is_negative : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
         | Function (f, m, t)
         | Lolli (f, m, t) ->
             isp f || isnr m || isn t
+        | AmbientFunction (_, f, t) -> isp f || isn t
+        | Modal (modality, body) ->
+           isn body || ModalEffects.fold_arguments (fun occurs arg ->
+             occurs || isp arg || isn arg) false modality
         | Record row -> isnr row
         | Variant row -> isnr row
         | ForAll (qs, t) ->
@@ -233,6 +240,10 @@ and is_positive : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
         | Function (f, m, t)
         | Lolli (f, m, t) ->
             isn f || ispr m || isp t
+        | AmbientFunction (_, f, t) -> isn f || isp t
+        | Modal (modality, body) ->
+           isp body || ModalEffects.fold_arguments (fun occurs arg ->
+             occurs || isp arg || isn arg) false modality
         | Record row -> ispr row
         | Variant row -> ispr row
         | ForAll (qs, t) ->

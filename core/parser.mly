@@ -75,6 +75,8 @@ let restriction_of_string p =
   | "Any"     -> res_any
   | "Base"    -> res_base
   | "Mono"    -> res_mono
+  | "Abs"     -> res_abs
+  | "MonoAbs" -> res_mono_abs
   | "Eff"     -> res_effect
   | rest      ->
      raise (ConcreteSyntaxError (pos p, "Invalid kind restriction: " ^ rest))
@@ -99,6 +101,8 @@ let kind_of p =
   (* subkind of type abbreviations *)
   | "Any"      -> (Some pk_type, Some (lin_any, res_any))
   | "Base"     -> (Some pk_type, Some (lin_unl, res_base))
+  | "Abs"      -> (Some pk_type, Some (lin_unl, res_abs))
+  | "MonoAbs"  -> (Some pk_type, Some (lin_unl, res_mono_abs))
   | "Eff"      -> (Some pk_row , Some (lin_unl, res_effect))
   | k          -> raise (ConcreteSyntaxError (pos p, "Invalid kind: " ^ k))
 
@@ -107,6 +111,8 @@ let subkind_of p =
   (* subkind abbreviations *)
   | "Any"     -> Some (lin_any, res_any)
   | "Base"    -> Some (lin_unl, res_base)
+  | "Abs"     -> Some (lin_unl, res_abs)
+  | "MonoAbs" -> Some (lin_unl, res_mono_abs)
   | "Eff"     -> Some (lin_unl, res_effect)
   | sk        -> raise (ConcreteSyntaxError (pos p, "Invalid subkind: " ^ sk))
 
@@ -190,6 +196,19 @@ let fresh_typevar ?(is_eff=false) freedom : SugarTypeVar.t =
 
 let fresh_effects =
   ([], Datatype.Open (fresh_typevar ~is_eff:true `Rigid))
+
+let absolute_modality p entries =
+  let wild, entries = List.partition_map (function
+    | None -> Either.Left ()
+    | Some entry -> Either.Right entry) entries in
+  if List.length wild > 1 then
+    raise (ConcreteSyntaxError (pos p, "`wild` can appear only once in an absolute effect context."));
+  Datatype.Absolute (wild <> [], entries)
+
+let mask_labels p entries =
+  List.map (function
+    | name, [] -> name
+    | _ -> raise (ConcreteSyntaxError (pos p, "A mask names interfaces without type arguments."))) entries
 
 module MutualBindings = struct
 
@@ -301,7 +320,8 @@ let any = any_pat dp
 %token <string> SLASHFLAGS
 %token UNDERSCORE AS
 %token <Operators.Associativity.t> FIXITY
-%token TYPENAME EFFECTNAME
+%token TYPENAME EFFECTNAME EFFECT
+%token LT GT NEQ BARGT
 %token <string> OPERATOR
 
 %start just_datatype
@@ -392,6 +412,7 @@ nofun_declaration:
                                                                  with_pos $loc node }
 | signature? tlvarbinding SEMICOLON                            { val_binding' ~ppos:$loc($2) $1 $2 }
 | typedecl SEMICOLON                                           { $1 }
+| effect_interface                                             { $1 }
 | links_module | links_open SEMICOLON                          { $1 }
 | pollute = boption(OPEN) IMPORT constructor_name SEMICOLON         { import ~ppos:$loc($2) ~pollute [$3] }
 
@@ -420,8 +441,8 @@ fun_kind:
 tlfunbinding:
 | fun_kind VARIABLE arg_lists block                            { ($1, $2, $3, loc_unknown, $4) }
 | OP pattern sigop pattern block                               { ((dl_unl, false), WithPos.node $3, [[$2; $4]], loc_unknown, $5) }
-| OP OPERATOR pattern block                                    { ((dl_unl, false), $2, [[$3]], loc_unknown, $4) }
-| OP pattern OPERATOR block                                    { ((dl_unl, false), $3, [[$2]], loc_unknown, $4) }
+| OP operator_text pattern block                                    { ((dl_unl, false), $2, [[$3]], loc_unknown, $4) }
+| OP pattern operator_text block                                    { ((dl_unl, false), $3, [[$2]], loc_unknown, $4) }
 
 switch_tlfunbinding:
 | fun_kind VARIABLE arg_lists switch_funlit_body               { ($1, $2, $3, loc_unknown, $4) }
@@ -445,6 +466,15 @@ typedecl:
 | EFFECTNAME constructor_name typeargs_opt EQ LBRACE erow RBRACE     { alias $loc $2 $3 (Effectname ( $6     , None)) }
 | EFFECTNAME constructor_name typeargs_opt EQ effect_app             { alias $loc $2 $3 (Effectname (([], $5), None)) }
 
+effect_interface:
+| EFFECT constructor_name typeargs_opt LBRACE effect_member+ RBRACE
+    { with_pos $loc (EffectInterface { interface_name = $2;
+        interface_id = None; interface_params = $3; interface_members = $5 }) }
+
+effect_member:
+| constructor_name COLON datatype SEMICOLON
+    { { member_name = $1; member_id = None; member_signature = $3; member_type = None } }
+
 (* Lists of quantifiers in square brackets denote type abstractions *)
 type_abstracion_vars:
 | LBRACKET varlist RBRACKET                                    { $2 }
@@ -456,6 +486,8 @@ typeargs_opt:
 kind:
 | COLONCOLON constructor_name LPAREN constructor_name COMMA constructor_name RPAREN
                                                                { full_kind_of $loc $2 $4 $6 }
+| COLONCOLON constructor_name LPAREN constructor_name RPAREN
+    { (Some (primary_kind_of_string $loc($2) $2), Some (lin_unl, restriction_of_string $loc($4) $4)) }
 | COLONCOLON constructor_name                                                 { kind_of $loc($2) $2        }
 
 subkind:
@@ -522,7 +554,14 @@ sigop:
 | op                                                           { $1 }
 
 op:
-| OPERATOR                                                     { with_pos $loc $1 }
+| operator_text                                                { with_pos $loc $1 }
+
+operator_text:
+| OPERATOR { $1 }
+| LT      { "<" }
+| GT      { ">" }
+| NEQ     { "<>" }
+| BARGT   { "|>" }
 
 postfix_expression:
 | primary_expression                                           { $1 }
@@ -547,14 +586,14 @@ perhaps_exps:
 unary_expression:
 | MINUS unary_expression                                       { unary_appl ~ppos:$loc UnaryOp.Minus      $2 }
 | MINUSDOT unary_expression                                    { unary_appl ~ppos:$loc UnaryOp.FloatMinus $2 }
-| OPERATOR unary_expression                                    { unary_appl ~ppos:$loc (UnaryOp.Name $1)  $2 }
+| operator_text unary_expression                                    { unary_appl ~ppos:$loc (UnaryOp.Name $1)  $2 }
 | postfix_expression | constructor_expression                  { $1 }
-| DOOP constructor_name loption(arg_spec)                           { with_pos $loc (DoOperation (with_pos $loc($2) (Operation $2), $3, None)) }
+| DOOP operation_name loption(arg_spec)                           { with_pos $loc (DoOperation (with_pos $loc($2) (Operation $2), $3, None)) }
 
 infix_appl:
 | unary_expression                                             { $1 }
-| unary_expression OPERATOR                                    { unary_appl ~ppos:$loc (UnaryOp.Name $2) $1 } /* TODO(dhil): This is more general than the previous rule as in it will permit more expressions to be chained together. */
-| unary_expression OPERATOR infix_appl                         { infix_appl' ~ppos:$loc $1 (BinaryOp.Name $2) $3 }
+| unary_expression operator_text                                    { unary_appl ~ppos:$loc (UnaryOp.Name $2) $1 } /* TODO(dhil): This is more general than the previous rule as in it will permit more expressions to be chained together. */
+| unary_expression operator_text infix_appl                         { infix_appl' ~ppos:$loc $1 (BinaryOp.Name $2) $3 }
 | unary_expression COLONCOLON infix_appl                       { infix_appl' ~ppos:$loc $1 BinaryOp.Cons $3 }
 | unary_expression MINUS infix_appl                            { infix_appl' ~ppos:$loc $1 BinaryOp.Minus $3 }
 | unary_expression MINUSDOT infix_appl                         { infix_appl' ~ppos:$loc $1 BinaryOp.FloatMinus $3 }
@@ -704,8 +743,10 @@ straight_arrow:
   straight_arrow_prefix RARROW datatype                        { Datatype.Function ($1, $2, $4) }
 | parenthesized_datatypes
   straight_arrow_prefix LOLLI datatype                         { Datatype.Lolli    ($1, $2, $4) }
-| parenthesized_datatypes RARROW datatype                      { Datatype.Function ($1, fresh_effects, $3) }
-| parenthesized_datatypes LOLLI datatype                       { Datatype.Lolli    ($1, fresh_effects, $3) }
+| parenthesized_datatypes RARROW datatype                      { Datatype.AmbientArrow (dl_unl, $1, $3) }
+| parenthesized_datatypes LOLLI datatype                       { Datatype.AmbientArrow (dl_lin, $1, $3) }
+| unary_domain RARROW datatype                                 { Datatype.AmbientArrow (dl_unl, [$1], $3) }
+| unary_domain LOLLI datatype                                  { Datatype.AmbientArrow (dl_lin, [$1], $3) }
 
 squiggly_arrow:
 | parenthesized_datatypes
@@ -725,8 +766,6 @@ mu_datatype:
 forall_datatype:
 | FORALL varlist DOT datatype                                  { Datatype.Forall ($2, $4) }
 | primary_datatype                                             { $1                       }
-| qualified_type_name                                          { Datatype.QualifiedTypeApplication ($1, []) }
-| qualified_type_name LPAREN type_arg_list RPAREN              { Datatype.QualifiedTypeApplication ($1, $3) }
 
 parenthesized_datatypes:
 | LPAREN RPAREN                                                { [] }
@@ -740,11 +779,21 @@ primary_datatype:
                                                                    | [] -> Datatype.Unit
                                                                    | [n] -> WithPos.node n
                                                                    | ts  -> Datatype.Tuple ts }
+| data_row_datatype                                             { $1 }
+| atomic_datatype                                               { $1 }
+
+data_row_datatype:
 | LPAREN rfields RPAREN                                        { Datatype.Record $2 }
 | LPAREN VBAR BARRPAREN                                         { Datatype.Variant ([], Datatype.Closed) }
 | LPAREN VBAR variant_fields BARRPAREN                          { Datatype.Variant $3 }
 | LPAREN VBAR data_row_tail row_end
     { let syntax, tail = $3 in open_data_row $loc $4 syntax tail }
+
+unary_domain:
+| atomic_datatype                                              { with_pos $loc $1 }
+| data_row_datatype                                             { with_pos $loc $1 }
+
+atomic_datatype:
 | type_var                                                     { $1 }
 | kinded_type_var                                              { $1 }
 | CONSTRUCTOR                                                  { let open Datatype in
@@ -758,7 +807,36 @@ primary_datatype:
                                                                    | t         -> TypeApplication (t, [])
                                                                }
 | CONSTRUCTOR LPAREN type_arg_list RPAREN                      { Datatype.TypeApplication ($1, $3) }
+| qualified_type_name                                          { Datatype.QualifiedTypeApplication ($1, []) }
+| qualified_type_name LPAREN type_arg_list RPAREN              { Datatype.QualifiedTypeApplication ($1, $3) }
 | LISTNAME primary_datatype_pos                                { Datatype.List $2 }
+| modality primary_datatype_pos                                { Datatype.Modal ($1, $2) }
+
+modality:
+| LBRACKET separated_list(COMMA, absolute_entry) RBRACKET     { absolute_modality $loc $2 }
+| NEQ                                                         { Datatype.Relative ([], []) }
+| LT entries = separated_nonempty_list(COMMA, effect_entry) GT
+    { Datatype.Relative ([], entries) }
+| LT labels = separated_nonempty_list(COMMA, effect_entry) BARGT
+    { Datatype.Relative (mask_labels $loc(labels) labels, []) }
+| LT labels = separated_nonempty_list(COMMA, effect_entry) VBAR entries = separated_list(COMMA, effect_entry) GT
+    { Datatype.Relative (mask_labels $loc(labels) labels, entries) }
+
+absolute_entry:
+| word = VARIABLE
+    { if word = "wild" then None else
+        raise (ConcreteSyntaxError (pos $loc, "Expected an effect interface or `wild`.")) }
+| effect_entry                                                 { Some $1 }
+
+effect_entry:
+| path = interface_path args = loption(delimited(LPAREN, datatypes, RPAREN))
+    { (Datatype.InterfaceName path, args) }
+
+interface_path:
+| separated_nonempty_list(DOT, constructor_name)               { $1 }
+
+operation_name:
+| interface_path                                               { String.concat "." $1 }
 
 type_var:
 | VARIABLE                                                     { Datatype.TypeVar (named_typevar $1  `Rigid)   }
@@ -1027,10 +1105,7 @@ effect_pattern:
 | typed_effect_pattern COLON primary_datatype_pos              { with_pos $loc (Pattern.HasType ($1, datatype $3)) }
 
 typed_effect_pattern:
-| lt = OPERATOR resumable_operation_pattern gt = OPERATOR
-    { if (lt <> "<") then raise (ConcreteSyntaxError (pos $loc(lt), ""))
-      else if (gt <> ">") then raise (ConcreteSyntaxError (pos $loc(gt), ""))
-      else $2 }
+| LT resumable_operation_pattern GT                            { $2 }
 
 resumable_operation_pattern:
 | operation_pattern FATRARROW pattern
@@ -1041,8 +1116,8 @@ resumable_operation_pattern:
     { with_pos $loc (Pattern.Operation (fst $1, snd $1, any)) }
 
 operation_pattern:
-| constructor_name                                                            { ($1, []) }
-| constructor_name multi_args                                       { ($1, $2) }
+| operation_name                                                            { ($1, []) }
+| operation_name multi_args                                    { ($1, $2) }
 
 typed_pattern:
 | cons_pattern                                                 { $1 }

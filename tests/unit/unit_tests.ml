@@ -14,6 +14,8 @@ let suites =
            Closures.suite;
            Variants.suite;
          ]);
+         Modal_effects_tests.suite;
+         Modal_scope_tests.suite;
        ]
 
 let () = run_test_tt_main suites

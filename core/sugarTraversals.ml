@@ -446,6 +446,14 @@ class map =
       | Operation (_x, _x_i1) ->
         let _x = o#list (fun o -> o#datatype) _x in
         let _x_i1 = o#datatype _x_i1 in Operation (_x, _x_i1)
+      | AmbientArrow (linearity, args, result) ->
+          AmbientArrow (o#linearity linearity, List.map o#datatype args, o#datatype result)
+      | Modal (modality, body) ->
+          let entry (name, arguments) = name, List.map o#datatype arguments in
+          let modality = match modality with
+            | Absolute (wild, entries) -> Absolute (wild, List.map entry entries)
+            | Relative (labels, entries) -> Relative (labels, List.map entry entries) in
+          Modal (modality, o#datatype body)
       | List _x -> let _x = o#datatype _x in List _x
       | TypeApplication (_x, _x_i1) ->
           let _x = o#name _x in
@@ -512,6 +520,13 @@ class map =
       | Aliases ts ->
           let _x = o#list (fun o -> o#alias) ts in
           Aliases _x
+      | EffectInterface declaration ->
+          let interface_params = List.map o#quantifier declaration.interface_params in
+          let interface_members = List.map (fun member ->
+            let member_signature = o#datatype member.member_signature in
+            let member_type = Option.map o#typ member.member_type in
+            { member with member_signature; member_type }) declaration.interface_members in
+          EffectInterface { declaration with interface_params; interface_members }
       | Infix { name; assoc; precedence } ->
          Infix { name = o#name name; assoc; precedence }
       | Exp _x -> let _x = o#phrase _x in Exp _x
@@ -976,6 +991,13 @@ class fold =
       | Operation (_x, _x_i1) ->
         let o = o#list (fun o -> o#datatype) _x in
         o#datatype _x_i1
+      | AmbientArrow (_, args, result) ->
+          let o = o#list (fun o -> o#datatype) args in
+          o#datatype result
+      | Modal (modality, body) ->
+          let entries = match modality with Absolute (_, es) | Relative (_, es) -> es in
+          let o = o#list (fun o (_, args) -> o#list (fun o -> o#datatype) args) entries in
+          o#datatype body
       | List _x -> let o = o#datatype _x in o
       | TypeApplication (_x, _x_i1) ->
           let o = o#name _x in
@@ -1043,6 +1065,9 @@ class fold =
       | Aliases ts ->
           let o = o#list (fun o -> o#alias) ts in
           o
+      | EffectInterface declaration ->
+          let o = o#list (fun o -> o#quantifier) declaration.interface_params in
+          o#list (fun o member -> o#datatype member.member_signature) declaration.interface_members
       | Infix { name; _ } ->
          o#name name
       | Exp _x -> let o = o#phrase _x in o
@@ -1590,6 +1615,21 @@ class fold_map =
         let (o, _x) = o#list (fun o -> o#datatype) _x in
         let (o, _x_i1) = o#datatype _x_i1 in
         (o, Operation (_x, _x_i1))
+      | AmbientArrow (linearity, args, result) ->
+          let o, args = o#list (fun o -> o#datatype) args in
+          let o, result = o#datatype result in
+          o, AmbientArrow (linearity, args, result)
+      | Modal (modality, body) ->
+          let entries es = o#list (fun o (name, arguments) ->
+            let o, arguments = o#list (fun o -> o#datatype) arguments in
+            o, (name, arguments)) es in
+          let o, modality = match modality with
+            | Absolute (wild, es) ->
+                let o, es = entries es in o, Absolute (wild, es)
+            | Relative (labels, es) ->
+                let o, es = entries es in o, Relative (labels, es) in
+          let o, body = o#datatype body in
+          o, Modal (modality, body)
       | List _x -> let (o, _x) = o#datatype _x in (o, (List _x))
       | TypeApplication (_x, _x_i1) ->
           let (o, _x) = o#string _x in
@@ -1669,6 +1709,13 @@ class fold_map =
       | Aliases ts ->
           let (o, _x) = o#list (fun o -> o#alias) ts in
           (o, (Aliases _x))
+      | EffectInterface declaration ->
+          let o, interface_params = o#list (fun o -> o#quantifier) declaration.interface_params in
+          let o, interface_members = o#list (fun o member ->
+            let o, member_signature = o#datatype member.member_signature in
+            let o, member_type = o#option (fun o -> o#typ) member.member_type in
+            o, { member with member_signature; member_type }) declaration.interface_members in
+          o, EffectInterface { declaration with interface_params; interface_members }
       | Infix { name; assoc; precedence } ->
          let (o, name) = o#name name in
          (o, Infix { name; assoc; precedence })

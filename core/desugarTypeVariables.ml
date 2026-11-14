@@ -557,6 +557,19 @@ object (o : 'self)
       o,b
     in
      match b with
+    | EffectInterface declaration ->
+       let inner = (o#reset_vars)#set_allow_implictly_bound_vars false in
+       let interface_params = List.map (fun param ->
+         let name, (primary, subkind), freedom = SugarQuantifier.get_unresolved_exn param in
+         let primary = match primary with None -> Some pk_type | explicit -> explicit in
+         SugarQuantifier.mk_unresolved name (primary, subkind) freedom) declaration.interface_params in
+       let _, interface_params, interface_members =
+         inner#quantified ~rigidify:true interface_params (fun inner ->
+           inner#list (fun inner member ->
+             let inner, member_signature = inner#datatype member.member_signature in
+             inner, { member with member_signature }) declaration.interface_members)
+       in
+       o, EffectInterface { declaration with interface_params; interface_members }
     | Funs fs ->
        (* Toplevel mutuals don't share type variables *)
        let (o, fs) =

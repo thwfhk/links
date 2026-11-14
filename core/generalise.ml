@@ -63,6 +63,9 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
             and effect_gens = get_row_type_args kind bound_vars m
             and to_gens = gt t in
               from_gens @ effect_gens @ to_gens
+        | AmbientFunction (_, f, t) -> gt f @ gt t
+        | Modal (modality, body) ->
+           ModalEffects.fold_arguments (fun args arg -> args @ gt arg) [] modality @ gt body
         | Record row
         | Variant row -> get_row_type_args kind bound_vars row
         | ForAll (qs, t) ->
@@ -154,6 +157,8 @@ let mono_type_args : type_arg -> unit =
     match Unionfind.find point with
     | Var (var, (primary_kind, (lin, Restriction.Mono)), `Flexible) ->
        Unionfind.change point (Var (var, (primary_kind, (lin, Restriction.Any)), `Flexible))
+    | Var (var, (primary_kind, (lin, Restriction.MonoAbs)), `Flexible) ->
+       Unionfind.change point (Var (var, (primary_kind, (lin, Restriction.Abs)), `Flexible))
     | _ -> () in
   let open PrimaryKind in
   function

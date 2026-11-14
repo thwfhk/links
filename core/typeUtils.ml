@@ -193,6 +193,8 @@ let rec primary_kind_of_type t =
   | Primitive _
   | Function _
   | Lolli _
+  | AmbientFunction _
+  | Modal _
   | Record _
   | Variant _
   | ForAll _
@@ -283,6 +285,13 @@ let check_type_wellformedness primary_kind t : unit =
     | Function (f, m, t)
     | Lolli (f, m, t) ->
        idatatype f; irow m; idatatype t;
+       pk_type
+    | AmbientFunction (_, f, t) ->
+       idatatype f; idatatype t;
+       pk_type
+    | Modal (modality, body) ->
+       ModalEffects.fold_arguments (fun () -> idatatype) () modality;
+       idatatype body;
        pk_type
     | Record row
     | Variant row ->

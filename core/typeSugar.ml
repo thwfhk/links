@@ -107,6 +107,7 @@ struct
     | Fun _
     | Funs _
     | Infix _
+    | EffectInterface _
     | Aliases _ -> true
     | Exp p -> is_pure p
     | Val (pat, (_, rhs), _, _) ->
@@ -1402,6 +1403,8 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
       | Primitive _
       | Function _
       | Lolli _
+      | AmbientFunction _
+      | Modal _
       | Operation _
       (* TODO: or anything special for recursive applications? *)
       | RecursiveApplication _
@@ -3392,6 +3395,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
           ) empty_context ts in
           (Aliases ts, env, Usage.empty)
       | Infix def -> Infix def, empty_context, Usage.empty
+      | EffectInterface declaration -> EffectInterface declaration, empty_context, Usage.empty
       | Exp e ->
           let e = tc e in
           let () = unify pos ~handle:Gripers.bind_exp

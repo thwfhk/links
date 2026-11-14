@@ -52,6 +52,8 @@ module Restriction = struct
     | Any
     | Base
     | Mono
+    | Abs
+    | MonoAbs
     | Effect
     [@@deriving eq,show]
 
@@ -64,8 +66,12 @@ module Restriction = struct
     | _    -> false
 
   let is_mono = function
-    | Mono -> true
+    | Mono | MonoAbs -> true
     | _    -> false
+
+  let requires_abs = function
+    | Abs | MonoAbs | Base -> true
+    | _ -> false
 
   let is_effect = function
     | Effect -> true
@@ -75,16 +81,23 @@ module Restriction = struct
     | Any     -> "Any"
     | Base    -> "Base"
     | Mono    -> "Mono"
+    | Abs     -> "Abs"
+    | MonoAbs -> "MonoAbs"
     | Effect  -> "Eff"
 
   let min l r =
     match l, r with
     | Any, Any         -> Some Any
     | Mono, Mono       -> Some Mono
+    | Abs, Abs         -> Some Abs
+    | MonoAbs, MonoAbs -> Some MonoAbs
     | Effect, Effect   -> Some Effect
     | Base, Base       -> Some Base
     | x, Any | Any, x  -> Some x (* Any will narrow to anything. *)
     | Base, Mono | Mono, Base -> Some Base (* Mono can narrow to Base. *)
+    | Base, (Abs | MonoAbs) | (Abs | MonoAbs), Base -> Some Base
+    | (Abs | MonoAbs), (Mono | MonoAbs) | (Mono | MonoAbs), (Abs | MonoAbs) ->
+        Some MonoAbs
     | _ -> None
 end
 
@@ -92,6 +105,8 @@ end
 let res_any     = Restriction.Any
 let res_base    = Restriction.Base
 let res_mono    = Restriction.Mono
+let res_abs     = Restriction.Abs
+let res_mono_abs = Restriction.MonoAbs
 let res_effect  = Restriction.Effect
 
 module Subkind = struct

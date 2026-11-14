@@ -1,0 +1,73 @@
+Effect interfaces have their own namespace and can refer to themselves
+typename Reader = Int; effect Reader(a::Abs) { Ask : () => a; Run : ([Reader(a)] (Int -> a)) => a; } 42 : Reader
+stdout : 42 : Reader
+
+Qualified names, quantified types and all modality forms
+module Effects { effect Reader(a::Abs) { Ask : () => a; } } typename T = forall a::Abs,r::Row(Abs),p::Presence(Abs). [wild, Effects.Reader(a)] (List (<Effects.Reader | Effects.Reader(Bool)> (Int -> (|Some{p}|r|)))); 42
+stdout : 42 : Int
+
+Adjacent closing angle brackets remain separate within types
+effect Reader(a::Type(Any,Any)) { Ask : () => Int; } typename T = <Reader(<Reader(Int)> (Int -> Int))><Reader |> (Int -> Int); 42
+stdout : 42 : Int
+
+Identity modality and symbolic term operators use the same spelling
+typename T = <> Int; op x <|> y { x + y } (20 <|> 22, 1 <> 2)
+stdout : (42, true) : (Int, Bool)
+
+Unary arrow shorthand in a list element
+var fs = [fun(n) { n }] : List (Int -> Int); hd(fs)(42)
+stdout : 42 : Int
+
+Unary arrow shorthand with record and variant domains
+typename RecordFn = [] ((n:Int) -> Int); typename VariantFn = [] ((|N:Int|) -> Int); 42
+stdout : 42 : Int
+
+Duplicate names in an interface are rejected
+effect Reader { Ask : () => Int; Ask : () => Bool; }
+stderr : @.*Duplicate operation Ask.*
+exit : 1
+
+Unknown qualified operation is rejected
+module Effects { effect Reader { Ask : () => Int; } } do Effects.Missing
+stderr : @.*Unbound operation Effects\.Missing.*
+exit : 1
+
+An interface instance must supply every type argument
+effect Reader(a::Abs) { Ask : () => a; } typename T = [Reader] Int;
+stderr : @.*Reader expects 1 type arguments.*
+exit : 1
+
+An absolute interface parameter rejects an ambient function
+effect Reader(a::Abs) { Ask : () => a; } typename T = [Reader(Int -> Int)] Int;
+stderr : @.*Argument 1 of Reader must satisfy Abs\..*
+exit : 1
+
+An operation payload must be absolute
+effect Runner { Run : ((Int -> Int)) => Int; }
+stderr : @.*The arguments and result of Run must have absolute types\..*
+exit : 1
+
+An operation signature needs a fat arrow
+effect Reader { Ask : () -> Int; }
+stderr : @.*An operation signature for Ask must use `=>`\..*
+exit : 1
+
+Masks take interface names only
+effect Reader(a::Abs) { Ask : () => a; } typename T = <Reader(Int) |> Int;
+stderr : @.*A mask names interfaces without type arguments\..*
+exit : 1
+
+An absolute context may contain wild once
+typename T = [wild, wild] Int;
+stderr : @.*`wild` can appear only once.*
+exit : 1
+
+The legacy checker rejects modal expression types
+42 : [] Int
+stderr : @.*Checking expressions with modal types requires the modal type checker\..*
+exit : 1
+
+The legacy checker rejects calls to declared operations
+effect Reader { Ask : () => Int; } do Ask
+stderr : @.*Calling a declared operation requires the modal type checker\..*
+exit : 1

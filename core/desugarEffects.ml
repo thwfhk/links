@@ -25,12 +25,22 @@ let rec elaborate_operation (dt : Datatype.with_pos) =
   | Forall (qs, body) -> with_node dt (Forall (qs, elaborate_operation body))
   | _ -> with_node dt (Datatype.Operation ([], dt))
 
+let has_modal_type =
+  let visitor = object
+    inherit SugarTraversals.fold as super
+    method! datatypenode = function
+      | Datatype.Modal _ -> raise Exit
+      | t -> super#datatypenode t
+  end in
+  fun dt -> try ignore (visitor#datatype dt); false with Exit -> true
+
 class main_traversal initial_alias_kinds =
   object (o)
     inherit SugarTraversals.fold_map as super
 
     val alias_kinds : Kind.t list SEnv.t = initial_alias_kinds
     val allow_implicit_vars = true
+    val modal_types = false
 
     method! phrasenode = function
       | Block _ as block ->
@@ -39,8 +49,10 @@ class main_traversal initial_alias_kinds =
       | phrase -> super#phrasenode phrase
 
     method! datatype dt =
+      (* Keep the meaning of bare arrows consistent within a modal type. *)
+      let inner = if modal_types || not (has_modal_type dt) then o else {<modal_types = true>} in
       Errors.rethrow_errors_if_better_position
-        (SourceCode.WithPos.pos dt) super#datatype dt
+        (SourceCode.WithPos.pos dt) inner#visit_datatype dt
 
     method! datatypenode =
       let open Datatype in
@@ -51,6 +63,14 @@ class main_traversal initial_alias_kinds =
         (o, args, effects, result)
       in
       function
+      | AmbientArrow (linearity, args, result) ->
+          if modal_types then super#datatypenode (AmbientArrow (linearity, args, result))
+          else
+            let anonymous = SugarTypeVar.mk_unresolved "$effect" ~is_eff:true None `Rigid in
+            let o, args, effects, result = arrow args ([], Datatype.Open anonymous) result in
+            o, (match linearity with
+                | DeclaredLinearity.Unl -> Function (args, effects, result)
+                | DeclaredLinearity.Lin -> Lolli (args, effects, result))
       | Function (args, effects, result) ->
           let o, args, effects, result = arrow args effects result in
           (o, Function (args, effects, result))
@@ -139,6 +159,10 @@ class main_traversal initial_alias_kinds =
       | body -> super#aliasbody body
 
     method! bindingnode = function
+      | EffectInterface _ as declaration ->
+          let inner = {<allow_implicit_vars = false; modal_types = true>} in
+          let _, declaration = inner#visit_bindingnode declaration in
+          o, declaration
       | Val (_, _, _, signature) as binding ->
           let inner = o#with_signature signature in
           let _, binding = inner#visit_bindingnode binding in
@@ -171,6 +195,7 @@ class main_traversal initial_alias_kinds =
           DesugarTypeVariables.sig_allows_implicitly_bound_vars signature>}
 
     method visit_bindingnode = super#bindingnode
+    method visit_datatype = super#datatype
     method visit_function_definition = super#function_definition
     method visit_recursive_functionnode = super#recursive_functionnode
 

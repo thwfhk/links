@@ -102,6 +102,8 @@ and typ =
   | Primitive of Primitive.t
   | Function of (typ * row * typ)
   | Lolli of (typ * row * typ)
+  | AmbientFunction of (DeclaredLinearity.t * typ * typ)
+  | Modal of (typ ModalEffects.modality * typ)
   | Record of row
   | Variant of row
   | ForAll of (Quantifier.t list * typ)
@@ -154,6 +156,7 @@ end
 module Base : Constraint
 module Unl : Constraint
 module Mono : Constraint
+module Abs : Constraint
 
 (** Get a {!Constraint} for a specific subkind {!Restriction.t}. *)
 val get_restriction_constraint : Restriction.t -> (module Constraint) option
@@ -183,6 +186,7 @@ val normalise_row : row -> row
 val normalise_typing_environment : typing_environment -> typing_environment
 
 val for_all : Quantifier.t list * datatype -> datatype
+val modal : datatype ModalEffects.modality -> datatype -> datatype
 
 (** useful types *)
 val unit_type : datatype

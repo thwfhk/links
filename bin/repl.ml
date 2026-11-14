@@ -197,7 +197,8 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
                ~default:(fun _ -> context)
                (lazy
                   (let (context', datatype, value) =
-                     Driver.Phases.whole_program context filename
+                     DesugarModules.with_scope_rollback (fun () ->
+                       Driver.Phases.whole_program context filename)
                    in
                    print_value datatype value; context'))
           | _ -> prerr_endline "syntax: @load \"filename\""; context),
@@ -344,7 +345,7 @@ let interact : Context.t -> unit
   Printf.printf "%s%!" (val_of (Settings.get welcome_note));
   let rec loop context =
     Parse.Readline.prepare_prompt ps1;
-    match I.readline ps1 context with
+    match DesugarModules.with_scope_rollback (fun () -> I.readline ps1 context) with
     | exception exn ->
        print_error exn; loop context
     | I.({ sentence; context = context' }) ->

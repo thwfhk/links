@@ -67,8 +67,21 @@ module Desugar = struct
   let desugar_quantifiers  (sqs: SugarQuantifier.t list) :  Quantifier.t list =
     List.map SugarQuantifier.get_resolved_exn sqs
 
-  let rec datatype (alias_env : Types.tycon_environment) t' =
-    let datatype t' = datatype alias_env t' in
+  let interface_id pos = function
+    | Datatype.InterfaceId id -> id
+    | Datatype.InterfaceName path ->
+        raise (module_error ~pos ("Unbound effect interface " ^ String.concat "." path))
+
+  let check_restriction pos name index restriction argument =
+    match Types.get_restriction_constraint restriction with
+    | Some (module Constraint) when not (Constraint.type_satisfies argument) ->
+        let message = Printf.sprintf "Argument %d of %s must satisfy %s."
+          (index + 1) name (Restriction.to_string restriction) in
+        raise (Type_error (pos, message))
+    | _ -> ()
+
+  let rec datatype interfaces (alias_env : Types.tycon_environment) t' =
+    let datatype t' = datatype interfaces alias_env t' in
     match t' with
     | { node = t; pos } ->
       let open Datatype in
@@ -80,12 +93,39 @@ module Desugar = struct
         | QualifiedTypeApplication _ -> assert false (* will have been erased *)
         | Function (f, e, t) as _fn ->
             Types.Function ( Types.make_tuple_type (List.map datatype f)
-                           , row alias_env e t'
+                           , row interfaces alias_env e t'
                            , datatype t )
         | Lolli (f, e, t) ->
             Types.Lolli ( Types.make_tuple_type (List.map datatype f)
-                        , row alias_env e t'
+                        , row interfaces alias_env e t'
                         , datatype t )
+        | AmbientArrow (linearity, args, result) ->
+            Types.AmbientFunction (linearity, Types.make_tuple_type (List.map datatype args), datatype result)
+        | Modal (modality, body) ->
+            let entry (name, args) =
+              let id = interface_id pos name in
+              let name = ModalEffects.Interface.name id in
+              let signature = match EffectInterfaces.find id interfaces with
+                | Some signature -> signature
+                | None -> raise (module_error ~pos ("Unbound effect interface " ^ name)) in
+              let expected = List.length signature.EffectInterfaces.parameters
+              and provided = List.length args in
+              if expected <> provided then
+                raise (TypeApplicationArityMismatch {pos; name; expected; provided});
+              let arguments = List.map datatype args in
+              List.iteri (fun index (q, argument) ->
+                let linearity, restriction = Quantifier.to_subkind q in
+                if linearity = lin_unl && not (Types.Unl.type_satisfies argument) then
+                  raise (Type_error (pos, Printf.sprintf "Argument %d of %s must be unrestricted." (index + 1) name));
+                check_restriction pos name index restriction argument)
+                (List.combine signature.EffectInterfaces.parameters arguments);
+              id, arguments in
+            let extension entries = ModalEffects.extension (List.map entry entries) in
+            let modality = match modality with
+              | Absolute (wild, entries) -> ModalEffects.Absolute (ModalEffects.context ~wild (extension entries))
+              | Relative (labels, entries) ->
+                  ModalEffects.Relative (ModalEffects.mask (List.map (interface_id pos) labels), extension entries) in
+            Types.modal modality (datatype body)
         | Mu (stv, t) ->
            let mtv = SugarTypeVar.get_resolved_type_exn stv in
            let var, sk = unpack_var_id (Unionfind.find mtv) in
@@ -105,9 +145,9 @@ module Desugar = struct
             let present (s, x) = (s, Types.Present x)
             in
               Types.Record (fold_right2 (curry (Types.row_with -<- present)) labels (map datatype ks) unit)
-        | Record r -> Types.Record (row alias_env r t')
-        | Variant r -> Types.Variant (row alias_env r t')
-        | Effect r -> Types.Effect (row alias_env r t')
+        | Record r -> Types.Record (row interfaces alias_env r t')
+        | Variant r -> Types.Variant (row interfaces alias_env r t')
+        | Effect r -> Types.Effect (row interfaces alias_env r t')
         | Operation (args, result) ->
             Types.Operation (Types.make_tuple_type (List.map datatype args), datatype result)
         | List k -> Types.Application (Types.list, [(PrimaryKind.Type, datatype k)])
@@ -135,7 +175,11 @@ module Desugar = struct
                 |> List.mapi
                      (fun i (q,t) ->
                        let  t = match_kinds i (q, t) in
-                       type_arg alias_env t t')
+                       let primary, argument = type_arg interfaces alias_env t t' in
+                       let _, (_, restriction) = proj q in
+                       if restriction = res_abs || restriction = res_mono_abs then
+                         check_restriction pos tycon i restriction argument;
+                       primary, argument)
               in
 
               let qn = List.length qs and tn = List.length ts in
@@ -174,10 +218,10 @@ module Desugar = struct
                     }
             end
         | Primitive k -> Types.Primitive k
-  and fieldspec alias_env fs _ =
+  and fieldspec interfaces alias_env fs _ =
     match fs with
     | Datatype.Absent -> Types.Absent
-    | Datatype.Present t -> Types.Present (datatype alias_env t)
+    | Datatype.Present t -> Types.Present (datatype interfaces alias_env t)
     (* | Var stv when is_anon stv ->
      *    let (_name, sk, freedom) = SugarTypeVar.get_unresolved_exn stv in
      *    `Var (make_anon_point var_env pos sk freedom) *)
@@ -186,7 +230,7 @@ module Desugar = struct
        (* Debug.print ("presence var: " ^ Types.string_of_presence (Types.Meta resolved_pv)); *)
        Types.Meta resolved_pv
 
-  and row alias_env (fields, rv) (node : 'a WithPos.t) =
+  and row interfaces alias_env (fields, rv) (node : 'a WithPos.t) =
     let seed =
       let open Datatype in
       match rv with
@@ -212,7 +256,7 @@ module Desugar = struct
                 |> List.mapi
                      (fun i (q,t) ->
                        let  t = match_kinds i (q, t) in
-                       type_arg alias_env t node)
+                       type_arg interfaces alias_env t node)
               in
               let qn = List.length qs and tn = List.length ts in
               if qn = tn then
@@ -260,52 +304,53 @@ module Desugar = struct
            let mrv = SugarTypeVar.get_resolved_row_exn stv in
 
            let var, sk = unpack_var_id (Unionfind.find mrv) in
-           let r = row alias_env r node in
+           let r = row interfaces alias_env r node in
 
            (* Turn mrv into a proper recursive row *)
            Unionfind.change mrv (Types.Recursive (var, sk, r));
            Types.Row (StringMap.empty, mrv)
 
     in
-    let fields = List.map (fun (k, p) -> (k, fieldspec alias_env p node)) fields in
+    let fields = List.map (fun (k, p) -> (k, fieldspec interfaces alias_env p node)) fields in
     fold_right Types.row_with fields seed
 
 
-  and type_arg alias_env ta node =
+  and type_arg interfaces alias_env ta node =
     let open Datatype in
     let open PrimaryKind in
     match ta with
-    | Type t     -> Type, datatype alias_env t
-    | Row r      -> Row, row alias_env r node
-    | Presence f -> Presence, fieldspec alias_env f node
+    | Type t     -> Type, datatype interfaces alias_env t
+    | Row r      -> Row, row interfaces alias_env r node
+    | Presence f -> Presence, fieldspec interfaces alias_env f node
 
-  let datatype' alias_env ((dt, _) : datatype') =
-    (dt, Some (datatype alias_env dt))
+  let datatype' interfaces alias_env ((dt, _) : datatype') =
+    (dt, Some (datatype interfaces alias_env dt))
 
-  let row' alias_env ((r, _) :row') =
-    (r, Some (row alias_env r (WithPos.make (Datatype.Effect r)))) (* should we keep the pos ? have a real node ? *)
+  let row' interfaces alias_env ((r, _) :row') =
+    (r, Some (row interfaces alias_env r (WithPos.make (Datatype.Effect r)))) (* should we keep the pos ? have a real node ? *)
 
-  let aliasbody alias_env = function
-    | Typename dt' -> Typename (datatype' alias_env dt')
-    | Effectname r' -> Effectname (row' alias_env r')
+  let aliasbody interfaces alias_env = function
+    | Typename dt' -> Typename (datatype' interfaces alias_env dt')
+    | Effectname r' -> Effectname (row' interfaces alias_env r')
 
-  let type_arg' alias_env ((ta, _) : type_arg') : type_arg' =
+  let type_arg' interfaces alias_env ((ta, _) : type_arg') : type_arg' =
     let unlocated = WithPos.make Datatype.Unit in
-    (ta, Some (type_arg alias_env ta unlocated))
+    (ta, Some (type_arg interfaces alias_env ta unlocated))
 end
 
 (** Convert a syntactic type into a semantic type, using `map' to resolve free type variables *)
-let desugar initial_alias_env =
+let desugar initial_interfaces initial_alias_env =
 object (self)
   inherit SugarTraversals.fold_map as super
 
   val alias_env = initial_alias_env
+  val interfaces = initial_interfaces
 
-  method! datatype' node = (self, Desugar.datatype' alias_env node)
+  method! datatype' node = (self, Desugar.datatype' interfaces alias_env node)
 
-  method! row' node = (self, Desugar.row' alias_env node)
+  method! row' node = (self, Desugar.row' interfaces alias_env node)
 
-  method! type_arg' node = (self, Desugar.type_arg' alias_env node)
+  method! type_arg' node = (self, Desugar.type_arg' interfaces alias_env node)
 
   method! phrasenode = function
     | Block (bs, p) ->
@@ -322,6 +367,35 @@ object (self)
 
 
   method! bindingnode = function
+    | EffectInterface declaration ->
+        let id = Option.get declaration.interface_id in
+        let parameters = Desugar.desugar_quantifiers declaration.interface_params in
+        let name = ModalEffects.Interface.name id in
+        let pos = match declaration.interface_members with
+          | member :: _ -> WithPos.pos member.member_signature
+          | [] -> Position.dummy in
+        List.iter (fun q ->
+          if Kind.primary_kind (Quantifier.to_kind q) <> pk_type then
+            raise (module_error ~pos ("Parameters of effect interface " ^ name ^ " must be value types."))) parameters;
+        let signature = EffectInterfaces.{ parameters; operations = Operations.empty } in
+        let interfaces = EffectInterfaces.add id signature interfaces in
+        let check_member member =
+          let t = Desugar.datatype interfaces alias_env member.member_signature in
+          let pos = WithPos.pos member.member_signature in
+          let rec check = function
+            | Types.ForAll (_, body) -> check body
+            | Types.Operation (domain, result) ->
+                if not (Types.Abs.type_satisfies domain && Types.Abs.type_satisfies result) then
+                  raise (module_error ~pos ("The arguments and result of " ^ member.member_name ^ " must have absolute types."))
+            | _ -> raise (module_error ~pos ("An operation signature for " ^ member.member_name ^ " must use `=>`.")) in
+          check t;
+          { member with member_type = Some t } in
+        let interface_members = List.map check_member declaration.interface_members in
+        let operations = List.fold_left (fun operations member ->
+          EffectInterfaces.Operations.add (Option.get member.member_id) (Option.get member.member_type) operations)
+            EffectInterfaces.Operations.empty interface_members in
+        let interfaces = EffectInterfaces.add id EffectInterfaces.{ signature with operations } interfaces in
+        {<interfaces>}, EffectInterface { declaration with interface_members }
     | Aliases ts ->
         (* Maps syntactic types in the recursive group to semantic types. *)
         (* This must be empty to start off with, because there's a cycle
@@ -354,7 +428,7 @@ object (self)
           List.map (fun {node=(name, args, b); pos} ->
             (* Desugar the datatype *)
             (* Check if the datatype has actually been desugared *)
-            let b' = match Desugar.aliasbody mutual_env b with
+            let b' = match Desugar.aliasbody interfaces mutual_env b with
                 | Typename     (_, Some _) as b' -> b'
                 | Effectname   (_, Some _) as b' -> b'
                 | _ -> raise (internal_error "Datatype not desugared")
@@ -438,57 +512,54 @@ object (self)
       self, (bindings, e)
 
   method aliases = alias_env
+  method interfaces = interfaces
 end
 
-let phrase alias_env p =
-  (desugar alias_env)#phrase p
+let phrase interfaces alias_env p =
+  (desugar interfaces alias_env)#phrase p
 
-let binding alias_env ({ node; pos } as b : binding) =
+let binding interfaces alias_env ({ node; pos } as b : binding) =
   match node with
   | Funs bnds ->
       let bnds =
         List.map
           (fun bnd ->
-            (desugar alias_env)#recursive_function bnd
+            (desugar interfaces alias_env)#recursive_function bnd
             |> snd )
           bnds
       in
-      (alias_env, WithPos.make ~pos (Funs bnds))
+      (interfaces, alias_env, WithPos.make ~pos (Funs bnds))
   | _ ->
-      let o, b = (desugar alias_env)#binding b in
-      (o#aliases, b)
+      let o, b = (desugar interfaces alias_env)#binding b in
+      (o#interfaces, o#aliases, b)
 
-let toplevel_bindings alias_env bs =
-  let alias_env, bnds =
+let toplevel_bindings interfaces alias_env bs =
+  let interfaces, alias_env, bnds =
     List.fold_left
-      (fun (alias_env, bnds) bnd ->
-         let aliases, bnd = binding alias_env bnd in
-           (aliases, bnd::bnds))
-    (alias_env, [])
+      (fun (interfaces, alias_env, bnds) bnd ->
+         let interfaces, aliases, bnd = binding interfaces alias_env bnd in
+           (interfaces, aliases, bnd::bnds))
+    (interfaces, alias_env, [])
       bs
-  in (alias_env, List.rev bnds)
+  in (interfaces, alias_env, List.rev bnds)
 
-let program typing_env (bindings, p : Sugartypes.program) :
-    Sugartypes.program =
-  let alias_env = typing_env.tycon_env in
-  let alias_env, bindings =
-    toplevel_bindings alias_env bindings in
-  (* let typing_env = { typing_env with tycon_env = alias_env } in *)
-  (bindings, opt_map ((phrase alias_env) ->- snd) p)
+let program typing_env interfaces (bindings, p : Sugartypes.program) =
+  let interfaces, alias_env, bindings =
+    toplevel_bindings interfaces typing_env.tycon_env bindings in
+  interfaces, (bindings, opt_map ((phrase interfaces alias_env) ->- snd) p)
 
-let sentence typing_env = function
+let sentence typing_env interfaces = function
   | Definitions bs ->
-      let _alias_env, bs' = toplevel_bindings typing_env.tycon_env bs in
-        Definitions bs'
-  | Expression  p  -> let _o, p = phrase typing_env.tycon_env p in
-      Expression p
-  | Directive   d  -> Directive d
+      let interfaces, _, bs = toplevel_bindings interfaces typing_env.tycon_env bs in
+      interfaces, Definitions bs
+  | Expression p -> interfaces, Expression (snd (phrase interfaces typing_env.tycon_env p))
+  | Directive d -> interfaces, Directive d
 
 let read ~aliases s =
   let dt, _ = parse_string ~in_context:(LinksLexer.fresh_context ()) datatype s in
   let dt = DesugarTypeVariables.standalone_signature dt in
   let dt = DesugarEffects.standalone_signature aliases dt in
-  let _, ty = Generalise.generalise Env.String.empty (Desugar.datatype aliases dt) in
+  let _, ty = Generalise.generalise Env.String.empty (Desugar.datatype EffectInterfaces.empty aliases dt) in
   ty
 
 module Untyped = struct
@@ -497,14 +568,12 @@ module Untyped = struct
   let name = "datatypes"
 
   let program state program' =
-    (* Debug.print ("program': " ^ Sugartypes.show_program program'); *)
-    let tyenv = Context.typing_environment (context state) in
-    let program'' = program tyenv program' in
-    (* Debug.print ("program'': " ^ Sugartypes.show_program program''); *)
-    return state program''
+    let state = context state in
+    let effect_interfaces, program = program (Context.typing_environment state) state.Context.effect_interfaces program' in
+    return Context.{ state with effect_interfaces } program
 
   let sentence state sentence' =
-    let tyenv = Context.typing_environment (context state) in
-    let sentence'' = sentence tyenv sentence' in
-    return state sentence''
+    let state = context state in
+    let effect_interfaces, sentence = sentence (Context.typing_environment state) state.Context.effect_interfaces sentence' in
+    return Context.{ state with effect_interfaces } sentence
 end

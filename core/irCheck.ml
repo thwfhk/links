@@ -305,6 +305,19 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
               eq_rows (context, lm   , rm   )
             | _  -> false
           end
+      | AmbientFunction (llin, lfrom, lto) ->
+          begin match t2 with
+            | AmbientFunction (rlin, rfrom, rto) ->
+              llin = rlin && eqt (context, lfrom, rfrom) && eqt (context, lto, rto)
+            | _ -> false
+          end
+      | Modal (lmod, lbody) ->
+          begin match t2 with
+            | Modal (rmod, rbody) ->
+              ModalEffects.equivalent ~equal:(fun l r -> eqt (context, l, r)) lmod rmod
+              && eqt (context, lbody, rbody)
+            | _ -> false
+          end
       | Record l ->
          begin match t2 with
          | Record r -> eq_rows (context, l, r)

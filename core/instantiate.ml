@@ -73,6 +73,8 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
               end
         | Function (f, m, t) -> Function (inst f, instr m, inst t)
         | Lolli (f, m, t) -> Lolli (inst f, instr m, inst t)
+        | AmbientFunction (linearity, f, t) -> AmbientFunction (linearity, inst f, inst t)
+        | Modal (modality, body) -> Types.modal (ModalEffects.map_arguments inst modality) (inst body)
         | Record row -> Record (instr row)
         | Variant row -> Variant (instr row)
         | Effect row -> Effect (instr row)

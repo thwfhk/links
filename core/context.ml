@@ -2,6 +2,7 @@
 (* TODO localise environment within their associated compilation units. *)
 type t =
   { typing_environment: Types.typing_environment; (* TODO remove. *)
+    effect_interfaces: EffectInterfaces.t;
     name_environment: Ir.var Env.String.t;        (* TODO remove. *)
     value_environment: Value.env;
     variable_environment: Types.datatype Env.Int.t; (* TODO remove. *)
@@ -12,6 +13,7 @@ let empty_code = new SourceCode.source_code
 
 let empty =
   { typing_environment = Types.empty_typing_environment;
+    effect_interfaces = EffectInterfaces.empty;
     variable_environment = Env.Int.empty;
     name_environment = Env.String.empty;
     value_environment = Value.Env.empty;

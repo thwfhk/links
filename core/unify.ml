@@ -131,6 +131,19 @@ let rec eq_types : (datatype * datatype) -> bool =
                                       && eq_rows  (lm,    rm)
           | _                       -> false
           end
+      | AmbientFunction (llin, lfrom, lto) ->
+          begin match unalias t2 with
+          | AmbientFunction (rlin, rfrom, rto) ->
+             llin = rlin && eq_types (lfrom, rfrom) && eq_types (lto, rto)
+          | _ -> false
+          end
+      | Modal (lmod, lbody) ->
+          begin match unalias t2 with
+          | Modal (rmod, rbody) ->
+             ModalEffects.equivalent ~equal:(Utility.curry eq_types) lmod rmod
+             && eq_types (lbody, rbody)
+          | _ -> false
+          end
       | Record l ->
          begin match unalias t2 with
          | Record r -> eq_rows (l, r)
@@ -391,7 +404,6 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                 Unionfind.union lpoint rpoint
            | Var (lvar, (lprimary_kind, (llin,lrest)), `Flexible), Var (rvar, (rprimary_kind, (rlin,rrest)), `Flexible) ->
               assert (lprimary_kind = PrimaryKind.Type && rprimary_kind = PrimaryKind.Type);
-              Unionfind.union lpoint rpoint;
               begin
                 let lin =
                   match llin, rlin with
@@ -406,6 +418,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                          (Restriction.to_string lrest) lvar (Restriction.to_string rrest) rvar
                      in raise (Failure (`Msg message))
                 in
+                Unionfind.union lpoint rpoint;
                 Unionfind.change lpoint (Var (lvar, (lprimary_kind, (lin, rest)), `Flexible))
               end
            | Var (var, ((primary_kind, (lin, rest)) as kind), `Flexible), _ ->
@@ -525,6 +538,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                 if Restriction.is_base rest then
                   raise (Failure (`Msg ("Cannot infer a recursive type for the type variable "^ string_of_int var ^
                                           " with the body "^ string_of_datatype t)));
+                if Restriction.requires_abs rest then check_subkind var (lin, rest) t;
                 let point' = Unionfind.fresh t in
                 rec_intro kind point' (var, t);
                 Unionfind.union point point'
@@ -583,6 +597,16 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
        (ut (lfrom, rfrom);
         ur (lm, rm);
         ut (lto, rto))
+    | AmbientFunction (llin, lfrom, lto), AmbientFunction (rlin, rfrom, rto) when llin = rlin ->
+       ut (lfrom, rfrom);
+       ut (lto, rto)
+    | Modal (lmod, lbody), Modal (rmod, rbody)
+      when ModalEffects.equivalent ~equal:(fun _ _ -> true) lmod rmod ->
+       let arguments modality =
+         List.rev (ModalEffects.fold_arguments (fun args arg -> arg :: args) [] modality)
+       in
+       List.iter2 (fun l r -> ut (l, r)) (arguments lmod) (arguments rmod);
+       ut (lbody, rbody)
     | Record (Row l), Record (Row r) -> ur (l, r)
     | Variant (Row l), Variant (Row r) -> ur (l, r)
     | ForAll l, ForAll r ->
@@ -650,13 +674,24 @@ and unify_presence' : unify_env -> (field_spec * field_spec -> unit) =
      raise (Failure (`Msg ("Present absent clash")))
   (*`PresentAbsentClash (label, lrow, rrow) *)
   | Meta lpoint, Meta rpoint ->
-     (* TODO: take into account subkinds! *)
      begin
        match Unionfind.find lpoint, Unionfind.find rpoint with
        | l', _ when is_field_spec_body l' -> unify_presence' rec_env (l', r)
        | _, r' when is_field_spec_body r' -> unify_presence' rec_env (l, r')
        | Var (lvar, _, `Rigid), Var (rvar, _, `Rigid) when compatible_quantifiers (lvar, rvar) rec_env.qenv ->
           ()
+       | Var (lvar, (pk, (llin, lrest)), `Flexible), Var (_, (_, (rlin, rrest)), `Flexible)
+         when Restriction.requires_abs lrest || Restriction.requires_abs rrest ->
+          begin match Restriction.min lrest rrest with
+          | None -> raise (Failure (`Msg "Incompatible presence restrictions"))
+          | Some restriction ->
+             Unionfind.union lpoint rpoint;
+             Unionfind.change rpoint (Var (lvar, (pk, (Linearity.min llin rlin, restriction)), `Flexible))
+          end
+       | Var (_, (_, (_, flexible)), `Flexible), Var (_, (_, (_, rigid)), `Rigid)
+       | Var (_, (_, (_, rigid)), `Rigid), Var (_, (_, (_, flexible)), `Flexible)
+         when Restriction.requires_abs flexible && not (Restriction.requires_abs rigid) ->
+          raise (Failure (`Msg "An absolute presence variable requires an absolute presence"))
        | Var (flexible_var, _, `Flexible), Var (rigid_var, _, `Rigid)
             when compatible_quantifiers (rigid_var, flexible_var) rec_env.qenv ->
           Unionfind.union lpoint rpoint
@@ -837,6 +872,8 @@ and unify_rows' : unify_env -> ((row' * row') -> unit) =
       | Var (_, (_, (_, rest')), `Flexible) ->
          if Restriction.is_any rest && Restriction.is_base rest' then
            raise (Failure (`Msg ("Rigid non-base row var cannot be unified with empty base row\n")));
+         if Restriction.requires_abs rest' && not (Restriction.requires_abs rest) then
+           raise (Failure (`Msg "An absolute row variable requires an absolute row"));
          Unionfind.change point' (Var (var, (PrimaryKind.Row, (lin, rest)), `Rigid))
       | Var (var', _, `Rigid) when var=var' -> ()
       | Var (var', (_, (_, rest')), `Rigid) when rest=rest' && compatible_quantifiers (var, var') rec_env.qenv ->
@@ -867,6 +904,7 @@ and unify_rows' : unify_env -> ((row' * row') -> unit) =
              if Restriction.is_base rest then
                raise (Failure (`Msg ("Cannot infer a recursive type for the base row variable "^ string_of_int var ^
                                        " with the body "^ string_of_row (Row extension_row))));
+             if Restriction.requires_abs rest then check_subkind var (lin, rest) (Row extension_row);
              rec_row_intro point (var, kind, Row extension_row)
            end
          else

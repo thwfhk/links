@@ -181,11 +181,17 @@ let rigidify (name, kind, _) = (name, kind, `Rigid)
 
 
 module Datatype = struct
+  type interface_ref =
+    | InterfaceName of Name.t list
+    | InterfaceId of ModalEffects.Interface.t
+    [@@deriving show]
+
   type t =
     | TypeVar         of SugarTypeVar.t
     | QualifiedTypeApplication of Name.t list * type_arg list
     | Function        of with_pos list * row * with_pos
     | Lolli           of with_pos list * row * with_pos
+    | AmbientArrow    of DeclaredLinearity.t * with_pos list * with_pos
     | Mu              of SugarTypeVar.t * with_pos
     | Forall          of SugarQuantifier.t list * with_pos
     | Unit
@@ -194,10 +200,14 @@ module Datatype = struct
     | Variant         of row
     | Effect          of row
     | Operation       of with_pos list * with_pos
+    | Modal           of modality * with_pos
     | List            of with_pos
     | TypeApplication of string * type_arg list
     | Primitive       of Primitive.t
   and with_pos = t WithPos.t
+  and modality =
+    | Absolute of bool * (interface_ref * with_pos list) list
+    | Relative of interface_ref list * (interface_ref * with_pos list) list
   and row = (string * fieldspec) list * row_var
   and row_var =
     | EffectApplication of string * type_arg list
@@ -337,6 +347,7 @@ and bindingnode =
   | Import of { pollute: bool; path : Name.t list }
   | Open of Name.t list
   | Aliases of alias list
+  | EffectInterface of effect_interface
   | Infix   of { assoc: Associativity.t;
                  precedence: int;
                  name: string }
@@ -349,6 +360,18 @@ and alias = aliasnode WithPos.t
 and aliasbody =
   | Typename of datatype'
   | Effectname of row'
+and effect_interface = {
+    interface_name : Name.t;
+    interface_id : ModalEffects.Interface.t option;
+    interface_params : SugarQuantifier.t list;
+    interface_members : effect_member list;
+  }
+and effect_member = {
+    member_name : Name.t;
+    member_id : ModalEffects.Operation.t option;
+    member_signature : Datatype.with_pos;
+    member_type : Types.datatype option;
+  }
 and function_definition = {
     fun_binder: Binder.with_pos;
     fun_linearity: DeclaredLinearity.t;
@@ -527,6 +550,7 @@ struct
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
     | Import _
     | Open _
+    | EffectInterface _
     | Aliases _ -> empty, empty
     (* This is technically a declaration, thus the name should
        probably be treated as bound rather than free. *)

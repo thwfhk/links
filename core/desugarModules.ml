@@ -87,6 +87,12 @@ module Epithet = struct
     let next = st.next in
     st.next <- next + 1;
     build ((-1, name) :: (next, "?") :: st.prefix)
+
+  let qualified_source_name st name =
+    let parts = List.fold_left (fun parts (_, name) ->
+      if name = "?" then parts else name :: parts
+    ) [name] st.prefix in
+    String.concat "." parts
 end
 
 (* The following data structures model scopes. *)
@@ -94,7 +100,9 @@ module BasicScope = struct
   type t =
     { modules: module_member StringMap.t;
       typenames: type_member StringMap.t;
-      terms: term_member StringMap.t }
+      terms: term_member StringMap.t;
+      interfaces: ModalEffects.Interface.t StringMap.t;
+      operations: ModalEffects.Operation.t StringMap.t }
   and module_member = t
   and type_member = string
   and term_member = string
@@ -102,7 +110,9 @@ module BasicScope = struct
   let empty =
     { modules = StringMap.empty;
       typenames = StringMap.empty;
-      terms = StringMap.empty }
+      terms = StringMap.empty;
+      interfaces = StringMap.empty;
+      operations = StringMap.empty }
 
   module Resolve = struct
     let rec module' : Name.t list -> t -> t
@@ -127,6 +137,16 @@ module BasicScope = struct
       | [name] -> StringMap.find name scope.typenames
       | prefix :: names ->
          typename names (StringMap.find prefix scope.modules)
+
+    let rec effect_name select names scope =
+      match names with
+      | [] -> assert false
+      | [name] -> StringMap.find_opt name (select scope)
+      | prefix :: names ->
+         Option.bind (StringMap.find_opt prefix scope.modules) (effect_name select names)
+
+    let interface = effect_name (fun scope -> scope.interfaces)
+    let operation = effect_name (fun scope -> scope.operations)
   end
 
   let shadow : t -> t -> t
@@ -141,7 +161,13 @@ module BasicScope = struct
     let terms =
       StringMap.union select_mask scope.terms mask.terms
     in
-    { modules; typenames; terms }
+    let interfaces =
+      StringMap.union select_mask scope.interfaces mask.interfaces
+    in
+    let operations =
+      StringMap.union select_mask scope.operations mask.operations
+    in
+    { modules; typenames; terms; interfaces; operations }
 
   module Extend = struct
     let module' module_name module_scope scope =
@@ -152,6 +178,12 @@ module BasicScope = struct
 
     let var name name' scope =
       { scope with terms = StringMap.add name name' scope.terms }
+
+    let interface name id scope =
+      { scope with interfaces = StringMap.add name id scope.interfaces }
+
+    let operation name id scope =
+      { scope with operations = StringMap.add name id scope.operations }
 
     let rec synthetic_module path module_scope scope =
       match path with
@@ -204,6 +236,9 @@ module Scope = struct
 
     let typename : Name.t -> t -> Name.t
       = fun name scopes -> qualified_typename [name] scopes
+
+    let interface names scopes = S.Resolve.interface names scopes.visible
+    let operation names scopes = S.Resolve.operation names scopes.visible
   end
 
   module Extend = struct
@@ -225,6 +260,16 @@ module Scope = struct
       let visible = S.Extend.typename typename prefixed_name scopes.visible in
       { visible; delta }
 
+    let interface name id scopes =
+      let delta = S.Extend.interface name id scopes.delta in
+      let visible = S.Extend.interface name id scopes.visible in
+      { visible; delta }
+
+    let operation name id scopes =
+      let delta = S.Extend.operation name id scopes.delta in
+      let visible = S.Extend.operation name id scopes.visible in
+      { visible; delta }
+
     let synthetic_module : Name.t list -> scope -> t -> t
       = fun path module_scope scopes ->
       let visible = S.Extend.synthetic_module path module_scope scopes.visible in
@@ -234,6 +279,9 @@ module Scope = struct
   let open_module : scope -> t -> t
     = fun module_scope scopes ->
     { scopes with visible = S.shadow scopes.visible module_scope }
+
+  let defines_operation name scopes =
+    StringMap.mem name scopes.delta.S.operations
 
   let renew : t -> t
     = fun scopes ->
@@ -292,6 +340,39 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
     method bind_type name name' =
       scope <- Scope.Extend.typename name name' scope
 
+    method resolve_interface pos = function
+      | Datatype.InterfaceId _ as reference -> reference
+      | Datatype.InterfaceName names ->
+         match Scope.Resolve.interface names scope with
+         | Some id -> Datatype.InterfaceId id
+         | None ->
+            let name = Scope.Resolve.best_guess names in
+            raise (Errors.module_error ~pos ("Unbound effect interface " ^ name))
+
+    method resolve_operation pos name =
+      let names = String.split_on_char '.' name in
+      match Scope.Resolve.operation names scope, names with
+      | Some id, _ -> ModalEffects.Operation.runtime_name id
+      | None, [_] -> name
+      | None, _ -> raise (Errors.module_error ~pos ("Unbound operation " ^ name))
+
+    method define_interface pos declaration =
+      let name = declaration.interface_name in
+      let qualified = Epithet.qualified_source_name renamer name in
+      let id = ModalEffects.Interface.fresh qualified in
+      scope <- Scope.Extend.interface name id scope;
+      let define_member member =
+        let name = member.member_name in
+        if Scope.defines_operation name scope then
+          raise (Errors.module_error ~pos ("Duplicate operation " ^ name));
+        let member_id = ModalEffects.Operation.fresh ~interface:id name in
+        scope <- Scope.Extend.operation name member_id scope;
+        let member_signature = self#datatype member.member_signature in
+        { member with member_id = Some member_id; member_signature }
+      in
+      let interface_members = List.map define_member declaration.interface_members in
+      { declaration with interface_id = Some id; interface_members }
+
     method open_module pos path =
       try
         let module_scope = Scope.Resolve.module' path scope in
@@ -349,6 +430,18 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
       | Name name -> Name (Scope.Resolve.var name scope)
       | _ -> super#section sect
 
+    method! phrase phrase =
+      match phrase.node with
+      | Operation name -> with_node phrase (Operation (self#resolve_operation phrase.pos name))
+      | _ -> super#phrase phrase
+
+    method! pattern pattern =
+      match pattern.node with
+      | Pattern.Operation (name, args, k) ->
+         let name = self#resolve_operation pattern.pos name in
+         super#pattern (with_node pattern (Pattern.Operation (name, args, k)))
+      | _ -> super#pattern pattern
+
     method! phrasenode = function
       | Block (bs, body) ->
        (* Enters a new scope, which is thrown away on exit. *)
@@ -381,6 +474,19 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
         Switch (expr', cases', dt)
       | p -> super#phrasenode p
 
+    method! datatype datatype =
+      let open Datatype in
+      match datatype.node with
+      | Modal (modality, body) ->
+         let resolve = self#resolve_interface datatype.pos in
+         let entries = List.map (fun (reference, args) -> resolve reference, List.map self#datatype args) in
+         let modality = match modality with
+           | Absolute (wild, added) -> Absolute (wild, entries added)
+           | Relative (mask, added) -> Relative (List.map resolve mask, entries added)
+         in
+         with_node datatype (Modal (modality, self#datatype body))
+      | _ -> super#datatype datatype
+
     method! datatypenode = let open Datatype in function
       | TypeApplication (name, args) ->
       (* Must be resolved. *)
@@ -391,6 +497,12 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
         let args' = self#list (fun o -> o#type_arg) args in
         TypeApplication (Scope.Resolve.qualified_typename names scope, args')
       | dt -> super#datatypenode dt
+
+    method! binding binding =
+      match binding.node with
+      | EffectInterface declaration ->
+         with_node binding (EffectInterface (self#define_interface binding.pos declaration))
+      | _ -> super#binding binding
 
     method! bindingnode = function
       | Fun ({ fun_binder = bndr; fun_definition = (tvs, funlit); fun_signature = dt; _ } as fn)->
@@ -488,6 +600,15 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
    keep a little bit of state around. *)
 let scope : Scope.t ref = ref Scope.empty
 let renamer : Epithet.t ref = ref Epithet.empty
+
+let with_scope_rollback f =
+  let previous_scope = !scope in
+  match f () with
+  | result -> result
+  | exception exn ->
+     let backtrace = Printexc.get_raw_backtrace () in
+     scope := previous_scope;
+     Printexc.raise_with_backtrace exn backtrace
 
 let desugar_program : Sugartypes.program -> Sugartypes.program
   = fun program ->

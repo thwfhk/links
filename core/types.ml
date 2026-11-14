@@ -113,6 +113,8 @@ and typ =
   | Primitive of Primitive.t
   | Function of (typ * row * typ)
   | Lolli of (typ * row * typ)
+  | AmbientFunction of (DeclaredLinearity.t * typ * typ)
+  | Modal of (typ ModalEffects.modality * typ)
   | Record of row
   | Variant of row
   | ForAll of (Quantifier.t list * typ)
@@ -139,6 +141,13 @@ and row_var = meta_row_var
    [@@deriving show]
 
 let dummy_type = Not_typed
+
+let rec modal modality typ =
+  if ModalEffects.is_identity modality then typ
+  else
+    match typ with
+    | Modal (inner, body) -> modal (ModalEffects.compose modality inner) body
+    | _ -> Modal (modality, typ)
 
 let is_present = function
   | Present _         -> true
@@ -316,6 +325,14 @@ struct
          let (o, eff') = o#row eff in
          let (o, cod') = o#typ cod in
          (o, Lolli (dom', eff', cod'))
+      | AmbientFunction (linearity, dom, cod) ->
+         let o, dom = o#typ dom in
+         let o, cod = o#typ cod in
+         (o, AmbientFunction (linearity, dom, cod))
+      | Modal (modality, body) ->
+         let o, modality = ModalEffects.fold_map_arguments (fun o -> o#typ) o modality in
+         let o, body = o#typ body in
+         (o, modal modality body)
       | Record row ->
          let (o, row') = o#row row in
          (o, Record row')
@@ -515,6 +532,12 @@ class virtual type_predicate = object(self)
     | Meta point -> self#point_satisfies self#type_satisfies vars point
     | Primitive _ -> true
     | Function (a, e, r) | Lolli (a, e, r) -> self#type_satisfies vars a && self#row_satisfies vars e && self#type_satisfies vars r
+    | AmbientFunction (_, a, r) ->
+       self#type_satisfies vars a && self#type_satisfies vars r
+    | Modal (modality, body) ->
+       ModalEffects.fold_arguments (fun valid arg -> valid && self#type_satisfies vars arg)
+         true modality
+       && self#type_satisfies vars body
     | Record r | Effect r | Variant r -> self#row_satisfies vars r
     | ForAll (qs, t) -> self#type_satisfies (rec_appl, rec_vars, TypeVarSet.add_quantifiers qs quant_vars) t
     | Row (fields, row_var) ->
@@ -577,6 +600,11 @@ class virtual type_iter = object(self)
     | Primitive _ -> ()
     | Function (a, e, r) | Lolli (a, e, r) ->
        self#visit_type vars a; self#visit_row vars e; self#visit_type vars r
+    | AmbientFunction (_, a, r) ->
+       self#visit_type vars a; self#visit_type vars r
+    | Modal (modality, body) ->
+       ModalEffects.fold_arguments (fun () -> self#visit_type vars) () modality;
+       self#visit_type vars body
     | Record r | Variant r -> self#visit_row vars r
     | ForAll (qs, t) ->
        self#visit_type (rec_appl, rec_vars, TypeVarSet.add_quantifiers qs quant_vars) t
@@ -629,31 +657,31 @@ let make_restriction_predicate (klass : (module TypePredicate)) restr flexibles 
             | _ -> false
    end)#predicates
 
-(** Make a basic restriction transformation. This attempts to transform any
-   flexible type variable to one with a compatible subkind.
+(** Narrow flexible variables to a compatible restriction. *)
+let make_restriction_transform ?(allow_incompatible=false) subkind =
+  (object(self)
+     inherit type_iter as super
 
-   If a type variable cannot be made compatible, and [ensure] is true, then an
-   error is thrown. *)
-let make_restriction_transform ?(ensure=false) subkind =
-  (object
-     inherit type_iter
+     method! visit_type vars = function
+       | Modal (_, body) when Restriction.is_base subkind -> self#visit_type vars body
+       | t -> super#visit_type vars t
 
      method! visit_var point = function
        | (_, (_, (_, sk)), _) when sk = subkind -> ()
        | (v, (pk, (l, sk)), `Flexible) ->
           begin
             match Restriction.min sk subkind with
-            | Some sk when sk = subkind -> Unionfind.change point (Var (v, (pk, (l, sk)), `Flexible))
-            | _ -> assert ensure
+            | Some sk -> Unionfind.change point (Var (v, (pk, (l, sk)), `Flexible))
+            | None -> assert allow_incompatible
           end
-       | (_, _, `Rigid) -> assert ensure
+       | (_, _, `Rigid) -> assert allow_incompatible
    end)#visitors
 
 module Base : Constraint = struct
   open Restriction
 
   module BasePredicate = struct
-    class klass = object
+    class klass = object(self)
       inherit type_predicate as super
 
       method! point_satisfies f vars point =
@@ -671,7 +699,8 @@ module Base : Constraint = struct
         | Meta _ as t  -> super#type_satisfies vars t
         (* Type *)
         | Primitive _ -> true
-        | (Function _ | Lolli _ | Record _ | Variant _ | ForAll (_::_, _)) -> false
+        | (Function _ | Lolli _ | AmbientFunction _ | Record _ | Variant _ | ForAll (_::_, _)) -> false
+        | Modal (_, t) -> self#type_satisfies vars t
         | ForAll ([], t) -> super#type_satisfies vars t
         (* Effect *)
         | Effect _ as t -> super#type_satisfies vars t
@@ -714,8 +743,9 @@ module Unl : Constraint = struct
          OptionUtils.opt_app not true (r_linear ())
       | Meta _ as t -> super#type_satisfies vars t
       (* Type *)
-      | Primitive _ | Function _ -> true
-      | Lolli _ -> false
+      | Primitive _ | Function _ | AmbientFunction (DeclaredLinearity.Unl, _, _) -> true
+      | Lolli _ | AmbientFunction (DeclaredLinearity.Lin, _, _) -> false
+      | Modal (_, t) -> o#type_satisfies vars t
       | (Record _ | Variant _) as t -> super#type_satisfies vars t
       | ForAll _ as t -> super#type_satisfies vars t
       (* Effect *)
@@ -747,7 +777,7 @@ module Unl : Constraint = struct
         | (_, _, `Rigid) -> false
     end)#predicates
 
-  let make_type, make_row = (object
+  let make_type, make_row = (object(self)
      inherit type_iter as super
 
      method! visit_type vars = function
@@ -761,8 +791,9 @@ module Unl : Constraint = struct
        | Meta _ as t -> super#visit_type vars t
        (* Type *)
        | Primitive _ -> ()
-       | Function _ -> ()
-       | Lolli _ -> assert false
+       | Function _ | AmbientFunction (DeclaredLinearity.Unl, _, _) -> ()
+       | Lolli _ | AmbientFunction (DeclaredLinearity.Lin, _, _) -> assert false
+       | Modal (_, body) -> self#visit_type vars body
        | (Record _ | Variant _) as t -> super#visit_type vars t
        | ForAll _ as t -> super#visit_type vars t
        (* Effect *)
@@ -793,7 +824,12 @@ module Mono : Constraint = struct
        end
      end
 
-  let type_satisfies, row_satisfies = make_restriction_predicate (module MonoPredicate) Mono false
+  let type_satisfies, row_satisfies =
+    (object
+       inherit MonoPredicate.klass
+       method! var_satisfies (_, (_, (_, restriction)), _) =
+         Restriction.is_mono restriction || Restriction.is_base restriction
+     end)#predicates
 
   let can_type_be, can_row_be =
     (object
@@ -809,7 +845,59 @@ module Mono : Constraint = struct
               | None -> false
      end)#predicates
 
-  let make_type, make_row = make_restriction_transform ~ensure:true Mono
+  let make_type, make_row = make_restriction_transform ~allow_incompatible:true Mono
+end
+
+module Abs : Constraint = struct
+  let predicates ~flexible =
+    (object(self)
+       inherit type_predicate as super
+
+       method! point_satisfies visit ((_, _, bound) as vars) point =
+         match Unionfind.find point with
+         | Var (id, (_, (_, restriction)), freedom) ->
+            Restriction.requires_abs restriction
+            || (flexible && freedom = `Flexible && not (IntSet.mem id bound)
+                && Option.is_some (Restriction.min restriction res_abs))
+         | _ -> super#point_satisfies visit vars point
+
+       method! type_satisfies vars = function
+         | Modal (ModalEffects.Absolute _, _) -> true
+         | Modal (ModalEffects.Relative _, body) -> self#type_satisfies vars body
+         | Function _ | Lolli _ | AmbientFunction _ | Effect _ | Operation _ -> false
+         | t -> super#type_satisfies vars t
+     end)#predicates
+
+  let type_satisfies, row_satisfies = predicates ~flexible:false
+  let can_type_be, can_row_be = predicates ~flexible:true
+
+  let make_type, make_row =
+    (object(self)
+       inherit type_iter as super
+
+       method! visit_type ((expanded, recursive, quantified) as vars) = function
+         | Modal (ModalEffects.Absolute _, _) -> ()
+         | Modal (ModalEffects.Relative _, body) -> self#visit_type vars body
+         | RecursiveApplication { r_unique_name; r_args; r_unwind; _ }
+           when not (StringSet.mem r_unique_name expanded) ->
+            self#visit_type (StringSet.add r_unique_name expanded, recursive, quantified) (r_unwind r_args)
+         | t -> super#visit_type vars t
+
+       method! visit_var point (id, (primary, (linearity, restriction)), freedom) =
+         match freedom, Restriction.min restriction res_abs with
+         | `Flexible, Some kind when restriction <> kind ->
+            Unionfind.change point (Var (id, (primary, (linearity, kind)), freedom))
+         | _ -> ()
+     end)#visitors
+end
+
+module MonoAbs : Constraint = struct
+  let type_satisfies t = Mono.type_satisfies t && Abs.type_satisfies t
+  let row_satisfies r = Mono.row_satisfies r && Abs.row_satisfies r
+  let can_type_be t = Mono.can_type_be t && Abs.can_type_be t
+  let can_row_be r = Mono.can_row_be r && Abs.can_row_be r
+  let make_type t = Mono.make_type t; Abs.make_type t
+  let make_row r = Mono.make_row r; Abs.make_row r
 end
 
 let get_restriction_constraint : Restriction.t -> (module Constraint) option =
@@ -817,6 +905,8 @@ let get_restriction_constraint : Restriction.t -> (module Constraint) option =
   | Any | Effect -> None
   | Base -> Some (module Base)
   | Mono -> Some (module Mono)
+  | Abs -> Some (module Abs)
+  | MonoAbs -> Some (module MonoAbs)
 
 (* useful for debugging: types tend to be too big to read *)
 (*
@@ -1015,6 +1105,10 @@ let free_type_vars, free_row_type_vars, free_tyarg_vars =
        S.union_all [free_type_vars' rec_vars f; free_row_type_vars' rec_vars m; free_type_vars' rec_vars t]
     | Lolli (f, m, t)         ->
        S.union_all [free_type_vars' rec_vars f; free_row_type_vars' rec_vars m; free_type_vars' rec_vars t]
+    | AmbientFunction (_, f, t) -> S.union (free_type_vars' rec_vars f) (free_type_vars' rec_vars t)
+    | Modal (modality, body) ->
+       ModalEffects.fold_arguments (fun vars arg -> S.union vars (free_type_vars' rec_vars arg))
+         (free_type_vars' rec_vars body) modality
     | Effect row | Record row | Variant row -> free_row_type_vars' rec_vars row
     | Operation (f, t) ->
        S.union_all [free_type_vars' rec_vars f; free_type_vars' rec_vars t]
@@ -1265,6 +1359,8 @@ and normalise_datatype rec_names t =
      Function (nt f, nr m, nt t)
   | Lolli (f, m, t)         ->
      Lolli (nt f, nr m, nt t)
+  | AmbientFunction (linearity, f, t) -> AmbientFunction (linearity, nt f, nt t)
+  | Modal (modality, body) -> modal (ModalEffects.map_arguments nt modality) (nt body)
   | Record row              -> Record (nr row)
   | Variant row             -> Variant (nr row)
   | Effect row              -> Effect (nr row)
@@ -1557,6 +1653,10 @@ struct
     | Effect row -> free_bound_row_type_vars bound_vars row
     | Operation (f, t) ->
        (fbtv f) @ (fbtv t)
+    | AmbientFunction (_, f, t) ->
+       (fbtv f) @ (fbtv t)
+    | Modal (modality, body) ->
+       ModalEffects.fold_arguments (fun vars arg -> vars @ fbtv arg) [] modality @ fbtv body
     (* Row *)
     | Row (field_env, row_var) ->
        let field_type_vars =
@@ -1798,6 +1898,7 @@ struct
        | (Linearity.Any, Restriction.Any)     -> "Any"
        | (Linearity.Unl, Restriction.Base)    -> Restriction.to_string res_base
        | (Linearity.Unl, Restriction.Effect)  -> Restriction.to_string res_effect
+       | (Linearity.Unl, Restriction.Abs)     -> Restriction.to_string res_abs
        | (l, r) -> full (l, r)
 
   let kind : (policy * names) -> Kind.t -> string =
@@ -1812,6 +1913,8 @@ struct
       | PrimaryKind.Type, (Linearity.Unl, Restriction.Any) -> ""
       | PrimaryKind.Type, (Linearity.Unl, Restriction.Base) ->
          Restriction.to_string res_base
+      | PrimaryKind.Type, (Linearity.Unl, Restriction.Abs) ->
+         Restriction.to_string res_abs
       | PrimaryKind.Type, (Linearity.Any, Restriction.Any) -> "Any"
       | PrimaryKind.Type, sk ->
          full Policy.({policy with kinds = Full}, vars) (k, sk)
@@ -1821,6 +1924,8 @@ struct
          Restriction.to_string res_effect
       | PrimaryKind.Presence, (Linearity.Unl, Restriction.Any) ->
          PrimaryKind.to_string pk_presence
+      | (PrimaryKind.Row | PrimaryKind.Presence), (Linearity.Unl, Restriction.Abs) ->
+         PrimaryKind.to_string k ^ "(Abs)"
       | PrimaryKind.Row, _ | PrimaryKind.Presence, _ ->
          full Policy.({policy with kinds = Full}, vars) (k, sk)
 
@@ -1942,7 +2047,7 @@ struct
          | Application (l, [(PrimaryKind.Type, elem)]) when Abstype.equal l list ->
             let elem_str = datatype context p elem in
             begin match concrete_type elem with
-            | Function _ | Lolli _ | Operation _ | ForAll _ | Meta _
+            | Function _ | Lolli _ | AmbientFunction _ | Modal _ | Operation _ | ForAll _ | Meta _
               when String.contains elem_str ' ' -> "List (" ^ elem_str ^ ")"
             | Application (inner, _) when Abstype.equal inner list ->
                 "List (" ^ elem_str ^ ")"
@@ -1972,6 +2077,15 @@ struct
          | Primitive p     -> Primitive.to_string p
          | Function (args, effects, t) -> ppr_function_type args effects t ">"
          | Lolli (args, effects, t) -> ppr_function_type args effects t "@"
+         | AmbientFunction (linearity, args, result) ->
+            let arrow = if DeclaredLinearity.is_linear linearity then " -@ " else " -> " in
+            let row, _ = unwrap_row (extract_row args) in
+            string_of_tuple context (extract_row_parts row)
+            ^ arrow ^ sd result
+         | Modal (modality, body) ->
+            let prefix = Format.asprintf "%a" (ModalEffects.pp_modality
+              (fun fmt arg -> Format.pp_print_string fmt (sd arg))) modality in
+            prefix ^ " (" ^ sd body ^ ")"
          | Record r ->
             let ur = unwrap r in
             let r = match r with
@@ -1983,7 +2097,11 @@ struct
              else "(" ^ row "," context p (Row r) ^ ")")
          | Variant r ->
             let field_str = row "|" context p r in
-            "(|" ^ (if field_str = "" then " " else field_str) ^ "|)"
+            let field_str =
+              if field_str = "" || String.ends_with ~suffix:"%" field_str then field_str ^ " "
+              else field_str
+            in
+            "(|" ^ field_str ^ "|)"
          | ForAll (tyvars, body) ->
             let bound_vars =
               List.fold_left
@@ -2314,6 +2432,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
        | (L.Any, R.Any)     -> constant "Any"
        | (L.Unl, R.Base)    -> constant @@ R.to_string res_base
        | (L.Unl, R.Effect)  -> constant @@ R.to_string res_effect
+       | (L.Unl, R.Abs)     -> constant @@ R.to_string res_abs
        | _ -> full_name
 
 
@@ -2343,6 +2462,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                  match subknd with
                  | L.Unl, R.Any     -> assert false
                  | L.Unl, R.Base    -> StringBuffer.write buf (R.to_string res_base)
+                 | L.Unl, R.Abs     -> StringBuffer.write buf (R.to_string res_abs)
                  | L.Any, R.Any    -> StringBuffer.write buf "Any"
                  | _ ->
                     let ctx' = Context.(with_policy Policy.(set_kinds Full (policy ctx)) ctx) in
@@ -2354,6 +2474,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                     StringBuffer.write buf (P.to_string pk_row)
                  | L.Unl, R.Effect ->
                     StringBuffer.write buf (R.to_string res_effect)
+                 | L.Unl, R.Abs ->
+                    StringBuffer.write buf "Row(Abs)"
                  | _ ->
                     let ctx' = Context.(with_policy Policy.(set_kinds Full (policy ctx)) ctx) in
                     Printer.apply full_name ctx' () buf
@@ -2362,6 +2484,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                  match subknd with
                  | L.Unl, R.Any ->
                     StringBuffer.write buf (P.to_string pk_presence)
+                 | L.Unl, R.Abs ->
+                    StringBuffer.write buf "Presence(Abs)"
                  | _ ->
                     let ctx' = Context.(with_policy Policy.(set_kinds Full (policy ctx)) ctx) in
                     Printer.apply full_name ctx' () buf
@@ -2528,7 +2652,13 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
              (it would be ambiguous which ones to get, because this can appear in any
              row-based type, nonetheless the case of Row in a Row-based type does occur in
              the internal representation, and so it must be allowed *)
-          Printer.apply row_parts new_ctx (extract_row_parts (flatten_row r')) buf;
+          let parts = extract_row_parts (flatten_row r') in
+          if Context.is_ambient_variant new_ctx then begin
+            let row = Printer.generate_string row_parts new_ctx parts in
+            StringBuffer.write buf row;
+            if String.ends_with ~suffix:"%" row then StringBuffer.write buf " "
+          end else
+            Printer.apply row_parts new_ctx parts buf;
           StringBuffer.write buf after
         )
 
@@ -2606,7 +2736,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           | (abstp, [(PrimaryKind.Type, elem)]) when Abstype.equal abstp list ->
              StringBuffer.write buf "List ";
              let grouped = match concrete_type elem with
-               | Function _ | Lolli _ | Operation _ | ForAll _ -> true
+               | Function _ | Lolli _ | AmbientFunction _ | Modal _ | Operation _ | ForAll _ -> true
                | Application (inner, _) -> Abstype.equal inner list
                | Meta point -> (match Unionfind.find point with Recursive _ -> true | _ -> false)
                | _ -> false
@@ -2666,6 +2796,21 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           Printer.apply datatype ctx range buf;
         )
 
+  and ambient_function : (DeclaredLinearity.t * typ * typ) printer
+    = let open Printer in
+      Printer (fun ctx (linearity, domain, range) buf ->
+          Printer.apply row (Context.set_ambient Context.Tuple ctx) domain buf;
+          StringBuffer.write buf (if DeclaredLinearity.is_linear linearity then " -@ " else " -> ");
+          Printer.apply datatype ctx range buf)
+
+  and modal_type : (typ ModalEffects.modality * typ) printer
+    = let open Printer in
+      Printer (fun ctx (modality, body) buf ->
+          let pp_arg fmt arg = Format.pp_print_string fmt (Printer.generate_string datatype ctx arg) in
+          StringBuffer.write buf (Format.asprintf "%a (" (ModalEffects.pp_modality pp_arg) modality);
+          Printer.apply datatype ctx body buf;
+          StringBuffer.write buf ")")
+
   and quantifier : Quantifier.t printer
     = let open Printer in
       Printer (fun ctx qr buf ->
@@ -2707,6 +2852,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
             | Function f         -> with_value (func ~linear:false) f
             | Lolli f            -> with_value (func ~linear:true) f
+            | AmbientFunction f  -> with_value ambient_function f
+            | Modal m            -> with_value modal_type m
 
             | ForAll fa          -> with_value forall fa
 
@@ -3010,6 +3157,10 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
     | Primitive _             -> empties
     | Function (f, m, t)      -> union [make_env boundvars f; make_env boundvars m; make_env boundvars t]
     | Lolli (f, m, t)         -> union [make_env boundvars f; make_env boundvars m; make_env boundvars t]
+    | AmbientFunction (_, f, t) -> union [make_env boundvars f; make_env boundvars t]
+    | Modal (modality, body) ->
+       ModalEffects.fold_arguments (fun envs arg -> union [envs; make_env boundvars arg])
+         (make_env boundvars body) modality
     | Effect row | Record row | Variant row -> make_env boundvars row
     | Operation (f, t)        -> union [make_env boundvars f; make_env boundvars t]
     | Alias (_, (_, _, ts), d) -> union (List.map (make_env_ta boundvars) ts @ [make_env boundvars d])
