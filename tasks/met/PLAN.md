@@ -391,6 +391,12 @@ switching the active inference path.
   their field types on success and when a failed match continues to a
   later case.
   Run the reported probes with default settings and strict checking.
+- [x] **5.20** (`f9d190ef`) Follow up on
+  [5.18](IMPL.md#518-negative-variant-aliases) for aliases that enclose
+  a nested negative pattern. Preserve the
+  narrowed type through records, tuples, lists and variants. Check
+  successful matches, fallthrough and linear payloads under strict IR
+  checking.
 
 Keep the concrete [handler demos](SPEC.md#prelude-and-example-behaviour)
 while the old APIs that let callers choose additional effects are
@@ -430,6 +436,9 @@ Depends on milestone 5.
 - [x] **6.6** (`5e971724`) Review 5.19 independently and run the combined
   checks on the new revision. Keep the results from 6.5 as a record of
   the earlier run.
+- [x] **6.7** (`f9d190ef`) Review 5.20 independently and run the combined
+  checks on the new revision. Keep the results from 6.5 and 6.6 as
+  historical checks.
 
 Completion check: a clean CI build and temporary installation work,
 all in-scope regressions and unit tests pass, the guide matches the
@@ -506,6 +515,9 @@ in `/private/tmp/smalllinks-met-5-18/`. The
 [combined checks in 6.5](#milestone-65-checks) passed on `66ee9476`.
 Item 5.19 passed both reported probes with default and strict settings.
 The [combined checks in 6.6](#milestone-66-checks) passed on `5e971724`.
+Item 5.20 passed the enclosing alias, annotation and record rest probes
+under default and strict settings. The
+[combined checks in 6.7](#milestone-67-checks) passed on `f9d190ef`.
 The separate design proposals remain paused.
 Items 5.5 and 5.7–5.13 share the compiler and library commit
 `7f1f3f8c` because the startup, frontend and IR changes share code and
@@ -660,7 +672,28 @@ previous interpreter. When an alias names an enclosing variant, as in
 `(Some(-Skip) as outer)`, its type narrows the payload but lowering
 rebuilds it from the wider payload. An alias on the negative pattern
 itself passes under strict checking. See `alias-baseline.log` and
-`nested-alias-probes.log`.
+`nested-alias-probes.log`. Follow-up item 5.20 covers the enclosing
+alias and related pattern forms.
+
+### Milestone 6.7 checks
+
+The combined checks used `f9d190ef` with OCaml 5.4.0. Logs are
+in `/private/tmp/smalllinks-met-5-20/`. Independent review checked
+alternative fallthrough, linear bindings, native evaluation order,
+quantified types and mixed handler operations. See
+`independent-review.log`, `independent-working-review.log` and
+`independent-working-edge.log`.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make all-ci`, including a fresh Dune build directory | Passed with `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk`. | `final-ci-build.log`, `final-clean-ci-build.log` |
+| `make tests` | 1,226 passed across 42 suites. Two existing cases were ignored. All four scripts passed. | `all-tests.log` |
+| `./test-harness tests/<suite>.tests` on affected suites | All passed, including 54 pattern, 51 record, 28 variant and 30 typed IR tests. | `default-<suite>.log` |
+| Frontend rechecking and strict IR checks | Passed for handlers (153), effect annotations (76), collections (70), modules (58), records (51) and patterns (54). The strict handler REPL and example runner also passed. | `strict-<suite>.log`, `strict-repl.log`, `strict-examples.log` |
+| `opam exec -- ./run-tests unit-tests` | All 105 passed. | `unit-tests.log` |
+| Direct `./links -e` probes | All 24 cases passed with default settings and strict checking. These include `(Some(-Skip) as outer)`, annotated record rests, and linear payloads after fallthrough. | `final-direct-probes.log` |
+| Guide and temporary installation | All 18 runnable guide blocks and four entry points passed. `dune install` from the fresh CI build and `./tests/check-install.sh` passed. The installed interpreter passed the enclosing alias, quantified rest and linear fallthrough probes. | `guide.log`, `install.log`, `install-check.log`, `installed-examples.log`, `installed-pattern-probes.log` |
+| `make rule-check`, `git diff --check`, tabs and document links | Passed. An `rg` scan covered the tabs rule because GNU find was unavailable. | `rule-check.log`, `diff-check.log`, `tabs.log`, `documents.log` |
 
 ### Milestone 4 follow-up checks
 
