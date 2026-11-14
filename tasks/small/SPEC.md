@@ -19,6 +19,12 @@ interpreter, use `linx` in place of `./links`. See the
    definition with a semicolon. Enter `fun double(x) { x * 2 };`
    and then `double(21);` to print `42 : Int`. Enter `@quit;` to exit.
 
+If a REPL command raises an error or calls `exit(v)`, its new
+definitions are discarded. Existing linear bindings used before the
+interruption are used up. Earlier native effects such as printing
+still take effect. `exit(v)` prints `v` by itself and returns to the
+prompt. It requires `wild` and an absolute, unrestricted argument.
+
 ## Basic features
 
 A source file contains declarations and may end with an expression. A
@@ -90,6 +96,18 @@ var moved = (named with x=21);
 
 This returns `(43, "start")`.
 
+When extending a record with a fixed effect context, its inherited
+fields keep that context where they need it. New fields use the
+current context. An unknown field can be inherited if its type is
+absolute whenever it is present. Instantiate a polymorphic record
+before extending it. See [modal record extension](../met/SPEC.md#modal-record-extension).
+
+An upcast `e : B <- A` checks `e` at `A` and gives it type `B`.
+It can add variant alternatives or omit unrestricted record fields.
+It cannot discard linear fields or change a function's argument count
+or linearity. A record update can name each field only once. See
+[upcasts and record updates](../met/SPEC.md#upcasts-and-record-updates).
+
 ### List comprehensions
 
 In `for (pattern <- xs) body`, the
@@ -109,8 +127,10 @@ for ((name, score) <- [("Kim", 8), ("Ali", 6), ("Jo", 2)])
   [name]
 ```
 
-This returns `["Ali", "Kim"]`. The prelude supplies list functions
-such as `map`, `filter` and `fold_left`.
+This returns `["Ali", "Kim"]`. Comprehensions use bundled list helpers
+and work with an empty or custom prelude. Explicit calls to `map` and
+other list functions use the definitions in scope. Comprehensions
+require unrestricted elements in the generator and result lists.
 
 ### Functions and recursion
 
@@ -156,6 +176,9 @@ works on lists, records and variants when their contents can be
 compared. Comparing functions raises a runtime error. Put a function
 name in backticks to call it as an infix operator, as in
 ``3 `elem` [1, 2, 3]``.
+
+You can redefine a comparison with `op`. Its result must be `Bool`.
+Infix calls use the argument types and effects of the definition in scope.
 
 Declare an operator's precedence and associativity with `infix`,
 `infixl` or `infixr`, or its position with `prefix` or `postfix`.
@@ -208,7 +231,8 @@ The program returns `42`.
 ### Type annotations and aliases
 
 SmallLinks infers ordinary types. Write a signature when a global
-function needs effects supplied by its caller.
+function needs effects supplied by its caller. Bind every type, row
+and presence variable introduced by a signature using `forall`.
 
 | Form | Use |
 | --- | --- |
@@ -231,10 +255,10 @@ printed types use `List Int` for lists and `(| One | Many:Int |)` for variants.
 
 ### Recursive types
 
-- **Syntax.** Write `mu n. T` to define a recursive type. Within `T`,
-  `n` refers to the whole type.
-- **Example.** `Nat` is a variant with `Zero` and `Succ`. Each `Succ`
-  contains another `Nat`. `toInt(Succ(Succ(Zero)))` returns `2`.
+Write `mu n. T` to define a recursive type. Within `T`, `n` refers to
+the whole type. Unfolding must reach a data or function type before
+repeating a recursive reference. `Nat` reaches a variant with `Zero`
+and `Succ`. Each `Succ` contains another `Nat`.
 
 ```links
 typename Nat = mu n. (|Zero | Succ:n|);
@@ -248,6 +272,8 @@ fun toInt(n:Nat) {
 
 toInt(Succ(Succ(Zero)))
 ```
+
+This returns `2`.
 
 ### Rows
 
@@ -274,7 +300,7 @@ remaining fields to primitive types.
 `x` and different extra fields. The result is `(1, "one")`.
 
 ```links
-sig getX : ((x:a | r)) -> a
+sig getX : forall a, r::Row. ((x:a | r)) -> a
 fun getX(r) { r.x }
 
 (getX((x=1, y=true)), getX((x="one", z=0)))
@@ -284,7 +310,7 @@ fun getX(r) { r.x }
 allows other constructors such as `Many`. The result is `(true, false)`.
 
 ```links
-sig isOne : ((|One | r|)) -> Bool
+sig isOne : forall r::Row. ((|One | r|)) -> Bool
 fun isOne(v) { switch (v) { case One -> true case _ -> false } }
 
 (isOne(One), isOne(Many(3)))
@@ -343,6 +369,11 @@ var keep = /\ [a]. { fun(x:a) { x } : (a) -> a };
 This returns `42`. Adding a second call to `f` in the block is a
 type error.
 
+A list is linear if its elements are linear. List literals, `::` and
+`++` can build such lists. Use a cons pattern to take the head and tail
+together. Functions such as `hd`, `tl` and `length` require unrestricted
+elements because they can discard part or all of the list.
+
 ### Effect contexts and modal types
 
 An ambient effect context lists the available effect interfaces. A
@@ -364,6 +395,11 @@ Put parentheses around an arrow beneath a modality. Modalities can
 also occur in data types, as in `List ([] (Int -> Int))`. A mask in
 a type changes which context the value requires. It leaves handler
 dispatch unchanged.
+
+A binding retains its effect context when you enter a handler or
+check a value under a modality. The checker accounts for the change
+before instantiating the binding. It uses the leading modalities up to
+the first `forall`, and values of absolute type can cross unchanged.
 
 SmallLinks checks an unannotated global function in the empty context
 and gives its type an outer `[]`. Local functions use their surrounding
@@ -404,6 +440,10 @@ arguments can be written `do Op`. Use a qualified name such as
 `do Effects.Ask` when the operation belongs to a module. A call uses the
 newest available instance of the interface that declares the operation.
 
+Interface and operation names follow module scope. A printed type uses
+a name that refers to the original declaration when one is available.
+The printer marks an interface as out of scope when it has no such name.
+
 A handler installs one instance of each interface it handles and
 covers every operation of each installed interface. Operations from
 other interfaces are forwarded. When a handler owns an operation and
@@ -428,7 +468,8 @@ This returns `[1, 2]`. In a deep handler, written `handle`, a
 resumption reinstalls the handler and returns the handler's result.
 In a shallow handler, written `shallowhandle`, a resumption continues
 the computation and returns the computation's result. It requires a
-new handler for the same interfaces.
+new handler for the same interfaces. If a shallow clause uses a
+captured linear value, every clause must use it once on each branch.
 
 ```links
 effect Counter { Next : () => Int; }
@@ -442,8 +483,11 @@ shallowhandle(do Next + do Next) {
 This returns `42`.
 
 A parameterised deep handler takes initial values after the computation.
-The initial values must be absolute. Each call to `k` supplies the
-operation result followed by the next values of the parameters.
+The initial values must be absolute and are evaluated left to right.
+Each call to `k` supplies the operation result followed by the next
+values of the parameters. Each clause must use a linear state binding
+once on each branch. A handler with linear state needs an explicit
+return clause.
 Here `Get` returns the current state and `Put` changes it.
 
 ```links

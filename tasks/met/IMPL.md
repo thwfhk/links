@@ -444,7 +444,8 @@ to handle this failure. The parser retains its backtracking diagnostic.
 
 #### 5.12 Standard comprehension helpers
 
-The driver loads `lib/comprehension.links` before the selected prelude.
+The driver loads `lib/comprehension.links` before the selected prelude
+and skips user preprocessing for those bundled definitions.
 `core/desugarFors.ml` gives its definitions private names and uses those
 names for generated calls. This makes the same helpers available with
 an empty or custom prelude. Explicit calls use ordinary lexical lookup.

@@ -4,9 +4,8 @@ The language design and scope are in [SPEC.md](SPEC.md#scope).
 This plan records milestones, dependencies, progress and checks.
 [IMPL.md](IMPL.md) records significant implementation decisions.
 
-Work stays on `small-met`. The first implementation is complete.
-The follow-up decisions are recorded. See [Status](#status) for the
-remaining work.
+Work stays on `small-met`. See [Status](#status) for the completion
+record and deferred work.
 
 ## Tracking
 
@@ -290,21 +289,21 @@ switching the active inference path.
   registration and aggregate runners together. Give the REPL handler
   fixture's `ask` its required signature while retaining its check
   across successive sentences.
-- [ ] **5.5** Keep resolved interface signatures available in local modules
+- [x] **5.5** (`7f1f3f8c`) Keep resolved interface signatures available in local modules
   and carry interface and operation names with the exported values and
   types of a prelude or a non-isolated input. Check that dependency loading
   recognises local modules in the same scopes as ordinary declarations.
   Test local module handlers and their scope, a custom prelude,
   successive inputs with both isolation settings, and REPL imports
   and failed loads.
-- [ ] **5.7** Preserve the checked types during lowering of quantified
+- [x] **5.7** (`7f1f3f8c`) Preserve the checked types during lowering of quantified
   record operations, comprehensions and upcasts. Run the regressions
   from 3.11 through ordinary execution, typed frontend rechecking and
   strict IR checking. Include a list with modal elements and the record
   extension after explicit instantiation. Check that strict IR checking
   accepts matching function arities and rejects a cast that changes
   the argument count.
-- [ ] **5.8** Support [linear lists](SPEC.md#list-linearity). Update list
+- [x] **5.8** (`7f1f3f8c`) Support [linear lists](SPEC.md#list-linearity). Update list
   kinds, inference, pattern lowering and primitive types together.
   Check that cons and append preserve all the elements and that list
   patterns split each list once on a matching path. Keep the
@@ -314,29 +313,29 @@ switching the active inference path.
   or `tl` on a linear list, including with explicit type application.
   Run the accepted examples with typed frontend rechecking and strict
   IR checks.
-- [ ] **5.9** Apply [REPL recovery](SPEC.md#repl-recovery) after runtime
+- [x] **5.9** (`7f1f3f8c`) Apply [REPL recovery](SPEC.md#repl-recovery) after runtime
   errors and early `exit`. Check a linear move before an interruption
   and a move the interruption skips. Check that an interrupted module
   leaves no new names in scope and that an exit value is printed without
   the type of the skipped result.
-- [ ] **5.10** Keep the [pure state helpers](SPEC.md#prelude-and-example-behaviour)
+- [x] **5.10** (`7f1f3f8c`) Keep the [pure state helpers](SPEC.md#prelude-and-example-behaviour)
   and remove the `Abs` requirement on the results produced by `fmap`
   and the elements produced by `sequence`. Test both with functions
   created during a state computation. Keep a rejection test for a
   non-absolute argument captured by `return`.
-- [ ] **5.11** Restore caller handling of `Fail` in the
+- [x] **5.11** (`7f1f3f8c`) Restore caller handling of `Fail` in the
   [SAT example](SPEC.md#prelude-and-example-behaviour). Test that
   `leftBiased` tries the second branch, that a caller can handle final
   failure from either helper, and that malformed input still gives
   `Nothing` from `parseTextExpression`.
-- [ ] **5.12** Lower list comprehensions to the
+- [x] **5.12** (`7f1f3f8c`, `4b63194d`) Lower list comprehensions to the
   [standard helpers](SPEC.md#prelude-and-example-behaviour). Test
   shadowing with one and several generators and with `orderby`.
   Check that `for` works with empty and custom preludes that define
   no list helpers and gives the same results as with the default
   prelude. Explicit calls still use the definitions in scope. Run
   the tests with typed frontend rechecking and strict IR checks.
-- [ ] **5.13** Check [custom comparisons](SPEC.md#comparison-operators)
+- [x] **5.13** (`7f1f3f8c`) Check [custom comparisons](SPEC.md#comparison-operators)
   against their definitions in scope and require a `Bool` result.
   Lower each call to the same definition the checker used. Test an
   accepted custom comparison, a declaration returning `String`, a
@@ -366,7 +365,7 @@ Depends on milestone 5.
 - [x] **6.3** (`fcb1e97a`) Run final build, regression, IR, source and installation
   checks on the combined revision. Record remaining deferred cases and
   their reasons. Complete this plan only when the in-scope checks pass.
-- [ ] **6.4** After the follow-up changes in 2–5, update the
+- [x] **6.4** After the follow-up changes in 2–5, update the
   SmallLinks guide, including signatures, lock access, recursive
   types, linear lists, REPL recovery, comparisons and comprehension
   helpers. Cover [interface names and printing](SPEC.md#effect-interfaces),
@@ -429,13 +428,33 @@ The first implementation is complete on `small-met`. The native compiler
 uses Fresco for files, expressions and REPL sentences. The [migration
 inventory](MIGRATION.md) records the retained and deferred cases.
 
-The milestone 2–4 follow-ups are complete on `small-met`. The next
-implementation starts at 5.5, which covers interface names across
-file inputs and preludes, and interface signatures in local modules.
-There are no milestone 4 blockers. Item 5.7 repeats the strict record
-and comprehension checks after integration. Complete 6.4 after the
-remaining milestone 5 items. Optimisation work remains in the
+The in-scope MET implementation and follow-up checks are complete.
+Items 5.5 and 5.7–5.13 share the compiler and library commit
+`7f1f3f8c` because the startup, frontend and IR changes share code and
+checks. Commit `4b63194d` keeps source preprocessing off the bundled
+comprehension helpers. The final guide and verification record cover
+the combined revision. Optimisation work remains in the
 [deferred list](IMPL.md#deferred-optimisation-issues).
+
+### Milestones 5–6 follow-up checks
+
+The combined source revision was `4b63194d` with OCaml 5.4.0.
+Logs are in `/private/tmp/smalllinks-met-56-follow-up/`.
+Independent review covered interface scopes, linear list splitting,
+REPL recovery, comparisons and comprehension lowering. The review
+fixes retain the usual precedence of a scoped comparison and preserve
+a modal generator's element type through frontend rechecking.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make all-ci` with a fresh Dune build directory | Passed. The macOS build used `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk`. | `final-clean-ci-build.log` |
+| `make tests` | 1,136 passed across 42 suites. Two existing cases were ignored. All four scripts passed, including both REPL scripts, print and reparse, and example registration. | `final-all-tests.log` |
+| `opam exec -- ./run-tests unit-tests` | 105 passed. | `final-unit.log` |
+| `./test-harness tests/<suite>.tests` with frontend rechecking and strict IR checks | Passed for `records` (39), `collections` (61), `operators` (27), `handlers` (131), `effect_annotations` (63), `native` (76), `modules` (57) and `library` (7). | `final-strict-<suite>.log` |
+| `./test-harness tests/typed_ir.tests` and `./test-harness tests/recheck_frontend_transformations.tests` | 30 and 3 passed. Includes the matching and mismatched upcast arities. | `final-typed-ir.log`, `final-recheck.log` |
+| Guide code blocks and entry points, plus the handler aggregate under strict checks | All 18 runnable guide blocks and four entry point checks passed. All nine handler assertions passed. | `final-guide.log`, `final-strict-examples.log` |
+| `opam exec -- dune install --profile=ci --prefix="$prefix" links` and `./tests/check-install.sh "$prefix/bin/linx"` | Passed from the fresh build. Outside the checkout the installed interpreter ran the import, empty-prelude comprehension, modal handler and polymorphic examples. | `final-clean-install.log`, `final-clean-install-check.log`, `final-installed-examples.log` |
+| `make rule-check`, `git diff --check` and document links | Passed. An `rg` scan covered the tabs rule because GNU find was unavailable. | `final-rule-check.log`, `final-diff-check.log`, `final-tabs.log`, `final-documents.log` |
 
 ### Milestone 4 follow-up checks
 
