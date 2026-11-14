@@ -4,6 +4,8 @@ open Sugartypes
 val check_duplicates : Position.t -> Pattern.with_pos list -> unit
 val require_unlimited : Position.t -> Types.datatype -> unit
 
+val is_irrefutable : Types.datatype -> Pattern.with_pos -> bool
+
 (** Approximate the scrutinee using pattern annotations and known constructors. *)
 val hint : Pattern.with_pos -> Types.datatype
 val hint_cases : Pattern.with_pos list -> Types.datatype

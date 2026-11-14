@@ -108,7 +108,7 @@ sig
 
   val escape : (var_info * Types.row * (var -> tail_computation sem)) -> tail_computation sem
 
-  val tabstr : (Quantifier.t list * value sem) -> value sem
+  val tabstr : (Quantifier.t list * tail_computation sem) -> tail_computation sem
   val tappl : (value sem * Types.type_arg list) -> value sem
 
   val apply : (value sem * (value sem) list) -> tail_computation sem
@@ -520,7 +520,17 @@ struct
 
   let tabstr (tyvars, s) =
     let t = Types.for_all (tyvars, sem_type s) in
-      bind s (fun v -> lift (TAbs (tyvars, v), t))
+    match reify s with
+    | [], Return v -> lift (Return (TAbs (tyvars, v)), t)
+    | bindings, tail ->
+        (* Keep every binding that can mention these type variables inside
+           the quantified let. Evaluate the body only once. *)
+        let tail =
+          if bindings = [] then tail else
+            If (Ir.Constant (Constant.Bool true),
+                (bindings, tail), ([], Special (Wrong (sem_type s)))) in
+        let variable = comp_binding ~tyvars (Var.info_of_type t, tail) in
+        M.bind variable (fun var -> lift (Return (Variable var), t))
 
   let tappl (s, tyargs) =
     let t = Instantiate.apply_type (sem_type s) tyargs in
@@ -634,9 +644,8 @@ struct
           | FnAppl (e, es) ->
               I.apply (ev e, evs es)
           | TAbstr (tyvars, e) ->
-              let v = ev e in
               let qs = List.map SugarQuantifier.get_resolved_exn tyvars in
-                cofv (I.tabstr (qs, v))
+              I.tabstr (qs, ec e)
           | TAppl (e, tyargs) ->
               let v = ev e in
               let vt = I.sem_type v in

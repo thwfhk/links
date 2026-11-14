@@ -2,6 +2,9 @@ open Utility
 open Sugartypes
 open SourceCode.WithPos
 
+let checked_type { node; _ } =
+  match node with Checked (_, typ) | ModalIntro (_, typ) -> Some typ | _ -> None
+
 let rec opt_generalisable o = opt_app is_pure true o
 and is_pure p = match p.node with
   | QualifiedVar _
@@ -58,7 +61,11 @@ and is_pure_binding ({node ; _ }: binding) = match node with
   | Aliases _ -> true
   | Exp p -> is_pure p
   | Val (pat, (_, rhs), _, _) ->
-      is_safe_pattern pat && is_pure rhs
+      is_pure rhs &&
+      begin match checked_type rhs with
+      | Some typ -> FrescoPatterns.is_irrefutable typ pat
+      | None -> is_safe_pattern pat
+      end
 and is_safe_pattern {node = pat; _} = let open Pattern in
   match pat with
     (* safe patterns cannot fail *)
@@ -66,10 +73,7 @@ and is_safe_pattern {node = pat; _} = let open Pattern in
   | Cons _
   | List _
   | Constant _ -> false
-  (* NOTE: variant assigment is typed such that it must always succeed *)
-  | Variant (_, None) -> true
-  | Variant (_, Some p) -> is_safe_pattern p
-  | Negative _ -> true
+  | Variant _ | Negative _ -> false
   | Any
   | Variable _ -> true
   | Record (ps, None) -> List.for_all (snd ->- is_safe_pattern) ps

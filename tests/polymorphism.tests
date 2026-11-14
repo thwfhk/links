@@ -255,6 +255,49 @@ Type abstraction: incorrect, violates value restriction
 exit : 1
 stderr : @.*Type error:.*Type abstraction requires a value.*
 
+An empty list can be checked at a polymorphic type
+([] : forall a. List a)
+args : --set=show_quantifiers=true
+stdout : [] : forall a.List a
+
+An effectful call cannot acquire a fresh universal binder
+(print("once") : forall a. ())
+stderr : @.*Type error:.*
+exit : 1
+
+An effectful call cannot acquire a fresh modality in the same context
+(print("once") : [wild] ())
+stderr : @.*Modal introduction requires a value.*
+exit : 1
+
+An effectful block cannot introduce a modality on its returned variable
+var n = 42; ({ print("once"); n } : [] Int)
+stderr : @.*Modal introduction requires a value.*
+exit : 1
+
+A value can acquire a written quantifier without changing its runtime type
+var n = 42; var p = (n : forall a. Int); (~p)[Bool]
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int
+
+A computation can return a value with an existing modality
+sig answer : () -> [] Int fun answer() { (42 : [] Int) } (answer() : [] Int) + 0
+stdout : 42 : Int
+
+A computation can return a value with an existing universal binder
+sig chooseId : () -> (forall a. a -> a) fun chooseId() { fun(x) { x } } var f = (chooseId() : forall a. a -> a); (f(42), f(true))
+stdout : (42, true) : (Int, Bool)
+
+A block with a failing pattern cannot acquire a fresh universal binder
+var v = (B : (| A | B |)); ({ var A = v; fun(x) { x } } : forall a. a -> a)
+stderr : @.*Type error:.*
+exit : 1
+
+A block with a total variant pattern can be polymorphic
+var v = (A : (| A |)); var f = ({ var A = v; fun(x) { x } } : forall a. a -> a); (f(42), f(true))
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : (42, true) : (Int, Bool)
+
 Non-linear generalisation (1)
 {var x = A; ()}
 stdout : () : ()

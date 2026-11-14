@@ -679,34 +679,32 @@ and check_row_upcast pos context ~sub ~super ~record =
 let has_leading_forall typ =
   match snd (Context.prefix typ) with ForAll _ -> true | _ -> false
 
-let adapt pos context mode typ =
+let adapt ?(allow_intro = false) pos context mode typ =
+  let convert actual expected =
+    let source, _ = Context.prefix actual in
+    let target, _ = Context.prefix expected in
+    if not allow_intro && ModalEffects.is_identity source && not (ModalEffects.is_identity target) then
+      error pos "Modal introduction requires a value";
+    convert pos context actual expected in
   match mode with
   | Infer -> [], typ
   | Apply _ -> instantiate_for mode typ
   | Check expected ->
       begin match head expected with
       | ForAll _ ->
-          (* The expected type may supply the polymorphism of an ordinary use. *)
-          begin match Context.transaction context (fun () -> consistent pos typ expected) with
-          | () -> [], expected
-          | exception Errors.Type_error _ ->
-              let qs, expected_body = TypeUtils.split_quantified_type (Instantiate.freshen_quantifiers (head expected)) in
-              in_rigid_scope context [typ] qs (fun () ->
-                let args, actual = instantiate_for (Check expected_body) typ in
-                convert pos context actual expected_body;
-                args, expected)
-          end
+          consistent pos typ expected;
+          [], expected
       | Modal _ when has_leading_forall expected ->
-          begin match Context.transaction context (fun () -> convert pos context typ expected) with
+          begin match Context.transaction context (fun () -> convert typ expected) with
           | () -> [], expected
           | exception Errors.Type_error _ ->
               let args, actual = instantiate_for mode typ in
-              convert pos context actual expected;
+              convert actual expected;
               args, expected
           end
       | _ ->
           let args, actual = instantiate_for mode typ in
-          convert pos context actual expected;
+          convert actual expected;
           args, expected
       end
 
@@ -825,11 +823,11 @@ let frozen_match pos mode typ =
 let access pos state name =
   at pos (fun () -> Context.access state.terms name)
 
-let variable pos state mode ~frozen name =
+let variable ~allow_intro pos state mode ~frozen name =
   let typ = access pos state name in
   let args, typ =
     if frozen then [], frozen_match pos mode typ
-    else adapt pos state.terms mode typ in
+    else adapt ~allow_intro pos state.terms mode typ in
   let node = if frozen || args <> [] then FreezeVar name else Var name in
   let phrase = set_type_args (make ~pos node) args in
   phrase, typ, Usage.singleton name
@@ -839,21 +837,35 @@ let rec variable_name : phrasenode -> string option = function
   | Freeze body | TupleLit [body] -> variable_name body.node
   | _ -> None
 
-let rec infer state mode phrase =
+let check_introduction phrase typ =
+  if not (TypeSugar.is_generalisable phrase) then
+    match head typ with
+    | ForAll _ -> error phrase.pos "Type abstraction requires a value"
+    | Modal _ -> error phrase.pos "Modal introduction requires a value"
+    | _ -> ()
+
+let rec infer ?(allow_intro = true) state mode phrase =
   let pos = phrase.pos in
   at pos (fun () ->
+    let infer_node = infer_node ~allow_intro in
     match mode, head (hint mode), phrase.node with
     | Check expected, _, (Checked _ | ModalIntro _ | Freeze _ | FreezeVar _ | FreezeSection _) ->
         infer_node state (Check expected) phrase
-    | Check expected, (ForAll _ | Modal _), FunLit _ ->
+    | Check expected, (ForAll _ | Modal _), FunLit _ when allow_intro ->
         introduce state expected phrase
     | Check _, (ForAll _ | Modal _), (Block ([], _) | TupleLit [_]) ->
         infer_node state mode phrase
     | Check expected, (ForAll _ | Modal _), (Conditional _ | Block _)
-      when TypeSugar.is_generalisable phrase ->
+      when allow_intro ->
+        begin match Context.transaction state.terms (fun () -> introduce state expected phrase) with
+        | result -> result
+        | exception Errors.Type_error _ -> infer_node state (Check expected) phrase
+        end
+    | Check expected, (ForAll _ | Modal _), (ListLit _ | TupleLit _ | RecordLit _ | ConstructorLit _)
+      when allow_intro && TypeSugar.is_generalisable phrase ->
         introduce state expected phrase
     | Check expected, (ForAll _ | Modal _), _
-      when TypeSugar.is_generalisable phrase ->
+      when allow_intro && TypeSugar.is_generalisable phrase ->
         begin match Context.transaction state.terms (fun () -> infer_node state mode phrase) with
         | result -> result
         | exception Errors.Type_error _ -> introduce state expected phrase
@@ -865,17 +877,20 @@ and introduce state expected phrase =
   | ForAll (qs, body) ->
       introduce_quantifiers state qs (fun () ->
         let body = infer (with_rigids state qs) (Check body) phrase in
+        check_introduction (term body) expected;
         wrap_usage phrase.pos (TAbstr (sugar_quantifiers qs, term body)) expected (usage body))
   | Modal (modality, body) ->
       let body = infer (under state modality) (Check body) phrase in
+      check_introduction (term body) expected;
       wrap_usage phrase.pos (ModalIntro (term body, expected)) expected (usage body)
   | _ -> infer_node state (Check expected) phrase
 
-and infer_node state mode phrase =
+and infer_node ?(allow_intro = true) state mode phrase =
   let pos = phrase.pos in
   let infer_here = infer state in
   let finish node typ usage =
-    let args, typ = adapt pos state.terms mode typ in
+    let args, typ = adapt ~allow_intro:(allow_intro && TypeSugar.is_generalisable phrase)
+        pos state.terms mode typ in
     set_type_args (make ~pos node) args, typ, usage in
   let finish_frozen node typ usage =
     wrap_usage pos node (frozen_match pos mode typ) usage in
@@ -884,18 +899,18 @@ and infer_node state mode phrase =
   let infer_optional expected phrase =
     infer_here (match expected with Some typ -> Check typ | None -> Infer) phrase in
   match phrase.node with
-  | Var name -> variable pos state mode ~frozen:false name
-  | FreezeVar name -> variable pos state mode ~frozen:true name
+  | Var name -> variable ~allow_intro pos state mode ~frozen:false name
+  | FreezeVar name -> variable ~allow_intro pos state mode ~frozen:true name
   | Freeze body ->
       begin match variable_name body.node with
-      | Some name -> variable pos state mode ~frozen:true name
+      | Some name -> variable ~allow_intro pos state mode ~frozen:true name
       | None ->
           let body = infer_here Infer body in
           finish_frozen (term body).node (typ body) (usage body)
       end
   | Constant c -> finish phrase.node (Primitive (Constant.type_of c)) Usage.empty
   | Checked (body, expected) ->
-      let body = infer_node state (Check expected) body in
+      let body = infer_node ~allow_intro state (Check expected) body in
       finish (Checked (term body, expected)) expected (usage body)
   | ModalIntro (body, expected) ->
       let body = introduce state expected body in
@@ -904,6 +919,11 @@ and infer_node state mode phrase =
       let expected = resolved source.pos (snd anno) in
       let body = infer_here (Check expected) body in
       finish (TypeAnnotation (term body, anno)) expected (usage body)
+  | FunLit _ when not allow_intro && (match head (hint mode) with ForAll _ | Modal _ -> true | _ -> false) ->
+      let inferred = infer_node state Infer phrase in
+      let args, typ = adapt pos state.terms mode (typ inferred) in
+      let phrase = set_type_args (term inferred) args in
+      wrap_usage pos (Checked (phrase, typ)) typ (usage inferred)
   | FunLit (_, lin, NormalFunlit (groups, body), location) ->
       let groups, body, typ, usage, arg_types = lambda state pos lin mode groups body in
       let arg_types = List.map (fun args -> args, make_empty_closed_row ()) arg_types in
@@ -918,18 +938,18 @@ and infer_node state mode phrase =
         (Usage.combine (usage fn) (Usage.combine_many (List.map usage arguments)))
   | Conditional (test, yes, no) ->
       let test = infer_here (Check bool_type) test in
-      let yes = infer_here mode yes in
-      let no = infer_here mode no in
+      let yes = infer ~allow_intro:false state mode yes in
+      let no = infer ~allow_intro:false state mode no in
       let typ = same_branches pos mode [yes; no] in
       wrap_usage pos (Conditional (term test, term yes, term no)) typ
         (Usage.combine (usage test) (Usage.align [usage yes; usage no]))
   | Block (bindings, body) ->
       let state, bindings, uses = infer_bindings ~global:false state bindings in
-      let body = infer state mode body in
+      let body = infer ~allow_intro:(allow_intro && bindings = []) state mode body in
       let remaining, _ = uses ~export:false (usage body) in
       wrap_usage pos (Block (bindings, term body)) (typ body) remaining
   | TupleLit [value] ->
-      let value = infer_here mode value in
+      let value = infer ~allow_intro state mode value in
       wrap_usage pos (TupleLit [term value]) (typ value) (usage value)
   | TupleLit items ->
       let expected = match expected_bare with
@@ -1021,16 +1041,23 @@ and infer_node state mode phrase =
       let arguments, instance = instantiate_for mode (typ body) in
       finish (tappl' (term body, arguments)) instance (usage body)
   | Generalise body ->
-      if not (TypeSugar.is_generalisable body) then error pos "Generalisation requires a value";
       let body = infer_here Infer body in
+      if not (TypeSugar.is_generalisable (term body)) then error pos "Generalisation requires a value";
       let (qs, _), typ = generalise state.terms state.rigids (typ body) in
       let node = match qs with [] -> (term body).node | _ -> TAbstr (sugar_quantifiers qs, term body) in
       finish node typ (usage body)
   | TAbstr (qs, body) ->
-      if not (TypeSugar.is_generalisable body) then error pos "Type abstraction requires a value";
       let rigid = quantifiers qs in
       let body = in_rigid_scope state.terms [] rigid (fun () ->
-        infer (with_rigids state rigid) Infer body) in
+        let state = with_rigids state rigid in
+        match head (hint mode) with
+        | ForAll (expected, target) when List.length expected = List.length rigid
+            && List.for_all2 (fun (_, kind) (_, expected) -> Kind.equal kind expected) rigid expected ->
+            let arguments = List.map type_arg_of_quantifier rigid in
+            let target = FrescoTypes.apply (Types.for_all (expected, target)) arguments in
+            infer state (Check target) body
+        | _ -> infer state Infer body) in
+      if not (TypeSugar.is_generalisable (term body)) then error pos "Type abstraction requires a value";
       let unknowns = TypeVarSet.diff (free_flexible_type_vars (typ body)) (Context.excluded state.terms) in
       if not (TypeVarSet.is_empty unknowns) then error pos "Type abstraction needs a type annotation";
       finish (TAbstr (qs, term body)) (Types.for_all (rigid, typ body)) (usage body)
@@ -1097,7 +1124,7 @@ and infer_node state mode phrase =
                 check (Check expected)
             end in
       let bodies = List.map2 (fun (pat, env) body ->
-        let body = infer (bind_all state env) mode body in
+        let body = infer ~allow_intro:false (bind_all state env) mode body in
         pat, body, use_binders pos env (usage body)) patterns bodies in
       let output = same_branches pos mode (List.map (fun (_, body, _) -> body) bodies) in
       let uses = Usage.align (List.map (fun (_, _, uses) -> uses) bodies) in
@@ -1280,7 +1307,7 @@ and infer_handler state pos mode { sh_expr; sh_effect_cases; sh_value_cases; sh_
             check_input (Check expected)
         end in
   let returns = List.map2 (fun (pattern, env) body ->
-    let body = infer (bind_all clause_state env) mode body in
+    let body = infer ~allow_intro:false (bind_all clause_state env) mode body in
     (pattern, term body), body, clause_usage pattern.pos env body) patterns bodies in
   let output = match mode, returns with
     | Check expected, _ -> expected
@@ -1304,7 +1331,7 @@ and infer_handler state pos mode { sh_expr; sh_effect_cases; sh_value_cases; sh_
       let args, envs = List.split (List.map2 (FrescoPatterns.check ~variants:`Open) domains args) in
       let k, kenv = FrescoPatterns.check resumption k in
       let env = List.fold_left Env.extend kenv envs in
-      let body = infer (bind_all (with_rigids clause_state qs) env) mode body in
+      let body = infer ~allow_intro:false (bind_all (with_rigids clause_state qs) env) mode body in
       same_handler_result pos output (typ body);
       let uses = clause_usage pos env body in
       (make ~pos (Pattern.Operation (label, args, k)), term body), uses in
@@ -1346,7 +1373,7 @@ and infer_pattern_binding state pattern value =
 
 and infer_explicit_target state body =
   match variable_name body.node with
-  | Some name -> variable body.pos state Infer ~frozen:true name
+  | Some name -> variable ~allow_intro:false body.pos state Infer ~frozen:true name
   | None -> infer state Infer body
 
 and instantiate_binding pos state name mode =
@@ -1495,7 +1522,7 @@ and infer_binding ~global state binding =
           | None -> check Infer in
         let typ = typ body' in
         let qs, env =
-          if TypeSugar.is_generalisable body then
+          if TypeSugar.is_generalisable (term body') && FrescoPatterns.is_irrefutable typ pattern then
             let (qs, args), _ = generalise ~mutate:false state.terms state.rigids typ in
             let env = Env.map (fun typ -> snd (generalise ~mutate:false state.terms state.rigids typ)) env in
             List.iter Generalise.rigidify_type_arg args;
@@ -1506,7 +1533,8 @@ and infer_binding ~global state binding =
             [], env
           end in
         let pattern = bind_pattern_types env pattern in
-        finish (bind_all state env) (Val (pattern, (sugar_quantifiers qs, term body'), location, anno)) env (usage body')
+        let checked = make ~pos:body.pos (Checked (term body', typ)) in
+        finish (bind_all state env) (Val (pattern, (sugar_quantifiers qs, checked), location, anno)) env (usage body')
     | Fun def ->
         let _, fnlit = def.fun_definition in
         let groups, body = Sugartypes.get_normal_funlit fnlit in

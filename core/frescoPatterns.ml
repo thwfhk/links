@@ -191,6 +191,40 @@ let rec unannotated { node; _ } =
   | Pattern.As (_, p) | Pattern.HasType (p, _) -> unannotated p
   | _ -> node
 
+let rec is_irrefutable typ ({ node; _ } : Pattern.with_pos) =
+  let _, body = unprefix typ in
+  match node, body with
+  | (Pattern.Any | Pattern.Variable _), _ -> true
+  | (Pattern.As (_, p) | Pattern.HasType (p, _)), _ -> is_irrefutable typ p
+  | Pattern.Variant (label, payload), Variant row ->
+      let fields, _ = row_parts row in
+      is_closed_row row
+      && StringMap.mem label fields
+      && StringMap.for_all (fun name spec ->
+        if name = label then
+          match concrete_field_spec spec with
+          | Present t -> Option.fold ~none:true ~some:(is_irrefutable t) payload
+          | _ -> false
+        else concrete_field_spec spec = Absent) fields
+  | Pattern.Negative labels, Variant row ->
+      let row = flatten_row row in
+      List.for_all (fun label -> is_absent_from_row label row) labels
+  | Pattern.Tuple patterns, Record row -> is_irrefutable_record row (tuple_fields patterns) None
+  | Pattern.Record (fields, rest), Record row -> is_irrefutable_record row fields rest
+  | _ -> false
+
+and is_irrefutable_record row fields rest =
+  let row_fields, _ = row_parts row in
+  List.for_all (fun (label, pattern) ->
+    match StringMap.find_opt label row_fields with
+    | Some spec ->
+        begin match concrete_field_spec spec with
+        | Present typ -> is_irrefutable typ pattern
+        | _ -> false
+        end
+    | None -> false) fields
+  && Option.fold ~none:true ~some:(is_irrefutable (Record (remove_fields row (labels fields)))) rest
+
 let complete typ = snd (FrescoTypes.complete_hint (PrimaryKind.Type, typ))
 let merge_hints hints = List.fold_left FrescoTypes.merge_known Not_typed hints
 
