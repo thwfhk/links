@@ -182,3 +182,35 @@ A variant payload must match the declared type
 typename MaybeInt = (| Nothing | Just:Int |); Just(true) : MaybeInt
 stderr : @.*Expected Int, got Bool.*
 exit : 1
+
+An absolute callback field accepts a growing recursive type argument
+typename Box(a) = (|Done:[] a|More:Box(List a)|); effect E { Take : (Box(Int -> Int)) => (); } ()
+stdout : () : ()
+
+An ambient callback field in a recursive type is rejected
+typename Box(a) = (|Done:a|More:Box(a)|); effect E { Take : (Box(Int -> Int)) => (); } ()
+stderr : @.*The arguments and result of Take must have absolute types.*
+exit : 1
+
+An ambient callback introduced after two recursive steps is rejected
+mutual { typename Shift(a,b) = (|Here:a|More:Step(b)|); typename Step(a) = (|Back:Shift(a,Int -> Int)|); } effect E { Take : (Shift(Int,Int)) => (); } ()
+stderr : @.*The arguments and result of Take must have absolute types.*
+exit : 1
+
+An explicit field can replace a callback supplied through a recursive row argument
+typename Item(r::Row) = (run:Int|r); typename Box(r::Row) = (|Done:Item({|r})|More:Box({run:Int -> Int|r})|); effect E { Take : (Box({run:Int -> Int})) => (); } ()
+stdout : () : ()
+
+An ambient callback added to a recursive row argument is rejected
+typename Item(r::Row) = (keep:Int|r); typename Box(r::Row) = (|Done:Item({|r})|More:Box({run:Int -> Int|r})|); effect E { Take : (Box({run:Int})) => (); } ()
+stderr : @.*The arguments and result of Take must have absolute types.*
+exit : 1
+
+An absolute callback added to a recursive presence argument is accepted
+typename Box(p::Presence) = (|Done:(run{p})|More:Box({:[] (Int -> Int)})|); effect E { Take : (Box({:Int})) => (); } ()
+stdout : () : ()
+
+An ambient callback added to a recursive presence argument is rejected
+typename Box(p::Presence) = (|Done:(run{p})|More:Box({:Int -> Int})|); effect E { Take : (Box({:Int})) => (); } ()
+stderr : @.*The arguments and result of Take must have absolute types.*
+exit : 1

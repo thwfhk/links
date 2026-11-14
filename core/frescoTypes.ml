@@ -45,15 +45,23 @@ let rec expose ~reject_cycle seen = function
         expose ~reject_cycle seen body
   | typ -> seen, typ
 
-let head_with_seen' ~reject_cycle seen typ =
+let expose_head ~reject_cycle seen typ =
   let rec combine seen modality body =
     match expose ~reject_cycle seen body with
-    | seen, Modal (inner, body) -> combine seen (ModalEffects.compose modality inner) body
-    | seen, _ -> seen, Types.modal modality body
+    | seen', Modal (inner, body) -> combine seen' (ModalEffects.compose modality inner) body
+    | seen', inner ->
+        if ModalEffects.is_identity modality then seen', inner, (seen', inner)
+        (* Let a caller strip the modality and expose its body again. The
+           guard check below can continue from the already exposed head. *)
+        else seen, Types.modal modality body, (seen', inner)
   in
   match expose ~reject_cycle seen typ with
   | seen, Modal (modality, body) -> combine seen modality body
-  | result -> result
+  | seen, typ -> seen, typ, (seen, typ)
+
+let head_with_seen' ~reject_cycle seen typ =
+  let seen, head, _ = expose_head ~reject_cycle seen typ in
+  seen, head
 
 let rec check_prefix_body seen = function
   | ForAll (_, body) | Modal (_, body) ->
@@ -62,8 +70,8 @@ let rec check_prefix_body seen = function
   | _ -> ()
 
 let head_with_seen seen typ =
-  let seen, exposed = head_with_seen' ~reject_cycle:true seen typ in
-  check_prefix_body seen exposed;
+  let seen, exposed, (inner_seen, inner) = expose_head ~reject_cycle:true seen typ in
+  check_prefix_body inner_seen inner;
   seen, exposed
 
 let head typ = snd (head_with_seen RecIdSet.empty typ)

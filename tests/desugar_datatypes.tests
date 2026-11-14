@@ -125,3 +125,16 @@ stdout : 42 : Int
 Type alias row arguments use their declared kinds
 effect Reader { Ask : () => Int; } typename AskFrom(r::Row) = [Reader] (((|r)) -> Int); fun(r) { r.x + do Ask } : AskFrom({x:Int})
 stdout : fun : AskFrom ({x:Int})
+
+A modality can enclose a recursive variant
+(Leaf : [] (mu a. (|Leaf|More:a|)))
+stdout : @Leaf : .*
+
+A quantifier and a modality cannot guard a recursive type
+fun (x : (mu a. [] (forall b. a))) { () }
+stderr : @.*A recursive type needs a data or function constructor.*
+exit : 1
+
+An absolute kind narrows only parameters used in exposed recursive fields
+typename Shift(a,b,c) = (|Here:a|More:Shift(b,Int,c)|); typename Wrap(a::Abs) = a; fun (x : Wrap(Shift(Int,%b,%c))) { x }
+stdout : fun : (Wrap (Shift (Int,a::Abs,b))) -> Wrap (Shift (Int,a::Abs,b))

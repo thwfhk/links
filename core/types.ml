@@ -849,46 +849,146 @@ module Mono : Constraint = struct
 end
 
 module Abs : Constraint = struct
-  let predicates ~flexible =
-    (object(self)
-       inherit type_predicate as super
+  (* For a row variable, only fields outside the hidden labels must be
+     absolute. When the same row is used twice, only labels hidden at
+     both uses can be ignored. Type and presence variables hide no labels. *)
+  type requirements = (typ point * StringSet.t) IntMap.t
 
-       method! point_satisfies visit ((_, _, bound) as vars) point =
-         match Unionfind.find point with
-         | Var (id, (_, (_, restriction)), freedom) ->
-            Restriction.requires_abs restriction
-            || (flexible && freedom = `Flexible && not (IntSet.mem id bound)
-                && Option.is_some (Restriction.min restriction res_abs))
-         | _ -> super#point_satisfies visit vars point
+  type definition = {
+    parameters : tid list;
+    body : typ;
+    mutable required : requirements option;
+  }
 
-       method! type_satisfies vars = function
-         | Modal (ModalEffects.Absolute _, _) -> true
-         | Modal (ModalEffects.Relative _, body) -> self#type_satisfies vars body
-         | Function _ | Lolli _ | AmbientFunction _ | Effect _ | Operation _ -> false
-         | t -> super#type_satisfies vars t
-     end)#predicates
+  exception Not_absolute
 
-  let type_satisfies, row_satisfies = predicates ~flexible:false
-  let can_type_be, can_row_be = predicates ~flexible:true
+  let add id point hidden required =
+    IntMap.update id (function
+      | None -> Some (point, hidden)
+      | Some (_, other) -> Some (point, StringSet.inter hidden other)) required
 
-  let make_type, make_row =
-    (object(self)
-       inherit type_iter as super
+  let requirements typ =
+    let definitions = lazy (Hashtbl.create 8) in
+    let changed = ref false in
+    let definition app =
+      let definitions = Lazy.force definitions in
+      match Hashtbl.find_opt definitions app.r_unique_name with
+      | Some definition -> definition
+      | None ->
+          (* Use fresh parameters so that unfolding cannot grow recursive
+             arguments. Their requirements will be applied at each use. *)
+          let parameter (primary, _) =
+            let id = fresh_raw_variable () in
+            let point = Unionfind.fresh (Var (id, (primary, (lin_unl, res_any)), `Rigid)) in
+            let typ =
+              if primary = pk_row then Row (FieldEnv.empty, point) else Meta point in
+            id, (primary, typ)
+          in
+          let parameters, arguments = List.split (List.map parameter app.r_quantifiers) in
+          let definition = { parameters; body = app.r_unwind arguments; required = Some IntMap.empty } in
+          Hashtbl.add definitions app.r_unique_name definition;
+          changed := true;
+          definition
+    in
+    let rec visit bound recursive hidden required typ =
+      let child = visit bound recursive StringSet.empty in
+      match typ with
+      | Alias (_, _, body) -> visit bound recursive hidden required body
+      | Modal (ModalEffects.Relative _, body) | Record body | Variant body | Present body ->
+          child required body
+      | Modal (ModalEffects.Absolute _, _) | Primitive _ | Absent -> required
+      | Function _ | Lolli _ | AmbientFunction _ | Effect _ | Operation _ -> raise Not_absolute
+      | ForAll (qs, body) ->
+          visit (TypeVarSet.add_quantifiers qs bound) recursive hidden required body
+      | Application (_, args) ->
+          List.fold_left (fun required (_, arg) -> child required arg) required args
+      | RecursiveApplication app ->
+          let { parameters; required = definition_required; _ } = definition app in
+          let definition_required = match definition_required with
+            | Some required -> required
+            | None -> raise Not_absolute in
+          let required, remaining = List.fold_left2 (fun (required, remaining) id (_, arg) ->
+            match IntMap.find_opt id remaining with
+            | None -> required, remaining
+            | Some (_, hidden) ->
+                visit bound recursive hidden required arg, IntMap.remove id remaining
+          ) (required, definition_required) parameters app.r_args in
+          IntMap.fold (fun _ (point, hidden) required ->
+            visit_point bound recursive hidden required point
+          ) remaining required
+      | Meta point -> visit_point bound recursive hidden required point
+      | Row (fields, tail) ->
+          let required = FieldEnv.fold (fun label field required ->
+            if StringSet.mem label hidden then required else child required field
+          ) fields required in
+          let hidden = FieldEnv.fold (fun label _ -> StringSet.add label) fields hidden in
+          visit_point bound recursive hidden required tail
+      | Not_typed | Var _ | Recursive _ | Closed -> raise tag_expectation_mismatch
+    and visit_point bound recursive hidden required point =
+      match Unionfind.find point with
+      | Closed -> required
+      | Var (id, (_, (_, restriction)), _) when IntSet.mem id bound ->
+          if Restriction.requires_abs restriction then required else raise Not_absolute
+      | Var (id, _, _) -> add id point hidden required
+      | Recursive (id, _, body) ->
+          if List.exists (fun (other, labels) ->
+            id = other && StringSet.subset labels hidden) recursive
+          then required
+          else visit bound ((id, hidden) :: recursive) hidden required body
+      | body -> visit bound recursive hidden required body
+    in
+    let collect typ =
+      try Some (visit IntSet.empty [] StringSet.empty IntMap.empty typ)
+      with Not_absolute -> None in
+    let equal left right =
+      Option.equal (IntMap.equal (fun (_, left) (_, right) -> StringSet.equal left right)) left right
+    in
+    let rec solve () =
+      changed := false;
+      let required = collect typ in
+      if Lazy.is_val definitions then
+        (* Visiting a body can discover more definitions, so take the
+           definitions for this pass before visiting any of them. *)
+        Hashtbl.to_seq_values (Lazy.force definitions) |> List.of_seq |> List.iter (fun definition ->
+          let required = collect definition.body in
+          if not (equal required definition.required) then begin
+            definition.required <- required;
+            changed := true
+          end);
+      if !changed then solve () else required
+    in
+    solve ()
 
-       method! visit_type ((expanded, recursive, quantified) as vars) = function
-         | Modal (ModalEffects.Absolute _, _) -> ()
-         | Modal (ModalEffects.Relative _, body) -> self#visit_type vars body
-         | RecursiveApplication { r_unique_name; r_args; r_unwind; _ }
-           when not (StringSet.mem r_unique_name expanded) ->
-            self#visit_type (StringSet.add r_unique_name expanded, recursive, quantified) (r_unwind r_args)
-         | t -> super#visit_type vars t
+  let satisfies ~flexible typ =
+    match requirements typ with
+    | None -> false
+    | Some required ->
+        IntMap.for_all (fun _ (point, _) ->
+          match Unionfind.find point with
+          | Var (_, (_, (_, restriction)), freedom) ->
+              Restriction.requires_abs restriction
+              || (flexible && freedom = `Flexible
+                  && Option.is_some (Restriction.min restriction res_abs))
+          | _ -> assert false
+        ) required
 
-       method! visit_var point (id, (primary, (linearity, restriction)), freedom) =
-         match freedom, Restriction.min restriction res_abs with
-         | `Flexible, Some kind when restriction <> kind ->
-            Unionfind.change point (Var (id, (primary, (linearity, kind)), freedom))
-         | _ -> ()
-     end)#visitors
+  let type_satisfies = satisfies ~flexible:false
+  let row_satisfies = type_satisfies
+  let can_type_be = satisfies ~flexible:true
+  let can_row_be = can_type_be
+
+  let make_type typ =
+    Option.iter (IntMap.iter (fun _ (point, _) ->
+      match Unionfind.find point with
+      | Var (id, (primary, (linearity, restriction)), `Flexible) ->
+          Option.iter (fun kind ->
+            if kind <> restriction then
+              Unionfind.change point (Var (id, (primary, (linearity, kind)), `Flexible))
+          ) (Restriction.min restriction res_abs)
+      | _ -> ()
+    )) (requirements typ)
+
+  let make_row = make_type
 end
 
 module MonoAbs : Constraint = struct
