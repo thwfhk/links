@@ -1,6 +1,6 @@
 (install
   (section lib)
-  (files prelude.links)
+  (files prelude.links comprehension.links)
   (package links))
 
 (rule
@@ -10,4 +10,4 @@
 
 (alias
   (name runtime-data)
-  (deps prelude.links (glob_files stdlib/*.links)))
+  (deps prelude.links comprehension.links (glob_files stdlib/*.links)))

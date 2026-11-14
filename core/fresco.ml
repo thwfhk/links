@@ -97,6 +97,15 @@ let rec prefix_quantifiers typ =
 
 let function_hint arguments result = arrow dl_unl arguments result
 
+let check_comparison pos name typ =
+  if Operators.is_comparison (Operators.source_name name) then begin
+    let rec result typ = match head typ with
+      | ForAll (_, body) | Modal (_, body) -> result body
+      | AmbientFunction (_, _, output) -> output
+      | _ -> error pos "Expected a comparison function" in
+    consistent pos (result typ) bool_type
+  end
+
 let tuple_parts pos count typ =
   let row = match head typ with
     | Record row -> flatten_row row
@@ -366,6 +375,10 @@ module Partial = struct
     | ListLit (first :: rest, _) ->
         make_list_type (List.fold_left (fun typ item -> agrees typ (infer_here item)) (infer_here first) rest)
     | ListLit ([], _) -> make_list_type hole
+    | ListElements body ->
+        let modality, list = Context.prefix (infer_here body) in
+        Option.fold ~none:hole
+          ~some:(fun item -> make_list_type (Context.carry modality item)) (list_item list)
     | RangeLit _ -> make_list_type int_type
     | RecordLit (fields, rest) ->
         let fields = List.map (fun (label, value) -> label, infer_here value) fields in
@@ -432,7 +445,7 @@ module Partial = struct
         let left = infer_here left in
         let right = infer_here right in
         begin match op with
-        | BinaryOp.And | BinaryOp.Or | BinaryOp.Name ("==" | "<>" | "<" | ">" | "<=" | ">=") -> bool_type
+        | BinaryOp.And | BinaryOp.Or -> bool_type
         | BinaryOp.Minus -> int_type
         | BinaryOp.FloatMinus -> float_type
         | BinaryOp.Cons -> make_list_type (Option.value ~default:left (list_item (head right)))
@@ -765,7 +778,7 @@ module Partial = struct
         visit env hole base;
         List.iter (fun (_, value) -> visit env hole value) fields
     | ConstructorLit (_, value, _) -> Option.iter (visit env hole) value
-    | Projection (value, _) | UnaryAppl (_, value) -> visit env hole value
+    | Projection (value, _) | UnaryAppl (_, value) | ListElements value -> visit env hole value
     | RangeLit (first, last) -> List.iter (visit env int_type) [first; last]
     | InfixAppl ((_, op), left, right) ->
         let expected = match op with
@@ -1081,7 +1094,7 @@ let usage (_, _, usage) = usage
 let builtin_binary pos op =
   let monomorphic inputs output = Some (arrow dl_unl inputs output) in
   let homogeneous_list concat =
-    let q, a = fresh_type_quantifier (lin_unl, res_any) in
+    let q, a = fresh_type_quantifier (lin_any, res_any) in
     let list = make_list_type a in
     Some (Types.for_all ([q], arrow dl_unl [if concat then list else a; list] list))
   in
@@ -1091,9 +1104,6 @@ let builtin_binary pos op =
   | BinaryOp.FloatMinus -> monomorphic [float_type; float_type] float_type
   | BinaryOp.Cons -> homogeneous_list false
   | BinaryOp.Name "++" -> homogeneous_list true
-  | BinaryOp.Name ("==" | "<>" | "<" | "<=" | ">" | ">=") ->
-      let q, a = fresh_type_quantifier (lin_unl, res_any) in
-      Some (Types.for_all ([q], arrow dl_unl [a; a] bool_type))
   | BinaryOp.RegexMatch flags ->
       let result =
         if List.mem RegexReplace flags then string_type
@@ -1337,11 +1347,17 @@ and infer_node ?(allow_intro = true) state mode phrase =
       let items = List.map (infer_optional expected) items in
       let item = match expected, items with
         | Some typ, _ -> typ
-        | None, [] -> fresh ~subkind:(lin_unl, res_any) ()
+        | None, [] -> fresh ()
         | None, first :: rest -> require_same pos (typ first) (List.map typ rest) in
-      FrescoPatterns.require_unlimited pos item;
       finish (ListLit (List.map term items, Some item)) (make_list_type item)
         (Usage.combine_many (List.map usage items))
+  | ListElements body ->
+      let body = infer_here Infer body in
+      let modality, list = Context.prefix (typ body) in
+      let item = match list_item list with
+        | Some item -> item
+        | None -> error pos "Expected a list" in
+      finish (ListElements (term body)) (make_list_type (Context.carry modality item)) (usage body)
   | RangeLit (low, high) ->
       let low = infer_here (Check int_type) low in
       let high = infer_here (Check int_type) high in
@@ -1516,6 +1532,7 @@ and infer_node ?(allow_intro = true) state mode phrase =
                 let item = fresh ~subkind:(lin_unl, res_any) () in
                 consistent pos list (make_list_type item);
                 item in
+          FrescoPatterns.require_unlimited (term generator).pos item;
           let pat, env = FrescoPatterns.check (Context.carry modality item) pat in
           bind_all state env, (pat, term generator) :: generators, env :: scopes,
           Usage.combine generator_uses (usage generator))
@@ -1525,7 +1542,7 @@ and infer_node ?(allow_intro = true) state mode phrase =
         | Some _ -> infer state (Check body_hint) body
         | None -> infer state Infer body in
       begin match list_item (head (typ body)) with
-      | Some _ -> ()
+      | Some item -> FrescoPatterns.require_unlimited (term body).pos item
       | None -> consistent pos (typ body) (make_list_type (fresh ~subkind:(lin_unl, res_any) ()))
       end;
       let where = Option.map (infer state (Check bool_type)) where in
@@ -1957,6 +1974,7 @@ and infer_binding ~global state binding =
         let fn = make ~pos (FunLit (None, def.fun_linearity, NormalFunlit (groups, body), def.fun_location)) in
         let fn = infer state_for_body (Option.fold ~none:Infer ~some:(fun typ -> Check typ) annotated) fn in
         let typ = if global && annotated = None then Types.modal pure (typ fn) else typ fn in
+        check_comparison pos name typ;
         let (qs, _), typ =
           if elaborated || (def.fun_frozen && annotated = None) then ([], []), typ
           else generalise state.terms state.rigids typ in
@@ -2033,6 +2051,7 @@ and prepare_recursive ~global def =
             arrow node.rec_linearity args result) groups (fresh ()) in
         false, (if global then Types.modal pure typ else typ) in
   let annotated, typ = typ in
+  check_comparison def.pos (Binder.to_name node.rec_binder) typ;
   def, annotated, typ
 
 and checked_function quantifiers phrase =

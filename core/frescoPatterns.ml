@@ -280,7 +280,7 @@ let rec shape ~linear_vars ~variants ({ node; pos } : Pattern.with_pos) =
       | _ -> typ
       end
   | HasType (_, (_, None)) -> error pos "Unresolved pattern type annotation."
-  | Nil | List [] -> Types.make_list_type (FrescoTypes.fresh ~subkind:unl_subkind ())
+  | Nil | List [] -> Types.make_list_type (fresh ())
   | List _ | Cons _ -> complete (hint (make ~pos node))
   | Tuple patterns -> make_tuple_type (List.map shape patterns)
   | Record (fields, rest) ->
@@ -348,7 +348,6 @@ and type_structure ~linear_vars ~variants wrap body ({ node; pos } : Pattern.wit
       Constant c, typ
   | (Nil | List _ | Cons _), Application (list, [PrimaryKind.Type, element])
     when Abstype.equal list Types.list ->
-      require_unlimited pos element;
       let node = match node with
         | Nil -> Nil
         | List patterns -> List (List.map (fun p -> fst (visit element p)) patterns)

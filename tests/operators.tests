@@ -82,3 +82,30 @@ Fixity tests
 tests/fixity.links
 filemode : true
 stdout : () : ()
+
+A custom comparison uses its own argument types
+op x < y { x && not(y) } (true < false, (<)(false, true))
+stdout : (true, false) : (Bool, Bool)
+
+A comparison cannot return a string
+op x < y { "changed" } true
+stderr : @.*Expected Bool, got String.*
+exit : 1
+
+A comparison signature must return Bool
+sig < : (Int, Int) -> String op x < y { "changed" } true
+stderr : @.*Expected Bool, got String.*
+exit : 1
+
+A scoped comparison does not replace the built-in outside its scope
+module Test { op x < y { x && not(y) } fun compare() { true < false } } (Test.compare(), 2 < 1)
+stdout : (true, false) : (Bool, Bool)
+
+A scoped comparison keeps the usual precedence without new fixity
+module Test { op x < y { x == y } fun compare() { 1 + 1 < 2 } } Test.compare()
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : true : Bool
+
+A custom comparison can use wild through its signature
+sig < : [wild] ((Int, Int) -> Bool) op x < y { print("compared"); x == y } 1 < 1
+stdout : comparedtrue : Bool

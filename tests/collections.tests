@@ -176,3 +176,93 @@ A generator cannot see a previous generator's binder
 for (x <- [1], y <- [x]) [x + y]
 stderr : @.*Unknown variable x.*
 exit : 1
+
+Linear list literals, cons and append preserve each element
+sig sumThunks : List (() -@ Int) -> Int fun sumThunks(xs) { switch (xs) { case [] -> 0 case f :: rest -> f() + sumThunks(rest) } } sumThunks((linfun() { 10 } :: [linfun() { 20 }]) ++ [linfun() { 12 }])
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int
+
+An empty linear list can match an empty pattern
+{ var [] = ([] : List (() -@ Int)); 42 }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int
+
+A nested binding pattern splits a linear list inside a record
+{ var (items=[f,g]) = (items=[linfun() { 20 }, linfun() { 22 }]); f() + g() }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int
+
+A whole linear list remains available after a failed nested match
+sig sumThunks : List (() -@ Int) -> Int fun sumThunks(xs) { switch (xs) { case [] -> 0 case f :: rest -> f() + sumThunks(rest) } } switch ([linfun() { 42 }]) { case [f,g] -> f() + g() case all -> sumThunks(all) }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int
+
+A later alternative can reuse the head and tail of a split linear list
+sig sumThunks : List (() -@ Int) -> Int fun sumThunks(xs) { switch (xs) { case [] -> 0 case f :: rest -> f() + sumThunks(rest) } } switch (([linfun() { 20 }, linfun() { 22 }], false)) { case ([f],_) -> f() case (all,true) -> sumThunks(all) case ([f,g],false) -> f() + g() case (all,_) -> sumThunks(all) }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int
+
+A linear list stored in a record cannot be duplicated
+{ var box = (items=[linfun() { 42 }]); (box, box) }
+stderr : @.*Type error:.*linear.*
+exit : 1
+
+A linear list cannot be dropped
+{ var xs = [linfun() { 42 }]; () }
+stderr : @.*Type error:.*linear.*
+exit : 1
+
+A linear list pattern cannot discard its head
+switch ([linfun() { 42 }]) { case _ :: rest -> rest case [] -> [] }
+stderr : @.*Type error:.*linear.*
+exit : 1
+
+Head cannot discard the tail of a linear list
+hd([linfun() { 42 }])
+stderr : @.*Type error:.*Unl.*
+exit : 1
+
+Tail cannot discard the head of a linear list
+tl([linfun() { 42 }])
+stderr : @.*Type error:.*Unl.*
+exit : 1
+
+Explicit head type arguments still require unrestricted elements
+hd[() -@ Int]([linfun() { 42 }])
+stderr : @.*Type error:.*Unl.*
+exit : 1
+
+Explicit tail type arguments still require unrestricted elements
+tl[() -@ Int]([linfun() { 42 }])
+stderr : @.*Type error:.*Unl.*
+exit : 1
+
+Length cannot consume a linear list
+length([linfun() { 42 }])
+stderr : @.*Type error:.*Unl.*
+exit : 1
+
+Take cannot discard part of a linear list
+take(1, [linfun() { 42 }])
+stderr : @.*Type error:.*Unl.*
+exit : 1
+
+Drop cannot discard part of a linear list
+drop(1, [linfun() { 42 }])
+stderr : @.*Type error:.*Unl.*
+exit : 1
+
+A comprehension cannot generate from a linear list
+for (f <- [linfun() { 42 }]) [f()]
+stderr : @.*Type error:.*linear.*
+exit : 1
+
+A comprehension cannot produce a list with linear elements
+for (i <- [41]) [linfun() { i + 1 }]
+stderr : @.*Type error:.*linear.*
+exit : 1
+
+An empty list is polymorphic over linear elements
+sig values : forall a::Any. List a var values = []; { var [] = values[() -@ Int]; 42 }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int

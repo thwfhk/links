@@ -183,6 +183,16 @@ effect Reader { Ask : () => Int; } var fns = ((for(x <- [1]) [fun() { x + do Ask
 args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
 stdout : 42 : Int
 
+A generator carries the list modality onto its elements
+effect Reader { Ask : () => Int; } var fs = ([fun() { do Ask }] : [Reader] (List (() -> Int))); var gs = for (f <- fs) [f]; handle(hd(gs)()) { case <Ask => k> -> k(42) }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int
+
+A later generator carries the list modality for each earlier element
+effect Reader { Ask : () => Int; } var fs = ([fun() { do Ask }] : [Reader] (List (() -> Int))); handle(for (n <- [1,2], f <- fs) [n+f()]) { case <Ask => k> -> k(40) }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : [41, 42] : List Int
+
 A variant payload must match the declared type
 typename MaybeInt = (| Nothing | Just:Int |); Just(true) : MaybeInt
 stderr : @.*Expected Int, got Bool.*

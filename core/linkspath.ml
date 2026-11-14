@@ -10,6 +10,7 @@ let data_dir =
   if Sys.file_exists installed_dir then installed_dir else lib_dir
 
 let prelude = Filename.concat data_dir "prelude.links"
+let comprehension = Filename.concat data_dir "comprehension.links"
 let stdlib = Filename.concat data_dir "stdlib"
 
 let config =

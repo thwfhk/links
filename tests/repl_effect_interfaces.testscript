@@ -53,3 +53,91 @@ if [[ ! "$output" =~ $hidden_types ]] || [[ "${BASH_REMATCH[1]}" == "${BASH_REMA
 fi
 
 echo "SUCCESS: The REPL kept successive imports distinct and identified both hidden declarations"
+
+scratch=$(mktemp -d "${TMPDIR:-/tmp}/links-effect-interfaces.XXXXXX") || exit 1
+trap 'rm -rf "$scratch"' EXIT
+
+cat > "$scratch/prelude.links" <<'PRELUDE'
+effect PreludeReader { PreludeAsk : () => Int; }
+
+module PreludeEffects {
+  effect Reader { Ask : () => Int; }
+
+  sig read : [Reader] (() -> Int)
+  fun read() { do Ask }
+}
+PRELUDE
+
+if ! output=$(./links --set=prelude="$scratch/prelude.links" \
+    -e 'handle(do PreludeAsk) { case <PreludeAsk => k> -> k(42) }' \
+    -e 'handle(PreludeEffects.read()) { case <PreludeEffects.Ask => k> -> k(43) }' 2>&1) ||
+    [[ "$output" != $'42 : Int\n43 : Int' ]]; then
+    echo "FAILURE: Isolated inputs did not start with the prelude interface scope"
+    printf '%s\n' "$output"
+    exit 1
+fi
+
+echo "SUCCESS: Isolated inputs can use interfaces declared in the prelude"
+
+cat > "$scratch/first.links" <<'FIRST'
+effect SessionReader { SessionAsk : () => Int; }
+
+sig read : [SessionReader] (() -> Int)
+fun read() { do SessionAsk }
+FIRST
+cat > "$scratch/second.links" <<'SECOND'
+handle(read()) { case <SessionAsk => k> -> k(42) }
+SECOND
+
+if ! output=$(./links --set=isolation=false "$scratch/first.links" "$scratch/second.links" 2>&1) ||
+    [[ "$output" != $'() : ()\n42 : Int' ]]; then
+    echo "FAILURE: Successive files did not share their interface declarations"
+    printf '%s\n' "$output"
+    exit 1
+fi
+
+if output=$(./links "$scratch/first.links" "$scratch/second.links" 2>&1) ||
+    [[ "$output" != *'Undeclared operation SessionAsk'* ]]; then
+    echo "FAILURE: A file used an interface from an isolated input"
+    printf '%s\n' "$output"
+    exit 1
+fi
+
+if ! output=$(./links --set=isolation=false \
+    -e 'effect First { Ask : () => Int; }' \
+    -e 'effect Second { Ask : () => Bool; } handle(do Ask) { case <Ask => k> -> k(true) }' 2>&1) ||
+    [[ "$output" != $'() : ()\ntrue : Bool' ]]; then
+    echo "FAILURE: An inherited operation was treated as a duplicate in a new input"
+    printf '%s\n' "$output"
+    exit 1
+fi
+
+echo "SUCCESS: Input isolation controls whether later inputs can use earlier declarations"
+
+cat > "$scratch/failed.links" <<'FAILED'
+effect PendingReader { PendingAsk : () => Int; }
+module Recovered {
+  effect Reader { Ask : () => Bool; }
+}
+error("failed load")
+FAILED
+
+if ! output=$(./links 2>&1 <<EOF_LOAD
+module Recovered { effect Reader { Ask : () => Int; } }
+@load "$scratch/failed.links";
+handle(do Recovered.Ask) { case <Recovered.Ask => k> -> k(42) };
+do PendingAsk;
+EOF_LOAD
+); then
+    echo "FAILURE: The failed load ended the REPL session"
+    printf '%s\n' "$output"
+    exit 1
+fi
+
+if [[ "$output" != *'failed load'*$'42 : Int'*'Undeclared operation PendingAsk'* ]]; then
+    echo "FAILURE: The failed load changed the REPL interface scope"
+    printf '%s\n' "$output"
+    exit 1
+fi
+
+echo "SUCCESS: A failed load restores the previous interface scope"

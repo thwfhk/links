@@ -26,3 +26,5 @@ check_output() {
 
 check_output '[42] : List Int' -e 'map(fun(x) { x + 2 }, [40])'
 check_output '"[1,2,3,4]" : String' imports.links
+touch empty.links
+check_output '[42] : List Int' --set=prelude=empty.links -e 'for (x <- [40], y <- [2]) [x + y]'

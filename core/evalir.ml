@@ -26,6 +26,7 @@ end
 
 module Exceptions = struct
   exception EvaluationError of string
+  exception Early_exit of Value.env * Value.t
   exception Wrong
 end
 
@@ -176,8 +177,9 @@ struct
     | `PrimitiveFunction (_, Some code), args ->
        Lib.apply_pfun_by_code code args >>= fun v ->
        apply_cont cont env v
+    | `Exit, [p] -> Lwt.fail (Exceptions.Early_exit (env, p))
     | `Continuation c,      [p] -> apply_cont c env p
-    | `Continuation _,       _  ->
+    | (`Continuation _ | `Exit), _ ->
        eval_error "Continuation applied to multiple (or zero) arguments"
     | `Resumption r, vs ->
        resume env cont r vs
@@ -231,6 +233,16 @@ struct
           end
         | v -> type_error ~action:"take case of" "variant" v
       end
+    | ListCase (v, nil, (head, tail, cons)) ->
+        value env v >>= fun v ->
+        begin match v with
+        | `List [] -> computation env cont nil
+        | `List (first :: rest) ->
+            let env = Value.Env.bind (Var.var_of_binder head) (first, Scope.Local) env in
+            let env = Value.Env.bind (Var.var_of_binder tail) (`List rest, Scope.Local) env in
+            computation env cont cons
+        | v -> type_error ~action:"take case of" "list" v
+        end
     | If (c,t,e)    ->
         value env c >>= fun c ->
         computation env cont

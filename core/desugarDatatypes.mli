@@ -1,4 +1,4 @@
-val read : ?interfaces:EffectInterfaces.t -> aliases:Types.tycon_environment -> string -> Types.datatype
+val read : ?interfaces:EffectInterfaces.t -> ?scope:ModuleScope.t -> aliases:Types.tycon_environment -> string -> Types.datatype
 
 val sentence :
   Types.typing_environment ->

@@ -187,6 +187,7 @@ class map =
           let _x = o#list (fun o -> o#phrase) _x in
           let _x_i1 = o#option (fun o -> o#typ) _x_i1 in
          ListLit (_x, _x_i1)
+      | ListElements p -> ListElements (o#phrase p)
       | Iteration ((_x, _x_i1, _x_i2, _x_i3)) ->
           let _x = o#list (fun o -> o#iterpatt) _x in
           let _x_i1 = o#phrase _x_i1 in
@@ -764,6 +765,7 @@ class fold =
           let o = o#list (fun o -> o#name) _xs in o
       | FunLit (_x, _x1, _x_i1, _x_i2) -> let o = o#funlit _x_i1 in let _x_i2 = o#location _x_i2 in o
       | ListLit (_x, _x_i1) -> let o = o#list (fun o -> o#phrase) _x in o
+      | ListElements p -> o#phrase p
       | Iteration ((_x, _x_i1, _x_i2, _x_i3)) ->
           let o = o#list (fun o -> o#iterpatt) _x in
           let o = o#phrase _x_i1 in
@@ -1312,6 +1314,9 @@ class fold_map =
           let (o, _x) = o#list (fun o -> o#phrase) _x in
           let (o, _x_i1) = o#option (fun o -> o#typ) _x_i1 in
           (o, (ListLit (_x, _x_i1)))
+      | ListElements p ->
+          let o, p = o#phrase p in
+          o, ListElements p
       | RangeLit ((_x_i1, _x_i2)) ->
           let (o, _x_i1) = o#phrase _x_i1 in
           let (o, _x_i2) = o#phrase _x_i2

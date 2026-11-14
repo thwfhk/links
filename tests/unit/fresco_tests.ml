@@ -4,7 +4,7 @@ open Links_core
 let policy () = Types.Policy.set_quantifiers true (Types.Policy.default_policy ())
 let show = Types.string_of_datatype ~policy
 
-let program ?(context = Context.empty) source =
+let program ?(context = fst (Frontend.Modal.initial_context ())) source =
   let program, source_code = Parse.parse_string Parse.program source in
   let context = { context with Context.source_code } in
   let terms = FrescoContext.create (Context.typing_environment context).Types.var_env in
@@ -269,7 +269,7 @@ let linearity _ =
   |};
   rejected {|
     var f = (linfun() { 42 } : [](() -@ Int));
-    [f]
+    { var xs = [f]; () }
   |};
   rejected {|
     var f = (linfun() { 42 } : [](() -@ Int));

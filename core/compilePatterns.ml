@@ -42,7 +42,7 @@ struct
 
   type context =
     | CNil
-    | CCons
+    | CCons of var * var
     | CVariant   of string
     | CNVariant  of StringSet.t
     | CConstant  of Constant.t
@@ -175,36 +175,6 @@ let rec desugar_pattern : Types.row -> Sugartypes.Pattern.with_pos -> Pattern.t 
 type raw_bound_computation = raw_env -> computation
 type bound_computation = env -> computation
 
-module CompileLists :
-sig
-  val nil : raw_env -> Types.datatype -> value
-  val list_head : raw_env -> Types.datatype -> value -> tail_computation
-  val list_tail : raw_env -> Types.datatype -> value -> tail_computation
-end
-  =
-struct
-  open PrimaryKind
-
-  let nil _env t : value =
-    TApp (Variable (NEnv.find "Nil" Lib.nenv),
-           [(Type, t)])
-
-  let list_head _env t : value -> tail_computation = fun v ->
-      Apply
-        (TApp
-           (Variable (NEnv.find "$$hd" Lib.nenv),
-            [(Type, t)]),
-         [v])
-
-  let list_tail _env t : value -> tail_computation = fun v ->
-      Apply
-        (TApp
-           (Variable (NEnv.find "$$tl" Lib.nenv),
-            [(Type, t)]),
-         [v])
-end
-open CompileLists
-
 module CompileEq :
 sig
   val eq : raw_env -> Types.datatype -> value -> value -> value
@@ -233,20 +203,19 @@ type annotated_clause = annotation * clause
 
 let let_pattern : raw_env -> Pattern.t -> value * Types.datatype -> computation * Types.datatype -> computation =
   fun env pat (value, value_type) (body, body_type) ->
+    let failure = [], Special (Wrong body_type) in
     let rec lp t pat value body =
       match pat with
         | Pattern.Nil ->
-            [], If (eq env t value (nil env (TypeUtils.element_type t)),
-                     body,
-                     ([], Special (Wrong body_type)))
+            let head = Var.fresh_binder_of_type (TypeUtils.element_type t) in
+            let tail = Var.fresh_binder_of_type t in
+            [], ListCase (value, body, (head, tail, failure))
         | Pattern.Cons (head, tail) ->
             let xt = TypeUtils.element_type t in
-            let xst = t in
             let xb, x = Var.fresh_var_of_type xt in
-            let xsb, xs = Var.fresh_var_of_type xst in
-              with_bindings
-                [letm (xb, list_head env xt value); letm (xsb, list_tail env xt value)]
-                (lp xt head (Variable x) (lp xst tail (Variable xs) body))
+            let xsb, xs = Var.fresh_var_of_type t in
+            let cons = lp xt head (Variable x) (lp t tail (Variable xs) body) in
+            [], ListCase (value, failure, (xb, xsb, cons))
         | Pattern.Variant (name, patt) ->
             let case_type = TypeUtils.variant_at name t in
             let case_binder, case_variable = Var.fresh_var_of_type case_type in
@@ -551,49 +520,24 @@ and match_var : var list -> clause list -> bound_computation -> var -> bound_com
 and match_list
     : var list -> (annotated_clause list * annotated_clause list) -> bound_computation -> var -> bound_computation =
   fun vars (nil_clauses, cons_clauses) def var env ->
-    let t = lookup_type var env in
     let var_val = Variable var in
-
-    let nil, list_head, list_tail =
-      let raw (nenv, tenv, eff, _) = (nenv, tenv, eff) in
-
-      let nil = nil (raw env) (TypeUtils.element_type t) in
-      let list_head env = list_head (raw env) in
-      let list_tail env = list_tail (raw env) in
-        nil, list_head, list_tail in
-
-    let nil_branch () =
-      let env = bind_context var (Pattern.CNil, nil) env in
-      let nil_clauses = apply_annotations var_val nil_clauses in
-        match nil_clauses with
-          | [] -> def env
-          | _ ->
-              match_cases vars nil_clauses def env in
-
-    let cons_branch () =
-      let env = bind_context var (Pattern.CCons, var_val) env in
-      let cons_clauses = apply_annotations var_val cons_clauses in
-        match cons_clauses with
-          | [] -> def env
-          | _ ->
-              let t' = TypeUtils.element_type t in
-              let xb, x = Var.fresh_var_of_type t' in
-              let xsb, xs = Var.fresh_var_of_type t in
-              let env = bind_type x t' (bind_type xs t env) in
-                with_bindings
-                  [letm (xb, list_head env t' var_val); letm (xsb, list_tail env t' var_val)]
-                  (match_cases (x::xs::vars) cons_clauses def env) in
-
-      if mem_context var env then
-        match lookup_context var env with
-          | Pattern.CNil, _ -> nil_branch ()
-          | Pattern.CCons, _ -> cons_branch ()
-          | _ -> assert false
-      else
-        let (nenv, tenv, eff, _) = env in
-          ([], If (eq (nenv, tenv, eff) t var_val nil,
-                    nil_branch (),
-                    cons_branch()))
+    let nil_branch env = match_cases vars (apply_annotations var_val nil_clauses) def env in
+    let cons_branch x xs env =
+      match_cases (x :: xs :: vars) (apply_annotations var_val cons_clauses) def env in
+    if mem_context var env then
+      match lookup_context var env with
+      | Pattern.CNil, _ -> nil_branch env
+      | Pattern.CCons (x, xs), _ -> cons_branch x xs env
+      | _ -> assert false
+    else
+      let t = lookup_type var env in
+      let elem = TypeUtils.element_type t in
+      let head, x = Var.fresh_var_of_type elem in
+      let tail, xs = Var.fresh_var_of_type t in
+      let nil_env = bind_context var (Pattern.CNil, var_val) env in
+      let cons_env = bind_context var (Pattern.CCons (x, xs), var_val) env in
+      let cons_env = bind_type x elem (bind_type xs t cons_env) in
+      [], ListCase (var_val, nil_branch nil_env, (head, tail, cons_branch x xs cons_env))
 
 
 (*

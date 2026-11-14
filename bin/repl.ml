@@ -46,13 +46,14 @@ module BS = Basicsettings
 let ps1 = "links> "
 
 (** Print a value (including its type if `printing_types' is [true]). *)
-let print_value rtype value =
+let print_value ?rtype value =
   if not (Settings.get print_pretty)
   then begin
       print_string (Value.string_of_value value);
-      print_endline (if Settings.get printing_types then
-               " : "^ Types.string_of_datatype rtype
-                     else "")
+      Option.iter (fun rtype ->
+        if Settings.get printing_types then
+          print_string (" : " ^ Types.string_of_datatype rtype)) rtype;
+      print_newline ()
     end
   else
     let (width, _height) = try ANSITerminal.size () with _ -> (80, 24) in
@@ -72,11 +73,12 @@ let print_value rtype value =
        print_close_stag = ignore;
       }
     end;
-    fprintf std_formatter "@[%a@;<1 4>: %s@]"
-            Value.p_value value
-            (if Settings.get printing_types then
-           Types.string_of_datatype rtype
-             else "");
+    begin match rtype with
+    | None -> fprintf std_formatter "@[%a@]" Value.p_value value
+    | Some rtype ->
+        fprintf std_formatter "@[%a@;<1 4>: %s@]" Value.p_value value
+          (if Settings.get printing_types then Types.string_of_datatype rtype else "")
+    end;
     pp_print_newline std_formatter ()
 
 
@@ -193,12 +195,14 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
         ((fun context args ->
           match args with
           | [filename] ->
-             begin match Driver.Phases.recover_linear_bindings context (fun on_variable ->
-               DesugarModules.with_scope_rollback (fun () ->
-                 Driver.Phases.whole_program ~on_variable context filename)) with
+             begin match Driver.Phases.recover_linear_bindings context (fun on_variable linear_variables ->
+               Driver.Phases.whole_program ~on_variable ~propagate_exit:true ~linear_variables context filename) with
              | Ok (context, datatype, value) ->
                  ModalEffects.Names.with_names context.Context.interface_names (fun () ->
-                   print_value datatype value);
+                   print_value ~rtype:datatype value);
+                 context
+             | Error (Evalir.Exceptions.Early_exit (_, value), context) ->
+                 print_value value;
                  context
              | Error (exn, context) ->
                  Errors.display ~default:(fun _ -> context) (lazy (raise exn))
@@ -227,7 +231,8 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
           in
           match args with
           | [] -> prerr_endline "syntax: @withtype type"; context
-          | _ -> let t = DesugarDatatypes.read ~interfaces:context.Context.effect_interfaces ~aliases (String.concat " " args) in
+          | _ -> let t = DesugarDatatypes.read ~scope:context.Context.module_scope
+                           ~interfaces:context.Context.effect_interfaces ~aliases (String.concat " " args) in
                  StringSet.iter
                    (fun id ->
                      try begin
@@ -328,7 +333,7 @@ let handle previous_context current_context = function
        nenv'
        (); current_context
   | `Expression (datatype, value) ->
-     print_value datatype value;
+     print_value ~rtype:datatype value;
      current_context
   | `Directive directive ->
      execute_directive current_context directive
@@ -343,8 +348,10 @@ let interact : Context.t -> unit
   Printf.printf "%s%!" (val_of (Settings.get welcome_note));
   let rec loop context =
     Parse.Readline.prepare_prompt ps1;
-    match Driver.Phases.recover_linear_bindings context (fun on_variable ->
-      DesugarModules.with_scope_rollback (fun () -> I.readline ~on_variable ps1 context)) with
+    match Driver.Phases.recover_linear_bindings context (fun on_variable linear_variables ->
+      I.readline ~on_variable ~linear_variables ps1 context) with
+    | Error (Evalir.Exceptions.Early_exit (_, value), context) ->
+       print_value value; loop context
     | Error (exn, context) ->
        print_error exn; loop context
     | Ok I.({ sentence; context = context' }) ->

@@ -804,6 +804,19 @@ struct
                o, Ir.Case (v, cases, default), t
             | _ ->  raise_ir_type_error "Case over non-variant value" (STC orig)
             end
+        | ListCase (v, nil, (head, tail, cons)) ->
+            let o, v, list_type = o#value v in
+            let elem_type = element_type ~overstep_quantifiers:false list_type in
+            o#check_eq_types elem_type (Var.type_of_binder head) (STC orig);
+            o#check_eq_types list_type (Var.type_of_binder tail) (STC orig);
+            let o, nil, nil_type = o#computation nil in
+            let o, head = o#binder head in
+            let o, tail = o#binder tail in
+            let o, cons, cons_type = o#computation cons in
+            let o = (o#remove_binder head)#remove_binder tail in
+            o#check_eq_types nil_type cons_type (STC orig);
+            o, ListCase (v, nil, (head, tail, cons)), nil_type
+
         | If (v, left, right) ->
             let o, v, vt = o#value v in
             let o, left, lt = o#computation left in

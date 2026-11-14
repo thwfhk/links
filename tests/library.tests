@@ -2,6 +2,19 @@ Test that prelude is loaded
 map
 stdout : fun : [] (((a) -> b, List a) -> List b)
 
+State map can return a function created during the computation
+var work = (fun(s) { (s,s + 1) } : State(Int,Int)); { var (f,s) = runState(fmap(fun(x) { fun(y) { x + y } }, work), 40); (f(2),s) }
+stdout : (42, 41) : (Int, Int)
+
+State sequence returns functions and threads state in order
+var work = (fun(s) { (fun(x) { s + x },s + 1) } : State(Int, Int -> Int)); { var (fs,s) = runState(sequence([work,work]),40); (map(fun(f) { f(2) },fs),s) }
+stdout : ([42, 43], 42) : (List Int, Int)
+
+State return requires an absolute argument
+var f = fun(x) { x + 1 }; return(f)
+stderr : @.*must satisfy Abs.*
+exit : 1
+
 Test sysexit [0]
 fun () {print("before"); sysexit(0); print("after")}()
 stdout : before

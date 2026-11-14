@@ -128,22 +128,20 @@ let registered_interface _ =
       end
   | _ -> assert_failure "Expected one resolved effect declaration"
 
-let scope_rollback _ =
-  let exception Failed_sentence in
-  let exception End_test in
-  let declare source =
+let persistent_scope _ =
+  let declare context source =
     let sentence, positions = Parse.parse_string Parse.interactive source in
-    ignore (DesugarModules.desugar_sentence ((ResolvePositions.resolve_positions positions)#sentence sentence))
+    let sentence = (ResolvePositions.resolve_positions positions)#sentence sentence in
+    let Transform.Untyped.Result { state; program = _ } =
+      DesugarModules.Untyped.sentence context sentence in
+    state
   in
-  try
-    DesugarModules.with_scope_rollback (fun () ->
-      assert_raises Failed_sentence (fun () ->
-        DesugarModules.with_scope_rollback (fun () ->
-          declare "effect Reader { Ask : () => Int; }";
-          raise Failed_sentence));
-      declare "effect Reader { Ask : () => Int; }";
-      raise End_test)
-  with End_test -> ()
+  let source = "effect Reader { Ask : () => Int; }" in
+  let first = declare Context.empty source in
+  assert_raises (Errors.ModuleError ("Duplicate operation Ask", None)) (fun () ->
+    try ignore (declare first source)
+    with Errors.ModuleError (message, _) -> raise (Errors.ModuleError (message, None)));
+  ignore (declare Context.empty source)
 
 let suite =
   "modal scopes" >::: [
@@ -152,5 +150,5 @@ let suite =
     "duplicate operations" >:: duplicate_operations;
     "unresolved names" >:: unresolved_names;
     "registered interface" >:: registered_interface;
-    "failed sentence rolls back its scope" >:: scope_rollback;
+    "discarded sentence context leaves scope unchanged" >:: persistent_scope;
   ]

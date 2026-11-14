@@ -217,6 +217,11 @@ class transform (env : Types.typing_environment) =
           let (o, es, _) = list o (fun o -> o#phrase) es in
           let (o, t) = o#datatype t in
             (o, ListLit (es, Some t), Types.make_list_type t)
+      | ListElements e ->
+          let o, e, t = o#phrase e in
+          let modality, list = FrescoContext.prefix t in
+          let item = FrescoContext.carry modality (TypeUtils.element_type list) in
+          o, ListElements e, Types.make_list_type item
       | RangeLit (e1, e2) ->
           let (o, e1, _) = o#phrase e1 in
           let (o, e2, _) = o#phrase e2 in

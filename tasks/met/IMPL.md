@@ -380,100 +380,83 @@ prefixes can be dropped.
 
 #### 5.5 Interface environments
 
-`core/desugarDatatypes.ml` drops the signatures registered in a block.
-`core/chaser.ml` can also fail to recognise a module declared there.
-At the CLI boundary,
-`bin/links.ml` carries the values and types of the prelude and of
-non-isolated inputs, while `core/desugarModules.ml` keeps the name
-scope only in interactive mode. Carry source name scope with the
-compiler context and keep resolved signatures by declaration identity
-through blocks, recursive definitions, final expressions and frontend
-rechecks. Restore enclosing name and alias scopes on leaving a block.
-Follow the resolver's lexical module and `open` rules in dependency
-loading. Check duplicates per file. Start isolated inputs with the
-prelude scope and carry scope across non-isolated inputs and successful
-REPL inputs. Preserve the previous scope and registry on failure.
+The compiler context carries the source name scope. Isolated inputs
+start with the prelude scope. Non-isolated inputs and successful REPL
+commands carry that scope forward. Each file checks its own duplicate
+operation names. `ModuleScope` is shared by the dependency loader and
+resolver. Imported declarations are compiled once per input, and an
+import exposes names in the scope that requested them.
+
+Datatype desugaring keeps interface signatures by declaration identity
+through blocks, recursive definitions and frontend rechecks. Leaving a
+block restores its lexical names and aliases. Failed inputs keep the
+previous context and registry.
 
 #### 5.7 Record and comprehension lowering
 
-Item [3.11](#311-record-and-comprehension-typing) includes lowering and
-strict checks for the checked record and comprehension types, including
-explicit instantiation before extension under the `Presence(Abs)` rule.
-Repeat these checks after the remaining integration changes.
+Item [3.11](#311-record-and-comprehension-typing) supplies the lowering
+for the checked record and comprehension types. `ListElements` carries
+the generator list's modality to its element type for frontend
+rechecking. Lowering erases it and keeps the original list value.
+The combined checks in
+[PLAN.md](PLAN.md#milestones-56-follow-up-checks) cover those types,
+explicit instantiation before extension under `Presence(Abs)`, and
+function arity checks for upcasts.
 
 #### 5.8 Linear lists
 
-Allow linear elements in the list constructor and make `Types.Unl`
-check and constrain the element type. Apply the rule in type
-annotations, literals, cons, append and patterns. In
-`core/lib.ml`, allow `Nil`, `Cons` and `Concat` at `a::Any`. Keep
-unrestricted element bounds on native functions that can discard
-elements, including `hd` and `tl`, and on collection helpers that
-require them.
+`Types.Unl` checks and constrains the list element type. `Nil`, `Cons`
+and `Concat` admit `a::Any`; list consumers such as `hd` and `tl` and
+the comprehension helpers still require unrestricted elements.
 
-`core/compilePatterns.ml` currently tests equality with `Nil` and
-calls `$$hd` and `$$tl` separately. Replace that lowering with a
-single internal split into the empty or cons case. Give the cons
-case both the head and tail. Use it for binding and case patterns,
-including nested patterns and later alternatives that bind the
-whole list. Test a fallback after a failed nested pattern and
-a list stored inside another linear value. Keep the native list
-representation.
+`core/compilePatterns.ml` emits an IR `ListCase` for binding and case
+patterns. It gives the cons branch both the head and tail and knows the
+result of an earlier split when trying a later alternative. The original
+list remains available to alternatives that bind the whole value. The
+native list representation is unchanged.
 
 #### 5.9 REPL recovery
 
 `bin/driver.ml` observes reads of existing linear bindings in
-`core/evalir.ml`. Check that lowering preserves source-level moves
-before an interruption.
+`core/evalir.ml`. REPL lowering records these reads at the source
+evaluation points, including reads when operands and closures are
+evaluated. After an interruption, the REPL retains the consumption of
+the bindings that were read and restores the preceding compiler scope.
 
-The built-in `exit` in `core/lib.ml` uses the empty continuation,
-so the driver receives what looks like a normal result. Distinguish
-early exit from normal completion when handling a REPL command.
-On interruption, restore the previous type, value and name scopes
-and keep only the updates for linear moves that ran. Show the exit
-value through the REPL's value printer without the enclosing
-expression's type. Keep the [native `exit` signature](SPEC.md#native-effects).
+The evaluator reports early exit separately from an ordinary return.
+The REPL prints its value without the enclosing expression's type and
+discards the new definitions. The driver preserves the existing exit
+behaviour for files and `-e`. See the [native `exit` signature](SPEC.md#native-effects).
 
 #### 5.10 State helpers
 
-The old `{}~>` state computation and callbacks could use native
-effects. The approved prelude types keep `[]`, so they can run in pure
-code. In `prelude.links`, have
-`fmap` apply its callback inside the state computation and return
-the result with the updated state. Have `sequence` build its list
-there while keeping the current order of state updates. This avoids
-calling `return` with a result that depends on that context. Keep
-the `Abs` requirement on the argument that `return` captures.
+The state computations and callbacks stay pure. `fmap` applies its
+callback inside the state computation. `sequence` builds its list there
+and threads state from left to right. Both return values directly.
+`return` requires `Abs` on the argument it captures.
 
 #### 5.11 SAT failure
 
-`examples/handlers/sat.links` currently uses `Maybe` inside
-`leftBiased` and `parse`. Keep that internal representation where it
-helps backtracking, then signal `Fail` in
-the caller's context after the local handler has finished if there
-is no result. Use `maybe` at `parseTextExpression` to handle the
-outward failure. Preserve the parser's backtracking and diagnostic.
+`leftBiased` and `parse` use `Maybe` within their handlers to choose
+whether to try another branch. After the handler finishes, an absent
+result signals `Fail` to the caller. `parseTextExpression` uses `maybe`
+to handle this failure. The parser retains its backtracking diagnostic.
 
 #### 5.12 Standard comprehension helpers
 
-`core/desugarFors.ml` generates references to `concatMap`, `map` and
-`sortByBase` by source name. A local replacement can change the result
-or cause the frontend recheck to disagree with source typing. Make the
-bundled standard definitions available to `for` independently of the
-selected prelude, including an empty prelude or a custom prelude with
-no list helpers. Resolve generated calls to those definitions. Explicit
-calls use ordinary lexical lookup. Preserve the types of the generated
-arguments and results through rechecking.
+The driver loads `lib/comprehension.links` before the selected prelude.
+`core/desugarFors.ml` gives its definitions private names and uses those
+names for generated calls. This makes the same helpers available with
+an empty or custom prelude. Explicit calls use ordinary lexical lookup.
+The generated calls carry their type arguments through frontend rechecking.
 
 #### 5.13 Custom comparisons
 
-`core/fresco.ml` assigns comparison syntax a built-in type by name.
-`core/sugartoir.ml` uses the binding in scope and still emits a call
-marked pure. This can print
-`"changed" : Bool` after `op x < y { "changed" }`. Check the
-declared operator's result at its definition, then use its resolved
-binding and type at the call. Choose the call form from that binding
-so a custom operator can have the effects its type permits.
+`core/fresco.ml` checks that each custom comparison returns `Bool`.
+Typing and lowering use the same resolved binding at the call site.
+Only a call to the built-in primitive can use its `ApplyPure` flag.
+A scoped comparison uses the standard precedence when it has no
+fixity declaration of its own.
 
 ### Deferred optimisation issues
 

@@ -56,6 +56,7 @@ and tail_computation =
   | Apply      of value * value list
   | Special    of special
   | Case       of value * (binder * computation) name_map * (binder * computation) option
+  | ListCase   of value * computation * (binder * binder * computation)
   | If         of value * computation * computation
 and fun_def =
   {

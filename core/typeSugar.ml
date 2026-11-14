@@ -21,6 +21,7 @@ and is_pure p = match p.node with
   | TAbstr (_, p)
   | Freeze p
   | Checked (p, _)
+  | ListElements p
   | ModalIntro (p, _)
   | TAppl (p, _)
   | Projection (p, _)

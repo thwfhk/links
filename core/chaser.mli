@@ -1,2 +1,2 @@
-val add_dependencies : Sugartypes.program -> Sugartypes.program
-val add_dependencies_sentence : Sugartypes.sentence -> Sugartypes.sentence
+(** Find the external modules an input needs in dependency order. *)
+val dependencies : ModuleScope.t -> Sugartypes.program -> (string * Sugartypes.binding) list

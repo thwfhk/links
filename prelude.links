@@ -639,16 +639,25 @@ op x >>= f {
 sig return : forall a::Abs, b. [] ((a::Abs) -> State (b,a))
 fun return(a) { fun (s) { (a,s) } }
 
-sig fmap : forall a, b::Abs, c. [] (([] ((a) -> b::Abs), State (c,a)) -> State (c,b))
-fun fmap(f, x) { x >>= (fun (v) { return(f(v)) }) }
+sig fmap : forall a, b, c. [] (([] ((a) -> b), State (c,a)) -> State (c,b))
+fun fmap(f, x) {
+  fun (state) {
+    var (v, state) = x(state);
+    (f(v), state)
+  }
+}
 
-sig sequence : forall a, b::Abs. [] ((List State(a,b::Abs)) -> State(a,List b))
+sig sequence : forall a, b. [] ((List State(a,b)) -> State(a,List b))
 fun sequence(xs) {
-  switch (xs) {
-    case [] -> return([])
-    case x::xs -> x >>= (fun (x) {
-                  sequence(xs) >>= (fun (xs) {
-                    return (x :: xs)})})
+  fun (state) {
+    switch (xs) {
+      case [] -> ([], state)
+      case x::xs -> {
+        var (v, state) = x(state);
+        var (vs, state) = sequence(xs)(state);
+        (v :: vs, state)
+      }
+    }
   }
 }
 

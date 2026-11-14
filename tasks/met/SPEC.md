@@ -460,6 +460,9 @@ Imports follow the same rules as imports of `typename` declarations.
 Within one dependency pass, repeated imports share the same module.
 When a later input loads the module again, new references use the
 newly loaded declarations and earlier references keep their identities.
+Isolated inputs start with the interface names supplied by the prelude.
+Non-isolated inputs also see the names from previous inputs. At the
+prompt, names from a command remain in scope when it completes normally.
 
 Interface parameters and an operation's own quantifiers are separate.
 An instance fixes the interface parameters for all its operations and

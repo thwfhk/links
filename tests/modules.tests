@@ -276,3 +276,43 @@ Qualified module reference
 filemode : true
 args : --path=tests/modules
 stdout : "hello from b!" : String
+
+A module inside a block can define and handle an operation
+{ module Local { effect Reader { Ask : () => Int; } sig read : [Reader] (() -> Int) fun read() { do Ask } } handle(Local.read()) { case <Local.Ask => k> -> k(42) } }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int
+
+An operation in a local module is out of scope after the block
+var answer = { module Local { effect Reader { Ask : () => Int; } } handle(do Local.Ask) { case <Local.Ask => k> -> k(42) } }; do Local.Ask
+stderr : @.*Module Error: Unbound operation Local\.Ask.*
+exit : 1
+
+An interface in a local module is out of scope after the block
+var answer = { module Local { effect Reader { Ask : () => Int; } } handle(do Local.Ask) { case <Local.Ask => k> -> k(42) } }; answer : [Local.Reader] Int
+stderr : @.*Module Error: Unbound effect interface Local\.Reader.*
+exit : 1
+
+Opening a module inside a block exposes its nested module to import
+{ module Outer { module Local { effect Reader { Ask : () => Int; } } } open Outer; module Caller { open import Local; fun answer() { handle(do Ask) { case <Ask => k> -> k(42) } } } Caller.answer() }
+stdout : 42 : Int
+
+An explicit import inside a local module can use an external interface
+{ module Local { open import Effect_identity; sig read : [Reader] (() -> Int) fun read() { do Ask } fun answer() { handle(read()) { case <Ask => k> -> k(42) } } } Local.answer() }
+args : --path=tests/modules
+stdout : 42 : Int
+
+An import inside a local module does not expose its interface outside
+var answer = { module Local { open import Effect_identity; fun read() { handle(do Ask) { case <Ask => k> -> k(42) } } } Local.read() }; answer : [Effect_identity.Reader] Int
+args : --path=tests/modules
+stderr : @.*Module Error: Unbound effect interface Effect_identity\.Reader.*
+exit : 1
+
+A recursive definition retains its local interface during frontend rechecking
+mutual { fun answer(n) { module Local { effect Reader { Ask : () => Int; } } if (n > 0) answer(n - 1) else { handle(do Local.Ask) { case <Local.Ask => k> -> k(42) } } } } answer(1)
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int
+
+An imported name can resolve to the nested local module with that name
+module Outer { module Import0 { effect Reader { Ask : () => Int; } } } open Outer; import Import0; handle(do Import0.Ask) { case <Import0.Ask => k> -> k(42) }
+args : --path=tests/modules
+stdout : 42 : Int

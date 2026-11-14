@@ -56,9 +56,9 @@ fun maybe(m)() {
 }
 
 # Left-biased choice with backtracking on failure.
-sig leftBiased : forall a::Abs. (<Choice, Failure> (() -> a)) -> () -> Maybe(a)
+sig leftBiased : forall a::Abs. [Failure] ((<Choice, Failure> (() -> a)) -> () -> a)
 fun leftBiased(m)() {
-  handle(m()) {
+  var result = handle(m()) {
     case x -> Just(x)
     case <Fail> -> Nothing
     case <Choose => k> ->
@@ -66,6 +66,10 @@ fun leftBiased(m)() {
         case Just(x) -> Just(x)
         case Nothing -> k(false)
       }
+  };
+  switch (result) {
+    case Just(x) -> x
+    case Nothing -> fail()
   }
 }
 
@@ -233,7 +237,7 @@ sig ex1 : Expr
 var ex1 = Or(Var("a"),Not(And(Var("b"),Or(Var("a"),Var("c")))));
 
 fun check(e) {
- var res = run(leftBiased(satisfiable(cnf(simplify(e)))));
+ var res = maybe(fun() { leftBiased(satisfiable(cnf(simplify(e))))() })();
  switch (res) {
    case Just(r) -> r
    case Nothing -> error("Unhandled error.")
@@ -441,9 +445,9 @@ mutual {
     else parseAtomicExpr()
   }
 
-  sig parse : forall a::Abs. [wild] ((Parser(a), List Char) -> () -> Maybe(a))
+  sig parse : forall a::Abs. [wild] ((Parser(a), List Char) -> [wild, Failure] (() -> a))
   fun parse(m, input)() {
-    handle(m())(tokens <- input) {
+    var result = handle(m())(tokens <- input) {
       case x -> Just(x)
       case <Fail> -> Nothing
       case <Peek => resume> ->
@@ -467,13 +471,17 @@ mutual {
                case Nothing -> println("Parsing failed, left: " ^^ implode(tokens)); Nothing
              }
         }
+    };
+    switch (result) {
+      case Just(x) -> x
+      case Nothing -> fail()
     }
   }
 }
 
 sig parseTextExpression : [wild] ((String) -> Maybe(Expr))
 fun parseTextExpression(textualInput) {
-  parse(parseE, explode(textualInput))()
+  maybe(parse(parseE, explode(textualInput)))()
 }
 
 sig unitTest : [wild] (() -> List Bool)

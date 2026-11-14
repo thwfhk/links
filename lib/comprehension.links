@@ -1,0 +1,32 @@
+# The compiler gives these definitions private names before loading them.
+sig concatMap : forall a, c. [] (((a) -> List c, List a) -> List c)
+fun concatMap(f, l) {
+  switch (l) {
+    case [] -> []
+    case hd::tl -> f(hd) ++ concatMap(f, tl)
+  }
+}
+
+sig map : forall a, c. [] (((a) -> c, List a) -> List c)
+fun map(f, l) {
+  switch (l) {
+    case [] -> []
+    case hd::tl -> f(hd) :: map(f, tl)
+  }
+}
+
+fun filter(p, l) {
+  concatMap(fun(x) { if (p(x)) [x] else [] }, l)
+}
+
+sig sortByBase : forall a, r::Row(Base). [] (((a) -> (| r), List a) -> List a)
+fun sortByBase(f, l) {
+  switch (l) {
+    case [] -> []
+    case x::xs -> {
+      var lt = filter(fun(y) { f(y) < f(x) }, xs);
+      var ge = filter(fun(y) { f(y) >= f(x) }, xs);
+      sortByBase(f, lt) ++ [x] ++ sortByBase(f, ge)
+    }
+  }
+}

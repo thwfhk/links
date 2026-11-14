@@ -153,10 +153,7 @@ module Desugar = struct
         | Variant r -> Types.Variant (row ~modal interfaces alias_env r t')
         | Operation (args, result) ->
             Types.Operation (Types.make_tuple_type (List.map datatype args), datatype result)
-        | List k ->
-            let item = datatype k in
-            check_argument modal pos (pk_type, (lin_unl, res_any)) (pk_type, item);
-            Types.make_list_type item
+        | List k -> Types.make_list_type (datatype k)
         | TypeApplication (tycon, ts) ->
             (* Matches kinds of the quantifiers against the type arguments.
              * Returns Types.type_args based on the given frontend type arguments. *)
@@ -277,17 +274,16 @@ module Desugar = struct
 end
 
 (** Convert a syntactic type into a semantic type, using `map' to resolve free type variables *)
-let desugar initial_interfaces initial_alias_env =
+let desugar interfaces initial_alias_env =
 let modal = Desugar.Check_kinds None in
 object (self)
   inherit SugarTraversals.fold_map as super
 
   val alias_env = initial_alias_env
-  val interfaces = initial_interfaces
 
-  method! datatype' node = (self, Desugar.datatype' ~modal interfaces alias_env node)
+  method! datatype' node = (self, Desugar.datatype' ~modal !interfaces alias_env node)
 
-  method! type_arg' node = (self, Desugar.type_arg' ~modal interfaces alias_env node)
+  method! type_arg' node = (self, Desugar.type_arg' ~modal !interfaces alias_env node)
 
   method! phrasenode = function
     | Block (bs, p) ->
@@ -315,10 +311,10 @@ object (self)
             let name = Desugar.interface_name pos id in
             raise (module_error ~pos ("Parameters of effect interface " ^ name ^ " must be value types."))) parameters;
         let signature = EffectInterfaces.{ parameters; operations = Operations.empty } in
-        let interfaces = EffectInterfaces.add id signature interfaces in
+        interfaces := EffectInterfaces.add id signature !interfaces;
         let bound = Types.TypeVarSet.add_quantifiers parameters Types.TypeVarSet.empty in
         let check_member member =
-          let t = Desugar.datatype ~modal interfaces alias_env member.member_signature in
+          let t = Desugar.datatype ~modal !interfaces alias_env member.member_signature in
           let pos = WithPos.pos member.member_signature in
           if not (Types.TypeVarSet.subset (Types.free_type_vars t) bound) then
             raise (module_error ~pos ("Unbound type variable in the signature of " ^ member.member_name ^ "."));
@@ -334,8 +330,8 @@ object (self)
         let operations = List.fold_left (fun operations member ->
           EffectInterfaces.Operations.add (Option.get member.member_id) (Option.get member.member_type) operations)
             EffectInterfaces.Operations.empty interface_members in
-        let interfaces = EffectInterfaces.add id EffectInterfaces.{ signature with operations } interfaces in
-        {<interfaces>}, EffectInterface { declaration with interface_members }
+        interfaces := EffectInterfaces.add id EffectInterfaces.{ signature with operations } !interfaces;
+        self, EffectInterface { declaration with interface_members }
     | Aliases ts ->
         let checks = ref [] in
         let modal = Desugar.Check_kinds (Some checks) in
@@ -366,7 +362,7 @@ object (self)
           List.map (fun {node=(name, args, b); pos} ->
             (* Desugar the datatype *)
             (* Check if the datatype has actually been desugared *)
-            let b' = match Desugar.aliasbody ~modal interfaces mutual_env b with
+            let b' = match Desugar.aliasbody ~modal !interfaces mutual_env b with
                 | Typename     (_, Some _) as b' -> b'
                 | _ -> raise (internal_error "Datatype not desugared")
             in
@@ -436,67 +432,23 @@ object (self)
     | b -> super#bindingnode b
 
 
-
-  method! sentence =
-    (* return any aliases bound to the interactive loop so that they
-       are available to future input.  The default definition will
-       do fine here *)
-    super#sentence
-
-  method! program (bindings, e) =
-    (* as with a block, bindings should not escape here *)
-    let o           = {<>} in
-    let o, bindings = o#list (fun o -> o#binding) bindings in
-    let _o, e       = o#option (fun o -> o#phrase) e in
-      self, (bindings, e)
-
-  method aliases = alias_env
-  method interfaces = interfaces
 end
 
-let phrase interfaces alias_env p =
-  (desugar interfaces alias_env)#phrase p
+(* A block restores its lexical aliases. Its interface declarations have
+   unique, resolved identities that later typing and rechecking still need. *)
+let program typing_env interfaces source =
+  let interfaces = ref interfaces in
+  let _, program = (desugar interfaces typing_env.tycon_env)#program source in
+  !interfaces, program
 
-let binding interfaces alias_env ({ node; pos } as b : binding) =
-  match node with
-  | Funs bnds ->
-      let bnds =
-        List.map
-          (fun bnd ->
-            (desugar interfaces alias_env)#recursive_function bnd
-            |> snd )
-          bnds
-      in
-      (interfaces, alias_env, WithPos.make ~pos (Funs bnds))
-  | _ ->
-      let o, b = (desugar interfaces alias_env)#binding b in
-      (o#interfaces, o#aliases, b)
+let sentence typing_env interfaces source =
+  let interfaces = ref interfaces in
+  let _, sentence = (desugar interfaces typing_env.tycon_env)#sentence source in
+  !interfaces, sentence
 
-let toplevel_bindings interfaces alias_env bs =
-  let interfaces, alias_env, bnds =
-    List.fold_left
-      (fun (interfaces, alias_env, bnds) bnd ->
-         let interfaces, aliases, bnd = binding interfaces alias_env bnd in
-           (interfaces, aliases, bnd::bnds))
-    (interfaces, alias_env, [])
-      bs
-  in (interfaces, alias_env, List.rev bnds)
-
-let program typing_env interfaces (bindings, p : Sugartypes.program) =
-  let interfaces, alias_env, bindings =
-    toplevel_bindings interfaces typing_env.tycon_env bindings in
-  interfaces, (bindings, opt_map ((phrase interfaces alias_env) ->- snd) p)
-
-let sentence typing_env interfaces = function
-  | Definitions bs ->
-      let interfaces, _, bs = toplevel_bindings interfaces typing_env.tycon_env bs in
-      interfaces, Definitions bs
-  | Expression p -> interfaces, Expression (snd (phrase interfaces typing_env.tycon_env p))
-  | Directive d -> interfaces, Directive d
-
-let read ?(interfaces = EffectInterfaces.empty) ~aliases s =
+let read ?(interfaces = EffectInterfaces.empty) ?scope ~aliases s =
   let dt, _ = parse_string ~in_context:(LinksLexer.fresh_context ()) datatype s in
-  let dt = DesugarModules.desugar_datatype dt in
+  let dt = DesugarModules.desugar_datatype ?scope dt in
   let dt = DesugarTypeVariables.standalone_signature dt in
   let dt = DesugarEffects.standalone_signature aliases dt in
   let _, ty = Generalise.generalise Env.String.empty (Desugar.datatype ~modal:(Desugar.Check_kinds None) interfaces aliases dt) in

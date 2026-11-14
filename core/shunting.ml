@@ -101,8 +101,12 @@ module Optable = struct
 
   let lookup : string -> t -> (int * Associativity.t)
     = fun name optable ->
-    try Utility.StringMap.find name optable with
-    | Notfound.NotFound _ -> (9, Associativity.Left)
+    match Utility.StringMap.find_opt name optable with
+    | Some fixity -> fixity
+    | None ->
+        let source = Operators.source_name name in
+        if Operators.is_comparison source then Utility.StringMap.find source defaults
+        else (9, Associativity.Left)
 
   let add : string -> (int * Associativity.t) -> t -> t
     = fun name data optable ->

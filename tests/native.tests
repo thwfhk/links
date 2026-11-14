@@ -362,3 +362,18 @@ Range syntax is pure
 (fun() { [1..3] } : [] (() -> List Int))
 args : --set=typecheck_ir=true
 stdout : fun : [] (() -> List Int)
+
+Comprehensions use standard helpers when source names are shadowed
+fun concatMap(f,l) { [99] } fun map(f,l) { [88] } fun sortByBase(f,l) { [77] } (for(x <- [2,1], y <- [2,1]) orderby (x,y) [10*x+y], concatMap((),[]), map((),[]), sortByBase((),[]))
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : ([11, 12, 21, 22], [99], [88], [77]) : (List Int, List Int, List Int, List Int)
+
+Comprehensions work with the empty prelude
+(for(x <- [1,2]) [x+1], for(x <- [2,1], y <- [2,1]) orderby (x,y) [10*x+y])
+args : --set=prelude=tests/empty_prelude.links --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : ([2, 3], [11, 12, 21, 22]) : (List Int, List Int)
+
+Comprehensions work with a custom prelude that does not define list helpers
+(pair, for(x <- [1,2]) [x+1], for(x <- [2,1], y <- [2,1]) orderby (x,y) [10*x+y])
+args : --set=prelude=tests/comprehension_prelude.links --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : ([(40, 2)], [2, 3], [11, 12, 21, 22]) : (List (Int, Int), List Int, List Int)

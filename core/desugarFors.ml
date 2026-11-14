@@ -3,6 +3,22 @@ open CommonTypes
 open Sugartypes
 open SugarConstructors.DummyPositions
 
+let concat_map = "$$forConcatMap"
+let map = "$$forMap"
+let sort_by_base = "$$forSortByBase"
+
+let library program =
+  let rename = object
+    inherit SugarTraversals.map as super
+    method! name = function
+      | "concatMap" -> concat_map
+      | "map" -> map
+      | "sortByBase" -> sort_by_base
+      | "filter" -> "$$forFilter"
+      | name -> super#name name
+  end in
+  rename#program program
+
 (*
   Desugaring n-ary for comprehensions with conditions and orderby
   ---------------------------------------------------------------
@@ -77,9 +93,9 @@ let results (es, xs, ts) =
               let a = Types.make_tuple_type (t :: ts) in
                 fun_lit ~args:[Types.make_tuple_type [t], empty]
                         dl_unl [[qb]]
-                        (fn_appl "map" [(Type, qst); (Type, a)] [inner; r]) in
+                        (fn_appl map [(Type, qst); (Type, a)] [inner; r]) in
             let a = Types.make_tuple_type (t :: ts) in
-            fn_appl "concatMap" [(Type, qt); (Type, a)] [outer; e]
+            fn_appl concat_map [(Type, qt); (Type, a)] [outer; e]
         | _, _, _ -> assert false
     in
       results (es, xs, ts)
@@ -103,8 +119,11 @@ object (o : 'self_type)
           (fun (o, (es, ps, xs, ts)) (p, e) ->
              let (o, e, t) = o#phrase e in
              let (o, p) = o#pattern p in
-             let modality, _ = FrescoContext.prefix t in
-             let element_type = FrescoContext.carry modality (TypeUtils.element_type t) in
+             let modality, list = FrescoContext.prefix t in
+             let item = TypeUtils.element_type list in
+             let element_type = FrescoContext.carry modality item in
+             let e = if ModalEffects.is_identity modality then e
+               else SourceCode.WithPos.with_node e (ListElements e) in
              let var = Utility.gensym ~prefix:"_for_" () in
              let xb = binder ~ty:element_type var in
              o, (e::es, with_dummy_pos (Pattern.As (xb, p))::ps,
@@ -149,17 +168,16 @@ object (o : 'self_type)
           match sort, sort_type with
             | None, None -> results
             | Some sort, Some sort_type ->
-               let sort_by, sort_row =
-                 "sortByBase", TypeUtils.extract_row sort_type in
+               let sort_row = TypeUtils.extract_row sort_type in
                let g : phrase =
                  fun_lit ~args:[Types.make_tuple_type [arg_type], empty]
                    dl_unl [arg] sort in
-               fn_appl sort_by [(Type, arg_type); (Row, sort_row)]
+               fn_appl sort_by_base [(Type, arg_type); (Row, sort_row)]
                  [g; results]
             | _, _ -> assert false in
 
         let e : phrasenode =
-          fn_appl_node "concatMap" [(Type, arg_type); (Type, elem_type)]
+          fn_appl_node concat_map [(Type, arg_type); (Type, elem_type)]
                        [f; results] in
         let o = o#restore_envs envs in
         (o, e, body_type)

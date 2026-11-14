@@ -159,6 +159,8 @@ sig
     (var list -> tail_computation sem) ->
     tail_computation sem
 
+  val record_captures : env -> StringSet.t Lazy.t -> tail_computation sem -> tail_computation sem
+
 end
 
 module BindingListMonad : BINDINGMONAD =
@@ -215,7 +217,7 @@ struct
       t
 end
 
-module Interpretation(M : BINDINGMONAD) : INTERPRETATION =
+module Interpretation(M : BINDINGMONAD)(Moves : sig val variables : IntSet.t end) : INTERPRETATION =
 struct
   type 'a sem = 'a M.semt
 
@@ -230,9 +232,11 @@ struct
 
   module S :
   sig
-    val lift_list : ('a sem) list -> ('a list) M.sem
+    val lift_list : value sem list -> value list M.sem
 
-    val lift_alist : ('a*'b sem) list -> (('a*'b) list) M.sem
+    val lift_alist : (Name.t * value sem) list -> (Name.t * value) list M.sem
+
+    val ordered_value : value sem -> value sem
 
     val comp_binding : ?tyvars:tyvar list -> var_info * tail_computation -> var M.sem
 
@@ -247,24 +251,6 @@ struct
     val value_of_untyped_var : var M.sem * datatype -> value sem
   end =
   struct
-    let lift_list ss =
-      List.fold_right
-        (fun s s' ->
-           bind s
-             (fun v ->
-                M.bind s'
-                  (fun vs -> lift (v :: vs))))
-        ss (lift [])
-
-    let lift_alist ss =
-      List.fold_right
-        (fun (name, s) ss ->
-           bind s
-             (fun v ->
-                M.bind ss
-                  (fun vs -> lift ((name, v) :: vs))))
-        ss (lift [])
-
     let comp_binding ?(tyvars=[]) (x_info , e) =
       let xb, x = Var.fresh_var x_info in
         lift_binding (letm ~tyvars (xb, e)) x
@@ -298,6 +284,33 @@ struct
 
     let value_of_untyped_var (s, t) =
       M.bind s (fun x -> lift (Variable x, t))
+
+    (* A later operand can fail before the final IR value is evaluated. *)
+    let ordered_value s =
+      if IntSet.is_empty Moves.variables then s
+      else
+        let typ = sem_type s in
+        bind s (function
+          | Constant _ as value -> lift (value, typ)
+          | value -> value_of_untyped_var (comp_binding (Var.info_of_type typ, Return value), typ))
+
+    let lift_list ss =
+      List.fold_right
+        (fun s s' ->
+           bind (ordered_value s)
+             (fun v ->
+                M.bind s'
+                  (fun vs -> lift (v :: vs))))
+        ss (lift [])
+
+    let lift_alist ss =
+      List.fold_right
+        (fun (name, s) ss ->
+           bind (ordered_value s)
+             (fun v ->
+                M.bind ss
+                  (fun vs -> lift ((name, v) :: vs))))
+        ss (lift [])
   end
   open S
 
@@ -329,7 +342,7 @@ struct
   let apply (s, ss) =
     let ss = lift_list ss in
     let t = TypeUtils.return_type (sem_type s) in
-      bind s
+      bind (ordered_value s)
         (fun v ->
            M.bind ss
              (fun vs -> lift (Apply (v, vs), t)))
@@ -360,7 +373,7 @@ struct
                    lift (Extend (StringMap.from_alist fields, None), t))
         | Some s ->
             let t = Types.Record (Types.extend_row field_types (TypeUtils.extract_row (sem_type s))) in
-              bind s
+              bind (ordered_value s)
                 (fun r ->
                    M.bind s'
                      (fun fields -> lift (Extend (StringMap.from_alist fields, Some r), t)))
@@ -541,6 +554,19 @@ struct
     in
       M.bind (rec_binding defs) rest
 
+  (* A function can read a prior linear binding through the global
+     environment. Record its move when the source function is created. *)
+  let record_captures (names, types, _) free_names body =
+    if IntSet.is_empty Moves.variables then body
+    else
+      StringSet.fold (fun name body ->
+        match NEnv.find_opt name names with
+        | Some var when IntSet.mem var Moves.variables ->
+            let typ = TEnv.find var types in
+            let move = comp_binding (Var.info_of_type typ, Return (Variable var)) in
+            M.bind move (fun _ -> body)
+        | _ -> body) (Lazy.force free_names) body
+
   let do_operation (name, vs, signature) =
     let vs = lift_list vs in
     let t = TypeUtils.return_type signature in
@@ -670,8 +696,6 @@ struct
           | Section (Section.Name name) | FreezeSection (Section.Name name) -> cofv (lookup_var name)
           | Conditional (p, e1, e2) ->
               I.condition (ev p, ec e1, ec e2)
-          | InfixAppl ((tyargs, BinaryOp.Name ((">" | ">=" | "==" | "<" | "<=" | "<>") as op)), e1, e2) ->
-              cofv (I.apply_pure (instantiate op tyargs, [ev e1; ev e2]))
           | InfixAppl ((tyargs, BinaryOp.Name "++"), e1, e2) ->
               cofv (I.apply_pure (instantiate "Concat" tyargs, [ev e1; ev e2]))
           | InfixAppl ((tyargs, BinaryOp.Name n), e1, e2) when is_pure_primitive n ->
@@ -738,7 +762,7 @@ struct
               cofv (I.update
                       (ev e,
                        List.map (fun (name, e) -> (name, ev e)) fields))
-          | TypeAnnotation (e, _) | Checked (e, _) | ModalIntro (e, _) ->
+          | TypeAnnotation (e, _) | Checked (e, _) | ModalIntro (e, _) | ListElements e ->
               (* we might consider getting rid of type annotations before here *)
               ec e
           | Upcast (e, (_, Some t), _) ->
@@ -820,7 +844,7 @@ struct
     let ev = evalv env in
       match bs' with
         | [] -> ec e
-        | { node = b; _ }::bs ->
+        | ({ node = b; _ } as binding)::bs ->
             begin
               let open Sugartypes in
               match b with
@@ -859,9 +883,10 @@ struct
                         ([], with_effects env eff) in
                     let body = eval body_env body in
                     let qs = List.map SugarQuantifier.get_resolved_exn tyvars in
-                      I.letfun
+                      I.record_captures env (lazy (snd (Freevars.binding binding)))
+                      (I.letfun
                         (Var.make_info ft f scope, (qs, (body_env, ps, body)), location, unsafe)
-                        (fun v -> eval_bindings scope (extend [f] [(v, ft)] env) bs e)
+                        (fun v -> eval_bindings scope (extend [f] [(v, ft)] env) bs e))
                 | Exp e' ->
                     I.comp env (CompilePatterns.Pattern.Any, ev e', eval_bindings scope env bs e)
                 | Funs defs ->
@@ -901,7 +926,8 @@ struct
                            (Var.make_info ft f scope, (qs, (body_env, ps, body)), location, unsafe))
                         (nodes_of_list defs)
                     in
-                    I.letrec defs (fun vs -> eval_bindings scope (extend fs (List.combine vs outer_fts) env) bs e)
+                    I.record_captures env (lazy (snd (Freevars.binding binding)))
+                      (I.letrec defs (fun vs -> eval_bindings scope (extend fs (List.combine vs outer_fts) env) bs e))
                 | Aliases _
                 | EffectInterface _
                 | Infix _ ->
@@ -985,7 +1011,9 @@ struct
     r, I.sem_type s
 end
 
-module C = Eval(Interpretation(BindingListMonad))
+module OrdinaryMoves = struct let variables = IntSet.empty end
+module OrdinaryIR = Interpretation(BindingListMonad)(OrdinaryMoves)
+module C = Eval(OrdinaryIR)
 
 let lower_sugar =
   object
@@ -1020,15 +1048,21 @@ type result =
     datatype: Types.datatype;
     context: Context.t }
 
-let program : Context.t -> Types.datatype -> Sugartypes.program -> result
-  = fun context datatype program ->
+let program ?(linear_variables = IntSet.empty) context datatype program =
   let (nenv, _, _) as env =
     let nenv = Context.name_environment context in
     let tenv = Context.typing_environment context in
     let venv = Env.Int.map TypeUtils.erase_modalities (Context.variable_environment context) in
     (nenv, venv, tenv.Types.effect_row)
   in
-  let program', _ = C.compile env (lower_sugar#program program) in
+  let program = lower_sugar#program program in
+  let program', _ =
+    if IntSet.is_empty linear_variables then C.compile env program
+    else
+      let module Moves = struct let variables = linear_variables end in
+      let module ReplIR = Interpretation(BindingListMonad)(Moves) in
+      let module Repl = Eval(ReplIR) in
+      Repl.compile env program in
   let globals, program'', nenv' = C.partition_program program' in
   let nenv'' = Env.String.extend nenv nenv' in
   let venv =

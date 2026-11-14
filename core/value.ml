@@ -435,6 +435,7 @@ type t = [
 | `FunctionPtr of (Ir.var * t option)
 | `PrimitiveFunction of string * Var.var option
 | `Continuation of continuation
+| `Exit
 | `Resumption of resumption
 | `Socket of in_channel * out_channel
 ]
@@ -482,6 +483,7 @@ let rec p_value (ppf : formatter) : t -> 'a = function
                                fprintf ppf "fun"
   | `Socket _ -> fprintf ppf "<socket>"
   | `Continuation cont -> fprintf ppf "Continuation%s" (Continuation.to_string cont)
+  | `Exit -> fprintf ppf "Continuation%s" (Continuation.to_string Continuation.empty)
   | `Resumption _res -> fprintf ppf "Resumption"
   | `DateTime (Timestamp.Timestamp ts) ->
       (* Default to showing local time representation *)

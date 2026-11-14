@@ -310,6 +310,7 @@ and phrasenode =
                           DeclaredLinearity.t * funlit * Location.t
   | RangeLit         of phrase * phrase
   | ListLit          of phrase list * Types.datatype option
+  | ListElements     of phrase
   | Iteration        of iterpatt list * phrase
                         * (*where:*)   phrase option
                         * (*orderby:*) phrase option
@@ -488,7 +489,7 @@ struct
     | Instantiate p
     | Generalise p
     | TypeAnnotation (p, _) -> phrase p
-    | Checked (p, _) | ModalIntro (p, _) -> phrase p
+    | Checked (p, _) | ModalIntro (p, _) | ListElements p -> phrase p
 
     | ListLit (ps, _)
     | TupleLit ps -> union_map phrase ps
@@ -501,6 +502,7 @@ struct
     | InfixAppl (_, p1, p2) -> union_map phrase [p1;p2]
     | RangeLit (p1, p2) -> union_map phrase [p1;p2]
     | Regex r -> regex r
+    | UnaryAppl ((_, UnaryOp.Name n), p) -> add n (phrase p)
     | UnaryAppl (_, p) -> phrase p
     | FnAppl (p, ps) -> union_map phrase (p::ps)
     | RecordLit (fields, p) ->

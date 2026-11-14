@@ -260,6 +260,13 @@ struct
                 val_of default_type
             in
               o, Ir.Case (v, cases, default), t
+        | ListCase (v, nil, (head, tail, cons)) ->
+            let o, v, _ = o#value v in
+            let o, nil, t = o#computation nil in
+            let o, head = o#binder head in
+            let o, tail = o#binder tail in
+            let o, cons, _ = o#computation cons in
+            o, ListCase (v, nil, (head, tail, cons)), t
         | If (v, left, right) ->
             let o, v, _ = o#value v in
             let o, left, t = o#computation left in

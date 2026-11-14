@@ -76,7 +76,9 @@ let linear_aggregates _ =
   assert_type_error (fun () -> FrescoPatterns.check value p);
   assert_type_error (fun () -> FrescoPatterns.project pos "number" value);
   assert_type linear (FrescoPatterns.project pos "run" value);
-  assert_type_error (fun () -> FrescoPatterns.check (make_list_type linear) (pattern Pattern.Nil))
+  ignore (FrescoPatterns.check (make_list_type linear) (pattern Pattern.Nil));
+  let cons = pattern (Pattern.Cons (pattern Pattern.Any, variable "rest")) in
+  assert_type_error (fun () -> FrescoPatterns.check (make_list_type linear) cons)
 
 let rigid_presence _ =
   let _, presence = fresh_presence_quantifier (lin_any, res_abs) in

@@ -13,6 +13,16 @@ open CommonTypes
 type regexflag = RegexList | RegexNative | RegexGlobal | RegexReplace
     [@@deriving show]
 
+let is_comparison = function
+  | "==" | "<>" | "<" | "<=" | ">" | ">=" -> true
+  | _ -> false
+
+let source_name name =
+  match String.rindex_opt name '$' with
+  | Some i when i + 1 < String.length name ->
+      String.sub name (i + 1) (String.length name - i - 1)
+  | _ -> name
+
 module Associativity = struct
   type t = Left | Right | None
     [@@deriving show]

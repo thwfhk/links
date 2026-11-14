@@ -74,7 +74,7 @@ exit : 1
 
 Same-context callbacks in curried recursive functions
 fun zipwith(f)(xs)(ys) {switch ((xs, ys)) {case ((x::xs),(y::ys)) -> (f(x)(y))::(zipwith(f)(xs)(ys)) case _ -> []}} zipwith
-stdout : fun : [] (((a) -> (b) -> c) -> (List a) -> (List b) -> List c)
+stdout : fun : [] (((a) -> (b) -> c::Any) -> (List a) -> (List b) -> List c::Any)
 
 Polymorphic function parameters (unannotated)
 fun (f) {(f(42), f(true))}

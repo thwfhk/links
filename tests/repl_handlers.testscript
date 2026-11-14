@@ -41,10 +41,10 @@ echo "SUCCESS: The REPL tracked a linear binding across sentences"
 
 if ! output=$(./links 2>&1 <<'EOF'
 var linear = (linfun() { 42 } : [] (() -@ Int));
-{ var n = linear(); error("after use") };
+{ var moved = linear; error("after move"); moved() };
 linear();
 var unused = (linfun() { 43 } : [] (() -@ Int));
-{ error("before use"); unused() };
+{ error("before move"); var moved = unused; moved() };
 unused();
 EOF
 ); then
@@ -52,13 +52,109 @@ EOF
     exit 1
 fi
 
-if [[ "$output" != *'after use'*'Linear variable linear has already been used'*'before use'*$'43 : Int' ]]; then
+if [[ "$output" != *'after move'*'Linear variable linear has already been used'*'before move'*$'43 : Int' ]]; then
     echo "FAILURE: The REPL lost track of which linear bindings ran"
     printf '%s\n' "$output"
     exit 1
 fi
 
 echo "SUCCESS: The REPL tracked linear uses before a runtime error"
+
+if ! output=$(./links 2>&1 <<'EOF'
+var firstArg = (linfun() { 44 } : [] (() -@ Int));
+(fun(f, n) { f() + n })(firstArg, error("after argument"));
+firstArg();
+var captured = (linfun() { 45 } : [] (() -@ Int));
+{ var wrapped = linfun() { captured() }; error("after capture"); wrapped() };
+captured();
+var unary = (linfun(n) { n } : [] ((Int) -@ Int));
+{ var wrapped = linfun() { `unary` 45 }; error("after unary operator capture"); wrapped() };
+unary(45);
+var left = (linfun() { 46 } : [] (() -@ Int));
+[left, { error("after list item"); linfun() { 47 } : [] (() -@ Int) }];
+left();
+var right = (linfun() { 48 } : [] (() -@ Int));
+[{ error("before list item"); linfun() { 49 } : [] (() -@ Int) }, right];
+right();
+EOF
+); then
+    echo "FAILURE: Evaluation of a move ended the REPL session"
+    exit 1
+fi
+
+if [[ "$output" != *'after argument'*'Linear variable firstArg has already been used'*'after capture'*'Linear variable captured has already been used'*'after unary operator capture'*'Linear variable unary has already been used'*'after list item'*'Linear variable left has already been used'*'before list item'*$'48 : Int' ]]; then
+    echo "FAILURE: The REPL tracked the wrong moves in arguments, closures or lists"
+    printf '%s\n' "$output"
+    exit 1
+fi
+
+echo "SUCCESS: The REPL tracked linear moves in arguments, closures and lists"
+
+if ! output=$(./links 2>&1 <<'EOF'
+var movedBeforeExit = (linfun() { 46 } : [] (() -@ Int));
+var skippedByExit = (linfun() { 47 } : [] (() -@ Int));
+var keep = 48;
+module Interrupted {
+  var madeBeforeExit = 49;
+  var moved = movedBeforeExit;
+  var stopped = { print("before exit"); exit("stopped"); moved() };
+  var skipped = skippedByExit();
+}
+Interrupted.madeBeforeExit;
+movedBeforeExit();
+skippedByExit();
+keep;
+module Failed {
+  var madeBeforeError = 50;
+  var failed = (error("module error") : Int);
+}
+Failed.madeBeforeError;
+keep;
+if (true) exit("early expression") else 51;
+52;
+EOF
+); then
+    echo "FAILURE: Exit recovery ended the REPL session"
+    exit 1
+fi
+
+if [[ "$output" != *$'before exit"stopped"\n'*'Interrupted'*'Linear variable movedBeforeExit has already been used'*$'47 : Int\n48 : Int\n'*'module error'*'Failed'*$'48 : Int\n"early expression"\n52 : Int' ||
+      "$output" == *'madeBeforeExit ='* || "$output" == *'madeBeforeError ='* ]]; then
+    echo "FAILURE: The REPL retained an interrupted module or printed the wrong exit result"
+    printf '%s\n' "$output"
+    exit 1
+fi
+
+echo "SUCCESS: The REPL rolled back interrupted modules and displayed exit values"
+
+scratch=$(mktemp -d "${TMPDIR:-/tmp}/links-repl-recovery.XXXXXX") || exit 1
+trap 'rm -rf "$scratch"' EXIT
+
+cat > "$scratch/exits.links" <<'SOURCE'
+var pending = 53;
+var moved = fromLoad;
+{ exit("load exit"); moved() }
+SOURCE
+
+if ! output=$(./links 2>&1 <<EOF_LOAD
+var fromLoad = (linfun() { 54 } : [] (() -@ Int));
+@load "$scratch/exits.links";
+pending;
+fromLoad();
+55;
+EOF_LOAD
+); then
+    echo "FAILURE: Exit during a load ended the REPL session"
+    exit 1
+fi
+
+if [[ "$output" != *$'"load exit"\n'*'Unknown variable pending'*'Linear variable fromLoad has already been used'*$'55 : Int' ]]; then
+    echo "FAILURE: The REPL failed to recover from exit during a load"
+    printf '%s\n' "$output"
+    exit 1
+fi
+
+echo "SUCCESS: The REPL recovered from an exit during a load"
 
 if ! output=$(./links 2>&1 <<'EOF'
 module Linear {

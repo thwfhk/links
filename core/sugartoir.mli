@@ -20,4 +20,4 @@ type result =
     datatype: Types.datatype;
     context: Context.t }
 
-val program : Context.t -> Types.datatype -> Sugartypes.program -> result
+val program : ?linear_variables:Utility.IntSet.t -> Context.t -> Types.datatype -> Sugartypes.program -> result

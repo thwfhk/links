@@ -113,6 +113,7 @@ type t = [
 | `FunctionPtr of (Ir.var * t option)
 | `PrimitiveFunction of string * Var.var option
 | `Continuation of continuation
+| `Exit
 | `Resumption of resumption
 | `Socket of in_channel * out_channel
 ]

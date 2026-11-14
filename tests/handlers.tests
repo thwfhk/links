@@ -531,3 +531,23 @@ Examples
 filemode : true
 stdout : () : ()
 args : --path=examples/handlers
+
+SAT choice tries the second branch after failure
+import Sat; handle(Sat.leftBiased(fun() { if (Sat.choose()) Sat.fail() else 42 })()) { case <Sat.Fail> -> 0 case x -> x }
+args : --path=examples/handlers
+stdout : 42 : Int
+
+SAT choice forwards failure to its caller
+import Sat; handle(Sat.leftBiased(fun() { var _ = Sat.choose(); Sat.fail() : Int })()) { case <Sat.Fail> -> 42 case x -> x }
+args : --path=examples/handlers
+stdout : 42 : Int
+
+SAT parser forwards failure to its caller
+import Sat; handle({ var _ = Sat.parse(Sat.char('x'), [])(); false }) { case <Sat.Fail> -> true case x -> x }
+args : --path=examples/handlers
+stdout : true : Bool
+
+SAT text parser returns Nothing on bad input
+import Sat; Sat.parseTextExpression("#") == Nothing
+args : --path=examples/handlers
+stdout : @.*true : Bool

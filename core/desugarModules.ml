@@ -52,24 +52,17 @@ open SourceCode.WithPos
 
 (* TODO FIXME: use ropes rather than strings to build names. *)
 module Epithet = struct
-  type t =
-    { mutable next: int;
-      prefix: (int * string) list }
+  let empty = []
+  let next = ref 0
 
-  let empty : t =
-    { next = 0; prefix = []; }
+  let fresh name =
+    let id = !next in
+    incr next;
+    id, name
 
-  (* Persistent *)
-  let remember ?(escapes=false) name st =
-    let prefix =
-      if escapes
-      then let next = st.next in
-           (st.next <- next + 1; (st.next, "?") :: st.prefix)
-      else st.prefix
-    in
-    let next = st.next in
-    st.next <- next + 1;
-    { empty with prefix = (next, name) :: prefix }
+  let remember ?(escapes=false) name prefix =
+    let prefix = if escapes then fresh "?" :: prefix else prefix in
+    fresh name :: prefix
 
   let build components =
     let components' =
@@ -81,233 +74,33 @@ module Epithet = struct
     String.concat "$" components'
 
   let expand st name =
-    build ((-1, name) :: st.prefix)
+    build ((-1, name) :: st)
 
   let expand_escapee st name =
-    let next = st.next in
-    st.next <- next + 1;
-    build ((-1, name) :: (next, "?") :: st.prefix)
+    build ((-1, name) :: fresh "?" :: st)
 
   let qualified_source_name st name =
     let parts = List.fold_left (fun parts (_, name) ->
       if name = "?" then parts else name :: parts
-    ) [name] st.prefix in
+    ) [name] st in
     String.concat "." parts
 end
 
-(* The following data structures model scopes. *)
-module BasicScope = struct
-  type t =
-    { modules: module_member StringMap.t;
-      typenames: type_member StringMap.t;
-      terms: term_member StringMap.t;
-      interfaces: ModalEffects.Interface.t StringMap.t;
-      operations: ModalEffects.Operation.t StringMap.t }
-  and module_member = t
-  and type_member = string
-  and term_member = string
+module Scope = ModuleScope
 
-  let empty =
-    { modules = StringMap.empty;
-      typenames = StringMap.empty;
-      terms = StringMap.empty;
-      interfaces = StringMap.empty;
-      operations = StringMap.empty }
-
-  module Resolve = struct
-    let rec module' : Name.t list -> t -> t
-      = fun names scope ->
-      match names with
-      | [] -> assert false
-      | [name] -> StringMap.find name scope.modules
-      | prefix :: names -> module' names (StringMap.find prefix scope.modules)
-
-    let rec var : Name.t list -> t -> Name.t
-      = fun names scope ->
-      match names with
-      | [] -> assert false
-      | [name] -> StringMap.find name scope.terms
-      | prefix :: names ->
-         var names (StringMap.find prefix scope.modules)
-
-    let rec typename : Name.t list -> t -> Name.t
-      = fun names scope ->
-      match names with
-      | [] -> assert false
-      | [name] -> StringMap.find name scope.typenames
-      | prefix :: names ->
-         typename names (StringMap.find prefix scope.modules)
-
-    let rec effect_name select names scope =
-      match names with
-      | [] -> assert false
-      | [name] -> StringMap.find_opt name (select scope)
-      | prefix :: names ->
-         Option.bind (StringMap.find_opt prefix scope.modules) (effect_name select names)
-
-    let interface = effect_name (fun scope -> scope.interfaces)
-    let operation = effect_name (fun scope -> scope.operations)
-  end
-
-  let shadow : t -> t -> t
-    = fun scope mask ->
-    let select_mask _ _ mask = Some mask in
-    let modules =
-      StringMap.union select_mask scope.modules mask.modules
-    in
-    let typenames =
-      StringMap.union select_mask scope.typenames mask.typenames
-    in
-    let terms =
-      StringMap.union select_mask scope.terms mask.terms
-    in
-    let interfaces =
-      StringMap.union select_mask scope.interfaces mask.interfaces
-    in
-    let operations =
-      StringMap.union select_mask scope.operations mask.operations
-    in
-    { modules; typenames; terms; interfaces; operations }
-
-  module Extend = struct
-    let module' module_name module_scope scope =
-      { scope with modules = StringMap.add module_name module_scope scope.modules }
-
-    let typename typename typename' scope =
-      { scope with typenames = StringMap.add typename typename' scope.typenames }
-
-    let var name name' scope =
-      { scope with terms = StringMap.add name name' scope.terms }
-
-    let interface name id scope =
-      { scope with interfaces = StringMap.add name id scope.interfaces }
-
-    let operation name id scope =
-      { scope with operations = StringMap.add name id scope.operations }
-
-    let rec synthetic_module path module_scope scope =
-      match path with
-      | [] -> assert false
-      | [name] ->
-         { scope with modules = StringMap.add name module_scope scope.modules }
-      | prefix :: path ->
-         synthetic_module path module_scope (StringMap.find prefix scope.modules)
-  end
-end
-
-(* Refined notion of scope. *)
-module Scope = struct
-  module S = BasicScope
-  type scope = S.t
-  type t =
-    { visible: scope;   (* Everything which is *visible*. *)
-      delta: scope }    (* Everything which is *defined* in the current
-                           scope but not in the parent scope. *)
-
-  let empty =
-    { visible = S.empty;
-      delta = S.empty }
-
-  module Resolve = struct
-    (* We do not produce an error if a name fails to resolve, which
-       happens if a variable is unbound. We defer error handling to the
-       type checker. We produce a "best guess" of its name, which is
-       simply its qualified form. *)
-    let best_guess : Name.t list -> Name.t
-      = String.concat "."
-
-    let generic_name_resolve : (Name.t list -> scope -> Name.t) -> Name.t list -> t -> Name.t
-      = fun resolver prefix scopes ->
-      try resolver prefix scopes.visible
-      with Notfound.NotFound _ -> best_guess prefix
-
-    let module' : Name.t list -> t -> scope
-      = fun names scopes ->
-      S.Resolve.module' names scopes.visible (* Allow any errors to propagate. *)
-
-    let qualified_var : Name.t list -> t -> Name.t
-      = generic_name_resolve S.Resolve.var
-
-    let qualified_typename : Name.t list -> t -> Name.t
-      = generic_name_resolve S.Resolve.typename
-
-    let var : Name.t -> t -> Name.t
-      = fun name scopes -> qualified_var [name] scopes
-
-    let typename : Name.t -> t -> Name.t
-      = fun name scopes -> qualified_typename [name] scopes
-
-    let interface names scopes = S.Resolve.interface names scopes.visible
-    let operation names scopes = S.Resolve.operation names scopes.visible
-  end
-
-  module Extend = struct
-    let module' : Name.t -> t -> t -> t
-      = fun module_name module_scope scopes ->
-      let delta = S.Extend.module' module_name module_scope.delta scopes.delta in
-      let visible = S.Extend.module' module_name module_scope.delta scopes.visible in
-      { visible; delta }
-
-    let var : Name.t -> string -> t -> t
-      = fun term_name prefixed_name scopes ->
-      let delta = S.Extend.var term_name prefixed_name scopes.delta in
-      let visible = S.Extend.var term_name prefixed_name scopes.visible in
-      { visible; delta }
-
-    let typename : Name.t -> string -> t -> t
-      = fun typename prefixed_name scopes ->
-      let delta = S.Extend.typename typename prefixed_name scopes.delta in
-      let visible = S.Extend.typename typename prefixed_name scopes.visible in
-      { visible; delta }
-
-    let interface name id scopes =
-      let delta = S.Extend.interface name id scopes.delta in
-      let visible = S.Extend.interface name id scopes.visible in
-      { visible; delta }
-
-    let operation name id scopes =
-      let delta = S.Extend.operation name id scopes.delta in
-      let visible = S.Extend.operation name id scopes.visible in
-      { visible; delta }
-
-    let synthetic_module : Name.t list -> scope -> t -> t
-      = fun path module_scope scopes ->
-      let visible = S.Extend.synthetic_module path module_scope scopes.visible in
-      { scopes with visible }
-  end
-
-  let open_module : scope -> t -> t
-    = fun module_scope scopes ->
-    { scopes with visible = S.shadow scopes.visible module_scope }
-
-  let defines_operation name scopes =
-    StringMap.mem name scopes.delta.S.operations
-
-  let renew : t -> t
-    = fun scopes ->
-    { scopes with delta = S.empty }
-
-  let interface_names scope =
-    let rec bindings prefix scope =
-      Seq.append
-        (StringMap.to_seq scope.S.interfaces |> Seq.map (fun (name, id) -> prefix ^ name, id))
-        (StringMap.to_seq scope.S.modules |> Seq.flat_map (fun (name, scope) ->
-           bindings (prefix ^ name ^ ".") scope)) in
-    ModalEffects.Names.of_bindings (bindings "" scope.visible)
-end
-
-let rec desugar_module : ?toplevel:bool -> Epithet.t -> Scope.t -> Sugartypes.binding -> binding list * Scope.t
-  = fun ?(toplevel=false) renamer scope binding ->
+let rec desugar_module : ?toplevel:bool -> ?imported:bool -> (int * string) list ->
+    Scope.scope StringMap.t -> Scope.t -> Sugartypes.binding -> binding list * Scope.t
+  = fun ?(toplevel=false) ?(imported=false) renamer imports scope binding ->
   match binding.node with
   | Module { binder; members } ->
      let name = Binder.to_name binder in
-     let visitor = desugar ~toplevel (Epithet.remember ~escapes:(not toplevel) name renamer) (Scope.renew scope) in
+     let visitor = desugar ~toplevel (Epithet.remember ~escapes:(not toplevel) name renamer) imports (Scope.renew scope) in
      let bs'    = visitor#bindings members in
      let scope' = visitor#get_scope in
-     let scope'' = Scope.Extend.module' name scope' scope in
+     let scope'' = Scope.Extend.module' ~imported name scope' scope in
      (bs', scope'')
   | _ -> assert false
-and desugar ?(toplevel=false) ?names (renamer' : Epithet.t) (scope' : Scope.t) =
+and desugar ?(toplevel=false) ?names renamer imports (scope' : Scope.t) =
   let open Sugartypes in
   let names = match names with
     | Some names -> names
@@ -317,8 +110,7 @@ and desugar ?(toplevel=false) ?names (renamer' : Epithet.t) (scope' : Scope.t) =
 
     val mutable scope = scope'
     val mutable names = names
-    val mutable renamer = renamer'
-    method get_renamer = renamer
+    val renamer = renamer
     method get_scope = scope
     method get_interface_names = Lazy.force names
 
@@ -331,7 +123,7 @@ and desugar ?(toplevel=false) ?names (renamer' : Epithet.t) (scope' : Scope.t) =
       pos
 
     method clone =
-      desugar ~toplevel:false ~names renamer scope
+      desugar ~toplevel:false ~names renamer imports (Scope.renew scope)
 
     method type_binder : Name.t -> Name.t
       = fun name ->
@@ -402,11 +194,22 @@ and desugar ?(toplevel=false) ?names (renamer' : Epithet.t) (scope' : Scope.t) =
         raise (Errors.module_error ~pos (Printf.sprintf "Unbound module %s" (Scope.Resolve.best_guess path)))
 
     method import_module pos path =
-      try
-        let module_scope = Scope.Resolve.module' path scope in
-        self#set_effect_scope (Scope.Extend.synthetic_module path module_scope scope)
-      with Notfound.NotFound _ ->
-        raise (Errors.module_error ~pos (Printf.sprintf "Unbound module %s" (Scope.Resolve.best_guess path)))
+      let scope =
+        match path with
+        | [name] ->
+            begin match Scope.Resolve.module' path scope with
+            | members when not (Scope.module_was_imported members) -> scope
+            | _ | exception Notfound.NotFound _ ->
+                begin match StringMap.find_opt name imports with
+                | Some members -> Scope.Extend.expose_module name members scope
+                | None -> scope
+                end
+            end
+        | _ -> scope in
+      match Scope.Resolve.module' path scope with
+      | _ -> self#set_effect_scope scope
+      | exception Notfound.NotFound _ ->
+          raise (Errors.module_error ~pos (Printf.sprintf "Unbound module %s" (Scope.Resolve.best_guess path)))
 
     method! funlit : funlit -> funlit
       = fun f ->
@@ -608,7 +411,7 @@ and desugar ?(toplevel=false) ?names (renamer' : Epithet.t) (scope' : Scope.t) =
          self#open_module pos names; self#bindings bs
       | ({ node = Module _; _ } as module') :: bs ->
       (* Affects [scope] and hoists [bs'] *)
-         let bs', scope' = desugar_module ~toplevel renamer scope module' in
+         let bs', scope' = desugar_module ~toplevel renamer imports scope module' in
          self#set_effect_scope scope'; bs' @ self#bindings bs
       | b :: bs ->
          let b = self#binding b in
@@ -621,64 +424,55 @@ and desugar ?(toplevel=false) ?names (renamer' : Epithet.t) (scope' : Scope.t) =
       let bs' = self#bindings bs in
       (bs', self#option (fun o -> o#phrase) exp)
 
-    method! sentence : sentence -> sentence = function
-      | Definitions defs -> Definitions (self#bindings defs)
-      | Expression exp -> Expression (self#phrase exp)
-      | s -> super#sentence s
   end
 
-(* To make modules behave as expected in interactive mode, we need to
-   keep a little bit of state around. *)
-let scope : Scope.t ref = ref Scope.empty
-let renamer : Epithet.t ref = ref Epithet.empty
+let desugar_program_in_scope scope (bindings, body) =
+  let dependencies = Chaser.dependencies scope (bindings, body) in
+  let imports, dependencies =
+    List.fold_left (fun (imports, bindings) (name, dependency) ->
+      let dependency = DesugarSwitchFuns.desugar_switching#binding dependency in
+      let declarations, resolved =
+        desugar_module ~toplevel:true ~imported:true Epithet.empty imports scope dependency in
+      let members = Scope.Resolve.module' [name] resolved in
+      StringMap.add name members imports, declarations :: bindings
+    ) (StringMap.empty, []) dependencies in
+  let visitor = desugar ~toplevel:true Epithet.empty imports scope in
+  let bindings, body = visitor#program (bindings, body) in
+  (List.concat (List.rev dependencies) @ bindings, body), visitor#get_scope, visitor#get_interface_names
 
-let with_scope_rollback f =
-  let previous_scope = !scope in
-  match f () with
-  | result -> result
-  | exception exn ->
-     let backtrace = Printexc.get_raw_backtrace () in
-     scope := previous_scope;
-     Printexc.raise_with_backtrace exn backtrace
+let desugar_program program =
+  let program, _, _ = desugar_program_in_scope Scope.empty program in
+  program
 
-let desugar_program_with_names : Sugartypes.program -> Sugartypes.program * ModalEffects.Names.t
-  = fun program ->
-  let interacting = Basicsettings.System.is_interacting () in
-  (* TODO move to this logic to the loader. *)
-  let program = Chaser.add_dependencies program in
-  (* Printf.fprintf stderr "Before elaboration:\n%s\n%!" (Sugartypes.show_program program); *)
-  let renamer', scope' = if interacting then !renamer, !scope else Epithet.empty, Scope.empty in
-  let desugar = desugar ~toplevel:true renamer' scope' in
-  let result = desugar#program program in
-  (* Printf.fprintf stderr "After elaboration:\n%s\n%!" (Sugartypes.show_program result); *)
-  ignore (if interacting then (scope := desugar#get_scope; renamer := desugar#get_renamer));
-  result, desugar#get_interface_names
-
-let desugar_program program = fst (desugar_program_with_names program)
-
-let desugar_sentence_with_names : Sugartypes.sentence -> Sugartypes.sentence * ModalEffects.Names.t
-  = fun sentence ->
-  let sentence = Chaser.add_dependencies_sentence sentence in
-  let visitor = desugar ~toplevel:true !renamer !scope in
-  let result = visitor#sentence sentence in
-  scope := visitor#get_scope; renamer := visitor#get_renamer;
-  result, visitor#get_interface_names
-
-let desugar_sentence sentence = fst (desugar_sentence_with_names sentence)
-
-let desugar_datatype datatype =
-  (desugar !renamer !scope)#datatype datatype
+let desugar_datatype ?(scope=Scope.empty) datatype =
+  (desugar Epithet.empty StringMap.empty scope)#datatype datatype
 
 module Untyped = struct
   open Transform.Untyped
 
   let name = "modules"
 
-  let program state program =
-    let program, interface_names = desugar_program_with_names program in
-    return Context.{ state with interface_names } program
+  let resolve state program =
+    let program, module_scope, interface_names = desugar_program_in_scope state.Context.module_scope program in
+    Context.{ state with module_scope; interface_names }, program
 
-  let sentence state sentence =
-    let sentence, interface_names = desugar_sentence_with_names sentence in
-    return Context.{ state with interface_names } sentence
+  let program state program =
+    let state = Context.{ state with module_scope = Scope.renew state.module_scope } in
+    let state, program = resolve state program in
+    return state program
+
+  let sentence state = function
+    | Definitions bindings ->
+        let state, (bindings, _) = resolve state (bindings, None) in
+        return state (Definitions bindings)
+    | Expression phrase ->
+        let original = state in
+        let state, (bindings, phrase) = resolve state ([], Some phrase) in
+        let state = Context.{ state with
+          module_scope = original.module_scope;
+          interface_names = original.interface_names } in
+        let phrase = Option.get phrase in
+        let phrase = if bindings = [] then phrase else with_node phrase (Block (bindings, phrase)) in
+        return state (Expression phrase)
+    | Directive _ as directive -> return state directive
 end

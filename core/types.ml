@@ -43,13 +43,10 @@ struct
   let compare l r = String.compare l.id r.id
 end
 
-(* Lists are currently unlimited because the only deconstructors are
-   hd and tl. There's nothing to stop us rolling our own potentially
-   linear lists, though. *)
 let list     = {
   Abstype.id = "List" ;
   name       = "List" ;
-  arity      = [pk_type, (lin_unl, res_any)] ;
+  arity      = [pk_type, (lin_any, res_any)] ;
 }
 
 let socket = {
@@ -751,9 +748,8 @@ module Unl : Constraint = struct
       | Var _ | Recursive _ | Closed ->
          failwith ("[4] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
       | Alias _ as t -> super#type_satisfies vars t
-      (* We might support linear lists like this...
-         but we'd need to replace hd and tl with a split operation. *)
-      (* | `Application ({Abstype.id="List"}, [`Type t]) -> Unl.satisfies_type (rec_vars, quant_vars) t  *)
+      | Application (constructor, [PrimaryKind.Type, elem]) when Abstype.equal constructor list ->
+          o#type_satisfies vars elem
       | Application _ -> true (* TODO: change this if we add linear abstract types *)
       | RecursiveApplication { r_linear ; _ } ->
             (* An application is linear if the type it refers to is
@@ -808,6 +804,8 @@ module Unl : Constraint = struct
        | Var _ | Recursive _ | Closed ->
           failwith ("[5] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
        | Alias _ as t -> super#visit_type vars t
+       | Application (constructor, [PrimaryKind.Type, elem]) when Abstype.equal constructor list ->
+           self#visit_type vars elem
        | Application _ -> ()
        | RecursiveApplication _ -> ()
        | Meta _ as t -> super#visit_type vars t

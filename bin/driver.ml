@@ -17,16 +17,20 @@ let typecheck_only
               |> sync)
 
 module Phases = struct
-  let recover_linear_bindings context f =
+  let linear_bindings context =
     let types = (Context.typing_environment context).Types.var_env in
-    let linear_names = Env.String.fold (fun name var names ->
+    Env.String.fold (fun name var names ->
       match Env.String.find_opt name types with
       | Some typ when not (Types.Unl.can_type_be typ) -> IntMap.add var name names
-      | _ -> names) (Context.name_environment context) IntMap.empty in
+      | _ -> names) (Context.name_environment context) IntMap.empty
+
+  let recover_linear_bindings context f =
+    let linear_names = linear_bindings context in
+    let linear_variables = IntMap.fold (fun var _ -> IntSet.add var) linear_names IntSet.empty in
     let used = ref StringSet.empty in
     let on_variable var =
       Option.iter (fun name -> used := StringSet.add name !used) (IntMap.lookup var linear_names) in
-    match f on_variable with
+    match f on_variable linear_variables with
     | value -> Ok value
     | exception exn ->
         let terms = context.Context.fresco_environment in
@@ -70,10 +74,9 @@ module Phases = struct
 
   module Compile = struct
     module IR = struct
-      let run : Sugartypes.program Frontend.result -> Sugartoir.result
-        = fun Frontend.({ context; datatype; program }) ->
+      let run ?linear_variables Frontend.({ context; datatype; program }) =
         ModalEffects.Names.with_names context.Context.interface_names (fun () ->
-          Sugartoir.program context datatype program)
+          Sugartoir.program ?linear_variables context datatype program)
     end
   end
 
@@ -90,10 +93,14 @@ module Phases = struct
   module Evaluate = struct
     module Eval = Evalir.Eval
 
-    let run ?on_variable Backend.({ context; program; datatype }) =
+    let run ?on_variable ?(propagate_exit = false) Backend.({ context; program; datatype }) =
       let valenv = Context.value_environment context in
       let (valenv', v) =
-        lazy (Eval.run_program ?on_variable valenv program) |>measure_as<| "run_program"
+        let evaluate () =
+          try Eval.run_program ?on_variable valenv program with
+          | Evalir.Exceptions.Early_exit (valenv, value) when not propagate_exit -> valenv, value
+        in
+        lazy (evaluate ()) |>measure_as<| "run_program"
       in
       (Context.({ context with value_environment = valenv' }), datatype, v)
   end
@@ -105,7 +112,7 @@ module Phases = struct
                   | `Expression of Types.datatype * Value.t
                   | `Directive of string * string list ] }
 
-    let readline ?on_variable ps1 context =
+    let readline ?on_variable ?linear_variables ps1 context =
       FrescoContext.transaction context.Context.fresco_environment (fun () ->
         let Frontend.({ context; program = sentence; datatype })
           = Parse.interactive ps1 context
@@ -116,18 +123,18 @@ module Phases = struct
           | Sugartypes.Definitions defs ->
              let program' = (defs, None) in
              let Backend.({ program; _ }) as result =
-               Compile.IR.run Frontend.({ context; datatype; program = program' })
+               Compile.IR.run ?linear_variables Frontend.({ context; datatype; program = program' })
                |> Transform.run
              in
-             let (context', _, _) = Evaluate.run ?on_variable result in
+             let (context', _, _) = Evaluate.run ?on_variable ~propagate_exit:true result in
              context', `Definitions (fst program)
           | Sugartypes.Expression expr ->
              let program' = ([], Some expr) in
              let result =
-               Compile.IR.run Frontend.({ context; datatype; program = program' })
+               Compile.IR.run ?linear_variables Frontend.({ context; datatype; program = program' })
                |> Transform.run
              in
-             let (context', datatype, value) = Evaluate.run ?on_variable result in
+             let (context', datatype, value) = Evaluate.run ?on_variable ~propagate_exit:true result in
              context', `Expression (datatype, value)
           | Sugartypes.Directive d ->
              context, `Directive d
@@ -147,37 +154,36 @@ module Phases = struct
         Printf.fprintf oc " %d -> %s : %s\n%!" var name datatype)
       Lib.nenv
 
-  (* Loads the prelude, and returns the 'initial' compilation context. *)
+  (* Load the compiler's list helpers before the selected prelude. *)
   let initialise : unit -> Context.t
     = fun () ->
     let context, _ = Frontend.Modal.initial_context () in
-    let filename = val_of (Settings.get prelude_file) in
-    let result =
-      Parse.run context filename
-      |> Desugar.run
-      |> (fun result ->
-        let context = result.Frontend.context in
-        let venv =
-          Var.varify_env (Lib.nenv, Lib.typing_env.Types.var_env)
-        in
-        let context' = Context.({ context with variable_environment = venv }) in
-        Compile.IR.run Frontend.({ result with context = context' }))
-      |> Transform.run
+    let variables = Var.varify_env (Lib.nenv, Lib.typing_env.Types.var_env) in
+    let context = { context with Context.variable_environment = variables } in
+    let load parsed =
+      let context, _, _ =
+        parsed
+        |> Desugar.run
+        |> Compile.IR.run
+        |> Transform.run
+        |> Evaluate.run in
+      context
     in
-    let context, _, _ = Evaluate.run result in
-    context
+    let helpers = Parse.run context Linkspath.comprehension in
+    let context = load Loader.{ helpers with program_ = DesugarFors.library helpers.program_ } in
+    load (Parse.run context (val_of (Settings.get prelude_file)))
 
-  let whole_program ?on_variable initial_context filename =
+  let whole_program ?on_variable ?propagate_exit ?linear_variables initial_context filename =
     FrescoContext.transaction initial_context.Context.fresco_environment (fun () ->
       (* Process source file (and its dependencies. *)
       let result =
         Parse.run initial_context filename
         |> Desugar.run
         |> (fun result -> if Settings.get typecheck_only then exit 0 else result)
-        |> Compile.IR.run
+        |> Compile.IR.run ?linear_variables
         |> Transform.run
       in
-      Evaluate.run ?on_variable result)
+      Evaluate.run ?on_variable ?propagate_exit result)
 
   let evaluate_string : Context.t -> string -> (Context.t * Types.datatype * Value.t)
     = fun initial_context source_code ->

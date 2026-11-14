@@ -284,7 +284,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
    IMPURE);
 
   "exit",
-  (`Continuation Value.Continuation.empty,
+  (`Exit,
   (* Return type must be free so that it unifies with things that
      might be used alternatively. E.g.:
      if (test) exit(1) else 42 *)
@@ -294,19 +294,19 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
   (* Lists and collections *)
   "Nil",
   (`List [],
-   datatype "List a",
+   datatype "forall a::Any. List a",
    PURE);
 
   "Cons",
   (p2 (fun x xs ->
          Value.box_list (x :: (Value.unbox_list xs))),
-   datatype "[] ((a, List a) -> List a)",
+   datatype "forall a::Any. [] ((a, List a) -> List a)",
    PURE);
 
   "Concat",
   (p2 (fun xs ys ->
          Value.box_list (Value.unbox_list xs @ Value.unbox_list ys)),
-   datatype "[] ((List a, List a) -> List a)",
+   datatype "forall a::Any. [] ((List a, List a) -> List a)",
    PURE);
 
   "intRange", int_range;
@@ -322,25 +322,6 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
   IMPURE);
 
   "tl",
-  (p1 (fun lst ->
-         match (Value.unbox_list lst) with
-            | [] -> runtime_error "tl() of empty list"
-            | _x :: xs -> Value.box_list xs
-      ),
-   datatype "[] ((List a) -> List a)",
-  IMPURE);
-
-  (* Internal versions of head and tail for pattern lowering. *)
-  "$$hd",
-  (p1 (fun lst ->
-        match (Value.unbox_list lst) with
-          | [] -> runtime_error "hd() of empty list"
-          | x :: _ -> x
-      ),
-   datatype "[] ((List a) -> a)",
-  IMPURE);
-
-  "$$tl",
   (p1 (fun lst ->
          match (Value.unbox_list lst) with
             | [] -> runtime_error "tl() of empty list"
