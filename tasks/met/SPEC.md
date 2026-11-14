@@ -65,7 +65,7 @@ below record the review.
    Keep `List` as a built-in type constructor; user-defined types cannot
    redefine it.
 8. **R7.3. Function arrows.** Allow `A -> B` as shorthand for
-   `(A) -> B` in function types.
+   `(A) -> B` and `A -@ B` as shorthand for `(A) -@ B`.
 9. **R7.2. Effect-interface declarations.** Use `effect Reader(a::Abs)
    { Ask : () => a; }` as shown under [Effect interfaces](#effect-interfaces).
 10. **Range helper.** Range syntax always uses the standard pure
@@ -208,11 +208,12 @@ its result a modal type.
 
 ### Types and annotations
 
-The proposed additions are:
+The type syntax includes these forms.
 
 ```text
 T ::= ... | List atomic-type | variant-type
-    | (T, ...) -> T | (T, ...) -@ T | atomic-type -> T | modality T
+    | (T, ...) -> T | (T, ...) -@ T
+    | atomic-type -> T | atomic-type -@ T | modality T
 variant-type ::= (| variant-row |)
 modality ::= [absolute-entries] | <effect-entries>
            | <mask-labels | effect-entries>
@@ -225,6 +226,10 @@ mask-labels ::= Interface, ...
 
 `variant-row` keeps the existing variant-row grammar, including the
 empty row, alternatives separated by `|`, and a final `| r` row tail.
+
+Use `=>` for an operation signature in an interface declaration or a
+handler clause annotation. A `typename` declaration, function signature,
+or other value type with a `=>` arrow is rejected.
 
 An empty argument list is `()`. Empty entries give `[]` and `<>`.
 `<Reader |>` masks one `Reader` instance; `<Reader, Reader |>` masks
@@ -240,19 +245,23 @@ whole function type: `[Reader(Int)] (() -> Int)`. In
 In `[](((Int) -> Int) -> Int)`, the whole higher-order function is
 absolute, and its callback uses its invocation context.
 
-List types use prefix application: `List A`, `List (A -> B)` and
-`List (List A)`. Application binds more tightly than an arrow;
-parenthesise a compound element type. `[] (List Int)` is an absolute
-list, `[Reader(Int)] (List (() -> Int))` is a list interpreted under
+List types use prefix application. They bind more tightly than an
+arrow. An atomic element type can follow `List` directly, as in
+`List Int` or `List Maybe(Int)`. Parenthesise nested list types,
+modalities, arrows, quantified types and recursive types when they
+are list elements. Write `List (List Int)` and `List ([] Int)`.
+The forms `List List Int` and `List [] Int` are rejected.
+`[] (List Int)` is an absolute list,
+`[Reader(Int)] (List (() -> Int))` is a list interpreted under
 `Reader(Int)`, and `List ([]((Int) -> Int))` is a list of absolute functions.
 Replace `[A]` in type annotations and printed types. List terms such as
 `[]`, `[1, 2]` and `[1..3]` keep their current syntax. Other type aliases
 keep their existing application syntax, such as `Maybe(Int)`.
 
-For `List (A -> B)`, use unary-arrow shorthand `A -> B` for
-`(A) -> B`. Keep `(A, B) -> C` for multiple arguments, `() -> C` for
-no arguments, and `(()) -> C` for one unit argument. A single tuple
-argument still needs `((A, B)) -> C`.
+For one argument, `A -> B` and `A -@ B` are shorthand for `(A) -> B`
+and `(A) -@ B`. Keep `(A, B) -> C` for multiple arguments, `() -> C`
+for no arguments, and `(()) -> C` for one unit argument. A single
+tuple argument still needs `((A, B)) -> C`.
 
 Reserve the type name `List` for the built-in list constructor.
 `List A` and `List(A)` then name the same type, and the printer uses
@@ -289,7 +298,9 @@ Keep `sig f : T`, parameter annotations, `e : T`, `typename`, recursive
 types, and explicit `forall`. Unbound ordinary type, data-row and
 data-presence variables in a signature keep SmallLinks' implicit
 quantification convention. Aliases and explicit `forall` types require
-their variables to be bound.
+their variables to be bound. This applies through a leading modality.
+For example, `sig f : [] (forall a. (a, b) -> b)` requires a binder
+for `b`.
 
 Remove effect-bearing arrows `{...}->`, `-e->`, `~>`, `~e~>`, and their
 linear forms after migration. `->` and `-@` are the unrestricted and
@@ -300,7 +311,8 @@ Keep non-effect upcasts with their existing checks.
 
 ### Effect interfaces
 
-Declare operations together in an effect interface:
+Use the reserved keyword `effect` to declare an interface. Each
+interface has at least one operation.
 
 ```links
 effect Reader(a::Abs) {
@@ -333,8 +345,19 @@ identify its declaring interface and operation. Keep unqualified forms
 such as `do Ask` where the name is in scope, and use module-qualified
 operation names when required. Duplicate operation names within an
 interface or its declaring scope are errors. `open` follows the existing
-SmallLinks shadowing rules. Runtime labels must preserve the resolved
-declaration identity.
+SmallLinks shadowing rules. A later interface declaration with the same
+name shadows the earlier one, as with `typename`. Earlier references
+keep their declaration identity, and each operation keeps the identity
+of its declaring interface. Runtime labels preserve that identity.
+A printed type uses an interface name that resolves to the same
+declaration when such a name is in scope. If no source name is in
+scope, the printer marks the declaration as out of scope. Diagnostics
+distinguish declarations that share a name.
+
+Imports follow the same rules as imports of `typename` declarations.
+Within one dependency pass, repeated imports share the same module.
+When a later input loads the module again, new references use the
+newly loaded declarations and earlier references keep their identities.
 
 Interface parameters and an operation's own quantifiers are separate.
 An instance fixes the interface parameters for all its operations and
@@ -367,13 +390,13 @@ of the ambient effect context. The restriction is `Abs`:
 5. Quantified and recursive data types use these rules for their bodies.
    Recursive checks must preserve restrictions through every field.
 
-SmallLinks currently separates the primary kind (`Type`, `Row` or
-`Presence`) from a pair of fields for linearity and restriction.
-Removing session types removed `Session` from the restrictions. Value
-linearity and restrictions such as `Base` remain in use; `Base` is
-needed by ordering operations. Add independence from the ambient effect
-context as a separate constraint. The source syntax need not mirror
-the internal representation.
+SmallLinks tracks primary kind (`Type`, `Row` or `Presence`), value
+linearity and type restrictions. `Base` restricts a type variable to
+primitive types such as `Int`, `Bool` and `String`. A non-identity
+modality such as `[]` in `[] Int` puts the type outside `Base`.
+In a row tail such as `(x:Int | r::Base)`, `Base` restricts the
+types of the remaining fields. The prelude uses it for ordering keys.
+`Abs` tracks independence from the ambient effect context.
 
 Use `a::Abs` for an absolute value type, with the same linearity
 default as `a::Type`. The full spellings are
@@ -382,7 +405,8 @@ default as `a::Type`. The full spellings are
 for an absent field or a field with an absolute payload. The internal
 representation should express the independent constraints clearly.
 
-`Abs` does not imply `Unl`, `Base` or `Mono`. `Base` implies `Abs`.
+`Abs` does not imply `Unl`, `Base` or `Mono`. `Base` implies both
+`Abs` and `Mono`.
 Fresco's unification metavariables range over monotypes. Explicit
 `Mono` annotations also restrict a programmer-written type variable.
 Use `MonoAbs` as shorthand for both `Mono` and `Abs`, including in
@@ -1081,6 +1105,8 @@ The outer `State(Int)` handler cannot provide the missing operation.
    signatures and fixtures to the reviewed syntax in milestone 2.
    Record `escape` examples and tests as deferred. Keep shared
    continuation code used by handlers.
+9. Keep the [lambda evaluator](MIGRATION.md#installed-examples) deferred
+   for this version.
 
 ## Design and implementation references
 

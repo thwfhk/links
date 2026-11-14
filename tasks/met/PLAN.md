@@ -4,7 +4,8 @@ The language design and scope are in [SPEC.md](SPEC.md#scope).
 This plan records milestones, dependencies, progress and checks.
 [IMPL.md](IMPL.md) will record significant implementation decisions.
 
-Work stays on `small-met`. The design review is complete.
+The first implementation is complete on `small-met`. The milestones
+below also track the fixes from the follow-up review.
 
 ## Tracking
 
@@ -100,11 +101,27 @@ Depends on milestone 1.
   traversals, substitution, free-variable collection, kinds and both
   type printers. Cover interface arguments, modal prefixes, quantifiers
   and their combinations with list and variant types.
+- [ ] **2.6** Enforce the reviewed surface syntax. Restrict `=>` to
+  interface member signatures and handler clause annotations. Reject
+  nested list and modal element types without parentheses, and migrate
+  any affected source or printer output. Test both unary arrow forms,
+  `List A` and `List(A)`, the reserved `effect` keyword and the rejection
+  of empty interfaces.
+- [ ] **2.7** Check that sequential interface declarations and repeated
+  imports follow the same scope as `typename`. Preserve the identities
+  of earlier references and the existing rule against duplicate operation
+  names. Test shadowing and reopening modules and repeated imports in one
+  input and across REPL inputs. Make type printers choose a name that
+  resolves to the right declaration when one is in scope. Mark
+  interfaces with no visible name as out of scope and distinguish
+  shadowed identities in diagnostics. Verify the resolved identities
+  in print-and-reparse checks.
 
 Completion check: the migrated list and variant syntax and the modal
 type representation have focused checks. Record, variant and presence
-behaviour remains covered; `escape` is identified as deferred. Printed
-types parse back to equivalent types.
+behaviour remains covered, and `escape` is identified as deferred.
+Printed annotations preserve the identity of interfaces that can be
+named in the current scope.
 
 ### 3. Implement modal inference and polymorphism
 
@@ -132,6 +149,18 @@ new inference path is completed with its library dependencies.
   global bindings, modules and imports. Update pattern typing and the
   rules for lists, tuples, records, variants and recursive types so that
   modal dependencies survive storage, projection and matching.
+- [ ] **3.5** Fix recursive `Abs` checks so they follow the types of the
+  fields and respect enclosing modalities. Use the same field requirements
+  when checking and narrowing kinds. Test absolute and ambient callback
+  fields, including a recursive reference whose arguments change. Look
+  through leading modalities to detect an explicit `forall` in a
+  signature. Test the same free variable rejection with `forall` before
+  or after the modality, and retain implicit quantification for signatures
+  without a leading `forall`.
+- [ ] **3.6** Reject types with a non-identity modality at `Base`.
+  Test direct and indirect uses through aliases at `Base`, `Mono` and
+  `MonoAbs`. Retain the existing checks on primitive types, row tails
+  and field presences.
 
 Completion check: the inference examples in SPEC.md have the specified
 types and annotation requirements. Tests cover both accepted and
@@ -189,10 +218,20 @@ switching the active inference path.
   registration and aggregate runners together. Give the REPL handler
   fixture's `ask` its required signature while retaining its check
   across successive sentences.
+- [ ] **5.5** Keep resolved interface signatures available in local modules
+  and carry interface and operation names with the exported values and
+  types of a prelude or a non-isolated input. Check that dependency loading
+  recognises local modules in the same scopes as ordinary declarations.
+  Test local module handlers and their scope, a custom prelude,
+  successive inputs with both isolation settings, and REPL imports
+  and failed loads.
 
 Completion check: the default prelude loads; files with imports, `-e`,
 REPL bindings and typecheck-only execution work. Typed frontend and IR
 checks pass, and no active code relies on the old effect-row path.
+
+The [lambda evaluator](MIGRATION.md#installed-examples) stays deferred
+for this version.
 
 ### 6. Verify and document the modal language
 
@@ -207,6 +246,9 @@ Depends on milestone 5.
 - [x] **6.3** (`fcb1e97a`) Run final build, regression, IR, source and installation
   checks on the combined revision. Record remaining deferred cases and
   their reasons. Complete this plan only when the in-scope checks pass.
+- [ ] **6.4** After the follow-up changes in 2, 3 and 5, update the
+  SmallLinks guide, review the combined changes and run the affected
+  checks below. Record the new tested revision and log paths.
 
 Completion check: a clean CI build and temporary installation work, all
 in-scope regressions and unit tests pass, printed types can be reused as
@@ -253,10 +295,14 @@ an explicit inventory.
 
 ## Status
 
-Milestones 1–6 are complete on `small-met`. The native compiler uses
-Fresco for files, expressions and REPL sentences. The [migration
-inventory](MIGRATION.md) records the retained and deferred cases. The
-[SmallLinks guide](../small/SPEC.md) uses the approved syntax.
+The first implementation is complete on `small-met`. The native compiler
+uses Fresco for files, expressions and REPL sentences. The [migration
+inventory](MIGRATION.md) records the retained and deferred cases.
+
+The follow-up fixes in milestones 2, 3, 5 and 6 are documented.
+The approved rules are in [SPEC.md](SPEC.md). The [implementation
+notes](IMPL.md#follow-up-review) give the cases and planned fixes.
+Implementation is paused. The next item is 2.6.
 
 ### Milestones 5–6 checks
 

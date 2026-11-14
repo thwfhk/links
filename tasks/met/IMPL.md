@@ -55,18 +55,17 @@ including absolute operation arguments and results. It lowers modal
 syntax to `Types.Modal` and ambient arrows to `Types.AmbientFunction`.
 `Abs` remains independent of value linearity. The restriction meet
 represents `Mono` together with `Abs` as `MonoAbs` so both checks apply.
-Legacy effect arrows still serve the active type checker. It reports a
-type error for modal value annotations and uses of declared operations.
+During milestone 2, the row-based checker still served the native
+entry points. Milestone 5 switched them to Fresco.
 
 Both type printers emit the approved `MonoAbs` shorthand. The parser
 separates adjacent modality brackets at a type boundary and preserves
 symbolic term operators such as `<|>` and `><`.
 
-Fresco must expose modal prefixes hidden by aliases when it compares
-types or crosses locks. Milestone 3 also applies declared restrictions
-to explicit type arguments and binds range syntax to the standard pure
-helper. The [baseline and milestone checks](PLAN.md#status) and
-[migration inventory](MIGRATION.md) record the verified cases.
+Milestone 3 exposed modal prefixes hidden by aliases, applied declared
+restrictions to explicit type arguments and bound range syntax to the
+standard pure helper. The [baseline and milestone checks](PLAN.md#status)
+and [migration inventory](MIGRATION.md) record the verified cases.
 
 ## 3. Modal inference and polymorphism
 
@@ -194,3 +193,77 @@ The [SmallLinks guide](../small/SPEC.md) describes the modal language.
 The [verification record](PLAN.md#milestones-56-checks) records the
 combined checks, and the [migration inventory](MIGRATION.md) links to
 the deferred fixtures.
+
+## Follow-up review
+
+The cases below come from the review of `98d39ac8`. The approved
+language rules are in [SPEC.md](SPEC.md). Implementation and its
+completion checks are pending in [PLAN.md](PLAN.md#milestones).
+
+1. **Syntax (2.6).** `core/parser.mly` uses the general datatype grammar
+   for `=>` and accepts list and modal prefixes as bare list elements.
+   Use a separate operation-signature production for member signatures
+   and handler clause annotations, with optional leading quantifiers.
+   Use a list-element production that accepts an atomic type or a
+   grouped type. Supplying `() => Int` to a type alias with a `Base`
+   parameter currently reaches an internal error. Reject it in the
+   parser and make `Types.Base` reject an operation signature normally
+   if one reaches the kind check. Check both printers and the source
+   types in the library and examples.
+2. **Names and printing (2.7).** `core/desugarModules.ml` already binds
+   interface names in declaration order, and `core/chaser.ml` loads
+   imports once per dependency pass. A later REPL import can load a new
+   module with the same printed name. `core/modalEffects.ml` prints
+   the path stored at declaration time, which can name a newer interface
+   after shadowing. Give both type printers the name scope and use a
+   short or qualified name only if it resolves to the same declaration.
+   If no name resolves to it, mark it as out of scope and include enough
+   information to distinguish declarations, including two loads from the
+   same source location. A print-and-reparse test must compare declaration
+   identities. Use one naming context for both sides of a diagnostic.
+3. **Kinds and binders (3.5–3.6).** The recursive case in `core/types.ml`
+   checks each alias argument when it sees an alias again. For
+   `typename Box(a) = (|Done:[] a|More:Box(a)|);`, the only callback
+   field is absolute. The current check rejects `Box(Int -> Int)` as
+   an operation payload. Derive the `Abs` requirements each alias
+   places on its parameters from its fields. An absolute modality
+   needs no further check on its body. Combine the requirements across
+   the recursive group, substituting the arguments at each call until
+   the requirements stop changing. Keep track of fields that row
+   substitution can replace. Use the same requirements to check and
+   narrow kinds. Test `Box(List a)` as the recursive call in `Box`, and
+   `typename Shift(a,b) = (|Here:a|More:Shift(b,Int -> Int)|);`.
+   The first case must terminate and accept `Box(Int -> Int)`. The
+   second must reject `Shift(Int,Int)` as an operation payload.
+
+   In `core/desugarTypeVariables.ml`, skip leading `Modal` nodes in
+   `sig_allows_implicitly_bound_vars`. When the next node is `Forall`,
+   use the existing rule for an explicit signature, with binders in
+   their written order and scope. Keep references to type variables
+   already in scope inside nested quantifiers.
+
+   In `core/types.ml`, make the `Base` predicate reject `Modal` directly
+   and remove the special case that narrows the body of a modal type to
+   `Base`. Keep `Base` as a sufficient bound for `Mono` and `Abs`. For
+   `typename M(a::MonoAbs) = a; typename B(b::Base) = M(b);`, both
+   `B([] Int)` and `M([] Int)` should fail, and both aliases should
+   accept `Int`.
+4. **Interface environments (5.5).** `core/desugarDatatypes.ml` drops
+   the signatures registered in a block. `core/chaser.ml` can also fail
+   to recognise a module declared there. At the CLI boundary,
+   `bin/links.ml` carries the values and types of the prelude and of
+   non-isolated inputs, while `core/desugarModules.ml` keeps the name
+   scope only in interactive mode. Carry the source name scope with
+   the compiler context and keep resolved signatures by declaration
+   identity through blocks, recursive definitions, final expressions
+   and frontend rechecks. Restore the enclosing name and alias scopes
+   on leaving a block. Make dependency loading follow the resolver's
+   lexical module and `open` rules. Each file starts with its own list
+   of declarations for duplicate checks. The prelude provides the
+   starting visible names for isolated inputs. Non-isolated inputs
+   and successful REPL inputs carry their scope forward. A failed
+   input preserves the previous scope and interface registry.
+
+The integration commit `fcb1e97a` archived the lambda evaluator.
+It stays deferred for this version. See the
+[migration inventory](MIGRATION.md#installed-examples).
