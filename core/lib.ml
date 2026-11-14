@@ -840,6 +840,43 @@ let is_primitive_var var =
 let type_env : Types.environment =
   List.fold_right (fun (n, (_,t,_)) env -> Env.String.bind n t env) env Env.String.empty
 
+(* Native permissions are independent of the flag used for IR ApplyPure.
+   Keep sleep's timing permission while its implementation is pending.
+   Deterministic runtime failures such as error do not require wild. *)
+let wild_primitives = StringSet.of_list [
+  "sysexit"; "show"; "exit"; "debug"; "print"; "sleep";
+  "serverTime"; "serverTimeMilliseconds"; "parseDate"; "now"; "utcOffset";
+  "random"; "gensym"; "connectSocket"; "writeToSocket"; "readFromSocket";
+  "closeSocket"; "crypt"; "getArgs";
+]
+
+let modal_function ~wild domain result =
+  let context = ModalEffects.context ~wild (ModalEffects.extension []) in
+  Types.modal (ModalEffects.Absolute context) (Types.AmbientFunction (dl_unl, domain, result))
+
+let modal_type_env =
+  let open Types in
+  let modal_type name datatype =
+    let wild = StringSet.mem name wild_primitives in
+    if name = "exit" then
+      let payload_q, payload = fresh_type_quantifier (lin_unl, res_abs) in
+      let result_q, result = fresh_type_quantifier (lin_unl, res_any) in
+      for_all ([payload_q; result_q], modal_function ~wild (make_tuple_type [payload]) result)
+    else
+      let quantifiers, body = TypeUtils.split_quantified_type datatype in
+      match body with
+      | Function (domain, _, result) ->
+          (* These primitives have first-order signatures. Reuse the value
+             types and keep only the quantifiers they use. *)
+          let typ = modal_function ~wild domain result in
+          let free = free_type_vars typ in
+          let quantifiers = List.filter (fun q -> TypeVarSet.mem (Quantifier.to_var q) free) quantifiers in
+          for_all (quantifiers, typ)
+      | _ -> datatype
+  in
+  Env.String.fold (fun name datatype env ->
+    Env.String.bind name (modal_type name datatype) env) type_env Env.String.empty
+
 let typing_env = {Types.var_env = type_env;
                   Types.rec_vars = StringSet.empty;
                   tycon_env = alias_env;

@@ -295,6 +295,12 @@ and handler_descriptor =
   ; shd_types   : Types.row * Types.datatype * Types.row * Types.datatype
   ; shd_raw_row : Types.row
   ; shd_params  : handler_parameterisation option
+  ; shd_modal   : modal_handler option
+  }
+and modal_handler =
+  { shm_outer      : Types.datatype ModalEffects.modality
+  ; shm_extension  : Types.datatype ModalEffects.modality
+  ; shm_operations : (string * Types.datatype) list
   }
 and handler_parameterisation =
   { shp_bindings : (Pattern.with_pos * phrase) list
@@ -525,11 +531,10 @@ struct
            descr.shd_params
        in
        union_all [phrase e;
-                  union_map case eff_cases;
-                  union_map case val_cases;
-                  diff (option_map (fun params -> union_map (snd ->- phrase)
-                                                    params.shp_bindings)
-                          descr.shd_params) params_bound]
+                  diff (union_map case eff_cases) params_bound;
+                  diff (union_map case val_cases) params_bound;
+                  option_map (fun params -> union_map (snd ->- phrase) params.shp_bindings)
+                    descr.shd_params]
     | Switch (p, cases, _) -> union (phrase p) (union_map case cases)
     | DoOperation (_, ps, _) -> union_map phrase ps
     | Operation _ -> empty

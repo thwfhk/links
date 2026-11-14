@@ -304,6 +304,13 @@ let interactive =
     Typeability_preserving.run_sentence TypeSugar.Check.sentence
 
 module Modal = struct
+  let initial_context () =
+    let typing = Types.{ empty_typing_environment with
+      var_env = Lib.modal_type_env;
+      tycon_env = Lib.typing_env.tycon_env } in
+    let context = { Context.empty with Context.typing_environment = typing; name_environment = Lib.nenv } in
+    context, FrescoContext.create Lib.modal_type_env
+
   let check context terms program =
     let typing_environment = Context.typing_environment context in
     let program, datatype, terms, tycon_env =

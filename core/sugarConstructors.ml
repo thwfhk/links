@@ -225,6 +225,7 @@ module SugarConstructors (Position : Pos)
           shd_types = ( Types.make_empty_closed_row (), Types.Not_typed
                       , Types.make_empty_closed_row (), Types.Not_typed);
           shd_raw_row = Types.make_empty_closed_row ();
+          shd_modal = None;
           shd_params = opt_map (fun pps -> {shp_bindings = pps; shp_types = []})
                                parameters
         };

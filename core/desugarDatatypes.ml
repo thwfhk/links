@@ -416,9 +416,12 @@ object (self)
             raise (module_error ~pos ("Parameters of effect interface " ^ name ^ " must be value types."))) parameters;
         let signature = EffectInterfaces.{ parameters; operations = Operations.empty } in
         let interfaces = EffectInterfaces.add id signature interfaces in
+        let bound = Types.TypeVarSet.add_quantifiers parameters Types.TypeVarSet.empty in
         let check_member member =
           let t = Desugar.datatype ~modal interfaces alias_env member.member_signature in
           let pos = WithPos.pos member.member_signature in
+          if not (Types.TypeVarSet.subset (Types.free_type_vars t) bound) then
+            raise (module_error ~pos ("Unbound type variable in the signature of " ^ member.member_name ^ "."));
           let rec check = function
             | Types.ForAll (_, body) -> check body
             | Types.Operation (domain, result) ->

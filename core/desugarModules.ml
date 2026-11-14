@@ -464,11 +464,13 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
         Escape (bndr', body')
       | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
          let sh_expr = self#phrase sh_expr in
-         let shd_params =
-           self#option (fun o -> o#handle_params) sh_descr.shd_params
-         in
-         let sh_effect_cases = self#cases sh_effect_cases in
-         let sh_value_cases = self#cases sh_value_cases in
+         let clauses = self#clone in
+         let shd_params = Option.map (fun params ->
+           let bindings = List.map (fun (pat, expr) -> pat, self#phrase expr) params.shp_bindings in
+           let shp_bindings = List.map (fun (pat, expr) -> clauses#pattern pat, expr) bindings in
+           { params with shp_bindings }) sh_descr.shd_params in
+         let sh_effect_cases = clauses#cases sh_effect_cases in
+         let sh_value_cases = clauses#cases sh_value_cases in
          Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr = { sh_descr with shd_params } }
       | Switch (expr, cases, dt) ->
         let expr' = self#phrase expr in

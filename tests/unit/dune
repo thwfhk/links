@@ -2,6 +2,7 @@
   (name unit_tests)
   (modes native)
   (flags :standard -safe-string -dtypes -w Ae-44-45-60 -g)
-  (modules unit_tests modal_effects_tests modal_scope_tests fresco_patterns_tests fresco_tests)
+  (modules unit_tests modal_effects_tests modal_scope_tests fresco_patterns_tests fresco_tests
+    fresco_effects_tests)
   (libraries ounit2.advanced ounit2 links_ir_unit_tests links.core)
   (preprocess (pps ppx_deriving.std)))
