@@ -235,110 +235,82 @@ and interface signatures in local modules.
 
 #### 3.5 Recursive types
 
-The recursive case in `core/types.ml` checks each alias argument when
-it sees an alias again. For
-`typename Box(a) = (|Done:[] a|More:Box(a)|);`, the only callback
-field is absolute. The current check rejects `Box(Int -> Int)` as
-an operation payload. Derive `Abs` requirements from the fields, with
-absolute modalities already satisfying the requirement. Combine the
-requirements across the recursive group, substituting arguments until
-the requirements stop changing. Track fields that row substitution can
-replace, and use the same requirements to check and narrow kinds.
-Test `Box` recursing as `Box(List a)` and
-`typename Shift(a,b) = (|Here:a|More:Shift(b,Int -> Int)|);`.
-The first case must terminate and accept `Box(Int -> Int)`. The
-second must reject `Shift(Int,Int)` as an operation payload.
+`Types.Abs` derives requirements from the fields of each recursive
+definition using fresh formal parameters. It follows type, row and
+presence arguments until the requirements stop changing. For row
+arguments it tracks the labels supplied by enclosing rows. Both the
+kind predicate and the narrowing pass use these requirements.
 
-Separately, `core/frescoTypes.ml` can visit the same `mu` binder twice
-while exposing a modal prefix and report a cycle for
-`(Leaf : [] (mu a. (|Leaf|More:a|)))`. Stop the guard
-check at the variant constructor. Keep the existing rejection when
-unfolding repeats the alias before reaching a data or function
-type, as in `typename Foo = forall a. Foo`.
+`FrescoTypes` checks each recursive prefix using the cycle information
+from exposing its head. The guard check stops at the first data or
+function constructor, including a variant below a modality.
 
 #### 3.6 Base kinds
 
-A kind check in `core/frescoTypes.ml` accepts a `Base` variable as a
-monotype. `core/unify.ml` rejects modal types as monotypes. The case
-`typename M(a::MonoAbs) = a; typename B(b::Base) = M(b);` accepts
-`B([] Int)` and rejects `M([] Int)`. Make `Base` reject `Modal`
-and remove the case that narrows the body of a modal type to `Base`.
-Both aliases should reject `[] Int` and accept `Int`.
+`Types.Base` rejects non-identity modalities. It shares alias exposure
+with the unifier so adjacent modalities that cancel through an alias
+are reduced before the `Base`, `Mono` and `MonoAbs` checks. Narrowing
+skips interface arguments discarded by cancellation.
 
 #### 3.7 Explicit binders
 
-`core/desugarTypeVariables.ml` allows implicit binders based on the
-outer node of a signature. A leading `[]` can hide a `forall`, so a
-misspelt type variable can be bound
-implicitly. Check every source `sig` and `unsafe sig` for unbound
-type, row and presence variables. Use named binders for row tails
-that the signature used to quantify implicitly, such as the key
-row in `sortByBase`. Check anonymous holes such as the `%` in
-`sig f : forall a. (a, %) -> a`, which currently adds a second
-quantifier. Keep explicit binders scoped to their type.
-Migrate the signatures that relied on implicit variables in the
-body using the existing explicit type abstraction where needed.
+`DesugarTypeVariables` checks source signatures and aliases for unbound
+type, row and presence variables and anonymous holes. A modality keeps
+the surrounding type variable scope. Explicit universal binders are
+scoped to their type. The migrated library signatures name previously
+implicit row tails, and bodies that refer to those variables use
+explicit type abstraction where needed.
 
 #### 3.8 Lock access and freezing
 
-`Fresco.variable` can instantiate a variable before checking access.
-`FrescoContext.access` also looks under `ForAll` and can move
-quantifiers in its fallback.
-Apply Maetel's access rule first, including its absolute-type case.
-Apply explicit type arguments to the type obtained by access. Test
-binding an explicitly applied value outside a lock. Replace the
-unit tests that expect instantiation before access or transport
-through a quantifier. Make `~((f))` behave like `~f`.
+`FrescoContext.access` checks the binding before Fresco instantiates it.
+It keeps an absolute type and computes the residual for consecutive
+leading modalities. A quantifier ends that modal prefix. Implicit and
+explicit type application use the type obtained by access, as does
+freezing a variable through grouping parentheses.
 
 #### 3.9 Partial type information
 
-The checker can reject `same(~ident, ident)` while accepting
-`same(ident, ~ident)` for `fun same(x,y) { [x,y] }`. The existing
-`app(poly)(~id)` test
-also passes with freezing where reference case A12 uses `app(poly)(id)`.
-The migrated `map(head)(single(ids))` test adds explicit type
-arguments. Restore the original call once inference can use the
-types of both stages. Preserve known types from all the arguments,
-expected types and modal pattern binders before solving. A conversion
-of `<Reader(a)> Int` to `<Reader(b)> Int` already holds by `Abs`.
-The partial pass must leave the interface arguments alone in this
-case. Ask for an annotation if later constraints leave a choice.
+`Fresco.Partial` collects argument types after lock access and uses the
+callee's known domains to refine those types. It keeps known modalities
+and quantifiers when following curried applications and pattern
+binders. A residual supplied by a lock alone leaves an unsolved type
+variable open. `FrescoTypes` uses known types of frozen arguments for
+consistency checks, then prefers the expected result type to convertible
+argument hints. If the body can be absolute, full checking uses
+later type information to settle any interface argument constraints.
+Competing modal types that would fix the same instantiation need an
+annotation when the expected type leaves the choice open.
+
+Handler clause inference is tracked in [item 4.6](#46-handler-result-types).
 
 #### 3.10 Value restriction
 
-In `core/fresco.ml`, `adapt` can open an expected quantifier after
-ordinary checking has bypassed the value check.
-`(print("once") : forall a. ())` is accepted. An
-effectful block ending in a lambda can also receive an expected
-quantified result. Check eligibility where a prefix is introduced,
-while allowing computations to return values that already have
-such a type. In `core/typeSugar.ml`, the variant pattern cases
-assume assignments always match. Use the checked pattern and type
-when deciding eligibility. Keep the runtime match failure where the
-binding is allowed. Test eligible checked literals, including an
-empty list at `forall a. List a`, and reject escaping type variables.
+Fresco checks the value restriction when it introduces a modal or
+universal prefix. Branches and the final expression of an effectful
+block may return an existing prefixed type. A handler clause can return
+a value checked at the clause's expected type. A forwarding return
+keeps the type obtained from the handled computation. `TypeSugar` uses the
+checked binding pattern and type to decide whether matching can fail.
+For a variant pattern the type must have a closed row with the named
+tag as its sole possible alternative. The body of a type abstraction
+is checked with its bound variables in scope, and lowering keeps
+computations inside the same quantifier scope.
 
 #### 3.11 Record and comprehension typing
 
-The record upcast in `core/fresco.ml` checks named fields it omits,
-but can drop an open tail without checking its linearity. Check that a
-discarded tail is unrestricted. Test an upcast from `(n:Int | r)` to
-`(n:Int)` with `r::Row(Any,Any)` containing a linear callback.
-`check_field_names` already rejects duplicate update fields. See the
-[upcast and update rules](SPEC.md#upcasts-and-record-updates).
+Fresco and the IR checker apply the same unrestricted-tail check for
+record upcasts. Both compare function arguments by position after
+checking their count. They compare arguments from target to source
+and the result from source to target.
 
-The function upcast in `core/fresco.ml` and the IR subtype check in
-`core/irCheck.ml` use record width checks on argument lists. They accept
-an upcast from `Int -> Int` to `(Int, Int) -> Int`. Calling the result
-with two arguments raises `Invalid_argument("List.fold_right2")`.
-Require equal arity and compare each corresponding argument from target
-to source and the result from source to target. Keep the existing arrow
-linearity check. Evaluation returns the original function value.
-The probe at `25b07c25` failed with and without strict IR checking.
-
-Preserve inherited quantifiers when projecting or extending a record.
-Pass the expected element type into list comprehensions. See
-[item 5.7](#57-record-and-comprehension-lowering) for lowering.
+Record projection and extension keep quantifiers around inherited
+field types. Lowering instantiates the base with its own type variables
+before projecting each inherited field and binds those variables again
+on each field. It evaluates the base once before the new fields.
+List comprehensions check their body against the known list type.
+The regressions run with frontend rechecking and strict IR checking.
+See [item 5.7](#57-record-and-comprehension-lowering) for integration.
 
 #### 3.12 Absolute field presences
 
@@ -350,10 +322,8 @@ and lowering receives a record row. `Fresco.record_fields` still
 converts an open record as a whole.
 
 See the [extension rule](SPEC.md#modal-record-extension) and the
-[milestone checks](PLAN.md#milestone-312-checks). General quantified
-record projection and extension remain under
-[3.11](#311-record-and-comprehension-typing) and
-[5.7](#57-record-and-comprehension-lowering).
+[milestone checks](PLAN.md#milestone-312-checks). See
+[3.11](#311-record-and-comprehension-typing) for quantified records.
 
 ### Milestone 4 follow-up
 
@@ -438,13 +408,10 @@ REPL inputs. Preserve the previous scope and registry on failure.
 
 #### 5.7 Record and comprehension lowering
 
-Carry the checked types of quantified record projections and extensions
-through lowering. Keep the expected element type of a list comprehension,
-including its modalities and quantifiers, through frontend rechecking.
-Add a passing case that explicitly instantiates a quantified record
-before extending it under the `Presence(Abs)` rule. Item 3.12 already
-covers rejection when the record has yet to be instantiated.
-See [item 3.11](#311-record-and-comprehension-typing) for source checking.
+Item [3.11](#311-record-and-comprehension-typing) includes lowering and
+strict checks for the checked record and comprehension types, including
+explicit instantiation before extension under the `Presence(Abs)` rule.
+Repeat these checks after the remaining integration changes.
 
 #### 5.8 Linear lists
 

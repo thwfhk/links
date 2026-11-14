@@ -150,46 +150,50 @@ new inference path is completed with its library dependencies.
   global bindings, modules and imports. Update pattern typing and the
   rules for lists, tuples, records, variants and recursive types so that
   modal dependencies survive storage, projection and matching.
-- [ ] **3.5** Fix recursive `Abs` checks so they follow the types of the
-  fields and respect enclosing modalities. Use the same field requirements
-  when checking and narrowing kinds. Test absolute and ambient callback
-  fields, including a recursive reference whose arguments change.
+- [x] **3.5** (`141ef72d`) Fix recursive `Abs` checks so they follow the
+  field types and respect enclosing modalities. Use the same field
+  requirements when checking and narrowing kinds. Test absolute and
+  ambient callback fields, including a recursive reference whose
+  arguments change.
   Apply the [recursive type rule](SPEC.md#recursive-types). Accept a
   `mu` type under `[]` when its body reaches a variant. Keep the
   existing rejection of cycles through aliases, quantifiers and
   modalities alone.
-- [ ] **3.6** Reject types with a non-identity modality at `Base`.
-  Test direct and indirect uses through aliases at `Base`, `Mono` and
-  `MonoAbs`. Retain the existing checks on primitive types, row tails
-  and field presences.
-- [ ] **3.7** Require explicit universal binders in source signatures.
+- [x] **3.6** (`75356d76`, `2e77710f`) Reject types with a non-identity
+  modality at `Base`. Test direct and indirect uses through aliases at
+  `Base`, `Mono` and `MonoAbs`. Retain the existing checks on primitive
+  types, row tails and field presences.
+- [x] **3.7** (`4d94622c`) Require explicit universal binders in source signatures.
   Test type, row and presence variables, holes, leading modalities and
   lexical references through nested `forall`. Update the default and
   FreezeML preludes, standard library, active examples and fixtures in
   the same commit.
-- [ ] **3.8** Apply Maetel's variable access rule before
+- [x] **3.8** (`77d1ffee`) Apply Maetel's variable access rule before
   instantiation. Use consecutive leading modalities for the residual.
   Test access at a still-bound quantifier, absolute access, and explicit
   type application on both sides of a lock. Make grouped frozen variables
   behave like `~x`.
-- [ ] **3.9** Use all available partial type information before fixing
-  polymorphic or modal instantiation. Test argument order, curried
-  applications and modal pattern binders. Keep modality conversion
+- [x] **3.9** (`77d1ffee`) Use all available partial type information
+  before fixing polymorphic or modal instantiation. Test argument order,
+  curried applications and modal pattern binders. Keep modality conversion
   independent of constraint order and ask for an annotation when the
-  available constraints leave a choice. Restore the FreezeML test for
+  available constraints leave a choice. Use known frozen argument
+  types before checking conversions. Restore the FreezeML test for
   `map(head)(single(ids))` without explicit type arguments.
-- [ ] **3.10** Check the value restriction on every path that introduces
-  a quantifier or modality. Cover effectful computations, failing binding
-  patterns, and computations that return an already-polymorphic or modal
-  value. Check that annotation variables cannot escape.
-- [ ] **3.11** Preserve known quantifiers during record projection and
-  extension, and preserve expected element types in list comprehensions.
+- [x] **3.10** (`3557f45d`, `d93cf72f`) Check the value restriction on
+  every path that introduces a quantifier or modality. Cover effectful
+  computations, failing binding patterns, and computations that return
+  an already-polymorphic or modal value. Check that annotation variables
+  cannot escape.
+- [x] **3.11** (`2abeefb8`) Preserve known quantifiers during record
+  projection and extension, and preserve expected element types in list
+  comprehensions.
   Test extending a quantified record with a `Presence(Abs)` field
   after explicit instantiation.
   Require a discarded record tail in an upcast to be unrestricted.
   Require matching argument counts in function upcasts. Test an accepted
   upcast with matching counts and a rejection with different counts.
-  Run the corresponding lowering checks in 5.7.
+  Run strict lowering checks here and repeat them after integration in 5.7.
 - [x] **3.12** (`d48a31fb`) Preserve a field with `Presence(Abs)` when extending a
   [closed modal record](SPEC.md#modal-record-extension). Cover a field
   that is absent or present, a presence without an `Abs` bound and a
@@ -425,19 +429,35 @@ The first implementation is complete on `small-met`. The native compiler
 uses Fresco for files, expressions and REPL sentences. The [migration
 inventory](MIGRATION.md) records the retained and deferred cases.
 
-Item 3.12 is complete. The reviewed follow-up decisions are in
-[SPEC.md](SPEC.md). The [implementation notes](IMPL.md#follow-up-review)
-record the cases and planned fixes. The user authorised sequential
-implementation. The milestone 2 follow-up is complete on `small-met`.
-The coordinating chat reviews the handover before milestone 3 starts
-at item 3.5. No cross-stage dependency blocks milestone 3. Item 5.5
-still covers interface names across file inputs and preludes, and
-interface signatures in local modules.
+The milestone 2 and 3 follow-ups are complete on `small-met`. The
+coordinating chat reviews the handover before the milestone 4 chat starts
+at item 4.5. There are no blockers for milestone 4. Run the affected
+handler, effect annotation and native suites with typed frontend
+rechecking. Item 4.6 covers partial inference from handler operation
+clauses. Item 5.5 covers interface names across file inputs and preludes,
+and interface signatures in local modules. Item 5.7 repeats the strict
+record and comprehension checks after integration. Complete 6.4 after
+the remaining items in milestones 4 and 5.
 
-Continue through the remaining items in milestones 3, 4 and 5 in order,
-then complete 6.4.
-For milestone 4, run the affected handler, effect annotation and
-native suites with typed frontend rechecking.
+### Milestone 3 follow-up checks
+
+The combined checks used `d93cf72f` and OCaml 5.4.0. Logs are in
+`/private/tmp/smalllinks-met-3-follow-up.iTO12K/`. Independent review
+covered lock access, argument order, the value restriction, kind
+checks and quantified record lowering. Review fixes preserved the type
+of frozen arguments, the evaluation of the record base, and introduction
+within an eligible handler clause.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make` for the intermediate commits `77d1ffee` and `3557f45d`, and `make all-ci` for `d93cf72f` | Passed. | `77d1ffee-build.log`, `3557f45d-build.log`, `reviewed-ci-build.log` |
+| `make tests` | 1,070 passed across 41 suites. Two existing pattern cases were ignored. All four scripts passed, covering the REPL, print and reparse, and example registration. | `reviewed-tests.log` |
+| `./test-harness` on the affected suites listed under [Checks](#checks) | Passed. `handlers` passed 118, `effect_annotations` 61, `polymorphism` 66, `freezeml` 67, `records` 39, `typed_ir` 30 and `typecheck_examples` 34. | `reviewed-<suite>.log` |
+| `opam exec -- ./run-tests unit-tests` | All 101 passed. | `reviewed-unit-tests.log` |
+| Handler aggregate with frontend rechecking and strict IR checks | All nine assertions passed. | `reviewed-strict-handlers.log` |
+| `./links -e`, file execution with an import and `--set=typecheck_only=true` | Passed. | `reviewed-entry-points.log` |
+| `opam exec -- dune install --profile=ci --prefix="$prefix" links` and `tests/check-install.sh "$prefix/bin/linx"` | Passed. The installed interpreter also ran a modal handler and an explicitly polymorphic function outside the checkout. | `reviewed-install.log`, `reviewed-install-check.log`, `reviewed-install-examples.log` |
+| `make rule-check`, `git diff --check`, the document check and the `rg` tab scan | Passed. The `rg` scan used the tabs rule's file patterns because GNU find was unavailable. | `reviewed-rule-check.log`, `reviewed-diff-check.log`, `reviewed-docs.log`, `verified-tabs.log` |
 
 ### Milestone 2 follow-up checks
 
