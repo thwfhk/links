@@ -113,10 +113,7 @@ object (o : 'self_type)
         let tyargs = o#add_extras name tyargs in
           super#phrasenode (UnaryAppl ((tyargs, UnaryOp.Name name), e))
     (* HACK: manage the lexical scope of extras *)
-    | Escape _ as e ->
-        let (o, e, t) = super#phrasenode e in
-          (o#with_extra_env extra_env, e, t)
-    | Block _ as e ->
+    | (Escape _ | Block _ | Iteration _) as e ->
         let (o, e, t) = super#phrasenode e in
           (o#with_extra_env extra_env, e, t)
     | e -> super#phrasenode e

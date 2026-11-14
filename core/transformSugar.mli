@@ -51,7 +51,7 @@ object ('self)
   method binop           : BinaryOp.t -> 'self * BinaryOp.t * Types.datatype
   method constant        : Constant.t -> 'self * Constant.t * Types.datatype
   method funlit          : funlit -> 'self * funlit * Types.datatype
-  method iterpatt        : iterpatt -> 'self * iterpatt
+  method iteration_generators : iterpatt list -> 'self * (iterpatt * Types.datatype) list
 
   method quantifiers     : SugarQuantifier.t list -> 'self * SugarQuantifier.t list
   method backup_quantifiers : Utility.IntSet.t

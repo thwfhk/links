@@ -114,11 +114,10 @@ object (o : 'self_type)
       (Sugartypes.phrase list * Sugartypes.Pattern.with_pos list * Name.t list *
          Types.datatype list) =
     fun qs ->
-      let o, (es, ps, xs, ts) =
+      let o, qs = o#iteration_generators qs in
+      let es, ps, xs, ts =
         List.fold_left
-          (fun (o, (es, ps, xs, ts)) (p, e) ->
-             let (o, e, t) = o#phrase e in
-             let (o, p) = o#pattern p in
+          (fun (es, ps, xs, ts) ((p, e), t) ->
              let modality, list = FrescoContext.prefix t in
              let item = TypeUtils.element_type list in
              let element_type = FrescoContext.carry modality item in
@@ -126,9 +125,9 @@ object (o : 'self_type)
                else SourceCode.WithPos.with_node e (ListElements e) in
              let var = Utility.gensym ~prefix:"_for_" () in
              let xb = binder ~ty:element_type var in
-             o, (e::es, with_dummy_pos (Pattern.As (xb, p))::ps,
-                 var::xs, element_type::ts))
-          (o, ([], [], [], []))
+             (e::es, with_dummy_pos (Pattern.As (xb, p))::ps,
+              var::xs, element_type::ts))
+          ([], [], [], [])
           qs
       in
         o, (List.rev es, List.rev ps, List.rev xs, List.rev ts)

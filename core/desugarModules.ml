@@ -273,6 +273,14 @@ and desugar ?(toplevel=false) ?names renamer imports (scope' : Scope.t) =
         let bs'= visitor#bindings bs in
         let body' = visitor#phrase body in
         Block (bs', body')
+      | Iteration (generators, body, where, orderby) ->
+        let sources = List.map (fun (pat, source) -> pat, self#phrase source) generators in
+        let visitor = self#clone in
+        let generators = List.map (fun (pat, source) -> visitor#pattern pat, source) sources in
+        let body = visitor#phrase body in
+        let where = Option.map visitor#phrase where in
+        let orderby = Option.map visitor#phrase orderby in
+        Iteration (generators, body, where, orderby)
       | Var name ->
        (* Must be resolved. *)
         Var (Scope.Resolve.var name scope)

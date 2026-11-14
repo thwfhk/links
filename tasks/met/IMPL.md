@@ -560,6 +560,13 @@ scope and requires their types to be unrestricted. It keeps all source
 uses in the comprehension's usage count, so a nested comprehension
 also reports its free uses to the enclosing check.
 
+#### 5.17 Generator scope
+
+The module resolver and typed frontend passes visit the generator
+sources before binding any generator patterns. The patterns extend a
+scope shared by the body, filter and sort keys. The lowering used for
+the generator sources still nests the same list callbacks.
+
 ### Deferred optimisation issues
 
 Dead-definition elimination can remove unused calls to `crypt`, `chr`

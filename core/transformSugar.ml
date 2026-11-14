@@ -228,7 +228,8 @@ class transform (env : Types.typing_environment) =
             (o, RangeLit (e1, e2), Types.make_list_type Types.int_type)
       | Iteration (gens, body, cond, orderby) ->
           let envs = o#backup_envs in
-          let (o, gens) = listu o (fun o -> o#iterpatt) gens in
+          let o, gens = o#iteration_generators gens in
+          let gens = List.map fst gens in
           let (o, body, t) = o#phrase body in
           let (o, cond, _) = option o (fun o -> o#phrase) cond in
           let (o, orderby, _) = option o (fun o -> o#phrase) orderby in
@@ -490,11 +491,14 @@ class transform (env : Types.typing_environment) =
         ~f_pos:(fun o v -> o, v)
         ~f_node:(fun o v -> o#patternnode v)
 
-    method iterpatt : iterpatt -> ('self_type * iterpatt) =
-      fun (p, e) ->
-        let (o, e, _) = o#phrase e in
-        let (o, p) = o#pattern p in
-        (o, (p, e))
+    method iteration_generators : iterpatt list -> ('self_type * (iterpatt * Types.datatype) list) =
+      fun generators ->
+        let sources = List.map (fun (pat, source) ->
+          let _, source, typ = o#phrase source in
+          (pat, source), typ) generators in
+        listu o (fun o ((pat, source), typ) ->
+          let o, pat = o#pattern pat in
+          o, ((pat, source), typ)) sources
 
     method funlit : funlit -> ('self_type * funlit * Types.datatype) =
       fun f ->

@@ -169,8 +169,24 @@ for (x <- [1,2], y <- [true, false], z <- ["foo", "bar"]) [(x,y,z)]
 stdout : [(1, true, "foo"), (1, true, "bar"), (1, false, "foo"), (1, false, "bar"), (2, true, "foo"), (2, true, "bar"), (2, false, "foo"), (2, false, "bar")] : List (Int, Bool, String)
 
 Generator sources use the scope outside the comprehension
-var x = 42; for (x <- [1], y <- [x]) [x + y]
-stdout : [43] : List Int
+var xs = [40,42]; var ys = for (xs <- [2,1], y <- xs) where (xs + y <= 43) orderby (xs + y) [xs + y]; (ys,xs)
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : ([41, 42, 43], [40, 42]) : (List Int, List Int)
+
+A nested generator source uses the scope outside its comprehension
+var xs = [30]; for (xs <- [[40]]) (for (xs <- [1], y <- (for (z <- xs) [z + 1])) [xs + y])
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : [42] : List Int
+
+Later generator sources run for each combination from earlier sources
+for (x <- { print("A"); [1,2] }, y <- { print("B"); [10,20] }, z <- { print("C"); [100] }) [x + y + z]
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : ABCCBCC[111, 121, 112, 122] : List Int
+
+An empty source skips the later generator
+for (x <- { print("A"); [1,2] }, y <- { print("B"); ([] : List Int) }, z <- { print("C"); [100] }) [x + y + z]
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : ABB[] : List Int
 
 A generator cannot see a previous generator's binder
 for (x <- [1], y <- [x]) [x + y]

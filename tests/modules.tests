@@ -34,6 +34,11 @@ Open still allows fully-qualified names to be used
 filemode : true
 stdout : "hello" : String
 
+Generator patterns are local to the comprehension body, filter and sort keys
+module Values { var xs = [40]; } open Values; var ys = for (xs <- [1], y <- xs, z <- Values.xs) [xs + y + z]; (ys,xs)
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : ([81], [40]) : (List Int, List Int)
+
 Opened module does not shadow bindings after opening
 ./tests/modules/basic-open-shadow.links
 filemode : true

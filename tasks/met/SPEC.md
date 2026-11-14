@@ -1333,6 +1333,8 @@ List comprehensions use the bundled `concatMap`, `map` and `sortByBase`
 helpers regardless of which prelude is selected. Built-in `for` works
 with an empty prelude or a custom prelude that defines no list helpers.
 Explicit calls to these names follow ordinary lexical lookup.
+Every generator source uses the scope outside the comprehension. The
+body, filter and sort keys use the names bound by the generator patterns.
 The first generator source runs once. A later source runs once for each
 combination of earlier elements and is skipped if there are none.
 Only the first source may use an outer linear binding.
