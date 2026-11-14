@@ -241,8 +241,9 @@ unit, tuples and a type in grouping parentheses.
 empty row, alternatives separated by `|`, and a final `| r` row tail.
 
 Use `=>` for an operation signature in an interface declaration or a
-handler clause annotation. A `typename` declaration, function signature,
-or other value type with a `=>` arrow is rejected.
+parenthesised handler clause annotation. Both forms can have leading
+quantifiers. A `typename` declaration, function signature or other
+value type with a `=>` arrow is rejected.
 
 An empty argument list is `()`. Empty entries give `[]` and `<>`.
 `<Reader |>` masks one `Reader` instance; `<Reader, Reader |>` masks

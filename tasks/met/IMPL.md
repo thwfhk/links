@@ -203,15 +203,15 @@ The follow-up notes build on the review of `98d39ac8`. The
 
 #### 2.6 Syntax
 
-`core/parser.mly` uses the general datatype grammar for `=>` and
-accepts list and modal prefixes as bare list elements.
-Give operation signatures their own grammar while keeping quantified
-handler clause annotations. Supplying `() => Int` to a type alias
-with a `Base` parameter reaches an internal error in `core/types.ml`.
-Reject it in the parser and make `Types.Base` reject an operation
-signature normally if one reaches the kind check. Use a list-element
-production for atomic or grouped types. Check both printers and the
-migrated library and example types.
+`core/parser.mly` gives operation signatures their own production for
+interface members and parenthesised handler clause annotations. Both
+positions accept explicit quantifiers. `Types.Base` returns a kind
+mismatch if an operation signature reaches the kind check.
+
+The list-element production accepts atomic and grouped types. The
+unary arrow domain also accepts list and modal prefixes. Both type
+printers use the same grouping check on the type they print, including
+explicit `mu` binders and nested lists.
 
 #### 2.7 Interface names and printing
 

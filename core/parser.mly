@@ -453,7 +453,7 @@ effect_interface:
         interface_id = None; interface_params = $3; interface_members = $5 }) }
 
 effect_member:
-| constructor_name COLON datatype SEMICOLON
+| constructor_name COLON operation_signature SEMICOLON
     { { member_name = $1; member_id = None; member_signature = $3; member_type = None } }
 
 (* Lists of quantifiers in square brackets denote type abstractions *)
@@ -705,7 +705,7 @@ just_datatype:
 | datatype EOF                                                 { $1 }
 
 datatype:
-| mu_datatype | straight_arrow | fat_arrow    { with_pos $loc $1 }
+| mu_datatype | straight_arrow                                 { with_pos $loc $1 }
 
 straight_arrow:
 | parenthesized_datatypes RARROW datatype                      { Datatype.AmbientArrow (dl_unl, $1, $3) }
@@ -713,8 +713,10 @@ straight_arrow:
 | unary_domain RARROW datatype                                 { Datatype.AmbientArrow (dl_unl, [$1], $3) }
 | unary_domain LOLLI datatype                                  { Datatype.AmbientArrow (dl_lin, [$1], $3) }
 
-fat_arrow:
-| parenthesized_datatypes FATRARROW datatype                   { Datatype.Operation ($1, $3) }
+operation_signature:
+| parenthesized_datatypes FATRARROW datatype                   { with_pos $loc (Datatype.Operation ($1, $3)) }
+| FORALL varlist DOT operation_signature                       { with_pos $loc (Datatype.Forall ($2, $4)) }
+| LPAREN operation_signature RPAREN                            { with_pos $loc (WithPos.node $2) }
 
 mu_datatype:
 | MU VARIABLE DOT mu_datatype                                  { Datatype.Mu (named_typevar $2 `Rigid, with_pos $loc($4) $4) }
@@ -732,12 +734,14 @@ primary_datatype_pos:
 | primary_datatype                                             { with_pos $loc $1 }
 
 primary_datatype:
+| list_element | prefixed_datatype                              { $1 }
+
+list_element:
 | parenthesized_datatypes                                      { match $1 with
                                                                    | [] -> Datatype.Unit
                                                                    | [n] -> WithPos.node n
                                                                    | ts  -> Datatype.Tuple ts }
-| data_row_datatype                                             { $1 }
-| atomic_datatype                                               { $1 }
+| atomic_datatype                                              { $1 }
 
 data_row_datatype:
 | LPAREN rfields RPAREN                                        { Datatype.Record $2 }
@@ -747,12 +751,12 @@ data_row_datatype:
     { let syntax, tail = $3 in open_data_row $loc $4 syntax tail }
 
 unary_domain:
-| atomic_datatype                                              { with_pos $loc $1 }
-| data_row_datatype                                             { with_pos $loc $1 }
+| atomic_datatype | prefixed_datatype                           { with_pos $loc $1 }
 
 atomic_datatype:
 | type_var                                                     { $1 }
 | kinded_type_var                                              { $1 }
+| data_row_datatype                                            { $1 }
 | CONSTRUCTOR                                                  { let open Datatype in
                                                                  match $1 with
                                                                    | "Bool"    -> Primitive Primitive.Bool
@@ -766,7 +770,9 @@ atomic_datatype:
 | CONSTRUCTOR LPAREN type_arg_list RPAREN                      { Datatype.TypeApplication ($1, $3) }
 | qualified_type_name                                          { Datatype.QualifiedTypeApplication ($1, []) }
 | qualified_type_name LPAREN type_arg_list RPAREN              { Datatype.QualifiedTypeApplication ($1, $3) }
-| LISTNAME primary_datatype_pos                                { Datatype.List $2 }
+
+prefixed_datatype:
+| LISTNAME list_element                                       { Datatype.List (with_pos $loc($2) $2) }
 | modality primary_datatype_pos                                { Datatype.Modal ($1, $2) }
 
 modality:
@@ -1004,7 +1010,7 @@ pattern:
 
 effect_pattern:
 | typed_effect_pattern                                         { $1 }
-| typed_effect_pattern COLON primary_datatype_pos              { with_pos $loc (Pattern.HasType ($1, datatype $3)) }
+| typed_effect_pattern COLON LPAREN operation_signature RPAREN  { with_pos $loc (Pattern.HasType ($1, datatype $4)) }
 
 typed_effect_pattern:
 | LT resumable_operation_pattern GT                            { $2 }

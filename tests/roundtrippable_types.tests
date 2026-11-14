@@ -18,3 +18,23 @@ stdout : fun : [Rec] (() -> ())
 A pure failure can use the empty context
 fun f() { error("") } f
 stdout : fun : [] (() -> _)
+
+Nested list and modal element types retain parentheses with the roundtrip printer
+sig f : (List (List ([] (Int -> Int)))) -> List (List ([] (Int -> Int))) fun f(xs) { xs } ~f
+args : --set=types_pretty_printer_engine=roundtrip
+stdout : fun : [] ((List (List ([] ((Int) -> Int)))) -> List (List ([] ((Int) -> Int))))
+
+Nested list and modal element types retain parentheses with the old printer
+sig f : (List (List ([] (Int -> Int)))) -> List (List ([] (Int -> Int))) fun f(xs) { xs } ~f
+args : --set=types_pretty_printer_engine=old
+stdout : fun : [] ((List (List ([] ((Int) -> Int)))) -> List (List ([] ((Int) -> Int))))
+
+Recursive list element types retain parentheses with the roundtrip printer
+sig f : () -> List (mu t. (|Leaf|More:t|)) fun f() { [] } ~f
+args : --set=types_pretty_printer_engine=roundtrip
+stdout : fun : [] (() -> List (mu a.(|Leaf|More:a|)))
+
+Recursive list element types retain parentheses with the old printer
+sig f : () -> List (mu t. (|Leaf|More:t|)) fun f() { [] } ~f
+args : --set=types_pretty_printer_engine=old
+stdout : fun : [] (() -> List (mu a . (|Leaf|More:a|)))

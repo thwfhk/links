@@ -427,13 +427,28 @@ inventory](MIGRATION.md) records the retained and deferred cases.
 
 Item 3.12 is complete. The reviewed follow-up decisions are in
 [SPEC.md](SPEC.md). The [implementation notes](IMPL.md#follow-up-review)
-record the cases and planned fixes. Implementation of the remaining
-items is paused pending the user's instruction to proceed.
+record the cases and planned fixes. The user authorised sequential
+implementation. Items 2.6 and 2.7 are in progress on `small-met`.
 
-After approval, start with 2.6 and 2.7. Continue through the remaining
-items in milestones 3, 4 and 5 in order, then complete 6.4.
+The coordinating chat reviews each handover before starting the next
+stage. Continue through the remaining items in milestones 3, 4 and 5
+in order, then complete 6.4.
 For milestone 4, run the affected handler, effect annotation and
 native suites with typed frontend rechecking.
+
+### Milestone 2 follow-up checks
+
+Logs are in `/private/tmp/smalllinks-met-12.iA9tXw/`. The first check
+used `010c0f87` with the 2.6 changes and OCaml 5.4.0.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make` | Passed. | `make-2.6.log` |
+| `./test-harness tests/modal_syntax.tests` and `./test-harness tests/roundtrippable_types.tests` | 33 and 9 passed. | `modal-syntax-2.6.log`, `2.6-roundtrippable_types.log` |
+| `./test-harness` on `handlers`, `effect_annotations`, `polymorphism` and `typecheck_examples` | 118, 40, 56 and 34 passed. | `2.6-<suite>.log` |
+| `tests/roundtrippable_types.testscript` from `010c0f87` | 12 passed. | `roundtrip-syntax-2.6.log` |
+| `make rule-check` | Passed. GNU find was unavailable for the tabs rule. The same file patterns passed with `rg`. | `2.6-rule-check.log`, `2.6-tabs.log` |
+| `git diff --check` for the 2.6 files | Passed. | `2.6-diff-check.log` |
 
 ### Historical check records
 

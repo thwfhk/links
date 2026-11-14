@@ -704,7 +704,7 @@ module Base : Constraint = struct
         | ForAll ([], t) -> super#type_satisfies vars t
         (* Effect *)
         | Effect _ as t -> super#type_satisfies vars t
-        | Operation _ -> failwith "TODO types.ml/766"
+        | Operation _ -> false
         (* Row *)
         | Row _ as t -> super#type_satisfies vars t
         (* Presence *)
@@ -1855,6 +1855,13 @@ end
 
 type names = (tid, string * Vars.spec) Hashtbl.t
 
+let rec list_element_needs_parentheses = function
+  | Function _ | Lolli _ | AmbientFunction _ | Modal _ | Operation _
+  | ForAll _ | Recursive _ -> true
+  | Application (constructor, _) -> Abstype.equal constructor list
+  | Meta point -> list_element_needs_parentheses (Unionfind.find point)
+  | _ -> false
+
 module type PRETTY_PRINTER = sig
   val string_of_datatype : Policy.t -> names -> datatype -> string
   val string_of_type_arg : Policy.t -> names -> type_arg -> string
@@ -2046,13 +2053,8 @@ struct
             end
          | Application (l, [(PrimaryKind.Type, elem)]) when Abstype.equal l list ->
             let elem_str = datatype context p elem in
-            begin match concrete_type elem with
-            | Function _ | Lolli _ | AmbientFunction _ | Modal _ | Operation _ | ForAll _ | Meta _
-              when String.contains elem_str ' ' -> "List (" ^ elem_str ^ ")"
-            | Application (inner, _) when Abstype.equal inner list ->
-                "List (" ^ elem_str ^ ")"
-            | _ -> "List " ^ elem_str
-            end
+            if list_element_needs_parentheses elem then "List (" ^ elem_str ^ ")"
+            else "List " ^ elem_str
          | Application (s, []) -> Abstype.name s
          | Application (s, ts) ->
             let vars = String.concat "," (List.map (type_arg context p) ts) in
@@ -2735,12 +2737,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           match p with
           | (abstp, [(PrimaryKind.Type, elem)]) when Abstype.equal abstp list ->
              StringBuffer.write buf "List ";
-             let grouped = match concrete_type elem with
-               | Function _ | Lolli _ | AmbientFunction _ | Modal _ | Operation _ | ForAll _ -> true
-               | Application (inner, _) -> Abstype.equal inner list
-               | Meta point -> (match Unionfind.find point with Recursive _ -> true | _ -> false)
-               | _ -> false
-             in
+             let grouped = list_element_needs_parentheses elem in
              if grouped then StringBuffer.write buf "(";
              Printer.apply datatype ctx elem buf;
              if grouped then StringBuffer.write buf ")"

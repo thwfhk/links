@@ -22,6 +22,43 @@ Unary arrow shorthand with record and variant domains
 typename RecordFn = [] ((n:Int) -> Int); typename VariantFn = [] ((|N:Int|) -> Int); 42
 stdout : 42 : Int
 
+Unary unrestricted and linear arrows
+sig first : List Int -> Int fun first(xs) { hd(xs) } sig inc : Int -@ Int linfun inc(x) { x + 1 } (first([42]), inc(41))
+stdout : (42, 42) : (Int, Int)
+
+List types with and without grouping parentheses
+var xs = [42] : List Int; xs : List(Int)
+stdout : [42] : List Int
+
+Grouped nested list, modal, unit, record and variant elements
+([[42]] : List (List Int), [42] : List ([] Int), [()] : List (), [(answer=42)] : List (answer:Int), [Answer(42)] : List (|Answer:Int|))
+stdout : ([[42]], [42], [()], [(answer = 42)], [Answer(42)]) : (List (List Int), List ([] (Int)), List (), List (answer:Int), List (|Answer:Int|))
+
+A nested list element needs parentheses
+typename Bad = List List Int;
+stderr : @.*Parse error:.*
+exit : 1
+
+An absolute list element needs parentheses
+typename Bad = List [] Int;
+stderr : @.*Parse error:.*
+exit : 1
+
+A relative list element needs parentheses
+typename Bad = List <> Int;
+stderr : @.*Parse error:.*
+exit : 1
+
+The effect keyword cannot be a variable name
+var effect = 42; effect
+stderr : @.*Parse error:.*
+exit : 1
+
+An effect interface needs at least one operation
+effect Empty { }
+stderr : @.*Parse error:.*
+exit : 1
+
 Duplicate names in an interface are rejected
 effect Reader { Ask : () => Int; Ask : () => Bool; }
 stderr : @.*Duplicate operation Ask.*
@@ -49,7 +86,45 @@ exit : 1
 
 An operation signature needs a fat arrow
 effect Reader { Ask : () -> Int; }
-stderr : @.*An operation signature for Ask must use `=>`\..*
+stderr : @.*Parse error:.*
+exit : 1
+
+A handler clause can have an operation signature
+effect Reader { Ask : () => Int; } handle(do Ask) { case <Ask => k> : (() => Int) -> k(42) }
+stdout : 42 : Int
+
+A handler clause can have a quantified operation signature
+effect Failure { Fail : forall a::Abs. () => a; } handle(if (do Fail) 0 else 1) { case <Fail => k> : (forall a::Abs. () => a) -> 42 }
+stdout : 42 : Int
+
+A handler clause annotation needs an operation signature
+effect Reader { Ask : () => Int; } handle(do Ask) { case <Ask => k> : (Int) -> k(42) }
+stderr : @.*Parse error:.*
+exit : 1
+
+A type alias cannot define an operation signature
+typename Bad = () => Int;
+stderr : @.*Parse error:.*
+exit : 1
+
+A type alias cannot take an operation signature argument
+typename BaseType(a::Base) = a; typename Bad = BaseType(() => Int);
+stderr : @.*Parse error:.*
+exit : 1
+
+A function signature cannot contain an operation signature
+sig f : () => Int fun f() { 42 } f()
+stderr : @.*Parse error:.*
+exit : 1
+
+A value annotation cannot contain an operation signature
+42 : () => Int
+stderr : @.*Parse error:.*
+exit : 1
+
+An operation result cannot be another operation signature
+effect Reader { Ask : () => (() => Int); }
+stderr : @.*Parse error:.*
 exit : 1
 
 Masks take interface names only
