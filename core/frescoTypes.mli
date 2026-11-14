@@ -15,6 +15,7 @@ val fresh : ?subkind:Subkind.t -> unit -> datatype
 (** Compare known type structure and solve monotype metavariables. *)
 val consistent : datatype -> datatype -> unit
 val equal : datatype -> datatype -> bool
+val unknown : datatype -> bool
 
 val transaction : (unit -> 'a) -> 'a
 val probe : (unit -> 'a) -> 'a
@@ -39,6 +40,10 @@ val complete_hint : type_arg -> type_arg
 (** Combine known portions of two hints, using the first type when their
     shapes conflict. The caller checks the resulting type. *)
 val merge_known : datatype -> datatype -> datatype
+
+(** Keep each observation of a parameter separately so the caller can compare
+    all observations before fixing a shared argument. *)
+val parameter_hints : Quantifier.t list -> frozen:bool -> datatype -> datatype -> datatype list list
 
 (** Apply explicit type arguments, keeping surrounding modalities. *)
 val apply : datatype -> type_arg list -> datatype

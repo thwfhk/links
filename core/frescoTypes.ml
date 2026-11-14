@@ -266,6 +266,12 @@ let merge_known = merge_hints Prefer_left RecIdSet.empty RecIdSet.empty
 let merge_instantiation_hints = merge_hints Prefer_prefixes RecIdSet.empty RecIdSet.empty
 let merge_required = merge_hints Prefer_required RecIdSet.empty RecIdSet.empty
 
+let parameter_hints quantifiers ~frozen source target =
+  let ids = List.fold_left (fun ids (id, _) -> IntSet.add id ids) IntSet.empty quantifiers in
+  let hints = collect_hints ~frozen ids TypeVarSet.empty RecIdSet.empty RecIdSet.empty
+      IntMap.empty source target in
+  List.map (fun (id, _) -> List.map snd (Option.value ~default:[] (IntMap.lookup id hints))) quantifiers
+
 let instantiate_with ~through_modal ?(expected = Not_typed) ?(required = Not_typed)
     ?(frozen = Not_typed) typ =
   let rec split seen quantifiers typ =

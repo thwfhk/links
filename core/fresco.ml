@@ -165,10 +165,6 @@ let operation_label (phrase : phrase) =
       Some (label, name, args)
   | _ -> None
 
-let interface_arguments (operation : EffectInterfaces.operation) expected =
-  let args, _ = FrescoTypes.instantiate ~expected (operation_scheme operation) in
-  List.map snd (ListUtils.take (List.length operation.EffectInterfaces.parameters) args)
-
 let instantiate_operation scheme arguments result =
   let instantiate result = FrescoTypes.instantiate ~expected:(operation_hint arguments result) scheme in
   match instantiate result with
@@ -198,21 +194,34 @@ let rec check_resumption_pattern (pattern : Pattern.with_pos) =
   | Pattern.As (_, pat) | Pattern.HasType (pat, _) -> check_resumption_pattern pat
   | _ -> error pattern.pos "Improper pattern matching on resumption"
 
-let annotated_resume_argument (resumption : Pattern.with_pos) (body : phrase) =
-  let rec binds name (pattern : Pattern.with_pos) = match pattern.node with
-    | Pattern.Variable binder -> name = Binder.to_name binder
-    | Pattern.As (binder, pat) -> name = Binder.to_name binder || binds name pat
-    | Pattern.HasType (pat, _) -> binds name pat
+let handler_interfaces interfaces clauses =
+  List.fold_left (fun handled (pattern, _) ->
+    let label, _, _, _ = operation_pattern pattern in
+    let EffectInterfaces.{ interface; parameters; _ } = lookup_operation pattern.pos interfaces label in
+    Interfaces.add interface parameters handled) Interfaces.empty clauses
+
+let identity_return cases =
+  let rec names env (pattern : Pattern.with_pos) = match pattern.node with
+    | Pattern.Variable binder -> Some (StringSet.add (Binder.to_name binder) env)
+    | Pattern.HasType (pattern, _) -> names env pattern
+    | Pattern.As (binder, pattern) -> names (StringSet.add (Binder.to_name binder) env) pattern
+    | _ -> None in
+  let rec aliases env (body : phrase) = match body.node with
+    | Var name -> StringSet.mem name env
+    | TupleLit [body] -> aliases env body
+    | Conditional (_, yes, no) -> aliases env yes && aliases env no
+    | Block (bindings, body) ->
+        let rec block env = function
+          | [] -> aliases env body
+          | { node = Val (pattern, (_, value), _, _); _ } :: rest when aliases env value ->
+              Option.fold ~none:false ~some:(fun env -> block env rest) (names env pattern)
+          | _ -> false in
+        block env bindings
     | _ -> false in
-  let rec annotation (value : phrase) = match value.node with
-    | TypeAnnotation (_, (_, Some typ)) -> typ
-    | Block ([], body) | TupleLit [body] -> annotation body
-    | _ -> Not_typed in
-  let rec argument (body : phrase) = match body.node with
-    | Block ([], body) | TupleLit [body] -> argument body
-    | FnAppl ({ node = Var name; _ }, value :: _) when binds name resumption -> annotation value
-    | _ -> Not_typed in
-  argument body
+  match cases with
+  | [] -> true
+  | [pattern, body] -> Option.fold ~none:false ~some:(fun env -> aliases env body) (names StringSet.empty pattern)
+  | _ -> false
 
 (* Partial inference uses the enclosing lock for its term environment and
    works on copies of flexible variables. *)
@@ -257,9 +266,12 @@ module Partial = struct
   let has_quantifiers typ =
     match snd (Context.prefix typ) with ForAll _ -> true | _ -> false
 
-  let carry modality typ =
+  let absolute typ =
     let _, complete = FrescoTypes.complete_hint (pk_type, typ) in
-    if Abs.type_satisfies complete then typ else Types.modal modality typ
+    Abs.type_satisfies complete
+
+  let carry modality typ =
+    if absolute typ then typ else Types.modal modality typ
 
   let function_type ?frozen arguments expected typ =
     let typ = instance ~expected:(function_hint arguments expected) ?frozen typ in
@@ -331,7 +343,7 @@ module Partial = struct
         result ~frozen arguments expected fn
     | FunLit (_, lin, NormalFunlit (groups, body), _) ->
         let rec lambda env hint = function
-          | [] -> infer interfaces env ~expected:hint body
+          | [] -> infer interfaces env ?ambient ~expected:hint body
           | patterns :: groups ->
               let arguments, output =
                 match snd (Context.prefix hint) with
@@ -379,7 +391,7 @@ module Partial = struct
           infer interfaces (bind_pattern env pattern typ) ?ambient ~expected body) cases in
         begin match results with [] -> hole | t :: ts -> List.fold_left agrees t ts end
     | Block (bindings, body) ->
-        let env = List.fold_left (bind interfaces) env bindings in
+        let env = List.fold_left (bind interfaces ?ambient) env bindings in
         infer interfaces env ?ambient ~expected ~frozen body
     | TAbstr (qs, body) -> Types.for_all (quantifiers qs, infer_here ~frozen:true body)
     | TAppl (body, args) when List.for_all (fun (_, arg) -> Option.is_some arg) args ->
@@ -414,28 +426,8 @@ module Partial = struct
         | _ -> hole
         end
     | Handle handler ->
-        let open EffectInterfaces in
-        let entries = List.fold_left (fun entries (pat, _) ->
-          let label, _, _, _ = operation_pattern pat in
-          let op = lookup_operation pat.pos interfaces label in
-          Interfaces.add op.interface (List.map (fun _ -> hole) op.parameters) entries
-        ) Interfaces.empty handler.sh_effect_cases in
-        let input = infer interfaces env handler.sh_expr in
-        let input = match input with
-          | Not_typed -> hole
-          | _ ->
-              let _, complete = FrescoTypes.complete_hint (pk_type, input) in
-              if Abs.type_satisfies complete then input
-              else Types.modal (extension (Interfaces.bindings entries)) input in
-        let env = Option.fold ~none:env ~some:(fun params ->
-          List.fold_left (fun env (pat, value) -> bind_pattern env pat (infer_here value)) env params.shp_bindings
-        ) handler.sh_descr.shd_params in
-        begin match handler.sh_value_cases with
-        | [] -> input
-        | first :: rest ->
-            let result (pat, body) = infer interfaces (bind_pattern env pat input) ?ambient ~expected body in
-            List.fold_left (fun first clause -> agrees first (result clause)) (result first) rest
-        end
+        let entries = handler_interfaces interfaces handler.sh_effect_cases |> Interfaces.map fresh_arguments in
+        handler_result interfaces env ?ambient entries expected handler
     | InfixAppl ((_, op), left, right) ->
         let left = infer_here left in
         let right = infer_here right in
@@ -451,25 +443,90 @@ module Partial = struct
         result [infer_here value] expected (find (UnaryOp.to_string op))
     | _ -> hole
 
-  and bind interfaces env binding =
+  and bind interfaces ?ambient env binding =
     match binding.node with
     | Val (pattern, (_, value), _, typ) ->
         let typ = match annotation typ with
           | Some typ -> copy typ
-          | None -> infer interfaces env value in
+          | None -> infer interfaces env ?ambient value in
         bind_pattern env pattern typ
     | Fun def ->
         let typ = match annotation def.fun_signature with
           | Some typ -> copy typ
           | None ->
               let _, fnlit = def.fun_definition in
-              infer interfaces env (with_node binding (FunLit (None, def.fun_linearity, fnlit, def.fun_location))) in
+              infer interfaces env ?ambient
+                (with_node binding (FunLit (None, def.fun_linearity, fnlit, def.fun_location))) in
         Env.bind (Binder.to_name def.fun_binder) typ env
     | Funs defs ->
         List.fold_left (fun env def ->
           let typ = Option.fold ~none:hole ~some:copy (annotation def.node.rec_signature) in
           Env.bind (Binder.to_name def.node.rec_binder) typ env) env defs
     | _ -> env
+
+  and handler_result interfaces env ?ambient entries expected handler =
+    let modality = extension (Interfaces.bindings entries) in
+    let input_expected =
+      if identity_return handler.sh_value_cases && (Interfaces.is_empty entries || absolute expected)
+      then expected else hole in
+    let input = infer_safely (fun () -> infer interfaces env ?ambient:(locked modality ambient)
+        ~expected:input_expected handler.sh_expr) in
+    let returned = if FrescoTypes.unknown input then hole else carry modality input in
+    let params = Option.fold ~none:[] ~some:(fun p -> p.shp_bindings) handler.sh_descr.shd_params in
+    let params = List.map (fun (pat, value) -> pat, infer_safely (fun () -> infer interfaces env ?ambient value)) params in
+    let env = List.fold_left (fun env (pat, typ) -> bind_pattern env pat typ) env params in
+    let clause env body = infer_safely (fun () -> infer interfaces env ?ambient ~expected body) in
+    let returns = match handler.sh_value_cases with
+      | [] -> [returned]
+      | cases -> List.map (fun (pat, body) -> clause (bind_pattern env pat returned) body) cases in
+    let operations = List.map (fun (pat, body) -> infer_safely (fun () ->
+      let label, args, k, _ = operation_pattern pat in
+      let op = lookup_operation pat.pos interfaces label in
+      let scheme = member_scheme op (Interfaces.find op.EffectInterfaces.interface entries) in
+      let qs, member = TypeUtils.split_quantified_type scheme in
+      let domains, result = operation_parts pat.pos (List.length args) member in
+      let env = List.fold_left2 bind_pattern env args domains in
+      let k_type = match handler.sh_descr.shd_depth with
+        | Deep -> arrow dl_unl (result :: List.map snd params) expected
+        | Shallow -> Types.modal modality (arrow dl_unl [result] input) in
+      let result = clause (bind_pattern env k k_type) body in
+      if TypeVarSet.disjoint (free_type_vars result) (TypeVarSet.add_quantifiers qs TypeVarSet.empty)
+      then result else hole)) handler.sh_effect_cases in
+    match List.filter (fun typ -> not (FrescoTypes.unknown (head typ))) (returns @ operations) with
+    | [] -> hole
+    | first :: rest -> List.fold_left join first rest
+
+  and infer_safely f =
+    try FrescoTypes.transaction f with Unify.Failure _ | Context.Error _ | Errors.Type_error _ -> hole
+
+  and fresh_arguments quantifiers =
+    List.map (fun (_, (_, kind)) -> fresh ~subkind:kind ()) quantifiers
+
+  and locked modality ambient =
+    Option.map (ModalEffects.apply modality) ambient
+
+  and join first second =
+    let combine first second =
+      if first = hole || second = hole then hole else
+      let merged = FrescoTypes.merge_known first second in
+      let compatible_hint typ =
+        let forward = FrescoTypes.merge_known typ merged in
+        let reverse = FrescoTypes.merge_known merged typ in
+        let _, left = FrescoTypes.complete_hint (pk_type, copy forward) in
+        let _, right = FrescoTypes.complete_hint (pk_type, copy reverse) in
+        FrescoTypes.consistent left right in
+      let compatible = FrescoTypes.probe (fun () ->
+        try
+          compatible_hint first;
+          compatible_hint second;
+          true
+        with Unify.Failure _ -> false) in
+      if compatible then merged else hole in
+    match Context.prefix first, Context.prefix second with
+    | (ModalEffects.Relative _, left), (ModalEffects.Relative _, right) ->
+        let body = combine left right in
+        if body <> hole && absolute body then body else combine first second
+    | _ -> combine first second
 
   let accessible_environment context =
     Context.environment context
@@ -514,59 +571,297 @@ module Partial = struct
         with Unify.Failure _ | Context.Error _ | Errors.Type_error _ -> hints in
     List.map2 argument arguments hints
 
-  (* These expressions evaluate their immediate children in the same ambient
-     context. A nested handler or a modal introduction may change which
-     instance an operation sees, so leave those to the full check. *)
-  let handler_hints interfaces context handled expected input =
-    let open EffectInterfaces in
-    let rec collect env expected hints phrase =
-      let try_hint gather =
-        match FrescoTypes.transaction gather with
-        | hints -> hints
-        | exception (Unify.Failure _ | Context.Error _ | Errors.Type_error _) -> hints in
-      match phrase.node with
-      | DoOperation ({ node = Operation label; _ }, arguments, _) ->
-          try_hint (fun () ->
+  type observation = Same_type | Provided | Expected
+
+  type instance_hint = {
+    interface : ModalEffects.Interface.t;
+    observation : observation;
+    arguments : datatype list list;
+  }
+
+  let operation_evidence EffectInterfaces.{ interface; parameters; scheme; _ } observation typ =
+    let arguments = FrescoTypes.parameter_hints parameters ~frozen:(observation = Same_type) scheme typ in
+    { interface; observation; arguments }
+
+  let operation_inputs op observation arguments result hints =
+    operation_evidence op observation (operation_hint arguments result) :: hints
+
+  let nested_argument_hint op hints domain arg typ =
+    let rec fixed_fields (value : phrase) = match value.node with
+      | TupleLit [value] | Block (_, value) -> fixed_fields value
+      | TupleLit _ | RecordLit _ | ListLit _ | ConstructorLit _ | Conditional _ -> false
+      | _ -> true in
+    if not (fixed_fields arg) || (match head domain with Meta _ -> true | _ -> false) then hints
+    else
+      let EffectInterfaces.{ interface; parameters; _ } = op in
+      let arguments = FrescoTypes.parameter_hints parameters ~frozen:true domain typ in
+      { interface; observation = Same_type; arguments } :: hints
+
+  (* Track the handled occurrences through locks independently of their types.
+     An occurrence at depth zero is the one selected by a do expression. *)
+  let shift modality tracked =
+    match modality with
+    | ModalEffects.Absolute _ -> Interfaces.empty
+    | ModalEffects.Relative (mask, added) ->
+        let tracked = List.fold_left (fun tracked interface ->
+          Interfaces.update interface (function
+            | Some depth when depth > 0 -> Some (depth - 1)
+            | _ -> None) tracked) tracked (ModalEffects.mask_entries mask) in
+        List.fold_left (fun tracked (interface, _) ->
+          Interfaces.update interface (Option.map succ) tracked)
+          tracked (ModalEffects.extension_entries added)
+
+  let rec collect interfaces ?resume ambient tracked env expected hints (phrase : phrase) =
+    let inspect ?(expected = hole) env phrase =
+      infer_safely (fun () -> infer interfaces env ?ambient ~expected phrase) in
+    let argument_hint env value =
+      let typ = inspect env value in
+      let modality, body = Context.prefix typ in
+      let _, complete = FrescoTypes.complete_hint (pk_type, body) in
+      if TypeSugar.is_generalisable value && not (frozen_argument value) &&
+         ModalEffects.is_identity modality &&
+         not (Abs.can_type_be complete)
+      then hole else typ in
+    let collect_here = collect interfaces ?resume ambient tracked in
+    let child_hints = ref hints in
+    let visit env expected child =
+      child_hints := collect_here env expected !child_hints child in
+    let in_lock modality env expected child =
+      let env = Env.map (carry modality) env in
+      child_hints := collect interfaces ?resume (locked modality ambient) (shift modality tracked)
+          env expected !child_hints child in
+    let visit_value env expected value =
+      let modality, _ = Context.prefix expected in
+      (* With an expected prefix, a value may be checked in another context.
+         Explicit introductions and function literals are handled below. *)
+      match value.node with
+      | FunLit _ | TypeAnnotation _ | ModalIntro _ | Checked _ -> visit env expected value
+      | _ when ModalEffects.is_identity modality || not (TypeSugar.is_generalisable value) ->
+          visit env expected value
+      | _ -> () in
+    let function_value env expected binding lin fnlit location =
+      let value = with_node binding (FunLit (None, lin, fnlit, location)) in
+      visit env expected value in
+    begin match phrase.node with
+    | DoOperation (label, args, _) ->
+        begin match operation_label label with
+        | None -> ()
+        | Some (_, label, _) ->
             let op = lookup_operation phrase.pos interfaces label in
-            if Interfaces.mem op.interface handled then
-              let args = List.map (infer interfaces env) arguments in
-              let values = interface_arguments op (operation_hint args expected) in
-              (op.interface, values) :: hints
-            else hints)
-      | FnAppl (fn, args) ->
-          try_hint (fun () ->
-            let arguments = List.map (infer interfaces env) args in
-            let expected_fn = function_hint arguments expected in
-            let fn = infer interfaces env ~expected:expected_fn ~frozen:true fn in
-            let _, fn = FrescoTypes.instantiate ~expected:expected_fn fn in
-            match Context.prefix fn with
-            | ModalEffects.Absolute required, AmbientFunction (_, domain, _) ->
-                let hints = Interfaces.fold (fun interface _ hints ->
-                  match ModalEffects.newest interface required with
-                  | Some args -> (interface, args) :: hints
-                  | None -> hints) handled hints in
-                let domains = tuple_parts phrase.pos (List.length args) domain in
-                List.fold_left2 (fun hints domain arg ->
-                  if TypeSugar.is_generalisable arg then hints else collect env domain hints arg
-                ) hints domains args
-            | _ -> hints)
-      | Block (bindings, body) ->
-          let env, hints = List.fold_left (fun (env, hints) binding ->
-            let hints = match binding.node with
-              | Val (_, (_, value), _, None) | Exp value -> collect env hole hints value
-              | _ -> hints in
-            let env = try bind interfaces env binding with
-              | Unify.Failure _ | Context.Error _ | Errors.Type_error _ -> env in
-            env, hints) (env, hints) bindings in
-          collect env expected hints body
-      | Conditional (test, yes, no) ->
-          let hints = collect env bool_type hints test in
-          let hints = collect env expected hints yes in
-          collect env expected hints no
-      | TupleLit [body] -> collect env expected hints body
-      | _ -> hints in
-    let env = Env.map copy (Context.environment context) in
-    List.rev (collect env expected [] input)
+            let argument_hints = List.map (argument_hint env) args in
+            if Interfaces.find_opt op.EffectInterfaces.interface tracked = Some 0 then begin
+              child_hints := operation_inputs op Provided argument_hints hole !child_hints;
+              child_hints := operation_inputs op Expected (List.map (fun _ -> hole) args) expected !child_hints;
+              let frozen = List.map2 (fun arg typ -> if frozen_argument arg then typ else hole) args argument_hints in
+              let hints = operation_inputs op Same_type frozen hole !child_hints in
+              let _, member = TypeUtils.split_quantified_type op.EffectInterfaces.scheme in
+              let domains, _ = operation_parts phrase.pos (List.length args) member in
+              child_hints := List.fold_left2 (fun hints domain (arg, typ) ->
+                nested_argument_hint op hints domain arg typ) hints domains (List.combine args argument_hints)
+            end;
+            let domains = infer_safely (fun () ->
+              let args = Option.bind ambient (ModalEffects.newest op.EffectInterfaces.interface) in
+              let scheme = Option.fold ~none:(operation_scheme op) ~some:(member_scheme op) args in
+              fst (operation_parts phrase.pos (List.length argument_hints)
+                (snd (instantiate_operation scheme argument_hints expected))) |> make_tuple_type) in
+            List.iteri (fun i arg ->
+              let expected = Option.bind (row_type domains) (fun row -> record_field row (string_of_int (i + 1))) in
+              visit_value env (Option.value ~default:hole expected) arg) args
+        end
+    | FnAppl (fn, args) ->
+        visit env hole fn;
+        let arguments = List.map (inspect env) args in
+        let fn_hint = function_hint arguments expected in
+        let callee = infer_safely (fun () -> infer interfaces env ?ambient ~frozen:true ~expected:fn_hint fn) in
+        Option.iter (fun (marker, op) ->
+          if snd (Context.prefix callee) == marker then match args with
+            | first :: _ ->
+                let observation = if frozen_argument first then Same_type else Provided in
+                let typ = argument_hint env first in
+                let hints = operation_inputs op observation [] typ !child_hints in
+                let _, member = TypeUtils.split_quantified_type op.EffectInterfaces.scheme in
+                let result = match head member with Operation (_, result) -> result | _ -> hole in
+                child_hints := nested_argument_hint op hints result first typ
+            | _ -> ()) resume;
+        let callee = infer_safely (fun () -> instance ~expected:fn_hint callee) in
+        let modality, body = Context.prefix callee in
+        Option.iter (fun ambient ->
+          match ModalEffects.transformation_arguments ~ambient modality ModalEffects.identity with
+          | None -> ()
+          | Some pairs ->
+              let occurrences = ModalEffects.extension_entries (ModalEffects.context_extension ambient) in
+              Interfaces.iter (fun interface depth ->
+                let instances = List.filter_map (fun (id, args) ->
+                  if ModalEffects.Interface.equal interface id then Some args else None) occurrences in
+                match List.nth_opt instances depth with
+                  | None -> ()
+                  | Some args ->
+                      let arguments = List.map (fun arg ->
+                        List.filter_map (fun (required, actual) ->
+                          if actual == arg && not (FrescoTypes.unknown (head required)) then Some required
+                          else None) pairs) args in
+                      child_hints := { interface; observation = Same_type; arguments } :: !child_hints) tracked) ambient;
+        let domains = match body with
+          | AmbientFunction (_, domain, _) ->
+              (try tuple_parts phrase.pos (List.length args) domain
+               with Errors.Type_error _ -> List.map (fun _ -> hole) args)
+          | _ -> List.map (fun _ -> hole) args in
+        List.iter2 (visit_value env) domains args
+    | FunLit (_, _, NormalFunlit (groups, body), _) ->
+        child_hints := collect_function interfaces ?resume ambient tracked env expected
+            !child_hints groups body
+    | Block (bindings, body) ->
+        let env = List.fold_left (fun env (binding : binding) ->
+          begin match binding.node with
+          | Val (pattern, (_, value), _, typ) ->
+              let expected = Option.value ~default:(FrescoPatterns.hint pattern) (annotation typ) in
+              visit_value env expected value
+          | Exp value -> visit env hole value
+          | Fun def ->
+              let _, fnlit = def.fun_definition in
+              let expected = Option.value ~default:hole (annotation def.fun_signature) in
+              function_value env expected binding def.fun_linearity fnlit def.fun_location
+          | Funs defs ->
+              let recursive = bind interfaces ?ambient env binding in
+              List.iter (fun def ->
+                let _, fnlit = def.node.rec_definition in
+                let expected = Option.value ~default:hole (annotation def.node.rec_signature) in
+                function_value recursive expected binding def.node.rec_linearity fnlit def.node.rec_location) defs
+          | _ -> ()
+          end;
+          try bind interfaces ?ambient env binding with
+          | Unify.Failure _ | Context.Error _ | Errors.Type_error _ -> env) env bindings in
+        visit env expected body
+    | Conditional (test, yes, no) ->
+        visit env bool_type test;
+        visit env expected yes;
+        visit env expected no
+    | Switch (value, cases, _) ->
+        visit env (FrescoPatterns.hint_cases (List.map fst cases)) value;
+        let typ = inspect env value in
+        List.iter (fun (pat, body) -> visit (bind_pattern env pat typ) expected body) cases
+    | TypeAnnotation (body, (_, Some typ)) | Checked (body, typ) ->
+        visit_value env typ body
+    | ModalIntro (body, typ) ->
+        let modality, inner = Context.prefix typ in
+        in_lock modality env inner body
+    | TupleLit [body] | Freeze body | TAbstr (_, body) | TAppl (body, _)
+    | Instantiate body | Generalise body -> visit env expected body
+    | TupleLit items ->
+        let domains = match head expected with
+          | Record _ -> (try tuple_parts phrase.pos (List.length items) expected
+                         with Errors.Type_error _ -> List.map (fun _ -> hole) items)
+          | _ -> List.map (fun _ -> hole) items in
+        List.iter2 (visit_value env) domains items
+    | ListLit (items, _) ->
+        let element = Option.value ~default:hole (list_item (head expected)) in
+        List.iter (visit_value env element) items
+    | RecordLit (fields, base) ->
+        Option.iter (visit env hole) base;
+        List.iter (fun (label, value) ->
+          let expected = Option.bind (row_type expected) (fun row -> record_field row label) in
+          visit_value env (Option.value ~default:hole expected) value) fields
+    | With (base, fields) ->
+        visit env hole base;
+        List.iter (fun (_, value) -> visit env hole value) fields
+    | ConstructorLit (_, value, _) -> Option.iter (visit env hole) value
+    | Projection (value, _) | UnaryAppl (_, value) -> visit env hole value
+    | RangeLit (first, last) -> List.iter (visit env int_type) [first; last]
+    | InfixAppl ((_, op), left, right) ->
+        let expected = match op with
+          | BinaryOp.And | BinaryOp.Or -> bool_type
+          | BinaryOp.Minus -> int_type
+          | BinaryOp.FloatMinus -> float_type
+          | _ -> hole in
+        visit env expected left;
+        visit env expected right
+    | Handle handler ->
+        let entries = handler_interfaces interfaces handler.sh_effect_cases |> Interfaces.map fresh_arguments in
+        let modality = extension (Interfaces.bindings entries) in
+        in_lock modality env hole handler.sh_expr;
+        let params = Option.fold ~none:[] ~some:(fun p -> p.shp_bindings) handler.sh_descr.shd_params in
+        List.iter (fun (_, value) -> visit env hole value) params;
+        let parameter_types = List.map (fun (_, value) -> inspect env value) params in
+        let clauses = List.fold_left2 (fun env (pat, _) -> bind_pattern env pat) env params parameter_types in
+        List.iter (fun (pat, body) -> visit (bind_pattern clauses pat hole) expected body) handler.sh_value_cases;
+        List.iter (fun (pat, body) ->
+          let _, args, k, _ = operation_pattern pat in
+          let env = List.fold_left (fun env pat -> bind_pattern env pat hole) clauses (k :: args) in
+          visit env expected body) handler.sh_effect_cases
+    | _ -> ()
+    end;
+    !child_hints
+
+  and collect_function interfaces ?resume ambient tracked env expected hints groups body =
+    let recur = collect_function interfaces ?resume in
+    match groups, head expected with
+    | [], _ -> collect interfaces ?resume ambient tracked env expected hints body
+    | _, ForAll (_, inner) -> recur ambient tracked env inner hints groups body
+    | _, Modal (modality, inner) ->
+        recur (locked modality ambient) (shift modality tracked) (Env.map (carry modality) env)
+          inner hints groups body
+    | patterns :: rest, typ ->
+        let unknowns () = List.map (fun _ -> hole) patterns, hole in
+        let domains, result = match typ with
+          | AmbientFunction (_, domain, result) ->
+              (try tuple_parts body.pos (List.length patterns) domain, result
+               with Errors.Type_error _ -> unknowns ())
+          | _ -> unknowns () in
+        let env = List.fold_left2 bind_pattern env patterns domains in
+        recur ambient tracked env result hints rest body
+
+  let ambient_copy context =
+    let modality = ModalEffects.Absolute (Context.ambient context) in
+    match ModalEffects.map_arguments copy modality with
+    | ModalEffects.Absolute ambient -> ambient
+    | _ -> assert false
+
+  let handler_hints interfaces context entries expected handler =
+    if Interfaces.for_all (fun _ args -> args = []) entries then [] else
+    let env = accessible_environment context in
+    let ambient = Some (ambient_copy context) in
+    let params = Option.fold ~none:[] ~some:(fun p -> p.shp_bindings) handler.sh_descr.shd_params in
+    let clause_env = List.fold_left (fun clause_env (pat, value) ->
+      bind_pattern clause_env pat (infer_safely (fun () -> infer interfaces env ?ambient value))) env params in
+    let modality = extension (Interfaces.bindings entries) in
+    let input_env = Env.map (carry modality) env in
+    let tracked = Interfaces.map (fun _ -> 0) entries in
+    let hints = collect interfaces (locked modality ambient) tracked input_env expected [] handler.sh_expr in
+    List.fold_left (fun hints (pat, body) ->
+      let label, args, k, annotations = operation_pattern pat in
+      let op = lookup_operation pat.pos interfaces label in
+      let scheme = member_scheme op (Interfaces.find op.EffectInterfaces.interface entries) in
+      let qs, instance = TypeUtils.split_quantified_type scheme in
+      let domains, result = operation_parts pat.pos (List.length args) instance in
+      let scope = TypeVarSet.add_quantifiers qs TypeVarSet.empty in
+      let domains = List.map (fun typ ->
+        if TypeVarSet.disjoint scope (free_type_vars typ) then typ else hole) domains in
+      let result = if TypeVarSet.disjoint scope (free_type_vars result) then result else hole in
+      let env = List.fold_left2 bind_pattern clause_env args domains in
+      let hints = List.fold_left (fun hints (_, typ) -> operation_evidence op Same_type typ :: hints)
+          hints annotations in
+      let k_hint = FrescoPatterns.hint k in
+      let result_hint = match snd (Context.prefix k_hint) with
+        | AmbientFunction (_, domain, _) ->
+            Option.value ~default:hole (Option.bind (row_type domain) (fun row -> record_field row "1"))
+        | _ -> hole in
+      let hints = operation_inputs op Same_type (List.map FrescoPatterns.hint args) result_hint hints in
+      let marker = arrow dl_unl (result :: List.map (fun _ -> hole) params) hole in
+      (* Keep a source annotation as evidence separately. The marker follows
+         unannotated aliases of this resumption within the clause. *)
+      let rec unannotated (pat : Pattern.with_pos) =
+        match pat.node with
+        | Pattern.HasType (pat, _) -> unannotated pat
+        | Pattern.As (binder, pat) -> with_node pat (Pattern.As (binder, unannotated pat))
+        | _ -> pat in
+      collect interfaces ~resume:(marker, op) ambient Interfaces.empty
+        (bind_pattern env (unannotated k) marker) hole hints body
+    ) hints handler.sh_effect_cases
+
+  let handler_result_hint interfaces context entries expected handler =
+    handler_result interfaces (accessible_environment context) ~ambient:(ambient_copy context)
+      (Interfaces.map (List.map copy) entries) (copy expected) handler
+
 end
 
 type mode =
@@ -621,6 +916,65 @@ let convert pos context actual expected =
   let target, expected_body = Context.prefix expected in
   consistent pos actual_body expected_body;
   Context.convert ~position:pos context ~source ~target ~body:expected_body
+
+let infer_interface_arguments pos context entries hints =
+  let open Partial in
+  Interfaces.mapi (fun interface parameters ->
+    let observations = List.fold_left (fun observations (hint : Partial.instance_hint) ->
+      if ModalEffects.Interface.equal interface hint.Partial.interface then
+        List.map2 (fun all args -> List.rev_append (List.map (fun arg -> hint.observation, arg) args) all)
+          observations hint.Partial.arguments
+      else observations) (List.map (fun _ -> []) parameters) hints in
+    let infer (_, kind) observations =
+      let exact, converted = List.partition_map (function
+        | Same_type, typ -> Either.Left typ
+        | observation -> Either.Right observation) observations in
+      let complete typ = snd (FrescoTypes.complete_hint (pk_type, typ)) in
+      let viable check =
+        match FrescoTypes.probe check with
+        | () -> true
+        | exception (Unify.Failure _ | Context.Error _ | Errors.Type_error _) -> false in
+      let check_kind typ = FrescoTypes.require_kind kind (pk_type, typ) in
+      let check_exact typ = List.iter (fun other -> consistent pos typ (complete other)) exact in
+      let accepts candidate = viable (fun () ->
+        let candidate = complete candidate in
+        check_kind candidate;
+        check_exact candidate;
+        let context = Context.create ~ambient:(Context.ambient context) Env.empty in
+        List.iter (function
+          | Provided, source -> convert pos context (complete source) candidate
+          | Expected, target -> convert pos context candidate (complete target)
+          | Same_type, _ -> assert false) converted;
+        Context.solve context) in
+      let distinct = List.fold_left (fun types candidate ->
+        if List.exists (FrescoTypes.equal candidate) types then types else candidate :: types) [] in
+      let pick types = match distinct types with
+        | [] -> fresh ~subkind:(snd kind) ()
+        | [typ] -> complete typ
+        | first :: rest ->
+            let candidate = complete first in
+            if viable (fun () -> List.iter (fun typ -> consistent pos candidate (complete typ)) rest) then begin
+              List.iter (fun typ -> consistent pos candidate (complete typ)) rest;
+              candidate
+            end else error pos "A handled interface argument needs a type or parameter annotation" in
+      let candidates = List.map snd converted in
+      let typ = match exact with
+        | first :: rest ->
+            let candidate = complete first in
+            List.iter (fun typ -> consistent pos candidate (complete typ)) rest;
+            let matching = List.filter accepts candidates in
+            if matching = [] then candidate
+            else
+              let inferred = pick matching in
+              consistent pos candidate inferred;
+              candidate
+        | [] ->
+            match List.filter accepts candidates with
+            | [] -> pick candidates
+            | matching -> pick matching in
+      check_kind typ;
+      typ in
+    List.map2 infer parameters observations) entries
 
 let record_fields pos context typ =
   let modality, body = Context.prefix typ in
@@ -758,29 +1112,26 @@ let require_same pos first rest =
   List.iter (fun item -> consistent pos item first) rest;
   first
 
-let same_branches pos mode branches =
-  match mode, branches with
+let consistent_branch_bodies pos first rest =
+  let compare other =
+    match Context.prefix first, Context.prefix other with
+    | (ModalEffects.Relative _, body), (ModalEffects.Relative _, other_body) ->
+        consistent pos body other_body
+    | _ -> consistent pos other first in
+  List.iter compare rest
+
+let branch_results pos mode types =
+  match mode, types with
   | Check expected, _ -> expected
-  | _, first :: rest -> require_same pos (typ first) (List.map typ rest)
+  | _, first :: rest ->
+      consistent_branch_bodies pos first rest;
+      begin match Context.prefix first with
+      | ModalEffects.Relative _, body when Abs.type_satisfies body -> body
+      | _ -> require_same pos first rest
+      end
   | _, [] -> fresh ()
 
-let same_handler_result pos left right =
-  match FrescoTypes.transaction (fun () -> consistent pos left right) with
-  | () -> ()
-  | exception (Errors.Type_error _ as exn) ->
-      let left_modality, left = Context.prefix left in
-      let right_modality, right = Context.prefix right in
-      begin match left_modality, right_modality with
-      | ModalEffects.Relative _, ModalEffects.Relative _ ->
-          consistent pos left right;
-          if not (Abs.type_satisfies left) then error pos "Handler clauses have different result modalities"
-      | _ -> raise exn
-      end
-
-let drop_irrelevant_relative typ =
-  match Context.prefix typ with
-  | ModalEffects.Relative _, body when Abs.type_satisfies body -> body
-  | _ -> typ
+let same_branches pos mode branches = branch_results pos mode (List.map typ branches)
 
 let check_field_names pos fields =
   ignore (List.fold_left (fun names (label, _) ->
@@ -792,14 +1143,27 @@ type state = {
   aliases : tycon_environment;
   interfaces : EffectInterfaces.t;
   rigids : TypeVarSet.t;
-  source_types : datatype list;
+  source_types : (Pattern.with_pos list * TypeVarSet.t * datatype) list;
 }
 
 let source_types visit =
   let types = ref [] in
-  let add typ = types := typ :: !types in
-  let visitor = object
+  let clauses = ref [] in
+  let add typ = types := (!clauses, free_type_vars typ, typ) :: !types in
+  let visitor = object (self)
     inherit SugarTraversals.fold as super
+    method! phrasenode = function
+      | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
+          ignore (self#phrase sh_expr);
+          Option.iter (fun params -> ignore (self#handle_params params)) sh_descr.shd_params;
+          List.iter (fun (pattern, body) ->
+            let enclosing = !clauses in
+            clauses := pattern :: enclosing;
+            ignore ((self#pattern pattern)#phrase body);
+            clauses := enclosing) sh_effect_cases;
+          List.iter (fun (pattern, body) -> ignore ((self#pattern pattern)#phrase body)) sh_value_cases;
+          self
+      | node -> super#phrasenode node
     method! datatype' ((_, semantic) as annotation) =
       Option.iter add semantic;
       super#datatype' annotation
@@ -1217,7 +1581,7 @@ and infer_node ?(allow_intro = true) state mode phrase =
   | FunLit (_, _, SwitchFunlit _, _) -> error pos "Function clauses have not been desugared"
   | Upcast _ -> error pos "Type annotation has not been resolved"
 
-and infer_handler state pos mode { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } =
+and infer_handler state pos mode ({ sh_expr; sh_effect_cases; sh_value_cases; sh_descr } as handler) =
   let open EffectInterfaces in
   if not (Settings.get Basicsettings.Handlers.enabled) then
     raise (Errors.disabled_extension ~pos ~setting:("enable_handlers", true)
@@ -1240,35 +1604,34 @@ and infer_handler state pos mode { sh_expr; sh_effect_cases; sh_value_cases; sh_
           (EffectInterfaces.Operations.bindings missing) in
       error pos (Printf.sprintf "Incomplete handler for %s. Missing operation clauses for %s"
         (ModalEffects.Names.name interface) (String.concat ", " names))) handled;
-  let rec identity_body name (body : phrase) = match body.node with
-    | Var returned -> name = returned
-    | Block ([], body) | TupleLit [body] -> identity_body name body
-    | _ -> false in
-  let identity_return = match sh_value_cases with
-    | [] -> true
-    | [{ node = Pattern.Variable binder; _ }, body] -> identity_body (Binder.to_name binder) body
-    | _ -> false in
+  let identity_return = identity_return sh_value_cases in
+  let flows_to_input typ = identity_return && (Interfaces.is_empty handled || Partial.absolute typ) in
   let input_mode = match mode with
-    | Check expected when identity_return && (Interfaces.is_empty handled || Abs.type_satisfies expected) ->
-        Check expected
+    | Check expected when flows_to_input expected -> Check expected
     | _ -> Infer in
-  let add_instance instances (interface, arguments) =
-    Interfaces.update interface (function
-      | None -> Some arguments
-      | Some previous -> Some (List.map2 FrescoTypes.merge_known previous arguments)) instances in
-  let instances = List.fold_left (fun instances (op, (_, _, args, resumption, annotations, body)) ->
-    let result = match snd (Context.prefix (FrescoPatterns.hint resumption)) with
-      | AmbientFunction (_, domain, _) ->
-          Option.value ~default:Not_typed
-            (Option.bind (row_type domain) (fun row -> record_field row "1"))
-      | _ -> Not_typed in
-    let result = FrescoTypes.merge_known result (annotated_resume_argument resumption body) in
-    let hints = List.map snd annotations @ [operation_hint (List.map FrescoPatterns.hint args) result] in
-    List.fold_left (fun instances hint ->
-      add_instance instances (op.interface, interface_arguments op hint)
-    ) instances hints) Interfaces.empty clauses in
-  let instances = List.fold_left add_instance instances
-      (Partial.handler_hints state.interfaces state.terms handled (hint input_mode) sh_expr) in
+  let parameters = handler_interfaces state.interfaces sh_effect_cases in
+  let provisional = Interfaces.map Partial.fresh_arguments parameters in
+  let known_result instances =
+    Partial.handler_result_hint state.interfaces state.terms instances Not_typed handler in
+  let input_hint = match input_mode with
+    | Check expected -> expected
+    | _ when not identity_return -> Not_typed
+    | _ ->
+        let result = known_result provisional in
+        if not (FrescoTypes.unknown (head result)) && flows_to_input result then result else Not_typed in
+  let instances, sibling_hint = match sh_descr.shd_modal with
+    | Some checked ->
+        let added = match checked.shm_extension with
+          | ModalEffects.Relative (_, added) -> added
+          | ModalEffects.Absolute _ -> assert false in
+        let instances = List.fold_left (fun instances (interface, args) ->
+          Interfaces.add interface args instances) Interfaces.empty (ModalEffects.extension_entries added) in
+        instances, known_result instances
+    | None ->
+        let hints = Partial.handler_hints state.interfaces state.terms provisional input_hint handler in
+        let instances = infer_interface_arguments pos state.terms parameters hints in
+        let sibling_hint = if hints = [] then input_hint else known_result instances in
+        instances, sibling_hint in
   let entries = Interfaces.bindings instances in
   let modality = extension entries in
   let input_state = under state modality in
@@ -1295,9 +1658,11 @@ and infer_handler state pos mode { sh_expr; sh_effect_cases; sh_value_cases; sh_
   let clause_state = bind_all state parameter_env in
   let clause_usage pos env body =
     let uses = use_binders pos env (usage body) in
-    if sh_descr.shd_depth = Deep then
+    if sh_descr.shd_depth = Deep then begin
+      let uses = use_binders pos parameter_env uses in
       Usage.iter (fun name _ -> require_unrestricted pos name (lookup pos clause_state.terms name)) uses;
-    Usage.restrict uses (Env.domain parameter_env) in
+      uses
+    end else uses in
   let returns = match sh_value_cases with
     | [] ->
         let name = gensym ~prefix:"$handler_return" () in
@@ -1305,12 +1670,30 @@ and infer_handler state pos mode { sh_expr; sh_effect_cases; sh_value_cases; sh_
         [Sugar.variable_pat ~ppos:pos name, Sugar.var ~ppos:pos name]
     | returns -> returns in
   let patterns, bodies = List.split returns in
-  let check_input mode =
-    let input = infer input_state mode sh_expr in
+  let check_input ?(allow_intro = true) mode =
+    let input = infer ~allow_intro input_state mode sh_expr in
     let patterns = FrescoPatterns.check_cases (Context.carry modality (typ input)) patterns in
     input, patterns in
   let input, patterns =
-    match Context.transaction state.terms (fun () -> check_input input_mode) with
+    let needs_prefix typ =
+      let has_prefix, _ = (object
+        inherit Types.type_predicate as super
+        method! type_satisfies vars = function
+          | Modal _ | ForAll (_ :: _, _) -> false
+          | typ -> super#type_satisfies vars typ
+      end)#predicates in
+      not (has_prefix typ) in
+    let check () =
+      match input_mode with
+      | (Infer | Apply _) when not (FrescoTypes.unknown (head sibling_hint)) &&
+                               flows_to_input sibling_hint && needs_prefix sibling_hint ->
+          let _, sibling_hint = FrescoTypes.complete_hint (pk_type, sibling_hint) in
+          begin match Context.transaction state.terms (fun () -> check_input ~allow_intro:false (Check sibling_hint)) with
+          | result -> result
+          | exception Errors.Type_error _ -> check_input input_mode
+          end
+      | _ -> check_input input_mode in
+    match Context.transaction state.terms check with
     | result -> result
     | exception (Errors.Type_error _ as exn) ->
         begin match FrescoPatterns.hint_cases patterns with
@@ -1327,12 +1710,11 @@ and infer_handler state pos mode { sh_expr; sh_effect_cases; sh_value_cases; sh_
   let output = match mode, returns with
     | Check expected, _ -> expected
     | _, (_, first, _) :: rest ->
-        List.iter (fun (_, body, _) -> same_handler_result pos (typ first) (typ body)) rest;
+        consistent_branch_bodies pos (typ first) (List.map (fun (_, body, _) -> typ body) rest);
         typ first
     | _, [] -> assert false in
-  let protected = typ input :: output :: hint mode ::
-    parameter_types @ List.concat_map snd entries @ state.source_types in
-  let operations = List.map (fun (_, (pos, label, args, k, annotations, body)) ->
+  let protected = typ input :: output :: hint mode :: parameter_types @ List.concat_map snd entries in
+  let operations = List.map2 (fun (pattern, _) (_, (pos, label, args, k, annotations, body)) ->
     let scheme = StringMap.find label schemes in
     List.iter (fun (pos, annotation) -> consistent pos scheme annotation) annotations;
     let qs, instance = TypeUtils.split_quantified_type scheme in
@@ -1347,12 +1729,24 @@ and infer_handler state pos mode { sh_expr; sh_effect_cases; sh_value_cases; sh_
       let k, kenv = FrescoPatterns.check resumption k in
       let env = List.fold_left Env.extend kenv envs in
       let body = infer (bind_all (with_rigids clause_state qs) env) mode body in
-      same_handler_result pos output (typ body);
+      consistent_branch_bodies pos output [typ body];
       let uses = clause_usage pos env body in
-      (make ~pos (Pattern.Operation (label, args, k)), term body), uses in
-    if qs = [] then check () else at pos (fun () -> in_rigid_scope clause_state.terms protected qs check)
-  ) clauses in
-  let output = match mode with Check _ -> output | _ -> drop_irrelevant_relative output in
+      (make ~pos (Pattern.Operation (label, args, k)), term body), typ body, uses in
+    if qs = [] then check () else
+      let inside clauses = List.exists (fun clause -> clause == pattern) clauses in
+      let local_vars = List.fold_left (fun local (clauses, vars, _) ->
+        if inside clauses then TypeVarSet.union local vars else local) TypeVarSet.empty state.source_types in
+      let member_vars = TypeVarSet.add_quantifiers qs TypeVarSet.empty in
+      let outside_types = List.filter_map (fun (clauses, vars, typ) ->
+        (* Rechecking already elaborated clauses can see the member's
+           quantifier in an independent annotation of another clause. *)
+        if inside clauses || TypeVarSet.disjoint local_vars vars ||
+           not (TypeVarSet.disjoint member_vars vars) then None else Some typ
+      ) state.source_types in
+      at pos (fun () -> in_rigid_scope clause_state.terms (outside_types @ protected) qs check)
+  ) sh_effect_cases clauses in
+  let output = branch_results pos mode
+      (output :: List.map (fun (_, body, _) -> typ body) returns @ List.map (fun (_, typ, _) -> typ) operations) in
   let row, _, outer, _ = sh_descr.shd_types in
   let sh_descr = { sh_descr with
     shd_types = (row, typ input, outer, output);
@@ -1363,11 +1757,11 @@ and infer_handler state pos mode { sh_expr; sh_effect_cases; sh_value_cases; sh_
         shp_types = parameter_types }) sh_descr.shd_params } in
   let uses = Usage.combine_many [usage input;
     Usage.combine_many (List.map (fun (_, _, _, uses) -> uses) parameters);
-    Usage.align (List.map (fun (_, _, uses) -> uses) returns);
-    Usage.align (List.map snd operations)] in
+    Usage.align (List.map (fun (_, _, uses) -> uses) returns @
+      List.map (fun (_, _, uses) -> uses) operations)] in
   wrap_usage pos (Handle { sh_expr = term input; sh_descr;
     sh_value_cases = List.map (fun (clause, _, _) -> clause) returns;
-    sh_effect_cases = List.map fst operations }) output uses
+    sh_effect_cases = List.map (fun (clause, _, _) -> clause) operations }) output uses
 
 and infer_pattern_binding state pattern value =
   let check mode =

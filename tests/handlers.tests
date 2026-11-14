@@ -451,9 +451,14 @@ effect Foo { Foo : () => Int; } var lf = linfun() { 42 }; handle(do Foo + 42) { 
 stderr : @.*Type error: Variable lf has a linear type*
 exit : 1
 
-Shallow handler operation clause can use a linear local
-effect Foo { Foo : () => Int; } var lf = linfun() { 42 }; shallowhandle(do Foo + 42) { case <Foo -> k> -> var n = lf(); handle(k(n)) { case <Foo => resume> -> resume(0) } }
+Shallow handler can use a linear local once in each clause
+effect Foo { Foo : () => Int; } var lf = linfun() { 42 }; shallowhandle(do Foo + 42) { case <Foo -> k> -> var n = lf(); handle(k(n)) { case <Foo => resume> -> resume(0) } case x -> x + lf() }
 stdout : 84 : Int
+
+Shallow handler cannot omit a linear use in the implicit return clause
+effect Foo { Foo : () => Int; } var lf = linfun() { 42 }; shallowhandle(do Foo + 42) { case <Foo -> k> -> var n = lf(); handle(k(n)) { case <Foo => resume> -> resume(0) } }
+stderr : @.*Type error: Variable lf has a linear type.*
+exit : 1
 
 Shallow handler cannot use a linear local twice
 effect Foo { Foo : () => Int; } fun() { var lf = (linfun(x) {x} : [] ((Int) -@ Int)); shallowhandle(lf(do Foo)) { case <Foo -> k> -> var n = lf(42); handle(k(n)) { case <Foo => next> -> next(0) } } }
@@ -483,10 +488,43 @@ effect State(a::Abs) { Get : () => a; Put : (a) => (); } handle({ var n = do Get
 stderr : @.*Expected Int, got Bool.*
 exit : 1
 
+A deep handler passes linear state on to its return clause
+effect Clock { Tick : () => (); } handle({ do Tick; 42 })(f <- (linfun() { 1 } : [](() -@ Int))) { case <Tick => k> -> k((), f) case n -> n + f() }
+stdout : 43 : Int
+
+An enclosing handler can replay captured linear state
+effect Clock { Tick : () => (); } effect Choice { Choose : () => Bool; } handle(handle({ do Tick; if (do Choose) 20 else 20 })(f <- (linfun() { 1 } : [](() -@ Int))) { case <Tick => k> -> k((), f) case n -> n + f() }) { case <Choose => k> -> k(true) + k(false) }
+stdout : 42 : Int
+
+Handler state initialisers use a linear value in sequence
+var f = (linfun() { 20 } : [](() -@ Int)); handle(1)(a <- f(), b <- 21) { case n -> n + a + b }
+stdout : 42 : Int
+
+Handler state initialisers cannot use a linear value twice
+var f = (linfun() { 20 } : [](() -@ Int)); handle(1)(a <- f(), b <- f()) { case n -> n + a + b }
+stderr : @.*Type error: Variable f has a linear type.*
+exit : 1
+
 A handler cannot choose a polymorphic operation's result type
 effect Failure { Fail : forall a::Abs. () => a; } sig f : [Failure] (() -> Int) fun f() { if (do Fail) 42 else do Fail } handle(f()) { case <Fail => k> -> k(42) }
 stderr : @.*Expected .*::Abs, got Int.*
 exit : 1
+
+An aborting clause supplies a modal result type to an application
+effect Failure { Fail : forall a::Abs. () => a; } fun keep(f) { f } keep(handle(do Fail) { case <Fail> -> (fun() { 42 } : [](() -> Int)) case x -> var y = x; y })()
+stdout : 42 : Int
+
+A flexible annotation can use an operation type variable within the clause
+effect Poly { Poly : forall a::Abs. (a) => (); } handle(do Poly(42)) { case <Poly(x)> -> (fun(y : %t) { () })(x) }
+stdout : () : ()
+
+Independent annotations in clauses for the same operation
+effect P { Op : forall a::Abs. (Int, a) => (); } handle(do Op(0, 42)) { case <Op(0, x)> -> (fun(y : %t) { () })(x) case <Op(_, x)> -> (fun(y : %s) { () })(x) }
+stdout : () : ()
+
+A curried local function can introduce a different interface instance
+effect State(a::Abs) { Put : (a) => (); Get : () => a; } handle({ sig putBool : () -> (forall a. [State(Bool)] ((a) -> ())) fun putBool()(x) { do Put(true) } do Put(42); do Get }) { case <Get => k> -> k(42) case <Put(v) => k> -> k(()) }
+stdout : 42 : Int
 
 Examples
 ./examples/handlers/tests.links

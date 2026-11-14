@@ -105,10 +105,6 @@ let polymorphic_operations _ =
     effect Yield { Yield : forall a::Abs. (a) => (); }
     handle(do Yield(42)) { case <Yield(value)> -> [value] case _ -> [] }
   |};
-  rejected ~message:"A quantified type variable would escape its scope" {|
-    effect Poly { Poly : forall a::Abs. (a) => (); }
-    (handle(()) { case <Poly(x)> -> (fun(y : %t) { () })(x) }, fun(y : %t) { y })
-  |};
   let keep second = {|
     effect Keep(a::Abs) { Keep : forall b::Abs. (a, b) => b; }
     handle((do Keep(0, 42), do Keep(|} ^ second ^ {|
@@ -164,6 +160,114 @@ let scoped_instances _ =
     }
   |});
   result "List Int" "handle(42) { case n -> [n] }"
+
+let shared_interface_arguments _ =
+  result "Int" (reader ^ {|
+    fun use(f : [](() -> Int)) { f() }
+    handle(use(do Ask)) { case <Ask => k> -> k(fun() { 42 }) }
+  |});
+  result "[] (() -> Int)" (reader ^ {|
+    handle(do Ask) {
+      case <Ask => k> -> var f = (fun() { 42 } : [](() -> Int)); k(f)
+    }
+  |});
+  result "[] (() -> Int)" (state ^ {|
+    var f = (fun() { 42 } : [](() -> Int));
+    handle({ do Put(f); do Put(fun() { 42 }); do Get }) {
+      case <Get => k> -> k(f)
+      case <Put(x) => k> -> k(())
+    }
+  |});
+  result "Int" {|
+    effect Pass(a::Abs) { Pass : (a) => Int; }
+    handle(switch (true) {
+      case true -> var f = (fun() { 42 } : [](() -> Int)); do Pass(f)
+      case false -> do Pass(fun() { 0 } : [](() -> Int))
+    }) { case <Pass(f) => k> -> k(f()) }
+  |};
+  result "Int" {|
+    effect Pass(a::Abs) { Pass : (a) => Int; }
+    handle({
+      fun pass() { var f = (fun() { 42 } : [](() -> Int)); do Pass(f) }
+      pass()
+    }) { case <Pass(f) => k> -> k(f()) }
+  |};
+  result "Int" (state ^ {|
+    handle({
+      do Put(42);
+      var inner = handle({ do Put(true); do Get }) {
+        case <Get => k> -> k(true)
+        case <Put(v) => k> -> k(())
+      };
+      var other = (fun() { do Put(false); do Get } : [State(Bool)] (() -> Bool));
+      do Get
+    }) { case <Get => k> -> k(42) case <Put(v) => k> -> k(()) }
+  |});
+  result "Int" (state ^ {|
+    handle({
+      sig putBool : () -> (forall a. [State(Bool)] ((a) -> ()))
+      fun putBool()(x) { do Put(true) }
+      do Put(42); do Get
+    }) { case <Get => k> -> k(42) case <Put(v) => k> -> k(()) }
+  |});
+  let run_state steps = "handle({ " ^ steps ^ "; do Get }) { " ^ {|
+    case <Get => k> -> k(42)
+    case <Put(n) => k> -> k(())
+  }|} in
+  let required = state ^ {|
+    sig put : [State([] Int)] (() -> ())
+    fun put() { do Put(2) }
+  |} in
+  result "[] (Int)" (required ^ run_state "do Put(1); put()");
+  result "[] (Int)" (required ^ run_state "put(); do Put(1)");
+  result "[] (Int)" {|
+    effect State(a::Abs) { Put : ((value:a)) => (); Get : () => a; }
+    var boxed = (value=(2 : [] Int));
+    handle({ do Put(boxed); do Put((value=1)); do Get }) {
+      case <Put(p) => k> -> k(()) case <Get => k> -> k(3)
+    }
+  |};
+  result "(value:[] (Int))" {|
+    effect Fetch(a::Abs) { Fetch : () => (value:a); }
+    var boxed = (value=(42 : [] Int));
+    handle(do Fetch) {
+      case <Fetch => k> -> if (true) k(boxed) else k((value=42))
+      case value -> value
+    }
+  |};
+  let ambiguous steps =
+    rejected ~message:"A handled interface argument needs a type or parameter annotation"
+      (state ^ run_state steps) in
+  ambiguous "do Put(1); do Put(2 : [] Int)";
+  ambiguous "do Put(2 : [] Int); do Put(1)";
+  let expected = state ^ tick ^ {|
+    var pure = (fun() { 42 } : [](() -> Int));
+    fun ignoreTick(f : [Tick] (() -> Int)) { () }
+    handle({ do Put(pure); ignoreTick(do Get); do Get }) {
+      case <Get => k> -> k(pure)
+  |} in
+  let put pattern = expected ^ "case <Put(" ^ pattern ^ ") => k> -> k(()) }" in
+  result "[] (() -> Int)" (put "f : [](() -> Int)");
+  result "[Tick] (() -> Int)" (put "f : [Tick] (() -> Int)");
+  rejected ~message:"A handled interface argument needs a type or parameter annotation" (put "f");
+  result "Int" (reader ^ {|
+    sig read : [Reader(Bool), Reader([](() -> Int))] (() -> Bool)
+    fun read() { do Ask }
+    handle({
+      var inner = handle(read()) { case <Ask => (k : ((Bool) -> Bool))> -> k(true) };
+      (do Ask)()
+    }) { case <Ask> -> 42 }
+  |});
+  result "Int" (state ^ {|
+    handle({
+      var n = (do Get).run();
+      do Put((run=(fun() { 42 } : [](() -> Int)), xs=[]));
+      n
+    }) {
+      case <Get => k> -> k((run=(fun() { 42 } : [](() -> Int)), xs=[]))
+      case <Put(v) => k> -> k(())
+    }
+  |})
 
 let complete_interfaces _ =
   result "Int" (choice ^ reader ^ {|
@@ -259,11 +363,58 @@ let handler_result_hint _ =
       case true -> (fun() { 42 } : [](() -> Int))
       case false -> fun() { 43 }
     })
-  |}
+  |};
+  let abort returns = {|
+    handle(do Fail) { case <Fail> -> (fun() { 42 } : [](() -> Int))
+  |} ^ returns ^ " }" in
+  result "Int" (failure ^ "var f = " ^ abort "" ^ "; f()");
+  result "Int" (failure ^ "var f = " ^ abort "case x -> var y = x; y" ^ "; f()");
+  result "Int" (failure ^ "fun keep(f) { f } keep(" ^ abort "" ^ ")()");
+  result "Int" (failure ^ {|
+    var result = handle(do Fail) { case <Fail> -> (run=(fun() { 42 } : [](() -> Int))) };
+    result.run()
+  |});
+  result "[] (() -> Int)" (reader ^ {|
+    handle(do Ask) { case <Ask> -> (fun() { 42 } : [](() -> Int)) }
+  |});
+  result "List ([] (Int))" (tick ^ {|
+    handle({ do Tick; [] }) { case <Tick> -> [(42 : [] Int)] }
+  |});
+  result "Int" (failure ^ {|
+    fun use(f : [](() -> Int)) { f() }
+    use(handle(do Fail) { case <Fail> -> fun() { 42 } case x -> var y = x; y })
+  |});
+  rejected (failure ^ "handle(do Fail) { case <Fail> -> 42 case x -> true }")
 
 let absolute_return_type _ =
   result "List Int" (tick ^ {|
     handle({ do Tick; [] }) { case <Tick> -> [42] }
+  |})
+
+let branch_result_types _ =
+  let conditional first second = "if (true) " ^ first ^ " else " ^ second in
+  let switch first second = "switch (true) { case true -> " ^ first ^ " case false -> " ^ second ^ " }" in
+  let handler first second = tick ^ "handle(do Tick) { case <Tick> -> " ^ first ^ " case _ -> " ^ second ^ " }" in
+  List.iter (fun branches ->
+    let source first second = reader ^ branches first second in
+    let num = "(42 : <Reader(Int)> Int)" in
+    let other_num = "(0 : <Reader(Bool)> Int)" in
+    let dependent = "(fun() { 42 } : <Reader(Int)> (() -> Int))" in
+    result "Int" (source num other_num);
+    result "Int" (source other_num num);
+    rejected (source num "(false : <Reader(Bool)> Bool)");
+    result "<Reader(Int)> (() -> Int)" (source dependent dependent);
+    rejected (source dependent "(fun() { 0 } : <Reader(Bool)> (() -> Int))"))
+    [conditional; switch; handler];
+  List.iter (fun (first, second) -> result "List Int" (tick ^
+    "switch (true) { case true -> [] case false -> " ^ first ^ " case _ -> " ^ second ^ " }"))
+    ["([] : <Tick> List %a)", "[42]"; "[42]", "([] : <Tick> List %a)"];
+  result "List Int" (tick ^ {|
+    handle({ do Tick; true }) {
+      case true -> []
+      case false -> ([] : <Tick> List %a)
+      case <Tick> -> [42]
+    }
   |})
 
 let mask_transport _ =
@@ -360,6 +511,18 @@ let clause_linearity _ =
   result "Int" (input ^ {|
     shallowhandle(do Next) {
       case <Next => k> -> handle(k(f())) { case <Next => resume> -> resume(0) }
+      case n -> n + f()
+    }
+  |});
+  rejected (input ^ {|
+    shallowhandle(do Next) {
+      case <Next => k> -> handle(k(f())) { case <Next => resume> -> resume(0) }
+    }
+  |});
+  rejected (input ^ {|
+    shallowhandle(do Next) {
+      case <Next> -> f() + f()
+      case n -> n + f()
     }
   |});
   rejected (input ^ "handle(do Next) { case <Next => k> -> k(f()) }");
@@ -385,6 +548,59 @@ let clause_linearity _ =
   |} ^ clause ^ " }" in
   result "Int" (consume "k(f())");
   rejected (consume "k(f() + f())")
+
+let clause_quantifier_scope _ =
+  let poly = "effect Poly { Poly : forall a::Abs. (a) => (); }\n" in
+  let clause = "handle(do Poly(42)) { case <Poly(x)> -> (fun(y : %t) { () })(x) }" in
+  result "()" (poly ^ clause);
+  rejected ~message:"A quantified type variable would escape its scope"
+    (poly ^ "(" ^ clause ^ ", fun(y : %t) { y })");
+  let split first second = {|
+    effect Poly { Poly : forall a::Abs. (Int, a) => (); }
+    handle(do Poly(0, 42)) {
+      case <Poly(0, x)> -> |} ^ first ^ " case <Poly(_, x)> -> " ^ second ^ " }" in
+  let local var = "(fun(y : %" ^ var ^ ") { () })(x)" in
+  result "()" (split (local "t") "()");
+  result "()" (split "()" (local "t"));
+  result "()" (split (local "t") (local "s"));
+  rejected ~message:"A quantified type variable would escape its scope" (split (local "t") (local "t"));
+  rejected ~message:"A quantified type variable would escape its scope" {|
+    effect Yield { Yield : forall a::Abs. (a) => (); }
+    handle(do Yield(42)) {
+      case <Yield(x)> -> (fun(y : %t) { [y] })(x)
+      case _ -> []
+    }
+  |};
+  rejected ~message:"A quantified type variable would escape its scope" {|
+    effect Store(a::Abs) { Save : forall b::Abs. (b) => a; }
+    handle({ var unused = do Save(42); () }) { case <Save(x) => k> -> k(x) }
+  |}
+
+let linear_state _ =
+  let pass clause = tick ^ {|
+    handle({ do Tick; 42 })(f <- (linfun() { 1 } : [](() -@ Int))) {
+      case <Tick => k> -> |} ^ clause in
+  result "Int" (pass "k((), f) case n -> n + f() }");
+  result "Int" (pass "if (true) k((), f) else f() case n -> n + f() }");
+  rejected (pass "k((), f) }");
+  rejected (pass "k((), f) case n -> n }");
+  rejected (pass "k((), f) case n -> n + f() + f() }");
+  rejected (pass "k((), f) case f -> f + 1 }");
+  rejected (pass "42 case n -> n + f() }");
+  rejected (pass "if (true) k((), f) else 42 case n -> n + f() }");
+  rejected (pass "{ var n = f(); k((), f) } case n -> n + f() }");
+  rejected {|
+    effect Write { Write : (Int) => (); }
+    handle({ do Write(42); 0 })(f <- (linfun() { 1 } : [](() -@ Int))) {
+      case <Write(f)> -> f + 1
+      case n -> n + f()
+    }
+  |};
+  let initialisers second = {|
+    var f = (linfun() { 20 } : [](() -@ Int));
+    handle(1)(a <- f(), b <- |} ^ second ^ ") { case n -> n + a + b }" in
+  result "Int" (initialisers "21");
+  rejected (initialisers "f()")
 
 let native_permissions _ =
   let say signature = "sig say : " ^ signature ^ {|
@@ -459,15 +675,19 @@ let suite = "Fresco effects" >::: [
   "operation signatures" >:: operation_signatures;
   "polymorphic operations" >:: polymorphic_operations;
   "scoped instances" >:: scoped_instances;
+  "shared interface arguments" >:: shared_interface_arguments;
   "complete interfaces and forwarding" >:: complete_interfaces;
   "callback contexts" >:: callbacks;
   "dependent return values" >:: dependent_returns;
   "handler result type as an application hint" >:: handler_result_hint;
   "absolute return type inferred from the operation clause" >:: absolute_return_type;
+  "relative prefixes on branch results" >:: branch_result_types;
   "transport with a mask modality" >:: mask_transport;
   "deep and shallow resumptions" >:: resumptions;
   "parameterised handlers" >:: parameterised_handlers;
   "clause linearity" >:: clause_linearity;
+  "operation clause quantifier scope" >:: clause_quantifier_scope;
+  "linear handler state" >:: linear_state;
   "native permissions" >:: native_permissions;
   "native exit" >:: native_exit;
   "operations and native permissions across sentences" >:: successive_sentences;
