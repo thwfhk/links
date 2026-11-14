@@ -78,9 +78,6 @@ are available.
   inference is in the repo
   `~/code/type/frost/paper/artifact/freso-implementation`. This is the
   main implementation reference for Fresco.
-- Aghilas' implementation of modal effects with a simple DK style
-  bidirectional type inference is in the repo
-  `~/code/algebraic-effects/aghilas-met-impl`.
 
 ## Build and test
 
