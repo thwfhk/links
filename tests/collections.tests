@@ -1,30 +1,30 @@
 Iteration
 for (i <- [1,2,3,4,5]) if (i == 3) [] else [i, i]
-stdout : [1, 1, 2, 2, 4, 4, 5, 5] : [Int]
+stdout : [1, 1, 2, 2, 4, 4, 5, 5] : List Int
 
 Where clause
 for (i <- [1,2,3,4,5]) where (i <> 3) [i, i]
-stdout : [1, 1, 2, 2, 4, 4, 5, 5] : [Int]
+stdout : [1, 1, 2, 2, 4, 4, 5, 5] : List Int
 
 Record projection in a comprehension
 for (x <- [(a=1)]) [(b=x.a+1)]
-stdout : [(b = 2)] : [(b:Int)]
+stdout : [(b = 2)] : List (b:Int)
 
 Nested comprehensions
 for (x <- [1,2,3]) [(x = x, y = (for (y <- [4,5,6]) [y]))]
-stdout : [(x = 1, y = [4, 5, 6]), (x = 2, y = [4, 5, 6]), (x = 3, y = [4, 5, 6])] : [(x:Int,y:[Int])]
+stdout : [(x = 1, y = [4, 5, 6]), (x = 2, y = [4, 5, 6]), (x = 3, y = [4, 5, 6])] : List (x:Int,y:List Int)
 
 Range in a comprehension
 for (x <- [1..3]) [(num=x)]
-stdout : [(num = 1), (num = 2), (num = 3)] : [(num:Int)]
+stdout : [(num = 1), (num = 2), (num = 3)] : List (num:Int)
 
 Group a list of records
 var rows = groupBy(fun (r) { r.id }, [(id=1, amount=2), (id=2, amount=3), (id=1, amount=4)]); lookupG(1, rows)
-stdout : [(amount = 2, id = 1), (amount = 4, id = 1)] : [(amount:Int,id:Int)]
+stdout : [(amount = 2, id = 1), (amount = 4, id = 1)] : List (amount:Int,id:Int)
 
 Concatenation/union
 [1,2,3] ++ [4,5]
-stdout : [1, 2, 3, 4, 5] : [Int]
+stdout : [1, 2, 3, 4, 5] : List Int
 
 Head and tail
 hd(['a','b','c']) == 'a'
@@ -36,7 +36,7 @@ stdout : true : Bool
 
 Cons
 1 :: 2 :: 3 :: 4 :: []
-stdout : [1, 2, 3, 4] : [Int]
+stdout : [1, 2, 3, 4] : List Int
 
 Let-patterns [1]
 {var x :: xs = [1,2,3] ; x}
@@ -114,7 +114,7 @@ stdout : 2 : Int
 
 Case-patterns (redundancy) [10]
 fun (x) { switch (x) { case ([], []) -> 1 case (x::xs, y::ys) -> 2 case ([], _) -> 3 case (_, []) -> 4 }}
-stdout : @fun : \(\(\[_\], \[_\]\)\) -> Int
+stdout : fun : ((List _, List _)) -> Int
 
 Case-patterns (singleton list pattern)
 switch ([1]) { case [x] -> 2 case x -> 1 }
@@ -134,15 +134,15 @@ stdout : 3 : Int
 
 Map function
 map(curry((+))(1), [1,2,3])
-stdout : [2, 3, 4] : [Int]
+stdout : [2, 3, 4] : List Int
 
 Sorting:
 for (i <- [2,1,3]) orderby (i) [i]
-stdout : [1, 2, 3] : [Int]
+stdout : [1, 2, 3] : List Int
 
 Sorting:
 for (i <- [2,1,3]) orderby (-i) [i]
-stdout : [3, 2, 1] : [Int]
+stdout : [3, 2, 1] : List Int
 
 Empty-list comparison (1)
 [] < []
@@ -162,8 +162,8 @@ stdout : true : Bool
 
 Nullary for comprehensions
 for () [1]
-stdout : [1] : [Int]
+stdout : [1] : List Int
 
 For comprehensions with multiple generators
 for (x <- [1,2], y <- [true, false], z <- ["foo", "bar"]) [(x,y,z)]
-stdout : [(1, true, "foo"), (1, true, "bar"), (1, false, "foo"), (1, false, "bar"), (2, true, "foo"), (2, true, "bar"), (2, false, "foo"), (2, false, "bar")] : [(Int, Bool, String)]
+stdout : [(1, true, "foo"), (1, true, "bar"), (1, false, "foo"), (1, false, "bar"), (2, true, "foo"), (2, true, "bar"), (2, false, "foo"), (2, false, "bar")] : List (Int, Bool, String)

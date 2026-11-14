@@ -11,8 +11,8 @@ fun (f)(x: Int) { f(x) + 0 } : ((Int) -e-> Int) -f-> (Int) -e-> Int
 stdout : fun : ((Int) -a-> Int) -> (Int) -a-> Int
 
 Shared effect across a tuple
-(map, id) : (((a) -e-> b, [a]) -e-> [b], (c) -e-> c)
-stdout : (fun, fun) : (((a) -b-> c, [a]) -b-> [c], (d) -b-> d)
+(map, id) : (((a) -e-> b, List a) -e-> List b, (c) -e-> c)
+stdout : (fun, fun) : (((a) -b-> c, List a) -b-> List c, (d) -b-> d)
 
 Anonymous effect tails after operation fields
 fun(_) {} : (() {F:()|_}-> ()) {F:()|_} -> ()

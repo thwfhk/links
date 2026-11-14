@@ -46,7 +46,7 @@ fun test() {
 # resumptions
 mutual {
   typename Res(e::Eff, a) = (ResList({ |e}, a)) ~e~> Maybe ((a, ResList({ |e}, a)));
-  typename ResList(e::Eff, a) = [|Cons:(Res({ |e}, a), ResList({ |e}, a))|Nil|];
+  typename ResList(e::Eff, a) = (|Cons:(Res({ |e}, a), ResList({ |e}, a))|Nil|);
 }
 
 # Links (following OCaml) only infers recursive types when all

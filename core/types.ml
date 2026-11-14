@@ -1939,7 +1939,15 @@ struct
                  (Module_hacks.Name.prettify s)
                  (String.concat "," ts)
             end
-         | Application (l, [elems]) when Abstype.equal l list ->  "["^ (type_arg context p) elems ^"]"
+         | Application (l, [(PrimaryKind.Type, elem)]) when Abstype.equal l list ->
+            let elem_str = datatype context p elem in
+            begin match concrete_type elem with
+            | Function _ | Lolli _ | Operation _ | ForAll _ | Meta _
+              when String.contains elem_str ' ' -> "List (" ^ elem_str ^ ")"
+            | Application (inner, _) when Abstype.equal inner list ->
+                "List (" ^ elem_str ^ ")"
+            | _ -> "List " ^ elem_str
+            end
          | Application (s, []) -> Abstype.name s
          | Application (s, ts) ->
             let vars = String.concat "," (List.map (type_arg context p) ts) in
@@ -1973,7 +1981,9 @@ struct
             in
             (if is_tuple ur then string_of_tuple context r
              else "(" ^ row "," context p (Row r) ^ ")")
-         | Variant r -> "[|" ^ row "|" context p r ^ "|]"
+         | Variant r ->
+            let field_str = row "|" context p r in
+            "(|" ^ (if field_str = "" then " " else field_str) ^ "|)"
          | ForAll (tyvars, body) ->
             let bound_vars =
               List.fold_left
@@ -2029,7 +2039,11 @@ struct
              if strip_wild && label = wild then
                field_strings
              else
-               (label ^ presence context p f) :: field_strings)
+               let field = match sep, concrete_field_spec f with
+                 | "|", Absent -> "{-}"
+                 | _ -> presence context p f
+               in
+               (label ^ field) :: field_strings)
            field_env []
        in
        let row_var_string = row_var name sep context p rv in
@@ -2037,6 +2051,7 @@ struct
          begin
            match row_var_string with
            | None -> ""
+           | Some s when sep = "|" && field_strings = [] -> s
            | Some s -> "|" ^ s
          end
     (* FIXME: this shouldn't happen *)
@@ -2499,7 +2514,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                in
                let is_tuple = (C.is_ambient_tuple ctx) || (is_tuple unrolled) (* not allowing onetuples by default *)
                in           r',       "(",   ")",   (if is_tuple then (C.set_ambient C.Tuple ctx) else (C.toplevel ctx))
-            | Variant r  -> r,        "[|",  "|]",  (C.set_ambient C.Variant ctx)
+            | Variant r  ->
+               let blank = if is_empty_row r then " " else "" in
+               r, "(|" ^ blank, "|)", C.set_ambient C.Variant ctx
             | Effect r   -> r,        "{",   "}",   (C.set_ambient C.Row ctx)
             | Row _ as r -> r,        "",    "",    ctx
             | _ -> failwith ("[*R] Invalid row:\n" ^ show_datatype @@ DecycleTypes.datatype r)
@@ -2521,7 +2538,10 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       Printer (fun ctx tp buf ->
           (match tp with
            | Absent ->
-              StringBuffer.write buf "-"
+              let inside_variant =
+                Context.is_ambient_variant ctx || Context.is_ambient_variant_rowvar ctx
+              in
+              StringBuffer.write buf (if inside_variant then "{-}" else "-")
            | Present tp ->
               (* Nullary variant payloads do not get printed. *)
               let is_nullary = concrete_type tp = unit_type in
@@ -2583,10 +2603,17 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     = let open Printer in
       Printer (fun ctx p buf ->
           match p with
-          | (abstp, [el]) when Abstype.equal abstp list ->
-             StringBuffer.write buf "[";
-             Printer.apply type_arg ctx el buf;
-             StringBuffer.write buf "]"
+          | (abstp, [(PrimaryKind.Type, elem)]) when Abstype.equal abstp list ->
+             StringBuffer.write buf "List ";
+             let grouped = match concrete_type elem with
+               | Function _ | Lolli _ | Operation _ | ForAll _ -> true
+               | Application (inner, _) -> Abstype.equal inner list
+               | Meta point -> (match Unionfind.find point with Recursive _ -> true | _ -> false)
+               | _ -> false
+             in
+             if grouped then StringBuffer.write buf "(";
+             Printer.apply datatype ctx elem buf;
+             if grouped then StringBuffer.write buf ")"
           | (abstp, []) ->
              StringBuffer.write buf (Abstype.name abstp)
           | (abstp, args) ->

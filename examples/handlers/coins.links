@@ -1,4 +1,4 @@
-typename Zero = [||];
+typename Zero = (| |);
 
 typename Comp(a, e::Eff) = () ~e~> a;
 typename CF(a, e::Eff) = Comp(a, {Choice: (()) => Bool,
@@ -13,7 +13,7 @@ fun choose(x,y) {if (choice()) {x} else {y}}
 sig fail : Comp(a, {Failure:(()) => Zero|_})
 fun fail() {switch (do Failure(())) { }}
 
-sig allResults : (CF(a, {})) {}~> [a]
+sig allResults : (CF(a, {})) {}~> List a
 fun allResults(m) {
   handle(m()) {
     case x     -> [x]
@@ -22,7 +22,7 @@ fun allResults(m) {
   }
 }
 
-typename Toss = [|Heads|Tails|];
+typename Toss = (|Heads|Tails|);
 
 sig drunkToss : CF(Toss, { |_})
 fun drunkToss() {
@@ -33,7 +33,7 @@ fun drunkToss() {
   }
 }
 
-sig drunkTosses : (Int) -> CF([Toss], { |_})
+sig drunkTosses : (Int) -> CF(List Toss, { |_})
 fun drunkTosses(n)() {
   for (_ <- [1..n]) [drunkToss()]
 }

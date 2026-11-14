@@ -309,19 +309,19 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
   (* Lists and collections *)
   "Nil",
   (`List [],
-   datatype "[a]",
+   datatype "List a",
    PURE);
 
   "Cons",
   (p2 (fun x xs ->
          Value.box_list (x :: (Value.unbox_list xs))),
-   datatype "(a, [a]) -> [a]",
+   datatype "(a, List a) -> List a",
    PURE);
 
   "Concat",
   (p2 (fun xs ys ->
          Value.box_list (Value.unbox_list xs @ Value.unbox_list ys)),
-   datatype "([a], [a]) -> [a]",
+   datatype "(List a, List a) -> List a",
    PURE);
 
   "hd",
@@ -330,7 +330,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
           | [] -> runtime_error "hd() of empty list"
           | x :: _ -> x
       ),
-   datatype "([a]) ~> a",
+   datatype "(List a) ~> a",
   IMPURE);
 
   "tl",
@@ -339,7 +339,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
             | [] -> runtime_error "tl() of empty list"
             | _x :: xs -> Value.box_list xs
       ),
-   datatype "([a]) ~> [a]",
+   datatype "(List a) ~> List a",
   IMPURE);
 
   (* HACK: tame versions of head and tail for use in pattern matching *)
@@ -349,7 +349,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
           | [] -> runtime_error "hd() of empty list"
           | x :: _ -> x
       ),
-   datatype "([a]) -> a",
+   datatype "(List a) -> a",
   IMPURE);
 
   "$$tl",
@@ -358,29 +358,29 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
             | [] -> runtime_error "tl() of empty list"
             | _x :: xs -> Value.box_list xs
       ),
-   datatype "([a]) -> [a]",
+   datatype "(List a) -> List a",
   IMPURE);
 
   "length",
   (p1 (Value.unbox_list ->- List.length ->- Value.box_int),
-   datatype "([a]) -> Int",
+   datatype "(List a) -> Int",
   PURE);
 
   "Sum",
   (p1 (Value.unbox_list ->- List.fold_left (fun x y -> x + Value.unbox_int y) 0 ->- Value.box_int),
-   datatype "([Int]) -> Int",
+   datatype "(List Int) -> Int",
    PURE);
 
   "take",
   (p2 (fun n l ->
          Value.box_list (Utility.take (Value.unbox_int n) (Value.unbox_list l))),
-   datatype "(Int, [a]) ~> [a]",
+   datatype "(Int, List a) ~> List a",
   PURE);
 
   "drop",
   (p2 (fun n l ->
          Value.box_list (Utility.drop (Value.unbox_int n) (Value.unbox_list l))),
-   datatype "(Int, [a]) ~> [a]",
+   datatype "(Int, List a) ~> List a",
   PURE);
 
   "max",
@@ -389,7 +389,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
            | `List [] -> `Variant ("Nothing", `Record [])
            | `List (x::xs) -> `Variant ("Just", List.fold_left max2 x xs)
            | _ -> raise (runtime_type_error "Internal error: non-list passed to max")),
-   datatype "([a]) ~> [|Just:a | Nothing:()|]",
+   datatype "(List a) ~> (|Just:a | Nothing:()|)",
   PURE);
 
   "min",
@@ -398,7 +398,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
            | `List [] -> `Variant ("Nothing", `Record [])
            | `List (x::xs) -> `Variant ("Just", List.fold_left min2 x xs)
            | _ -> raise (runtime_type_error "Internal error: non-list passed to min")),
-   datatype "([a]) ~> [|Just:a | Nothing:()|]",
+   datatype "(List a) ~> (|Just:a | Nothing:()|)",
   PURE);
 
   "least",
@@ -617,7 +617,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
     with
        NotFound _ -> accumMatches ((`String "")::l) (i - 1)) in
        accumMatches [] ngroups)),
-     datatype "(String, Regex) ~> [String]",
+     datatype "(String, Regex) ~> List String",
    PURE));
 
   (* regular expression substitutions --- don't yet support global substitutions *)
@@ -695,7 +695,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
            in
              aux 0 chars;
              Value.box_string (Bytes.to_string s)),
-    datatype ("([Char]) ~> String"),
+    datatype ("(List Char) ~> String"),
     PURE));
 
   ("explode",
@@ -710,7 +710,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
                let chars = aux ((String.length s) - 1) [] in
              Value.box_list (List.map Value.box_char chars)
                | _  -> raise (runtime_type_error "Internal error: non-String in implode")),
-    datatype ("(String) ~> [Char]"),
+    datatype ("(String) ~> List Char"),
     PURE));
 
   (* non-deterministic random number generator *)
@@ -741,7 +741,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
                     Unix.set_nonblock sock;
                     `Variant ("Just", Value.box_socket (Unix.in_channel_of_descr sock, Unix.out_channel_of_descr sock))
                   with _ -> `Variant ("Nothing", `Record [])),
-     datatype "(String, Int) ~> [|Nothing|Just:Socket|]",
+     datatype "(String, Int) ~> (|Nothing|Just:Socket|)",
      IMPURE);
     "writeToSocket",
     (p2 (fun messagev socketv ->
@@ -761,7 +761,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
                   with
                     Sys_blocked_io ->
                     `Variant ("Nothing", `Record [])),
-     datatype "(Socket) ~> [|Nothing|Just:String|]",
+     datatype "(Socket) ~> (|Nothing|Just:String|)",
      IMPURE);
     "closeSocket",
     (p1 (fun socketv ->
@@ -786,7 +786,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
     "getArgs",
     (pure_pfun (fun _ ->
             Value.(box_list (List.map box_string (Settings.get_rest_arguments ())))),
-     datatype "() ~> [String]",
+     datatype "() ~> List String",
      IMPURE)
 ]
 

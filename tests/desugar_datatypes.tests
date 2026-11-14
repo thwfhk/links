@@ -95,7 +95,7 @@ typename Thunk(a,e::Eff) = () ~e~> a; fun() {} : Thunk((), {|e})
 stdout : fun : Thunk ((),{ |_})
 
 Mutual type aliases take explicit effect arguments
-mutual { typename Either(a,e::Eff) = [|A:() ~e~> a|B:Indirect(a,{|e})|]; typename Indirect(a,e::Eff) = Either(a,{|e}); } A(fun() {}) : Either((), { | e})
+mutual { typename Either(a,e::Eff) = (|A:() ~e~> a|B:Indirect(a,{|e})|); typename Indirect(a,e::Eff) = Either(a,{|e}); } A(fun() {}) : Either((), { | e})
 stdout : A(fun) : Either ((),{ |_})
 
 The last effect argument of a type alias is required

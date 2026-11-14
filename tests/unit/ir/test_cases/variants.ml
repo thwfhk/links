@@ -147,7 +147,7 @@ let bad =
 
   expect_error
     ~name:"default_binder_wrong_type"
-    ~error_regex:"Type mismatch.*Expected:.*c1-.*Actual:"
+    ~error_regex:"Type mismatch.*Expected:.*c1{-}.*Actual:"
     (binding_to_comp
       (fun_ "f" (forall [q_row "R"] ([(variant ~row_var:(row_var "R") ["c1", present int; "c2", present int])] |--> int))
         ~tparams:[q_row "R"]

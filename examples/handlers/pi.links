@@ -33,7 +33,7 @@ fun randomPoints() {
 }
 
 # Synchronous take operation
-sig take : (Int, Comp(b, {Yield: (a) => () |e})) {Yield{_} |e}~> [a]
+sig take : (Int, Comp(b, {Yield: (a) => () |e})) {Yield{_} |e}~> List a
 fun take(n, m) {
   handle(m())(n <- n, st <- []) {
     case _ -> st
@@ -109,10 +109,10 @@ fun collectEstimations(n)() {
 # Multi-handler
 typename Resumption(a, e::Eff, r) = (a) ~e~> r;
 typename Step(a, e::Eff, r) =
-                (mu b . [|Done:r
+                (mu b . (|Done:r
                          |Yielded:(a, Resumption((), { |e}, b))
                          |Awaits:Resumption(a, { |e}, b)
-                         |]);
+                         |));
 
 sig step : (Comp(b, {Await:a, Yield: (a) => () |e})) {Await{q}, Yield{p} |e}~> Step(a, { Await{q}, Yield{p} |e}, b)
 fun step(f) {

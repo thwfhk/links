@@ -7,15 +7,15 @@ fun assertion(e, s) {
 
 # Some silly operations
 prefix 9 @@;
-sig @@ : (a) -> [a]
+sig @@ : (a) -> List a
 op @@ x { [x] }
 
 prefix 3 @@@@;
-sig @@@@ : ([a]) -> [[a]]
+sig @@@@ : (List a) -> List (List a)
 op @@@@ xs { [xs] }
 
 infix 2 ++++;
-sig ++++ : ([[a]], [[a]]) -> [[a]]
+sig ++++ : (List (List a), List (List a)) -> List (List a)
 op xss ++++ yss { xss ++ yss }
 
 postfix 1 <<>>;

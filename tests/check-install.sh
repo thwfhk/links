@@ -24,5 +24,5 @@ check_output() {
     printf 'SUCCESS: %s\n' "$actual"
 }
 
-check_output '[42] : [Int]' -e 'map(fun(x) { x + 2 }, [40])'
+check_output '[42] : List Int' -e 'map(fun(x) { x + 2 }, [40])'
 check_output '"[1,2,3,4]" : String' imports.links

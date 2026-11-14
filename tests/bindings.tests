@@ -54,7 +54,7 @@ exit : 1
 
 as patterns
 {var x::xs as y = [1,2,3]; y}
-stdout : [1, 2, 3] : [Int]
+stdout : [1, 2, 3] : List Int
 
 Reject multiple occurrences of a name in a pattern [1]
 fun (x,x) { x }

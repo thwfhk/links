@@ -61,8 +61,8 @@ fun lit(x)() { x }
 # Due to the (current) lack of multi-handlers in Links, we are going
 # simulate them by reifying operations.
 typename Expr(a) = Comp(a, {Var:(Var) => Expr(a), Lam:(Var) => ()});
-typename Step(a) = [|Val:a
-                    |Lam:(Var, Expr(a))|];
+typename Step(a) = (|Val:a
+                    |Lam:(Var, Expr(a))|);
 
 # The handler `step' big-steps a term to either a value or a
 # lambda-abstraction. Crucially, the handler is shallow such that the

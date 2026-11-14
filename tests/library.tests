@@ -1,6 +1,6 @@
 Test that prelude is loaded
 map
-stdout : fun : ((a) -b-> c, [a]) -b-> [c]
+stdout : fun : ((a) -b-> c, List a) -b-> List c
 
 Test sysexit [0]
 fun () {print("before"); sysexit(0); print("after")}()

@@ -1170,7 +1170,7 @@ let type_binary_op pos ctxt =
         begin
           match replacep, listp, nativep with
            | true,   _   , false -> (* stilde  *) add_empty_usages (datatype "(String, Regex) -> String")
-           | false, true , false -> (* ltilde *)  add_empty_usages (datatype "(String, Regex) -> [String]")
+           | false, true , false -> (* ltilde *)  add_empty_usages (datatype "(String, Regex) -> List String")
            | false, false, false -> (* tilde *)   add_empty_usages (datatype "(String, Regex) -> Bool")
            | _    , _    , true  -> assert false
         end

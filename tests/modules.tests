@@ -218,7 +218,7 @@ Open is not include
 ./tests/modules/open_is_not_include2.links
 filemode : true
 args : --path=tests/modules
-stdout : [1, 2] : [Int]
+stdout : [1, 2] : List Int
 
 Record accesses
 ./tests/modules/records.links

@@ -21,7 +21,7 @@ module Repeat : Links_type with type a = repeat =
 struct
   type a = repeat
 
-  let datatype = "[| Star | Plus | Question |]"
+  let datatype = "(| Star | Plus | Question |)"
 
   let rec asLinks : repeat -> Value.t = function
     | Star      -> `Variant ("Star", unit)
@@ -41,19 +41,19 @@ struct
   type a = regex
   let datatype = "                                      \
       mu regex . (                                      \
-      [|                                                \
+      (|                                                \
          Range : (Char, Char)                           \
        | Simply : String                                \
        | Quote : regex                                  \
        | Any                                            \
        | StartAnchor                                    \
        | EndAnchor                                      \
-       | Seq : [regex]                                  \
+       | Seq : List regex                                  \
        | Alternate : (regex, regex)                     \
        | Group : regex                                  \
-       | Repeat : ([| Star | Plus | Question |], regex) \
+       | Repeat : ((| Star | Plus | Question |), regex) \
        | Replace : (regex, String)                      \
-      |]                                                \
+      |)                                                \
       )                                                 \
       "
   let rec asLinks : regex -> Value.t = function

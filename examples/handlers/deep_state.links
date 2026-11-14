@@ -2,7 +2,7 @@
 
 # Standard types
 typename Comp(e::Eff, a) = () ~e~> a;
-typename Unit = [|Unit|];
+typename Unit = (|Unit|);
 
 # The run handler forces evaluation of a computation
 fun run(m) {
@@ -57,9 +57,9 @@ fun logPrinter(m)() {
 }
 
 # Log accumulator
-sig logAccumulator : ([a]) ->
+sig logAccumulator : (List a) ->
                      (Comp({Log:(a) => () |e}, b)) ->
-                      Comp({Log{_}          |e}, (b,[a]))
+                      Comp({Log{_}          |e}, (b,List a))
 fun logAccumulator(ps)(m)() {
   (handle(m()) {
     case x -> fun(ps) { (x,ps) }

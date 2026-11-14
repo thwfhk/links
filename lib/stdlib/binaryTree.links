@@ -1,7 +1,7 @@
 # Node-indexed binary trees. Very incomplete; just a demonstration we can now
 # have a standard library.
 
-typename BinaryTree(a) = [| Leaf | Node: (BinaryTree(a), a, BinaryTree(a)) |];
+typename BinaryTree(a) = (| Leaf | Node: (BinaryTree(a), a, BinaryTree(a)) |);
 
 sig empty : () -> (BinaryTree(a))
 fun empty() {

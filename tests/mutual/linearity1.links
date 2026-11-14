@@ -1,6 +1,6 @@
 mutual {
-  typename Foo = [| Bobsleigh | Bobsleigh2:() {}-@ () |];
-  typename Bar = [| Bobsleigh3 | Bobsleigh4:Foo |];
+  typename Foo = (| Bobsleigh | Bobsleigh2:() {}-@ () |);
+  typename Bar = (| Bobsleigh3 | Bobsleigh4:Foo |);
 }
 
 sig bobsleigh : Bar

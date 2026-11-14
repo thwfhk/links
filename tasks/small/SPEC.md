@@ -36,9 +36,9 @@ A source file contains declarations and may end with an expression. A
 | `String` | `"hello"`, `"line\n"` | Join strings with `s ^^ t`. |
 | `DateTime` | `intToDate(0)`, `parseDate("2022-08-04 12:03:12")` | Format a date with `show(d)`. |
 | Tuple `(Int, String)` | `(42, "hello")` | Read the first component with `pair.1`. Components can have different types. |
-| List `[Int]` | `[]`, `[1, 2, 3]` | Prepend with `x :: xs` and join with `xs ++ ys`. All elements have the same type. An integer range such as `[1..4]` includes both endpoints. A descending range such as `[4..1]` is empty. |
+| List `List Int` | `[]`, `[1, 2, 3]` | Prepend with `x :: xs` and join with `xs ++ ys`. All elements have the same type. An integer range such as `[1..4]` includes both endpoints. A descending range such as `[4..1]` is empty. |
 | Record `(x:Int, ready:Bool)` | `(x=42, ready=true)` | Read field `x` with `r.x`. Add it with `(x=42 \| r)` when absent, or replace it with `(r with x=42)` when present. Both forms produce a new record. |
-| Variant `[\|Nothing \| Just:Int\|]` | `Nothing`, `Just(42)` | A constructor starts with a capital letter. It may carry a payload, as in `Just(42)`. Use `switch` to match the constructor. |
+| Variant `(\|Nothing \| Just:Int\|)` | `Nothing`, `Just(42)` | A constructor starts with a capital letter. It may carry a payload, as in `Just(42)`. Use `switch` to match the constructor. |
 
 ### Bindings and blocks
 
@@ -236,7 +236,7 @@ types in aliases and explicit `forall` types.
   contains another `Nat`. `toInt(Succ(Succ(Zero)))` returns `2`.
 
 ```links
-typename Nat = mu n. [|Zero | Succ:n|];
+typename Nat = mu n. (|Zero | Succ:n|);
 
 fun toInt(n:Nat) {
   switch (n) {
@@ -279,11 +279,11 @@ fun getX(r) { r.x }
 (getX((x=1, y=true)), getX((x="one", z=0)))
 ```
 
-**Variant example.** In `[|One | r|]`, `One` has no payload and `r`
+**Variant example.** In `(|One | r|)`, `One` has no payload and `r`
 allows other constructors such as `Many`. The result is `(true, false)`.
 
 ```links
-sig isOne : ([|One | r|]) -> Bool
+sig isOne : ((|One | r|)) -> Bool
 fun isOne(v) { switch (v) { case One -> true case _ -> false } }
 
 (isOne(One), isOne(Many(3)))

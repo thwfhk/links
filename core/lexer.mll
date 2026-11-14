@@ -113,8 +113,7 @@ rule lex ctxt nl = parse
   | '}'                                 { ctxt#pop_lexer (* fall back *); RBRACE }
   | ("<-t-" | "<-v-") as op              { OPERATOR op }
   | "<-"                                { LARROW }
-  | "[|"                                { LBRACKETBAR }
-  | "|]"                                { BARRBRACKET }
+  | "|)"                                { BARRPAREN }
   | '['                                 { LBRACKET }
   | ']'                                 { RBRACKET }
   | "||"                                { BARBAR }
@@ -150,6 +149,7 @@ rule lex ctxt nl = parse
   | "postfix"                           { FIXITY Associativity.Left }
   | "~fun"                              { FROZEN_FUN }
   | "~linfun"                           { FROZEN_LINFUN }
+  | "List"                              { LISTNAME }
   | def_id as var                       { try List.assoc var keywords
                                           with Not_found | NotFound _ ->
                                             if Char.isUpper var.[0] then CONSTRUCTOR var

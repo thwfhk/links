@@ -1,10 +1,10 @@
 #tictactoe console edition
 
-typename Player = [|X|O|];
+typename Player = (|X|O|);
 
 var initialState = [Nothing, Nothing, Nothing,
                     Nothing, Nothing, Nothing,
-                    Nothing, Nothing, Nothing] : [Maybe(Player)];
+                    Nothing, Nothing, Nothing] : List Maybe(Player);
 
 sig playerToInt : (Player) -> Int
 fun playerToInt(player) {
@@ -30,7 +30,7 @@ fun maybeToString(xToString)(ma){
     }
 }
 
-sig stringCat : ([String]) ~> String
+sig stringCat : (List String) ~> String
 fun stringCat(xs){
     switch(xs){
         case [] -> ""
@@ -38,7 +38,7 @@ fun stringCat(xs){
     }
 }
 
-sig intersperse : (a, [a]) ~> [a]
+sig intersperse : (a, List a) ~> List a
 fun intersperse(y, xs){
     switch(xs){
         case [] -> []
@@ -47,18 +47,18 @@ fun intersperse(y, xs){
     }
 }
 
-sig listToString : ([a], ((a) ~e~> String)) ~e~>  String
+sig listToString : (List a, ((a) ~e~> String)) ~e~>  String
 fun listToString(list, xToString){
    "[" ^^ stringCat(intersperse(", ", map(xToString, list))) ^^ "]"
 }
 
-sig printState : ([Maybe(Player)]) ~> ()
+sig printState : (List Maybe(Player)) ~> ()
 fun printState(state){
     print(listToString(state, maybeToString(playerToString)))
 }
 
 
-sig addMove : (Player, Int, [Maybe(Player)]) ~> [Maybe(Player)]
+sig addMove : (Player, Int, List Maybe(Player)) ~> List Maybe(Player)
 fun addMove(player, index, state){
     print("Set Move");
     mapi(fun(field, i){
@@ -70,7 +70,7 @@ fun addMove(player, index, state){
     }, state)
 }
 
-sig checkIfWon : (Player, [Maybe(Player)]) ~> Bool
+sig checkIfWon : (Player, List Maybe(Player)) ~> Bool
 fun checkIfWon(player : Player, gameState){
 
     # very stupid. Couldn't understand how to loop through by rows and columns
@@ -95,7 +95,7 @@ fun checkIfWon(player : Player, gameState){
 }
 
 mutual {
-  sig x : ([Maybe(Player)], [Int]) ~> ()
+  sig x : (List Maybe(Player), List Int) ~> ()
   fun x(gameState, moves) {
     switch (moves) {
       case [] -> ()
@@ -114,7 +114,7 @@ mutual {
     }
   }
 
-  sig o : ([Maybe(Player)], [Int]) ~> ()
+  sig o : (List Maybe(Player), List Int) ~> ()
   fun o(gameState, moves) {
     switch (moves) {
       case [] -> ()
@@ -134,7 +134,7 @@ mutual {
   }
 }
 
-sig playGame : ([Int]) ~> ()
+sig playGame : (List Int) ~> ()
 fun playGame(moveList) {
   x(initialState, moveList)
 }

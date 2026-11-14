@@ -1,4 +1,4 @@
-unsafe sig concatMap : ((a) -b-> [c], [a]) -b-> [c]
+unsafe sig concatMap : ((a) -b-> List c, List a) -b-> List c
 fun concatMap(f, l) {
   switch (l) {
     case [] -> []
@@ -6,4 +6,4 @@ fun concatMap(f, l) {
   }
 }
 
-fun () { [] : [(|r::(Any,Base))] }
+fun () { [] : List (|r::(Any,Base)) }

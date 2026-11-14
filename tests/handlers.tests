@@ -14,19 +14,19 @@ exit : 1
 
 Listify handler (1)
 { handle(42) {case x -> [x]} }
-stdout : [42] : [Int]
+stdout : [42] : List Int
 
 Listify handler (2)
 handle(42) {case x -> [x]}
-stdout : [42] : [Int]
+stdout : [42] : List Int
 
 Listify handler (3)
 { handle([42, 41, 40, 39]) {case x -> [x]} }
-stdout : [[42, 41, 40, 39]] : [[Int]]
+stdout : [[42, 41, 40, 39]] : List (List Int)
 
 Listify handler (4)
 handle([42, 41, 40, 39]) {case x -> [x]}
-stdout : [[42, 41, 40, 39]] : [[Int]]
+stdout : [[42, 41, 40, 39]] : List (List Int)
 
 Top level operation invocation
 { do Foo }
@@ -85,11 +85,11 @@ exit : 1
 
 Binary choice handling (1)
 { handle({ var x = if (do Choose) 40 else 20; var y = if (do Choose) 2 else -20; x + y }) {case <Choose => k> -> k(true) ++ k(false) case x -> [x]} }
-stdout : [42, 20, 22, 0] : [Int]
+stdout : [42, 20, 22, 0] : List Int
 
 Binary choice handling (2)
 handle({ var x = if (do Choose) 40 else 20; var y = if (do Choose) 2 else -20; x + y }) {case <Choose => k> -> k(true) ++ k(false) case x -> [x]}
-stdout : [42, 20, 22, 0] : [Int]
+stdout : [42, 20, 22, 0] : List Int
 
 Deep continuation escape (1)
 { fromJust(handle({ do Escape; print("Back in action"); do Escape}) { case <Escape => k> -> Just(k) case _ -> Nothing })(()) }
@@ -102,27 +102,27 @@ stdout : @.
 exit : 0
 
 Type-and-effect signature for deep handler (1)
-sig allChoices : (Comp(a, {Choose:Bool|e})) {Choose{_}|e}~> [a] fun allChoices(m) {handle(m()) {case x -> [x] case <Choose => k> -> k(true) ++ k(false) }}
+sig allChoices : (Comp(a, {Choose:Bool|e})) {Choose{_}|e}~> List a fun allChoices(m) {handle(m()) {case x -> [x] case <Choose => k> -> k(true) ++ k(false) }}
 stdout : () : ()
 
 Type-and-effect signature for deep handler (2)
-sig allChoices : (Comp(a, {Choose:Bool|e})) -> Comp([a], {Choose{_}|e}) fun allChoices(m)() {handle(m()) {case x -> [x] case <Choose => k> -> k(true) ++ k(false)}}
+sig allChoices : (Comp(a, {Choose:Bool|e})) -> Comp(List a, {Choose{_}|e}) fun allChoices(m)() {handle(m()) {case x -> [x] case <Choose => k> -> k(true) ++ k(false)}}
 stdout : () : ()
 
 Type-and-effect signature for deep handler (3)
-sig allChoices : (Comp(a, {Choose:Bool|e})) -> Comp([a], {Choose- |e}) fun allChoices(m)() {handle(m()) {case x -> [x] case <Choose => k> -> k(true) ++ k(false)}}
+sig allChoices : (Comp(a, {Choose:Bool|e})) -> Comp(List a, {Choose- |e}) fun allChoices(m)() {handle(m()) {case x -> [x] case <Choose => k> -> k(true) ++ k(false)}}
 stdout : () : ()
 
 Type-and-effect signature for shallow handler (1)
-sig allChoices : (Comp(a, {Choose:Bool|e})) {Choose{_}|e}~> [a] fun allChoices(m) {shallowhandle(m()) {case x -> [x] case <Choose -> k> -> allChoices(fun() {k(true)}) ++ allChoices(fun(){k(false)}) }}
+sig allChoices : (Comp(a, {Choose:Bool|e})) {Choose{_}|e}~> List a fun allChoices(m) {shallowhandle(m()) {case x -> [x] case <Choose -> k> -> allChoices(fun() {k(true)}) ++ allChoices(fun(){k(false)}) }}
 stdout : () : ()
 
 Type-and-effect signature for shallow handler (2)
-sig allChoices : (Comp(a, {Choose:Bool|e})) -> Comp([a], {Choose{_}|e}) fun allChoices(m)() {shallowhandle(m()) {case x -> [x] case <Choose -> k> -> allChoices(fun(){k(true)})() ++ allChoices(fun(){k(false)})()}}
+sig allChoices : (Comp(a, {Choose:Bool|e})) -> Comp(List a, {Choose{_}|e}) fun allChoices(m)() {shallowhandle(m()) {case x -> [x] case <Choose -> k> -> allChoices(fun(){k(true)})() ++ allChoices(fun(){k(false)})()}}
 stdout : () : ()
 
 Type-and-effect signature for shallow handler (3)
-sig allChoices : (Comp(a, {Choose:Bool|e})) -> Comp([a], {Choose- |e}) fun allChoices(m)() {shallowhandle(m()) {case x -> [x] case <Choose -> k> -> allChoices(fun(){k(true)})() ++ allChoices(fun(){k(false)})()}}
+sig allChoices : (Comp(a, {Choose:Bool|e})) -> Comp(List a, {Choose- |e}) fun allChoices(m)() {shallowhandle(m()) {case x -> [x] case <Choose -> k> -> allChoices(fun(){k(true)})() ++ allChoices(fun(){k(false)})()}}
 stdout : () : ()
 
 Type inference for deep handler
@@ -192,7 +192,7 @@ stdout : () : ()
 
 Operation parameter pattern-matching (7)
 fun(m) { handle(m()) { case <Move(Alice)> -> 'A' case <Move(Bob)> -> 'B' case <Move(_)> -> 'U' case x -> x } }
-stdout : fun : (() {Move:([|Alice|Bob|_|]) => _::Any|c}~> Char) {Move{_}|c}~> Char
+stdout : fun : (() {Move:((|Alice|Bob|_|)) => _::Any|c}~> Char) {Move{_}|c}~> Char
 
 Operation parameter pattern-matching (8)
 handle(do Move(Alice)) { case <Move(Alice)> -> 'A' case <Move(Bob)> -> 'B' case <Move(_)> -> 'U' case x -> x }
@@ -301,7 +301,7 @@ stdout : 42 : Int
 Combining choice and state handlers
 tests/handlers/choose_and_state.links
 filemode : true
-stdout : [3, 4, 9, 10, 3, 3, 3, 3] : [Int]
+stdout : [3, 4, 9, 10, 3, 3, 3, 3] : List Int
 
 Type annotation on deep continuation parameter
 fun h1(m) { handle(m()) { case <Op => (k : ((Int) {Op{_}|_}~> Int)) > -> k(1) } }
@@ -325,7 +325,7 @@ stdout : 3 : Int
 
 A shallow resumption runs under a new handler and skips the original return clause
 shallowhandle(do Next + do Next) { case <Next => k> -> [handle(k(20)) { case <Next => resume> -> resume(22) }] case n -> [n + 100] }
-stdout : [42] : [Int]
+stdout : [42] : List Int
 
 Type ascription, parameterised handlers (1)
 { fun(a : Int)(b : Float)(c : String)(m)() { handle (m())(x <- a, y <- b, z <- c) { case <Op(p) => k> -> k(c,42,p,"Foo") case _ -> x } } }
@@ -374,7 +374,7 @@ stdout : (1, true, (false, 1), "Hello World") : (Int, Bool, (Bool, Int), String)
 Handler state initialisers run left to right in the enclosing context
 tests/handlers/state_initialisers.links
 filemode : true
-stdout : (42, [20, 21]) : (Int, [Int])
+stdout : (42, [20, 21]) : (Int, List Int)
 
 Effect type sugar (1)
 fun(g : (() {A:a,B:(a) => b|_}~> b)) { g }(fun(){error("N/A")})

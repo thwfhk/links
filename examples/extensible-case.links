@@ -26,17 +26,17 @@ fun add_C(f) (e) {
   }
 }
 
-fun defaultCase(f:(([|rho|]) -> String)) {
+fun defaultCase(f:(((|rho|)) -> String)) {
   f
 }
 
-fun nocases(e:[||]) {
+fun nocases(e:(| |)) {
   switch (e) { }      # unreachable
 }
 
 
 fun sub_A(f)(e) {
-  f(e : [|A:a|rho|] <- [|A- |rho|])
+  f(e : (|A:a|rho|) <- (|A- |rho|))
 }
 
 var f = add_A(add_B(add_C(nocases)));

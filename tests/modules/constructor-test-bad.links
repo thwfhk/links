@@ -1,5 +1,5 @@
 module A {
-    typename DT = [| Foo: (Int, Int) | Bar: String |];
+    typename DT = (| Foo: (Int, Int) | Bar: String |);
 }
 
 sig foo : (DT) -> Int

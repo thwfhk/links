@@ -9,8 +9,8 @@
 # Some standard data types
 
 # Binary tree data type
-typename Tree(a) = [|Leaf:a
-                    |Node:(Tree(a),Tree(a))|];
+typename Tree(a) = (|Leaf:a
+                    |Node:(Tree(a),Tree(a))|);
 
 # Yield operation for (leaf-)values
 sig yield : (a) {Yield:(a) => ()|_}-> ()
@@ -27,8 +27,8 @@ fun walkTree(tree)() {
 
 # Convenient type synonyms
 typename Continuation(a, r, e::Eff) = (a) ~e~> r;
-typename Status(a, e::Eff) = mu r . [|Done:()
-                                   |Yielded:(a, Continuation((), r, { |e}))|];
+typename Status(a, e::Eff) = mu r . (|Done:()
+                                   |Yielded:(a, Continuation((), r, { |e}))|);
 
 # Pauses evaluation of a computation whenever Yield occurs
 sig step : (Comp((), {Yield:(a) => ()|e})) ->

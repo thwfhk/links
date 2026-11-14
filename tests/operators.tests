@@ -72,11 +72,11 @@ stdout : true : Bool
 
 Cons (TODO: surprising that parentheses are required. Decide whether to change precedence)
 (2 ^ 0) :: (2 ^ 1) :: (2 ^ 2) :: (2 ^ 3) :: []
-stdout : [1, 2, 4, 8] : [Int]
+stdout : [1, 2, 4, 8] : List Int
 
 List concatenation
 1 :: [] ++ [] ++ 2 :: 3 :: 4 :: [] ++ 5 :: []
-stdout : [1, 2, 3, 4, 5] : [Int]
+stdout : [1, 2, 3, 4, 5] : List Int
 
 Fixity tests
 tests/fixity.links

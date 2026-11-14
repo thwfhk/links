@@ -34,7 +34,7 @@ stderr : @.+
 exit : 1
 
 Close recursive patterns (issue #360)
-switch (Var(0)) { case (_ : (mu a . [|Lam:(Int, a)|Var:Int|])) -> 42 }
+switch (Var(0)) { case (_ : (mu a . (|Lam:(Int, a)|Var:Int|))) -> 42 }
 stdout : 42 : Int
 
 Unsafe type annotations on non-recursive functions
@@ -68,4 +68,18 @@ exit : 1
 Invalid unsafe type annotations on polymorphic types
 unsafe sig f : (a) -> () fun f(x) { print(x) } f
 stderr : @.*
+exit : 1
+
+List type spellings agree, and List is still a constructor in terms
+var xs = [[1]] : List (List Int); (xs : List(List(Int)), List(42) : (|List:Int|))
+stdout : ([[1]], List(42)) : (List (List Int), (|List:Int|))
+
+The built-in List type cannot be redefined at file scope
+typename List(a) = (|Nil|Cons:a|); ()
+stderr : @.*List is a built-in type and cannot be redefined\..*
+exit : 1
+
+The built-in List type cannot be redefined in a module
+module Lists { typename List(a) = (|Nil|Cons:a|); } ()
+stderr : @.*List is a built-in type and cannot be redefined\..*
 exit : 1

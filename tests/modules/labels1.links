@@ -1,8 +1,8 @@
 module A {
-  typename Foo = [| Bar: String |];
+  typename Foo = (| Bar: String |);
 }
 
-typename Foo = [| Bar: Int |];
+typename Foo = (| Bar: Int |);
 
 sig f : (Foo) ~> String
 fun f(x) {

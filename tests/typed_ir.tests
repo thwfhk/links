@@ -36,7 +36,7 @@ stdout : () : ()
 Bound quantifiers in a list of records (#694)
 tests/typed_ir/T694.links
 filemode : true
-stdout : fun : forall a::Row,b::Row(Any,Base).() -a-> [(|b::(Any,Base))]
+stdout : fun : forall a::Row,b::Row(Any,Base).() -a-> List (|b::(Any,Base))
 
 Curry (#574)
 tests/typed_ir/T574.links
@@ -89,14 +89,14 @@ stdout : () : ()
 List comprehension (#698)
 tests/typed_ir/T698.links
 filemode : true
-stdout : [1, 2] : [Int]
+stdout : [1, 2] : List Int
 
 isInt (#575)
 sig isInt : (String) -> Bool fun isInt (x) { x =~ /-?[0-9]+$/ }
 stdout : () : ()
 
 function pattern matching has right effects (#691)
-sig f : ([a]) {}-> a fun f ([x]) { x }
+sig f : (List a) {}-> a fun f ([x]) { x }
 stdout : () : ()
 
 Freshen type variables when turning a lambda into a named function (#871)

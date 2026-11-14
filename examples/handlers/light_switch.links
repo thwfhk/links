@@ -8,7 +8,7 @@ fun put(st) {do Put(st)}
 #
 # Light switch
 #
-typename LState = [|On|Off|];
+typename LState = (|On|Off|);
 
 # Toggle the light switch
 sig toggle : Comp((), {Get:LState,Put:(LState) => ()|_})

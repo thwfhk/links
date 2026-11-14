@@ -1,24 +1,24 @@
-typename Whitespace = [| Space | NewLine | Tab | Crlf | EOF | Para | HLine |];
+typename Whitespace = (| Space | NewLine | Tab | Crlf | EOF | Para | HLine |);
 
-typename FormatType = [| Bold | Emph | Sub | Sup | Del | Hdr1 | Hdr2 | WikiLink | Indent : Int
+typename FormatType = (| Bold | Emph | Sub | Sup | Del | Hdr1 | Hdr2 | WikiLink | Indent : Int
                         | Link : String | ImageLink : String | List | OrderedElt : String | UnorderedElt : String
-                        | BlockQuote | WS : Whitespace |];
+                        | BlockQuote | WS : Whitespace |);
 
-typename LabelType  = [| Semantic | Security : Int |];
+typename LabelType  = (| Semantic | Security : Int |);
 
-typename BlockType (a) = mu block . ([| EmptyBlock
+typename BlockType (a) = mu block . ((| EmptyBlock
                                     | WordBlock : (a, String)
                                     | FormattedBlock : (a, FormatType, block)
                                     | LabeledBlock : (a, LabelType, block)
-                                    | CompoundBlock : (a, [block])
-                                    |]);
+                                    | CompoundBlock : (a, List block)
+                                    |));
 
-typename ParseTree = BlockType ([| None |]);
+typename ParseTree = BlockType ((| None |));
 
-typename ParseResult = [| None
+typename ParseResult = (| None
                         | Some : ParseTree
                         | Error : String
-                        |];
+                        |);
 
 typename Document = BlockType (Int);
 
@@ -73,7 +73,7 @@ mutual {
 
   sig makeWordBlock : (String) ~> (ParseResult, String)
   fun makeWordBlock(text) {
-      fun mwb(text, wbs : [ParseTree]) {
+      fun mwb(text, wbs : List ParseTree) {
         var word = (text =~ /^([^\ {"\x0d\x0a"}\\<\\_\\^\\~\\[\\#\\*-])+(\ |\\b)/l); #includes trailing punctuation like commas etc.
         switch (word) {
          case [] ->
@@ -109,7 +109,7 @@ mutual {
 
   sig makeFormattedBlock : (String) ~> (ParseResult, String)
   fun makeFormattedBlock(text) {
-     fun matchNth(f :[String], p) {
+     fun matchNth(f :List String, p) {
           switch(p) {
             case [] -> Error("matchNth reached the end of the match list") #should be impossible to reach the end of this without finding a match
             case (ix, ftag)::tl ->
@@ -262,8 +262,8 @@ mutual {
        }
 
 
-       fun t2b(text:String, bs : [ParseTree]) {
-           var parsers = ([makeBlockQuote, makeList, makeSentenceBlock, eatWhitespace, makeFormattedBlock, makeHref, makeImageLink]: [(String) ~> (ParseResult, String)]);
+       fun t2b(text:String, bs : List ParseTree) {
+           var parsers = ([makeBlockQuote, makeList, makeSentenceBlock, eatWhitespace, makeFormattedBlock, makeHref, makeImageLink]: List ((String) ~> (ParseResult, String)));
 
 
            if(text == emptyString) {
@@ -331,7 +331,7 @@ fun blockToText(b) {
             }
         }
 
-        fun l2t(lbs:[ParseTree], t:String) {
+        fun l2t(lbs:List ParseTree, t:String) {
             switch(lbs) {
             case [] -> t
             case FormattedBlock(None, Indent(i), FormattedBlock(None, pfxElt, listelt))::tl ->
@@ -368,7 +368,7 @@ fun blockToText(b) {
             case WS(_) -> b2t(t, fb)
             case List ->
                 switch (fb) {
-                    case CompoundBlock(None, lbs) -> l2t(lbs :[ParseTree], t)
+                    case CompoundBlock(None, lbs) -> l2t(lbs :List ParseTree, t)
                     case _ -> l2t([fb], t)
                 }
             case BlockQuote ->

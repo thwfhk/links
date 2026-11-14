@@ -1,10 +1,10 @@
 # Satisfiability testing
 
-typename Expr = [|Var:String
+typename Expr = (|Var:String
                  |And:(Expr,Expr)
                  |Or:(Expr,Expr)
                  |Not:Expr
-                 |Const:Bool|];
+                 |Const:Bool|);
 
 # Converts an expression into a string
 sig exprToString : (Expr) ~> String
@@ -240,9 +240,9 @@ fun check(e) {
 }
 
 # Optimisations
-typename Polarity = [|Positive
+typename Polarity = (|Positive
                      |Negative
-                     |Mixed|];
+                     |Mixed|);
 
 sig literalPolarity : (Expr, String) -> Maybe(Polarity)
 fun literalPolarity(e,x) {
@@ -277,13 +277,13 @@ fun peek() { do Peek }
 sig succeed : (a) -> Parser(a, { |_})
 fun succeed(x)() { x }
 
-sig many : (Parser(a, { |e})) ~> Parser([a], { |e})
+sig many : (Parser(a, { |e})) ~> Parser(List a, { |e})
 fun many(p)() {
   if (choose()) p() :: many(p)()
   else []
 }
 
-sig many1 : (Parser(a, { |e})) -> Parser([a], { |e})
+sig many1 : (Parser(a, { |e})) -> Parser(List a, { |e})
 fun many1(p)() {
   p() :: many(p)()
 }
@@ -437,7 +437,7 @@ mutual {
     else parseAtomicExpr()
   }
 
-  sig parse : (Parser(a, {Choose{_},Satisfies{_},Peek{_},Fail{_}|e}), [Char]) ->
+  sig parse : (Parser(a, {Choose{_},Satisfies{_},Peek{_},Fail{_}|e}), List Char) ->
               Comp(a, {Choose-,Satisfies-,Peek-,Fail: Zero |e})
   fun parse(m, input)() {
     handle(m())(tokens <- input) {

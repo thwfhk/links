@@ -49,4 +49,25 @@ roundtrip "Recursive effect row" \
     'fun w(g) { handle(g()) { case () -> () case <F(h) => res> -> w(h) }}' \
     'w' || status=1
 
+roundtrip "Nested lists and function elements" \
+    'sig f : forall e::Eff. (List (List ((Int) -e-> Int))) -e-> List (List ((Int) -e-> Int)) fun f(xs) { xs }' \
+    '~f' --set=show_quantifiers=true || status=1
+
+roundtrip "Variants and open record rows" \
+    'sig f : forall e::Eff,r::Row,s::Row. (List (|None|Some:(x:Int|r)|s|)) -e-> List (|None|Some:(x:Int|r)|s|) fun f(xs) { xs }' \
+    '~f' --set=show_quantifiers=true || status=1
+
+roundtrip "Empty variants" '' \
+    'fun(x : (| |)) { switch (x) { } }' || status=1
+
+roundtrip "Open-only variants with the old printer" \
+    'sig f : forall r::Row,e::Eff. ((|r|)) -e-> (|r|) fun f(x) { x }' \
+    '~f' --set=types_pretty_printer_engine=old --set=show_quantifiers=true || status=1
+
+for engine in roundtrip old; do
+    roundtrip "Absent variant fields with the $engine printer" \
+        'sig f : forall r::Row,e::Eff. ((|None{-}|Some:Int|r|)) -e-> (|None{-}|Some:Int|r|) fun f(x) { x }' \
+        '~f' --set=types_pretty_printer_engine="$engine" --set=show_quantifiers=true || status=1
+done
+
 exit "$status"

@@ -79,7 +79,7 @@ exit : 1
 
 List comprehension infers a row for its input records
 fun (rows) { for (x <- rows) [(a=x.y)] }
-stdout : fun : ([(y:a|_)]) -> [(a:a)]
+stdout : fun : (List (y:a|_)) -> List (a:a)
 
 Duplicate fields
 (x=3,x=3)

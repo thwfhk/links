@@ -147,7 +147,26 @@ let attach_presence_subkind (t, subkind) =
   in attach_subkind_helper update subkind
 
 
+type recursive_row_syntax = Both_rows | Record_row | Variant_row
+
+let combine_row_syntax p left right =
+  match left, right with
+  | Both_rows, syntax | syntax, Both_rows -> syntax
+  | Record_row, Record_row -> Record_row
+  | Variant_row, Variant_row -> Variant_row
+  | _ -> raise (ConcreteSyntaxError (pos p, "Record and variant row fields cannot be mixed."))
+
+let open_data_row p ending syntax row =
+  let data = [], row in
+  match ending, syntax with
+  | `Record, (Both_rows | Record_row) -> Datatype.Record data
+  | `Variant, (Both_rows | Variant_row) -> Datatype.Variant data
+  | `Record, Variant_row | `Variant, Record_row ->
+      raise (ConcreteSyntaxError (pos p, "Row fields do not match the closing delimiter."))
+
 let alias p name args aliasbody =
+    if name = "List" then
+      raise (ConcreteSyntaxError (pos p, "List is a built-in type and cannot be redefined."));
     with_pos p (Aliases [with_pos p (name, args, aliasbody)])
 
 let parseRegexFlags f =
@@ -258,7 +277,7 @@ let any = any_pat dp
 %token DOOP
 %token LPAREN RPAREN
 %token LBRACE RBRACE
-%token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
+%token RBRACKET LBRACKET BARRPAREN
 %token FOR LARROW WHERE
 %token COMMA VBAR DOT DOTDOT COLON COLONCOLON
 %token WITH ORDERBY
@@ -271,6 +290,7 @@ let any = any_pat dp
 %token <string> STRING REGEXREPL
 %token <char> CHAR
 %token <string> VARIABLE CONSTRUCTOR KEYWORD PERCENTVAR
+%token LISTNAME
 %token MU FORALL SIG UNSAFE
 %token MODULE MUTUAL OPEN IMPORT
 %token QUESTION
@@ -307,6 +327,11 @@ let any = any_pat dp
 
 %%
 
+constructor_name:
+| CONSTRUCTOR                                                  { $1 }
+| LISTNAME                                                     { "List" }
+
+
 (* soption = singleton option.  Allows an argument to appear optionally.  If it
    does, it is placed in a singleton list.  This combinator is useful when
    defining various *field productions.  *)
@@ -336,7 +361,7 @@ args:
 arg:
 | STRING                                                       { $1 }
 | VARIABLE                                                     { $1 }
-| CONSTRUCTOR                                                  { $1 }
+| constructor_name                                                            { $1 }
 | UINTEGER                                                     { string_of_int    $1 }
 | UFLOAT                                                       { string_of_float' $1 }
 | TRUE                                                         { "true"  }
@@ -368,10 +393,10 @@ nofun_declaration:
 | signature? tlvarbinding SEMICOLON                            { val_binding' ~ppos:$loc($2) $1 $2 }
 | typedecl SEMICOLON                                           { $1 }
 | links_module | links_open SEMICOLON                          { $1 }
-| pollute = boption(OPEN) IMPORT CONSTRUCTOR SEMICOLON         { import ~ppos:$loc($2) ~pollute [$3] }
+| pollute = boption(OPEN) IMPORT constructor_name SEMICOLON         { import ~ppos:$loc($2) ~pollute [$3] }
 
 links_module:
-| MODULE name = CONSTRUCTOR members = moduleblock              { module_binding ~ppos:$loc($1) (binder ~ppos:$loc(name) name) members }
+| MODULE name = constructor_name members = moduleblock              { module_binding ~ppos:$loc($1) (binder ~ppos:$loc(name) name) members }
 
 fun_declarations:
 | fun_declaration+                                             { $1 }
@@ -416,9 +441,9 @@ signature:
 | SIG sigop COLON datatype                                     { with_pos $loc ($2, datatype $4) }
 
 typedecl:
-| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                 { alias $loc $2 $3 (Typename   ( $5     , None)) }
-| EFFECTNAME CONSTRUCTOR typeargs_opt EQ LBRACE erow RBRACE     { alias $loc $2 $3 (Effectname ( $6     , None)) }
-| EFFECTNAME CONSTRUCTOR typeargs_opt EQ effect_app             { alias $loc $2 $3 (Effectname (([], $5), None)) }
+| TYPENAME constructor_name typeargs_opt EQ datatype                 { alias $loc $2 $3 (Typename   ( $5     , None)) }
+| EFFECTNAME constructor_name typeargs_opt EQ LBRACE erow RBRACE     { alias $loc $2 $3 (Effectname ( $6     , None)) }
+| EFFECTNAME constructor_name typeargs_opt EQ effect_app             { alias $loc $2 $3 (Effectname (([], $5), None)) }
 
 (* Lists of quantifiers in square brackets denote type abstractions *)
 type_abstracion_vars:
@@ -429,13 +454,13 @@ typeargs_opt:
 | LPAREN varlist RPAREN                                        { $2 }
 
 kind:
-| COLONCOLON CONSTRUCTOR LPAREN CONSTRUCTOR COMMA CONSTRUCTOR RPAREN
+| COLONCOLON constructor_name LPAREN constructor_name COMMA constructor_name RPAREN
                                                                { full_kind_of $loc $2 $4 $6 }
-| COLONCOLON CONSTRUCTOR                                       { kind_of $loc($2) $2        }
+| COLONCOLON constructor_name                                                 { kind_of $loc($2) $2        }
 
 subkind:
-| COLONCOLON LPAREN CONSTRUCTOR COMMA CONSTRUCTOR RPAREN       { full_subkind_of $loc $3 $5 }
-| COLONCOLON CONSTRUCTOR                                       { subkind_of $loc($2) $2     }
+| COLONCOLON LPAREN constructor_name COMMA constructor_name RPAREN       { full_subkind_of $loc $3 $5 }
+| COLONCOLON constructor_name                                                 { subkind_of $loc($2) $2     }
 
 typearg:
 | VARIABLE                                                     { (named_quantifier $1 (None, None) `Rigid) }
@@ -453,14 +478,14 @@ constant:
 | CHAR                                                         { Constant.Char $1    }
 
 qualified_name:
-| CONSTRUCTOR DOT qualified_name_inner                         { $1 :: $3 }
+| constructor_name DOT qualified_name_inner                         { $1 :: $3 }
 
 qualified_name_inner:
-| CONSTRUCTOR DOT qualified_name_inner                         { $1 :: $3 }
+| constructor_name DOT qualified_name_inner                         { $1 :: $3 }
 | VARIABLE                                                     { [$1]     }
 
 qualified_type_name:
-| CONSTRUCTOR DOT separated_nonempty_list(DOT, CONSTRUCTOR)    { $1 :: $3 }
+| constructor_name DOT separated_nonempty_list(DOT, constructor_name)    { $1 :: $3 }
 
 atomic_expression:
 | qualified_name                                               { with_pos $loc (QualifiedVar $1) }
@@ -477,7 +502,7 @@ primary_expression:
 | DOLLAR primary_expression                                    { with_pos $loc (Generalise $2) }
 
 constructor_expression:
-| CONSTRUCTOR parenthesized_thing?                             { constructor ~ppos:$loc ?body:$2 $1 }
+| constructor_name parenthesized_thing?                             { constructor ~ppos:$loc ?body:$2 $1 }
 
 parenthesized_thing:
 | LPAREN binop RPAREN                                          { with_pos $loc (Section $2)              }
@@ -524,7 +549,7 @@ unary_expression:
 | MINUSDOT unary_expression                                    { unary_appl ~ppos:$loc UnaryOp.FloatMinus $2 }
 | OPERATOR unary_expression                                    { unary_appl ~ppos:$loc (UnaryOp.Name $1)  $2 }
 | postfix_expression | constructor_expression                  { $1 }
-| DOOP CONSTRUCTOR loption(arg_spec)                           { with_pos $loc (DoOperation (with_pos $loc($2) (Operation $2), $3, None)) }
+| DOOP constructor_name loption(arg_spec)                           { with_pos $loc (DoOperation (with_pos $loc($2) (Operation $2), $3, None)) }
 
 infix_appl:
 | unary_expression                                             { $1 }
@@ -603,7 +628,7 @@ exp:
 | typed_expression                                             { $1 }
 
 links_open:
-| OPEN separated_nonempty_list(DOT, CONSTRUCTOR)               { with_pos $loc (Open $2) }
+| OPEN separated_nonempty_list(DOT, constructor_name)               { with_pos $loc (Open $2) }
 
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { val_binding ~ppos:$loc $2 $4 }
@@ -715,8 +740,10 @@ primary_datatype:
                                                                    | [n] -> WithPos.node n
                                                                    | ts  -> Datatype.Tuple ts }
 | LPAREN rfields RPAREN                                        { Datatype.Record $2 }
-| LBRACKETBAR vrow BARRBRACKET                                 { Datatype.Variant $2 }
-| LBRACKET datatype RBRACKET                                   { Datatype.List $2 }
+| LPAREN VBAR BARRPAREN                                         { Datatype.Variant ([], Datatype.Closed) }
+| LPAREN VBAR variant_fields BARRPAREN                          { Datatype.Variant $3 }
+| LPAREN VBAR data_row_tail row_end
+    { let syntax, tail = $3 in open_data_row $loc $4 syntax tail }
 | type_var                                                     { $1 }
 | kinded_type_var                                              { $1 }
 | CONSTRUCTOR                                                  { let open Datatype in
@@ -730,6 +757,7 @@ primary_datatype:
                                                                    | t         -> TypeApplication (t, [])
                                                                }
 | CONSTRUCTOR LPAREN type_arg_list RPAREN                      { Datatype.TypeApplication ($1, $3) }
+| LISTNAME primary_datatype_pos                                { Datatype.List $2 }
 
 type_var:
 | VARIABLE                                                     { Datatype.TypeVar (named_typevar $1  `Rigid)   }
@@ -751,10 +779,6 @@ type_arg:
 datatypes:
 | separated_nonempty_list(COMMA, datatype)                     { $1 }
 
-vrow:
-| vfields                                                      { $1                    }
-| /* empty */                                                  { ([], Datatype.Closed) }
-
 erow:
 | efields                                                      { $1                    }
 | /* empty */                                                  { ([], Datatype.Closed) }
@@ -770,17 +794,71 @@ fields:
 | fields_def(field, COMMA, row_var, kinded_row_var)                   { $1 }
 
 field:
-| CONSTRUCTOR /* allows nullary variant labels */              { ($1, present) }
+| constructor_name /* allows nullary variant labels */              { ($1, present) }
 | field_label fieldspec                                        { ($1, $2) }
 
 field_label:
-| CONSTRUCTOR                                                  { $1 }
+| constructor_name                                                            { $1 }
 | VARIABLE                                                     { $1 }
 | STRING                                                       { $1 }
 | UINTEGER                                                     { string_of_int $1 }
 
 rfields:
-| fields_def(rfield, COMMA, row_var, kinded_row_var)                  { $1 }
+| rfield                                                       { ([$1], Datatype.Closed) }
+| rfield VBAR row_var                                          { ([$1], $3) }
+| rfield VBAR kinded_row_var                                   { ([$1], $3) }
+| rfield COMMA
+  fields_def(rfield, COMMA, row_var, kinded_row_var)             { ($1 :: fst $3, snd $3) }
+
+row_end:
+| RPAREN                                                       { `Record }
+| BARRPAREN                                                    { `Variant }
+
+data_row_tail:
+| nonrec_row_var option(subkind)
+    { let tail = match $2 with
+        | None -> $1
+        | Some subkind -> attach_row_subkind ($1, subkind)
+      in
+      (Both_rows, tail) }
+| LPAREN MU VARIABLE DOT recursive_data_row RPAREN
+    { let syntax, row = $5 in
+      (syntax, Datatype.Recursive (named_typevar $3 `Rigid, row)) }
+
+recursive_data_row:
+| data_row_tail
+    { let syntax, tail = $1 in
+      (combine_row_syntax $loc Variant_row syntax, ([], tail)) }
+| VBAR data_row_tail
+    { let syntax, tail = $2 in (syntax, ([], tail)) }
+| recursive_data_field
+    { let syntax, field = $1 in (syntax, ([field], Datatype.Closed)) }
+| recursive_data_field VBAR data_row_tail
+    { let syntax, field = $1 in
+      let tail_style, tail = $3 in
+      (combine_row_syntax $loc syntax tail_style, ([field], tail)) }
+| recursive_data_field COMMA recursive_data_row
+    { let style, field = $1 in
+      let rest_style, (fields, tail) = $3 in
+      let style = combine_row_syntax $loc Record_row (combine_row_syntax $loc style rest_style) in
+      (style, (field :: fields, tail)) }
+| recursive_data_field VBAR recursive_variant_fields
+    { let style, field = $1 in
+      let style = combine_row_syntax $loc Variant_row style in
+      (style, (field :: fst $3, snd $3)) }
+
+recursive_variant_fields:
+| vfield                                                       { ([$1], Datatype.Closed) }
+| vfield VBAR vrow_var                                         { ([$1], $3) }
+| vfield VBAR kinded_vrow_var                                  { ([$1], $3) }
+| vfield VBAR recursive_variant_fields                         { ($1 :: fst $3, snd $3) }
+
+recursive_data_field:
+| constructor_name                                            { (Both_rows, ($1, present)) }
+| constructor_name fieldspec                                  { (Both_rows, ($1, $2)) }
+| VARIABLE fieldspec                                          { (Record_row, ($1, $2)) }
+| STRING fieldspec                                            { (Record_row, ($1, $2)) }
+| UINTEGER fieldspec                                          { (Record_row, (string_of_int $1, $2)) }
 
 rfield:
 /* The following sugar is tempting, but it leads to a conflict. Is
@@ -793,13 +871,19 @@ record_label:
 | field_label                                                  { $1 }
 
 vfields:
-| fields_def(vfield, VBAR, vrow_var, kinded_vrow_var)          { $1 }
-| vrow_var                                                     { ([]  , $1             ) }
-| kinded_vrow_var                                              { ([]  , $1             ) }
+| variant_fields                                               { $1 }
+| vrow_var                                                     { ([], $1) }
+| kinded_vrow_var                                              { ([], $1) }
+| VBAR vrow_var                                                { ([], $2) }
+| VBAR kinded_vrow_var                                         { ([], $2) }
+
+variant_fields:
+| vfield                                                       { ([$1], Datatype.Closed) }
+| vfield VBAR vfields                                          { ($1 :: fst $3, snd $3) }
 
 vfield:
-| CONSTRUCTOR                                                  { ($1, present) }
-| CONSTRUCTOR fieldspec                                        { ($1, $2)      }
+| constructor_name                                                            { ($1, present) }
+| constructor_name fieldspec                                        { ($1, $2)      }
 
 efields:
 | efield                                                      { ([$1], Datatype.Closed                 ) }
@@ -812,12 +896,12 @@ efield:
 | effect_label efieldspec                                       { ($1, $2)      }
 
 effect_label:
-| CONSTRUCTOR                                                  { $1 }
+| constructor_name                                                            { $1 }
 | VARIABLE                                                     { $1 }
 
 effect_app:
-| CONSTRUCTOR                                                  { Datatype.EffectApplication($1, []) }
-| CONSTRUCTOR LPAREN type_arg_list RPAREN                      { Datatype.EffectApplication($1, $3) }
+| constructor_name                                                            { Datatype.EffectApplication($1, []) }
+| constructor_name LPAREN type_arg_list RPAREN                      { Datatype.EffectApplication($1, $3) }
 
 fieldspec:
 | braced_fieldspec                                             { $1 }
@@ -956,8 +1040,8 @@ resumable_operation_pattern:
     { with_pos $loc (Pattern.Operation (fst $1, snd $1, any)) }
 
 operation_pattern:
-| CONSTRUCTOR                                                  { ($1, []) }
-| CONSTRUCTOR multi_args                                       { ($1, $2) }
+| constructor_name                                                            { ($1, []) }
+| constructor_name multi_args                                       { ($1, $2) }
 
 typed_pattern:
 | cons_pattern                                                 { $1 }
@@ -969,14 +1053,14 @@ cons_pattern:
 
 constructor_pattern:
 | negative_pattern                                             { $1 }
-| CONSTRUCTOR parenthesized_pattern?                           { with_pos $loc (Pattern.Variant ($1, $2)) }
+| constructor_name parenthesized_pattern?                           { with_pos $loc (Pattern.Variant ($1, $2)) }
 
 constructors:
-| separated_nonempty_list(COMMA, CONSTRUCTOR)                  { $1 }
+| separated_nonempty_list(COMMA, constructor_name)                  { $1 }
 
 negative_pattern:
 | primary_pattern                                              { $1 }
-| MINUS CONSTRUCTOR                                            { with_pos $loc (Pattern.Negative [$2]) }
+| MINUS constructor_name                                                      { with_pos $loc (Pattern.Negative [$2]) }
 | MINUS LPAREN constructors RPAREN                             { with_pos $loc (Pattern.Negative $3)   }
 
 parenthesized_pattern:

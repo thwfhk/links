@@ -1,14 +1,14 @@
 Construction
 Foo
-stdout : @Foo *\(\) : \[|Foo | [0-9]*\|]
+stdout : Foo : (|Foo|_::Any|)
 
 Nested Construction
 Foo (Bar)
-stdout : @Foo *\(Bar\) : \[|Foo:\[|Bar | [0-9]*|\] | [0-9]*\|]
+stdout : @Foo\(Bar\) : \(\|Foo:\(\|Bar\|_::Any\|\)\|_::Any\|\)
 
 Nested Construction + argument (nary)
 This(Is(A(Valid(Links(Program(42))))))
-stdout : @This *\(Is *\(A *\(Valid *\(Links *\(Program *\(42\)\)\)\)\)\) : \[|This:\[|Is:\[|A:\[|Valid:\[|Links:\[|Program:Int | [0-9]*|\] | [0-9]*|\] | [0-9]*|\] | [0-9]*|\] | [0-9]*|\] | [0-9]*|\]
+stdout : @This\(Is\(A\(Valid\(Links\(Program\(42\)\)\)\)\)\) : \(\|This:\(\|Is:\(\|A:\(\|Valid:\(\|Links:\(\|Program:Int\|_::Any\|\)\|_::Any\|\)\|_::Any\|\)\|_::Any\|\)\|_::Any\|\)\|_::Any\|\)
 
 Trivial closed case
 fun (x) { switch (x) { case A(b) -> b } }
@@ -58,39 +58,39 @@ stdout : @fun : .*A:Bool.*B:Bool.* -> Bool
 
 Recursive variant types [1]
 fun (x) { switch (x) { case A(a) -> a case y -> x } }
-stdout : @fun : \(mu [a-z]+\.\[|A:[a-z]+ | [a-z0-9]+|\]\)-> mu [a-z]+\.\[|A:[a-z]+ | [a-z0-9]+|\]
+stdout : @fun : \(mu a\.\(\|A:a\|b\|\)\) \-> mu a\.\(\|A:a\|b\|\)
 
 Recursive variant types [2]
 fun increment(x) { switch (x) { case Zero -> Succ (Zero) case Succ (n) -> Succ ((increment(n))) }} increment
-stdout : @fun : \(mu [a-z]+\.\[|Succ:[a-z]+ | Zero|\]\) -> \[|Zero | mu [0-9]+\.Succ:\[|Zero | [0-9]+|\] | [0-9]+|\]
+stdout : @fun : \(mu a\.\(\|Succ:a\|Zero\|\)\) \~> \(\|Zero\|\(mu c\.Succ:\(\|Zero\|c\|\)\|_::Any\)\|\)
 
 Recursive variant types [3]
 fun rev(x, r) { switch (x) { case Empty -> r case Cons(a, b) -> rev(b, Cons(a, r)) }} rev
-stdout : @fun : \(mu [a-z]+\.\[|Cons:\([a-z]+, [a-z]+\) | Empty|\], mu [a-z]+\.\[|Cons:\([a-z]+, [a-z]+\) | [0-9]+|\]\) -> mu [a-z]+\.\[|Cons:\([a-z]+, [a-z]+\) | [0-9]+|\]
+stdout : @fun : \(mu a\.\(\|Cons:\(b::Any, a\)\|Empty\|\), mu c\.\(\|Cons:\(b::Any, c\)\|d::Any\|\)\) \~> \(\|Cons:\(b::Any, mu f\.\(\|Cons:\(b::Any, f\)\|d::Any\|\)\)\|d::Any\|\)
 
 Recursive variant types [4]
 fun increment(x) { switch (x) { case Zero -> Succ (Zero) case Succ (n) -> Succ (increment(n))}} fun (x) {switch (increment(x)) { case Foo -> 0 case Zero -> 1 case Succ (n) -> 2 }}
-stdout : @fun : \(mu ([a-z]+).\[|Succ:\\1 | Zero|\]\) -> Int
+stdout : @fun : \(mu a\.\(\|Succ:a\|Zero\|\)\) \~> Int
 
 Recursive variant types [5]
 fun increment(x) { switch (x) { case Zero -> Succ (Zero) case Succ (n) -> Succ (increment(n))}} increment(increment(Zero))
-stdout : @Succ *\(Succ *\(Zero\)\) : \[|Zero | (mu ([0-9]*).Succ:\[|Zero | \\1|\] | [0-9]*)|\]
+stdout : @Succ\(Succ\(Zero\)\) : \(\|Zero\|\(mu a\.Succ:\(\|Zero\|a\|\)\|_::Any\)\|\)
 
 Rows preserved across functions
 fun f(x) { switch (x) { case Foo -> Bar case s -> s } } f
-stdout : @fun : \(\[|Bar | Foo | [0-9]*|\]\) -> \[|Bar | [0-9]*|\]
+stdout : @fun : \(\(\|Bar\|Foo\|a::Any\|\)\) \-> \(\|Bar\|Foo\|a::Any\|\)
 
 Nullary variants with cases
 switch (None) { case None -> None case Some (x) -> Some (x) }
-stdout : @None *\(\) : \[|None | Some:a | [0-9]*|\]
+stdout : None : (|None|Some:_::Any|_::Any|)
 
 Nested variant unification
 [C (A), C (B)]
 stdout : @\[C *\(A\), C *\(B\)\] : .*
 
 Type annotations
-fun increment(x) {(Succ (x)):([|Succ:(mu a . [|Zero | Succ:a|])|])} increment
-stdout : @fun : \(mu ([a-z]+)\.\[|Succ:\\1 | Zero|]\) -> \[|Succ:mu ([a-z]+).\[|Succ:\\2 | Zero|\]|\]
+fun increment(x) {(Succ (x)):((|Succ:(mu a . (|Zero | Succ:a|))|))} increment
+stdout : @fun : \(mu a\.\(\|Succ:a\|Zero\|\)\) \-> \(\|Succ:mu c\.\(\|Succ:c\|Zero\|\)\|\)
 
 Closure at top-level (issue #422) [1]
 (switch(Foo(id)) { case Foo(id) -> fun(x) { id(x) } })(2)
@@ -102,11 +102,11 @@ stdout : fun : (a::Any) -> a::Any
 
 Constructor names with primes (1)
 Foo'
-stdout : Foo' : [|Foo'|_::Any|]
+stdout : Foo' : (|Foo'|_::Any|)
 
 Constructor names with primes (2)
 Foo'''''bar
-stdout : Foo'''''bar : [|Foo'''''bar|_::Any|]
+stdout : Foo'''''bar : (|Foo'''''bar|_::Any|)
 
 Constructor names with primes (3)
 'Foo

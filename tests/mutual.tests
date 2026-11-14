@@ -1,7 +1,7 @@
 Lists (Correct)
 ./tests/mutual/list.links
 filemode : true
-stdout : Cons(1, Cons(2, Cons(3, Nil))) : List (Int)
+stdout : Cons(1, Cons(2, Cons(3, Nil))) : VariantList (Int)
 
 Lists (Type argument mismatch)
 ./tests/mutual/listWrong.links
@@ -12,7 +12,7 @@ exit : 1
 Lists (Map)
 ./tests/mutual/listMap.links
 filemode : true
-stdout : Cons(2, Cons(3, Cons(4, Nil))) : List (Int)
+stdout : Cons(2, Cons(3, Cons(4, Nil))) : VariantList (Int)
 
 Odd and even numbers (1)
 ./tests/mutual/oddEven.links

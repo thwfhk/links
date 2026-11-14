@@ -1,6 +1,6 @@
 Base row types
-fun (rows : [(id:Int|r::Base)]) { for (x <- rows) where (x.id == 42) [x] }
-stdout : fun : ([(id:Int|a::Base)]) -> [(id:Int|a::Base)]
+fun (rows : List (id:Int|r::Base)) { for (x <- rows) where (x.id == 42) [x] }
+stdout : fun : (List (id:Int|a::Base)) -> List (id:Int|a::Base)
 
 Onetuple with unit
 (1=())

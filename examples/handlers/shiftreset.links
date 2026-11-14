@@ -24,7 +24,7 @@ fun yield(x) {
   })
 }
 
-sig example : () {Shift{_} |_}~> [Int]
+sig example : () {Shift{_} |_}~> List Int
 fun example() {
   reset(fun() {
     yield(1);

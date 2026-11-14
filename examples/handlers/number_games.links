@@ -1,6 +1,6 @@
 # Classic guess a number game
 typename Comp(e::Eff,a) = () ~e~> a;
-typename Answer = [|Low|Correct|High|];
+typename Answer = (|Low|Correct|High|);
 
 sig readInt : () {Read:Int|_}~> Int
 fun readInt() {var n = do Read; print(" " ^^ intToString(n)); n}
@@ -23,7 +23,7 @@ fun isNil(xs) {
   }
 }
 
-sig input : ([Int], Comp({Read:Int |e}, a)) {Read{_} |e}~> ()
+sig input : (List Int, Comp({Read:Int |e}, a)) {Read{_} |e}~> ()
 fun input(guesses, m) {
   handle(m())(guesses <- guesses) {
     case x -> ()
@@ -46,7 +46,7 @@ fun mySecret(secret, m) {
   }
 }
 
-sig logger : (Comp({Guess:(Int) => Answer|e}, a)) {Guess:(Int) => Answer|e}~> [(Int,Answer)]
+sig logger : (Comp({Guess:(Int) => Answer|e}, a)) {Guess:(Int) => Answer|e}~> List (Int,Answer)
 fun logger(m) {
   handle(m())(log <- []) {
     case _ -> log

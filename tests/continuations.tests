@@ -48,16 +48,16 @@ stdout : 42 : Int
 
 Escape body [1]
 escape k in A
-stdout : A : [|A|_::Any|]
+stdout : A : (|A|_::Any|)
 
 Escape body [2]
 escape k in A(k)
-stdout : A(Continuationgeneralised_continuation) : [|A:(mu a.[|A:(a) ~b~> c::Any|d::Any|]) ~b~> c::Any|d::Any|]
+stdout : A(Continuationgeneralised_continuation) : (|A:(mu a.(|A:(a) ~b~> c::Any|d::Any|)) ~b~> c::Any|d::Any|)
 
 Escape with handlers disabled
 escape k in A(k)
 args : --set=enable_handlers=false
-stdout : A(Continuationpure_continuation) : [|A:(mu a.[|A:(a) ~b~> c::Any|d::Any|]) ~b~> c::Any|d::Any|]
+stdout : A(Continuationpure_continuation) : (|A:(mu a.(|A:(a) ~b~> c::Any|d::Any|)) ~b~> c::Any|d::Any|)
 
 Escape body [3]
 escape k in switch (A) { case A -> 0 case B -> 1 }
@@ -69,7 +69,7 @@ stdout : () : ()
 
 Escape body [5]
 escape k in (foo="bar",quux=Just(k((foo="baz",quux=Nothing))))
-stdout : (foo = "baz", quux = Nothing) : (foo:String,quux:[|Just:_::Any|Nothing|_::Any|])
+stdout : (foo = "baz", quux = Nothing) : (foo:String,quux:(|Just:_::Any|Nothing|_::Any|))
 
 Escape body [6]
 escape k in 2 + 40

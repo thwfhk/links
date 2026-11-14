@@ -20,7 +20,7 @@ stdout : fun : (forall a,b::Row.(a) -b-> a) -c-> forall a,b::Row.(a) -b-> a
 
 Polymorphic Instantiation (3)
 choose([])(ids)
-stdout : [] : [forall a,b::Row.(a) -b-> a]
+stdout : [] : List (forall a,b::Row.(a) -b-> a)
 
 Polymorphic Instantiation (4)
 fun(x : (forall a,e::Row. (a) -e-> a)) { x(x) }
@@ -73,8 +73,8 @@ fun(f : (forall a,e::Row. (a) -e-> a)) { (f(1), f(true)) }
 stdout : fun : forall a::Row.(forall b,c::Row.(b) -c-> b) -a-> (Int, Bool)
 
 Inference of Polymorphic Arguments (2)
-fun(xs : [forall a,e::Row. (a) -e-> a]) { poly(head(xs)) }
-stdout : fun : forall a::Row.([forall b,c::Row.(b) -c-> b]) -a-> (Int, Bool)
+fun(xs : List (forall a,e::Row. (a) -e-> a)) { poly(head(xs)) }
+stdout : fun : forall a::Row.(List (forall b,c::Row.(b) -c-> b)) -a-> (Int, Bool)
 
 Functions on Polymorphic Lists (1)
 length(ids)
@@ -82,7 +82,7 @@ stdout : 1 : Int
 
 Functions on Polymorphic Lists (2)
 tail(ids)
-stdout : [] : [forall a,b::Row.(a) -b-> a]
+stdout : [] : List (forall a,b::Row.(a) -b-> a)
 
 Functions on Polymorphic Lists (3)
 head(ids)
@@ -90,23 +90,23 @@ stdout : fun : forall a,b::Row.(a) -b-> a
 
 Functions on Polymorphic Lists (4)
 single(id)
-stdout : [fun] : [(a) -b-> a]
+stdout : [fun] : List ((a) -b-> a)
 
 Functions on Polymorphic Lists (4•)
 single(~id)
-stdout : [fun] : [forall a,b::Row.(a) -b-> a]
+stdout : [fun] : List (forall a,b::Row.(a) -b-> a)
 
 Functions on Polymorphic Lists (5)
 ~id :: ids
-stdout : [fun, fun] : [forall a,b::Row.(a) -b-> a]
+stdout : [fun, fun] : List (forall a,b::Row.(a) -b-> a)
 
 Functions on Polymorphic Lists (6)
 $(fun(x:_::(Unl,Any)) { x }) :: ids
-stdout : [fun, fun] : [forall a,b::Row.(a) -b-> a]
+stdout : [fun, fun] : List (forall a,b::Row.(a) -b-> a)
 
 Functions on Polymorphic Lists (7)
 single(inc) ++ single(id)
-stdout : [fun, fun] : [(Int) -a-> Int]
+stdout : [fun, fun] : List ((Int) -a-> Int)
 
 Functions on Polymorphic Lists (8)
 tests/freezeml/c8.links
@@ -115,11 +115,11 @@ stdout : fun : forall a,b::Row.(a) -b-> a
 
 Functions on Polymorphic Lists (9)
 map(poly)(single(~id))
-stdout : [(0, true)] : [(Int, Bool)]
+stdout : [(0, true)] : List (Int, Bool)
 
 Functions on Polymorphic Lists (10)
 map(head)(single(ids))
-stdout : [fun] : [forall a,b::Row.(a) -b-> a]
+stdout : [fun] : List (forall a,b::Row.(a) -b-> a)
 
 Application functions (1)
 app(poly)(~id)
@@ -165,7 +165,7 @@ stdout : fun : forall a::Any,b::Row.(a::Any) -b-> a::Any
 
 FreezeML programs (2)
 var ids = [~id]; ~ids
-stdout : [fun] : [forall a,b::Row.(a) -b-> a]
+stdout : [fun] : List (forall a,b::Row.(a) -b-> a)
 
 FreezeML programs (5)
 auto(~id)
@@ -173,7 +173,7 @@ stdout : fun : forall a,b::Row.(a) -b-> a
 
 FreezeML programs (6)
 head(ids) :: ids
-stdout : [fun, fun] : [forall a,b::Row.(a) -b-> a]
+stdout : [fun, fun] : List (forall a,b::Row.(a) -b-> a)
 
 FreezeML programs (7)
 head(ids)@(3)

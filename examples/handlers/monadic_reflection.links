@@ -1,6 +1,6 @@
 # Monadic reflection (state)
 
-typename Unit = [|Unit|];
+typename Unit = (|Unit|);
 
 # State monad
 typename State (a,s) = (s) {}~> (s,a);

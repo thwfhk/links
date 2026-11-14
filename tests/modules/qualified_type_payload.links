@@ -2,7 +2,7 @@ module A {
   typename AInt = Int;
 }
 
-typename Payload = [|Payload: A.AInt|];
+typename Payload = (|Payload: A.AInt|);
 
 sig unpack : (Payload) -> Int
 fun unpack(p) {

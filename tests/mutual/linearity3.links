@@ -1,7 +1,7 @@
 mutual {
-  typename Foo = [| Bobsleigh | Bobsleigh2:() {}-@ () |];
-  typename Bar = [| Bobsleigh3 | Bobsleigh4:Foo |];
-  typename Unrestricted = [| LookImUnrestricted |];
+  typename Foo = (| Bobsleigh | Bobsleigh2:() {}-@ () |);
+  typename Bar = (| Bobsleigh3 | Bobsleigh4:Foo |);
+  typename Unrestricted = (| LookImUnrestricted |);
 }
 
 sig unrestricted : Unrestricted

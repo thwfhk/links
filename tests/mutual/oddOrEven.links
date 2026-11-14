@@ -1,4 +1,4 @@
-  typename Nat = [| Z | Succ:Nat |];
+  typename Nat = (| Z | Succ:Nat |);
 
 mutual {
   sig isOdd : (Nat) ~> Bool

@@ -30,7 +30,7 @@ op m >> f {f(m)}
 #
 
 # Datatype modelling the players
-typename Player = [|Alice|Bob|];
+typename Player = (|Alice|Bob|);
 
 # String of player
 sig showPlayer : (Player) -> String
@@ -119,7 +119,7 @@ fun perfect(m) {
 
 # Auxiliary function.
 # Given the number of sticks n it returns a list of valid moves.
-sig validMoves : (Int) ~> [Int]
+sig validMoves : (Int) ~> List Int
 fun validMoves(n) {
     filter(fun(m) { m <= n }, [1..3])
 }
@@ -164,9 +164,9 @@ fun pvb(m) {
 
 # Game tree data type
 typename GameTree =
-  [|Take  : (Player, [(Int, GameTree)])  # Intermediate node
+  (|Take  : (Player, List (Int, GameTree))  # Intermediate node
    |Winner:  Player                      # Leaf
-   |];
+   |);
 
 # Reify a move as part of the move tree
 sig reifyMove : (Player, Int, (Int) ~e~> GameTree) ~e~> GameTree
@@ -410,7 +410,7 @@ fun strategy(s1, s2)(m) {
 
 # The game state is an association list
 # where a player is associated with its number of wins
-typename GameState = [(Player,Int)];
+typename GameState = List (Player,Int);
 
 # Initially both players have zero victories
 var initialState = [(Alice,0),(Bob,0)] : GameState;
@@ -467,7 +467,7 @@ sig boardPrinter : (Comp(a ,{Get:GameState|e})) ->
                     Comp((),{Get:GameState|e})
 fun boardPrinter(m)() {
   # Ranks Alice and Bob
-  sig sort : ([(2:Int|p)]) ~> [(2:Int|p)]
+  sig sort : (List (2:Int|p)) ~> List (2:Int|p)
   fun sort(s) {
     if (second(s !! 1) > second(s !! 0)) {
       (s !! 1) :: (s !! 0) :: []
@@ -508,7 +508,7 @@ fun boardPrinter(m)() {
 # Finally, we define repeatGame which repeats
 # a given game r times
 sig repeatGame : (Int, Comp( a ,{Move:(Player,Int) => Int|e})) ->
-                       Comp([a],{Move:(Player,Int) => Int|e})
+                       Comp(List a,{Move:(Player,Int) => Int|e})
 fun repeatGame(r, m)() {
     for (_ <- [1..r]) {
         [m()]

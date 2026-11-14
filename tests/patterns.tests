@@ -48,7 +48,7 @@ stderr : @..*
 exit : 1
 
 HasType pattern [3]
-switch (A) {case A -> 0 case -A:[|B:[|C:String|]|] -> 1}
+switch (A) {case A -> 0 case -A:(|B:(|C:String|)|) -> 1}
 stdout : 0 : Int
 
 HasType pattern [4]
@@ -61,7 +61,7 @@ stdout : 1 : Int
 
 Absence typing in variant patterns
 fun f(x) {switch (x) {case A(B) -> B case A(-B as y) -> A(f(y))}} f
-stdout : @fun : \(\[||\(mu ([a-z]+) . A:\[\|B:\(\)\|\1\|\]\)|\]\) -> mu ([a-z]+) . \[\|A:\2 \| B:()\|[a-z]+\|\]
+stdout : @^fun : \(\(\|\(mu ([a-z]+)\.A:\(\|B\|\1\|\)\)\|\)\) ~> mu ([a-z]+)\.\(\|A:\2\|B\|_::Any\|\)$
 
 Redundant pattern [1]
 fun (x) { switch (x) { case x -> x case A -> A }}
@@ -86,11 +86,11 @@ stdout : fun : (Bool) -> Int
 
 Pattern matching twice against the same expression
 fun (x) {(switch (x) {case A -> 0 case _ -> 1}) + (switch (x) {case A -> 0 case _ -> 1})}
-stdout : @fun : \(\[\|A\|_\|\]\) -> Int
+stdout : fun : ((|A|_|)) -> Int
 
 Negative pattern [1]
 fun (-Foo) { () }
-stdout : fun : ([|Foo:_::Any|_::Any|]) -> ()
+stdout : fun : ((|Foo:_::Any|_::Any|)) -> ()
 
 Negative pattern [2]
 (fun (-Foo) { () })(Bar)
@@ -103,7 +103,7 @@ exit : 1
 
 Negative pattern [4]
 fun (-(Foo,Bar,Baz)) { () }
-stdout : fun : ([|Bar:_::Any|Baz:_::Any|Foo:_::Any|_::Any|]) -> ()
+stdout : fun : ((|Bar:_::Any|Baz:_::Any|Foo:_::Any|_::Any|)) -> ()
 
 Negative pattern [5]
 (fun (-(Foo,Bar,Baz)) { () })(Bar)
@@ -140,21 +140,21 @@ stdout : 42 : Int
 
 Negative pattern [10]
 fun(-Foo as r) { r }
-stdout : fun : ([|Foo:_::Any|b::Any|]) -> [|Foo-|b::Any|]
+stdout : fun : ((|Foo:_::Any|b::Any|)) -> (|Foo{-}|b::Any|)
 
 Negative pattern [11]
 (fun(x) { switch(x) { case (-(Foo, Bar, Baz) as x) -> x case _ -> Quux }})(Foo)
-stdout : Quux : [|Bar-|Baz-|Foo-|Quux|_|]
+stdout : Quux : (|Bar{-}|Baz{-}|Foo{-}|Quux|_|)
 
 Negative pattern [12]
 (fun(x) { switch(x) { case (-(Foo, Bar, Baz) as x) -> x case _ -> Quux }})(FooBar)
-stdout : FooBar : [|Bar-|Baz-|Foo-|FooBar|Quux|_|]
+stdout : FooBar : (|Bar{-}|Baz{-}|Foo{-}|FooBar|Quux|_|)
 
 Presence polymorphism 1 [13]
-(fun (x : [|Foo| Bar{p}|]) { switch(x) {case Foo -> 1 case _ -> 2  }} )
-stdout : fun : ([|Bar{_}|Foo|]) -> Int
+(fun (x : (|Foo| Bar{p}|)) { switch(x) {case Foo -> 1 case _ -> 2  }} )
+stdout : fun : ((|Bar{_}|Foo|)) -> Int
 
 Presence polymorphism 2 [14]
-(fun (x : [|Foo| Bar{p}|]) { switch(x) {case Bar -> 1 case _ -> 2  }} )
+(fun (x : (|Foo| Bar{p}|)) { switch(x) {case Bar -> 1 case _ -> 2  }} )
 stderr : @.*Type error.*
 exit : 1
