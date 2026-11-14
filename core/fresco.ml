@@ -174,10 +174,10 @@ let operation_label (phrase : phrase) =
       Some (label, name, args)
   | _ -> None
 
-let instantiate_operation ?frozen scheme arguments result =
+let instantiate_operation ?frozen ?nested scheme arguments result =
   let frozen = Option.map (fun arguments -> operation_hint arguments Not_typed) frozen in
   let instantiate result =
-    FrescoTypes.instantiate ~expected:(operation_hint arguments result) ?frozen scheme in
+    FrescoTypes.instantiate ~expected:(operation_hint arguments result) ?frozen ?nested scheme in
   match instantiate result with
   | instance -> instance
   | exception (Unify.Failure _ as exn) ->
@@ -239,7 +239,11 @@ let identity_return cases =
 module Partial = struct
   let hole = Not_typed
 
-  type argument = { partial : datatype; frozen : bool }
+  type argument = {
+    partial : datatype;
+    frozen : bool;
+    requirements : (FrescoTypes.hint_step list * FrescoTypes.hint_requirement) list;
+  }
 
   let rec frozen_argument phrase =
     match phrase.node with
@@ -247,9 +251,12 @@ module Partial = struct
     | TupleLit [body] | Block ([], body) | Checked (body, _) -> frozen_argument body
     | _ -> false
 
-  let argument phrase partial = { partial; frozen = frozen_argument phrase }
   let argument_types = List.map (fun argument -> argument.partial)
   let required_arguments = List.map (fun argument -> if argument.frozen then argument.partial else hole)
+  let nested_arguments arguments =
+    List.mapi (fun i arg ->
+      List.map (fun (path, requirement) -> FrescoTypes.Argument i :: path, requirement) arg.requirements)
+      arguments |> List.concat
 
   let copy typ =
     let flexibles = Hashtbl.create 8 in
@@ -272,7 +279,38 @@ module Partial = struct
     end in
     snd (visitor#typ typ)
 
-  let instance ?expected ?frozen typ = snd (FrescoTypes.instantiate_prefix ?expected ?frozen typ)
+  let instance ?expected ?frozen ?nested typ =
+    snd (FrescoTypes.instantiate_prefix ?expected ?frozen ?nested typ)
+
+  let rec fixed_call_result interfaces env ?ambient (phrase : phrase) =
+    let find = fixed_call_result interfaces env ?ambient in
+    match phrase.node with
+    | Var name | FreezeVar name -> Env.find_opt name env
+    | TupleLit [body] | Block ([], body) | Freeze body -> find body
+    | Checked (_, typ) | ModalIntro (_, typ) | TypeAnnotation (_, (_, Some typ))
+    | Upcast (_, (_, Some typ), _) -> Some (copy typ)
+    | FnAppl (fn, _) ->
+        Option.bind (find fn) (fun typ ->
+          match snd (Context.prefix (instance typ)) with
+          | AmbientFunction (_, _, result) -> Some result
+          | _ -> None)
+    | TAppl (body, args) when List.for_all (fun (_, arg) -> Option.is_some arg) args ->
+        Option.map (fun typ -> FrescoTypes.apply (copy typ) (List.map (fun (_, arg) ->
+          let kind, typ = Option.get arg in kind, copy typ) args)) (find body)
+    | DoOperation (label, _, _) ->
+        Option.bind (operation_label label) (fun (label, name, explicit) ->
+          let operation = lookup_operation label.pos interfaces name in
+          let scheme = match Option.bind ambient (ModalEffects.newest operation.EffectInterfaces.interface) with
+            | None -> operation_scheme operation
+            | Some arguments -> member_scheme operation (List.map copy arguments) in
+          let signature = match explicit with
+            | [] -> snd (FrescoTypes.instantiate (copy scheme))
+            | args -> FrescoTypes.apply (copy scheme) (List.map (fun (_, arg) ->
+                let kind, typ = Option.get arg in kind, copy typ) args) in
+          match head signature with
+          | Operation (_, result) -> Some result
+          | _ -> None)
+    | _ -> None
 
   let has_quantifiers typ =
     match snd (Context.prefix typ) with ForAll _ -> true | _ -> false
@@ -284,14 +322,14 @@ module Partial = struct
   let carry modality typ =
     if absolute typ then typ else Types.modal modality typ
 
-  let function_type ?frozen arguments expected typ =
-    let typ = instance ~expected:(function_hint arguments expected) ?frozen typ in
+  let function_type ?frozen ?nested arguments expected typ =
+    let typ = instance ~expected:(function_hint arguments expected) ?frozen ?nested typ in
     match snd (Context.prefix typ) with
     | AmbientFunction (_, domain, result) -> Some (domain, result)
     | _ -> None
 
-  let result ?frozen arguments expected typ =
-    Option.fold ~none:hole ~some:snd (function_type ?frozen arguments expected typ)
+  let result ?frozen ?nested arguments expected typ =
+    Option.fold ~none:hole ~some:snd (function_type ?frozen ?nested arguments expected typ)
 
   let agrees left right =
     match head left, head right with
@@ -347,11 +385,12 @@ module Partial = struct
     | Checked (_, typ) | ModalIntro (_, typ) | TypeAnnotation (_, (_, Some typ))
     | Upcast (_, (_, Some typ), _) -> copy typ
     | FnAppl (fn, args) ->
-        let hints = List.map (fun arg -> argument arg (infer_here arg)) args in
+        let hints = List.map (fun arg -> argument interfaces env ?ambient arg (infer_here arg)) args in
         let arguments = argument_types hints in
         let frozen = function_hint (required_arguments hints) hole in
+        let nested = nested_arguments hints in
         let fn = infer_here ~frozen:true ~expected:(function_hint arguments expected) fn in
-        result ~frozen arguments expected fn
+        result ~frozen ~nested arguments expected fn
     | FunLit (_, lin, NormalFunlit (groups, body), _) ->
         let rec lambda env hint = function
           | [] -> infer interfaces env ?ambient ~expected:hint body
@@ -434,8 +473,9 @@ module Partial = struct
           | Some arguments -> member_scheme operation arguments in
         let signature = match explicit with
           | [] ->
-              let hints = List.map (fun arg -> argument arg (infer_here arg)) arguments in
-              snd (instantiate_operation ~frozen:(required_arguments hints)
+              let hints = List.map (fun arg ->
+                argument interfaces env ?ambient arg (infer_here arg)) arguments in
+              snd (instantiate_operation ~frozen:(required_arguments hints) ~nested:(nested_arguments hints)
                 scheme (argument_types hints) expected)
           | args -> FrescoTypes.apply scheme (List.map (fun (_, arg) ->
               let kind, typ = Option.get arg in kind, copy typ) args) in
@@ -460,6 +500,52 @@ module Partial = struct
     | UnaryAppl ((_, op), value) ->
         result [infer_here value] expected (find (UnaryOp.to_string op))
     | _ -> hole
+
+  and argument interfaces env ?ambient phrase partial =
+    let fixed_result env path phrase =
+      if TypeSugar.is_generalisable phrase then []
+      else
+        (* A bare result selected during partial inference is insufficient.
+           Expose the known result before the call receives an expected type. *)
+        match FrescoTypes.transaction (fun () -> fixed_call_result interfaces env ?ambient phrase) with
+        | Some typ ->
+            begin match head typ with
+            | Primitive _ | Record _ | Variant _ | Application _ | AmbientFunction _ ->
+                [List.rev path, FrescoTypes.Bare]
+            | _ -> []
+            end
+        | None | exception (Unify.Failure _ | Context.Error _ | Errors.Type_error _) -> [] in
+    let rec requirements env path phrase =
+      let field step value = requirements env (step :: path) value in
+      let fields fields =
+        List.concat_map (fun (label, value) -> field (FrescoTypes.Record_field label) value) fields in
+      if path <> [] && frozen_argument phrase then
+        let typ = infer_safely (fun () -> infer interfaces env ?ambient phrase) in
+        if FrescoTypes.unknown (head typ) then [] else [List.rev path, FrescoTypes.Exact typ]
+      else
+        match phrase.node with
+        | TupleLit [body] | Checked (body, _) -> requirements env path body
+        | Block (bindings, body) ->
+            begin match FrescoTypes.transaction (fun () ->
+              List.fold_left (bind interfaces ?ambient) env bindings) with
+            | env -> requirements env path body
+            | exception (Unify.Failure _ | Context.Error _ | Errors.Type_error _) -> []
+            end
+        | TupleLit items ->
+            List.mapi (fun i value -> field (FrescoTypes.Record_field (string_of_int (i + 1))) value)
+              items |> List.concat
+        | RecordLit (values, rest) ->
+            fields values @ Option.fold ~none:[] ~some:(requirements env path) rest
+        | With (base, values) ->
+            let inherited = requirements env path base |> List.filter (fun (field_path, _) ->
+              match ListUtils.drop (List.length path) field_path with
+              | FrescoTypes.Record_field label :: _ -> not (List.mem_assoc label values)
+              | _ -> false) in
+            fields values @ inherited
+        | ListLit (values, _) -> List.concat_map (field FrescoTypes.List_item) values
+        | ConstructorLit (label, Some payload, _) -> field (FrescoTypes.Variant_field label) payload
+        | _ -> fixed_result env path phrase in
+    { partial; frozen = frozen_argument phrase; requirements = requirements env [] phrase }
 
   and bind interfaces ?ambient env binding =
     match binding.node with
@@ -569,6 +655,7 @@ module Partial = struct
       try FrescoTypes.transaction (fun () -> infer interfaces env ~ambient ?expected argument) with
       | Unify.Failure _ | Context.Error _ | Errors.Type_error _ -> hole in
     let hints = List.map (try_infer ?expected:None) arguments in
+    let evidence = List.map2 (argument interfaces env ~ambient) arguments hints in
     let hints = match callee with
     | None -> hints
     | Some (fn, expected) ->
@@ -577,7 +664,9 @@ module Partial = struct
             let expected = copy expected in
             let fn_hint = function_hint hints expected in
             let callee = infer interfaces env ~ambient ~expected:fn_hint ~frozen:true fn in
-            match function_type hints expected callee with
+            let frozen = function_hint (required_arguments evidence) hole in
+            let nested = nested_arguments evidence in
+            match function_type ~frozen ~nested hints expected callee with
             | None -> None
             | Some (domain, _) -> Some (tuple_parts fn.pos (List.length arguments) domain)) in
           begin match domains with
@@ -587,7 +676,7 @@ module Partial = struct
               |> List.map2 (fun original refined -> FrescoTypes.merge_known refined original) hints
           end
         with Unify.Failure _ | Context.Error _ | Errors.Type_error _ -> hints in
-    List.map2 argument arguments hints
+    List.map2 (fun argument partial -> { argument with partial }) evidence hints
 
   type observation = Same_type | Provided | Expected
 
@@ -908,9 +997,15 @@ let rec frozen_hint = function
       if result = Not_typed && List.for_all (( = ) Not_typed) arguments then Not_typed
       else function_hint arguments result
 
+let rec nested_hint = function
+  | Infer | Check _ -> []
+  | Apply (args, mode) ->
+      Partial.nested_arguments args @
+      List.map (fun (path, requirement) -> FrescoTypes.Result :: path, requirement) (nested_hint mode)
+
 let instantiate_for mode typ =
   FrescoTypes.instantiate_prefix ~expected:(hint mode) ~required:(required_hint mode)
-    ~frozen:(frozen_hint mode) typ
+    ~frozen:(frozen_hint mode) ~nested:(nested_hint mode) typ
 
 let callable pos context ~count typ =
   let modality, body = Context.prefix typ in
@@ -1582,7 +1677,7 @@ and infer_node ?(allow_intro = true) state mode phrase =
         | [] ->
             let hints = Partial.arguments state.interfaces state.terms arguments in
             instantiate_operation ~frozen:(Partial.required_arguments hints)
-              scheme (Partial.argument_types hints) (hint mode)
+              ~nested:(Partial.nested_arguments hints) scheme (Partial.argument_types hints) (hint mode)
         | args ->
             let args = List.map (fun (_, arg) -> Option.get arg) args in
             args, FrescoTypes.apply scheme args in

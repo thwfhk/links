@@ -274,6 +274,55 @@ An expected list element type resolves distinct modal arguments in either order
 effect Reader { Ask : () => Int; } effect State { Get : () => Int; } fun same(x,y) { [x,y] } ((same((42 : <Reader> Int), (41 : <State> Int)) : List Int), (same((41 : <State> Int), (42 : <Reader> Int)) : List Int))
 stdout : ([42, 41], [41, 42]) : (List Int, List Int)
 
+A fixed bare result resolves competing modal argument hints
+effect Reader { Ask : () => Int; } effect State { Get : () => Int; } fun number() { 1 } fun same(x,y,z) { [x,y,z] } var x = (42 : <Reader> Int); var y = (41 : <State> Int); (same(number(),x,y), same(x,y,number()))
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : ([1, 42, 41], [42, 41, 1]) : (List Int, List Int)
+
+A polymorphic result can still use the expected modality
+effect Reader { Ask : () => Int; } fun id(x) { x } fun same(x,y) { [x,y] } var x = (42 : <Reader> Int); (same(id(1),x), same(x,id(1)))
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : ([1, 42], [42, 1]) : (List (<Reader> (Int)), List (<Reader> (Int)))
+
+The element of a fixed list result can still use the expected modality
+effect Reader { Ask : () => Int; } effect State { Get : () => Int; } fun singleValue(x) { [x] } fun same(x,y) { [x,y] } var x = ([42] : <Reader> (List (<State> Int))); same(singleValue(1),x)
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : [[1], [42]] : List (List (<State> (Int)))
+
+A fixed bare result cannot acquire a modality required by a list annotation
+effect Reader { Ask : () => Int; } fun number() { 1 } fun same(x,y) { [x,y] } (same(number(), (42 : <Reader> Int)) : List (<Reader> Int))
+stderr : @.*Type error:.*
+exit : 1
+
+A frozen record field fixes the shared field type in either argument position
+effect Reader { Ask : () => Int; } effect State { Get : () => Int; } fun same(x,y) { [x,y] } var x = (42 : <Reader> Int); var y = (41 : <State> Int); (same((f= ~x),(f=y)), same((f=y),(f= ~x)))
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : ([(f = 42), (f = 41)], [(f = 41), (f = 42)]) : (List (f:<Reader> (Int)), List (f:<Reader> (Int)))
+
+A fixed record field resolves conflicting modal hints at that field
+effect Reader { Ask : () => Int; } fun number() { 1 } fun same(x,y) { [x,y] } same((f=number()),(f=(42 : <Reader> Int)))
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : [(f = 1), (f = 42)] : List (f:Int)
+
+Record extension and update keep hints from inherited frozen fields
+effect Reader { Ask : () => Int; } effect State { Get : () => Int; } fun same(x,y) { [x,y] } var x = (42 : <Reader> Int); var y = (41 : <State> Int); (same((n=0 | (f= ~x)), (n=1,f=y)), same(((f= ~x,n=0) with n=1), (n=2,f=y)))
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : ([(f = 42, n = 0), (f = 41, n = 1)], [(f = 42, n = 1), (f = 41, n = 2)]) : (List (f:<Reader> (Int),n:Int), List (f:<Reader> (Int),n:Int))
+
+A frozen field can determine the element type of a list argument
+effect Reader { Ask : () => Int; } effect State { Get : () => Int; } fun id(x) { x } var x = (42 : <Reader> Int); var y = (41 : <State> Int); id([(f= ~x),(f=y)])
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : [(f = 42), (f = 41)] : List (f:<Reader> (Int))
+
+A record with a frozen field can be checked under its expected modality
+effect Reader { Ask : () => Int; } fun id(x) { x } var f = fun() { 42 }; (id((f= ~f)) : <Reader> (f:<Reader |> (() -> Int)))
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : @\(f = fun\) : <Reader>.*<Reader \|>.*
+
+An annotated binding can resolve ambiguity inside an argument block
+effect Reader { Ask : () => Int; } effect State { Get : () => Int; } fun same(x,y) { [x,y] } fun keep(x) { x } var x = (42 : <Reader> Int); var y = (41 : <State> Int); keep({ var (z : List Int) = same(x,y); z })
+stdout : [42, 41] : List Int
+
 A frozen argument fixes the modal type in either curried argument position
 effect Reader { Ask : () => Int; } effect State { Get : () => Int; } fun same(x)(y) { [x,y] } var x = (42 : <Reader> Int); var y = (41 : <State> Int); (same(~((x)))(y), same(y)(~x))
 stdout : ([42, 41], [41, 42]) : (List (<Reader> (Int)), List (<Reader> (Int)))
@@ -291,6 +340,11 @@ A frozen argument fixes a polymorphic operation's type argument
 effect Reader { Ask : () => Int; } effect State { Get : () => Int; } effect Pick { Choose : forall a::Abs. (a,a) => Bool; } var x = (42 : <Reader> Int); var y = (41 : <State> Int); (handle(do Choose(~x,y)) { case <Choose(_,_) => k> -> k(true) }, handle(do Choose(y,~x)) { case <Choose(_,_) => k> -> k(true) })
 args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
 stdout : (true, true) : (Bool, Bool)
+
+A frozen record field fixes a polymorphic operation's type argument
+effect Reader { Ask : () => Int; } effect State { Get : () => Int; } effect Pick { Choose : forall a::Abs. (a,a) => Bool; } var x = (42 : <Reader> Int); var y = (41 : <State> Int); handle(do Choose((f= ~x),(f=y))) { case <Choose(_,_) => k> -> k(true) }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : true : Bool
 
 A polymorphic operation still needs an annotation for competing ordinary arguments
 effect Reader { Ask : () => Int; } effect State { Get : () => Int; } effect Pick { Choose : forall a::Abs. (a,a) => Bool; } var x = (42 : <Reader> Int); var y = (41 : <State> Int); handle(do Choose(x,y)) { case <Choose(_,_) => k> -> k(true) }

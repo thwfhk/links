@@ -272,8 +272,106 @@ let parameter_hints quantifiers ~frozen source target =
       IntMap.empty source target in
   List.map (fun (id, _) -> List.map snd (Option.value ~default:[] (IntMap.lookup id hints))) quantifiers
 
+type hint_step =
+  | Argument of int
+  | Result
+  | Record_field of string
+  | Variant_field of string
+  | List_item
+
+type hint_requirement = Exact of datatype | Bare
+
+let row_field row label =
+  let fields, _ = TypeUtils.extract_row_parts (flatten_row row) in
+  match StringMap.find_opt label fields with
+  | Some field ->
+      begin match concrete_field_spec field with Present typ -> Some typ | _ -> None end
+  | None -> None
+
+let rec apply_requirement candidate path requirement =
+  let exposed = head candidate in
+  match path, exposed with
+  | [], _ ->
+      begin match requirement with
+      | Exact typ -> merge_required typ candidate
+      | Bare ->
+          match exposed with Modal (_, body) -> body | _ -> candidate
+      end
+  | _ :: _, Not_typed when requirement = Bare -> candidate
+  | Record_field label :: path, Record row ->
+      Record (apply_field_requirement row label path requirement)
+  | Variant_field label :: path, Variant row ->
+      Variant (apply_field_requirement row label path requirement)
+  | List_item :: path, Application (constructor, [PrimaryKind.Type, item])
+      when Abstype.equal constructor list ->
+      make_list_type (apply_requirement item path requirement)
+  | Record_field label :: path, Not_typed ->
+      Record (make_singleton_open_row (label, Present (apply_requirement Not_typed path requirement))
+        (lin_any, res_any))
+  | Variant_field label :: path, Not_typed ->
+      Variant (make_singleton_open_row (label, Present (apply_requirement Not_typed path requirement))
+        (lin_any, res_any))
+  | List_item :: path, Not_typed ->
+      make_list_type (apply_requirement Not_typed path requirement)
+  (* Introducing a prefix on the aggregate can change which type a
+     frozen field has in its new scope. Leave such fields to full checking. *)
+  | _ -> candidate
+
+and apply_field_requirement row label path requirement =
+  let row = flatten_row row in
+  let fields, _ = TypeUtils.extract_row_parts row in
+  match StringMap.find_opt label fields with
+  | Some field ->
+      begin match concrete_field_spec field with
+      | Present typ -> row_with (label, Present (apply_requirement typ path requirement)) row
+      | _ -> row
+      end
+  | None when not (is_closed_row row) ->
+      begin match requirement with
+      | Exact _ -> row_with (label, Present (apply_requirement Not_typed path requirement)) row
+      | Bare -> row
+      end
+  | None -> row
+
+let collect_requirements ids body nested =
+  let exact = collect_hints ~frozen:true ids TypeVarSet.empty RecIdSet.empty RecIdSet.empty in
+  let add id path requirement hints =
+    IntMap.update id (function None -> Some [path, requirement] | Some previous ->
+      Some ((path, requirement) :: previous)) hints in
+  let rec collect hints typ path requirement =
+    match path, head typ with
+    | _, Meta point ->
+        begin match Unionfind.find point with
+        | Var (id, (PrimaryKind.Type, _), _) when IntSet.mem id ids -> add id path requirement hints
+        | _ -> hints
+        end
+    | [], typ ->
+        begin match requirement with
+        | Bare -> hints
+        | Exact required ->
+            IntMap.fold (fun id observed hints ->
+              List.fold_left (fun hints (_, typ) -> add id [] (Exact typ) hints) hints observed)
+              (exact IntMap.empty typ required) hints
+        end
+    | (Argument _ | Result) :: _, (ForAll (_, typ) | Modal (_, typ)) ->
+        collect hints typ path requirement
+    | Argument i :: path, (AmbientFunction (_, Record row, _) | Operation (Record row, _)) ->
+        collect_field hints row (string_of_int (i + 1)) path requirement
+    | Result :: path, AmbientFunction (_, _, typ) -> collect hints typ path requirement
+    | Record_field label :: path, Record row | Variant_field label :: path, Variant row ->
+        collect_field hints row label path requirement
+    | List_item :: path, Application (constructor, [PrimaryKind.Type, item])
+        when Abstype.equal constructor list ->
+        collect hints item path requirement
+    | _ -> hints
+  and collect_field hints row label path requirement =
+    match row_field row label with
+    | Some typ -> collect hints typ path requirement
+    | None -> hints in
+  List.fold_left (fun hints (path, requirement) -> collect hints body path requirement) IntMap.empty nested
+
 let instantiate_with ~through_modal ?(expected = Not_typed) ?(required = Not_typed)
-    ?(frozen = Not_typed) typ =
+    ?(frozen = Not_typed) ?(nested = []) typ =
   let rec split seen quantifiers typ =
     let seen, body = expose ~reject_cycle:true seen typ in
     match body with
@@ -293,6 +391,7 @@ let instantiate_with ~through_modal ?(expected = Not_typed) ?(required = Not_typ
       let hints = collect ~frozen:false expected in
       let required = collect ~frozen:false required in
       let frozen = collect ~frozen:true frozen in
+      let requirements = collect_requirements ids body nested in
       let arguments = List.map (fun (id, kind) ->
         let merge merge = function
           | None | Some [] -> Not_typed
@@ -300,10 +399,14 @@ let instantiate_with ~through_modal ?(expected = Not_typed) ?(required = Not_typ
               List.fold_left (fun typ (_, hint) -> merge typ hint) first rest in
         let frozen = merge merge_known (IntMap.lookup id frozen) in
         let required = merge_required frozen (merge merge_known (IntMap.lookup id required)) in
+        let requirements = Option.value ~default:[] (IntMap.lookup id requirements) in
+        let apply_requirements typ = List.fold_left (fun typ (path, requirement) ->
+          apply_requirement typ path requirement) typ requirements in
         let candidates = match IntMap.lookup id hints with
           | None -> []
-          | Some hints -> List.map (fun (_, hint) -> merge_required required hint) hints in
-        let typ = List.fold_left merge_instantiation_hints required candidates in
+          | Some hints -> List.map (fun (_, hint) ->
+              apply_requirements (merge_required required hint)) hints in
+        let typ = List.fold_left merge_instantiation_hints (apply_requirements required) candidates in
         match typ with
         | Not_typed -> variable_argument kind
         | typ ->
@@ -317,9 +420,10 @@ let instantiate_with ~through_modal ?(expected = Not_typed) ?(required = Not_typ
       in
       arguments, Instantiate.datatype substitutions body)
 
-let instantiate ?expected ?frozen typ = instantiate_with ~through_modal:false ?expected ?frozen typ
-let instantiate_prefix ?expected ?required ?frozen typ =
-  instantiate_with ~through_modal:true ?expected ?required ?frozen typ
+let instantiate ?expected ?frozen ?nested typ =
+  instantiate_with ~through_modal:false ?expected ?frozen ?nested typ
+let instantiate_prefix ?expected ?required ?frozen ?nested typ =
+  instantiate_with ~through_modal:true ?expected ?required ?frozen ?nested typ
 
 let apply typ arguments =
   let rec apply seen typ arguments =

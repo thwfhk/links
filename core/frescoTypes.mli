@@ -23,16 +23,27 @@ val probe : (unit -> 'a) -> 'a
 (** Check a rigid scope for variables that escape into the supplied outer types. *)
 val with_rigids : protected:datatype list -> Quantifier.t list -> (unit -> 'a) -> 'a
 
+type hint_step =
+  | Argument of int
+  | Result
+  | Record_field of string
+  | Variant_field of string
+  | List_item
+
+type hint_requirement = Exact of datatype | Bare
+
 (** Use known type information to instantiate leading quantifiers. [Not_typed]
     marks missing information. [frozen] supplies hints from arguments checked
-    for consistency. The caller checks the resulting type. *)
-val instantiate : ?expected:datatype -> ?frozen:datatype -> datatype -> type_arg list * datatype
+    for consistency. [nested] locates requirements within the argument types.
+    The caller checks the resulting type. *)
+val instantiate : ?expected:datatype -> ?frozen:datatype ->
+  ?nested:(hint_step list * hint_requirement) list -> datatype -> type_arg list * datatype
 
 (** Also instantiate quantifiers under leading modalities and keep those modalities.
     Use [frozen] for arguments that require consistency, then prefer the known
     parts of [required] to conflicting parts of [expected]. *)
-val instantiate_prefix : ?expected:datatype -> ?required:datatype -> ?frozen:datatype
-  -> datatype -> type_arg list * datatype
+val instantiate_prefix : ?expected:datatype -> ?required:datatype -> ?frozen:datatype ->
+  ?nested:(hint_step list * hint_requirement) list -> datatype -> type_arg list * datatype
 
 (** Replace unknown parts of a type hint with fresh metavariables of the
     corresponding primary kind. *)
