@@ -168,22 +168,22 @@ never change operation dispatch.
 Depends on milestones 2–4. Prepare each runtime-library dependency before
 switching the active inference path.
 
-- [ ] **5.1** Update primitive and default-alias types, the default and
+- [x] **5.1** (`fcb1e97a`) Update primitive and default-alias types, the default and
   FreezeML preludes, standard library modules and desugared helper calls.
   Translate same-context callbacks and update explicit type arguments.
   Resolve or record `Comp` and `gen0`–`gen2` dependencies.
-- [ ] **5.2** Update typed frontend transformations, handler-pattern
+- [x] **5.2** (`fcb1e97a`) Update typed frontend transformations, handler-pattern
   lowering, sugar-to-IR translation, IR type checking, substitutions and
   closure conversion. Preserve modality information until every check
   needing it has run. Keep the native runtime representation and the
   independent `ApplyPure` primitive classification. Preserve resolved
   interface and operation identities through compilation and dispatch.
-- [ ] **5.3** Switch native file, expression and REPL entry points to the
+- [x] **5.3** (`fcb1e97a`) Switch native file, expression and REPL entry points to the
   modal checker with the migrated runtime library. Remove the replaced
   effect-arrow syntax, `effectname`, effect-row inference and effect-only
   settings or coercions. Keep shared code required for data rows and
   polymorphism.
-- [ ] **5.4** Migrate regression fixtures, examples and expected printed
+- [x] **5.4** (`fcb1e97a`) Migrate regression fixtures, examples and expected printed
   types. Keep original assertions where they still apply. Record each
   unavoidable deferral with its feature dependency; update example
   registration and aggregate runners together. Give the REPL handler
@@ -198,13 +198,13 @@ checks pass, and no active code relies on the old effect-row path.
 
 Depends on milestone 5.
 
-- [ ] **6.1** Independently review the combined compiler changes against
+- [x] **6.1** (`fcb1e97a`) Independently review the combined compiler changes against
   SPEC.md and resolve findings. Check handler scopes, modal erasure,
   kind constraints and preservation of data rows and value linearity.
-- [ ] **6.2** Update the SmallLinks guide to the approved syntax and
+- [x] **6.2** (`fcb1e97a`) Update the SmallLinks guide to the approved syntax and
   inference rules. Turn every accepted and rejected design example into
   a registered regression and run all executable guide examples.
-- [ ] **6.3** Run final build, regression, IR, source and installation
+- [x] **6.3** (`fcb1e97a`) Run final build, regression, IR, source and installation
   checks on the combined revision. Record remaining deferred cases and
   their reasons. Complete this plan only when the in-scope checks pass.
 
@@ -253,28 +253,30 @@ an explicit inventory.
 
 ## Status
 
-Milestones 1–4 are complete on `small-met`. The
-[migration inventory](MIGRATION.md) names the affected sources and
-fixtures and links to the deferred `escape` cases.
+Milestones 1–6 are complete on `small-met`. The native compiler uses
+Fresco for files, expressions and REPL sentences. The [migration
+inventory](MIGRATION.md) records the retained and deferred cases. The
+[SmallLinks guide](../small/SPEC.md) uses the approved syntax.
 
-### Handover to milestones 5–6
+### Milestones 5–6 checks
 
-Start the library and compiler integration from `0a9eaaa9`.
-`Frontend.Modal.initial_context` sets up modal primitives and the
-native top-level context. `Frontend.Modal.program` and
-`Frontend.Modal.interactive` check source and return the binding
-contexts for successive sentences.
+The combined checks used `fcb1e97a` with OCaml 5.4.0. Logs are under
+`/private/tmp/smalllinks-met-56/`. Independent reviews covered Fresco,
+typed lowering and IR, and REPL recovery. The review fixes and
+regressions are included in that revision. The compiler switch and its
+library and fixture changes share one commit so the revision builds
+and runs with the matching prelude and tests.
 
-The modal handler descriptor contains the effect context, extension
-and member schemes needed by the typed transforms and handler lowering.
-See [implementation notes](IMPL.md#4-operations-handlers-and-native-effects).
-The running compiler uses the row-based checker. In 5.2 and 5.3,
-integrate modal types through lowering and switch the entry points.
-Then run the modal examples through native dispatch, including failed
-operation patterns, forwarding, state evaluation and resumption order.
-The existing runtime fixtures still check those behaviours on the
-row-based path. See the [migration inventory](MIGRATION.md) for the
-library changes and the `escape` deferrals.
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make`; `make all-ci`; `make all-ci` with a fresh Dune build directory | Passed. | `final-build.log`, `final-ci.log`, `final-clean-ci.log` |
+| `opam exec -- ./run-tests unit-tests` | 101 passed. | `final-unit.log` |
+| `./test-harness tests/<suite>.tests` for affected suites | Passed, including 118 handler, 40 effect annotation, 17 modal syntax, 56 polymorphism, 64 FreezeML, 26 typed IR and 34 example checks. | `final-focused.log`, `final-suite-<suite>.log` |
+| `make tests` | 967 passed in 41 suites. Two existing redundant-pattern cases were ignored. Four scripts passed, including the REPL, example registration and 12 print-and-reparse cases. | `final-all.log` |
+| `./links --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true --optimise --path=examples/handlers examples/handlers/tests.links` | All nine aggregate assertions passed under strict checking and optimisation. | `final-strict-examples.log` |
+| Run the SmallLinks guide programs, including the import, `-e`, typecheck-only and REPL examples | Passed. | `final-guide.log`, `guide/*.log` |
+| `opam exec -- dune install --profile=ci --prefix="$prefix" links`, then `./tests/check-install.sh "$prefix/bin/linx"` and two installed modal programs | Passed outside the checkout, including a standard library import, an interface handler and mixed modal and quantified type application. | `final-install.log`, `final-install-prefix.txt` |
+| `make rule-check` and `git diff --check 4fd5fba4..HEAD` | Passed. GNU find was unavailable for the tabs rule. The same file patterns passed with `rg`. | `final-source.log`, `final-tabs.log`, `final-whitespace.log` |
 
 ### Milestone 4 checks
 

@@ -187,7 +187,9 @@ operation in another module.
 The REPL retains the types and binding contexts from each successful
 sentence. It also records whether a linear binding has been used. After
 a runtime error, it marks the linear bindings already read by the
-failed sentence and restores the previous compiler scope.
+failed sentence and restores the previous compiler scope. A successful
+file load or module definition also records the uses of linear bindings
+it creates before exporting its environment.
 
 ## 6. Review and final verification
 
