@@ -170,6 +170,87 @@ switch (((C : (|A|B|C|)), false)) { case (-A, true) -> 1 case (B, _) -> 2 case _
 args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
 stdout : 3 : Int
 
+An enclosing variant alias preserves a narrowed payload
+var r = ((item=Some(Keep(42))) : (item:(|Some:(|Keep:Int|Skip|)|Nothing|))); switch (r) { case (item=(Some(-Skip) as outer)) -> switch (outer) { case Some(Keep(n)) -> n case _ -> 0 } case _ -> 0 }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int
+
+An enclosing variant alias retains quantifiers on a narrowed payload
+var r = ((item=Some(Keep(fun(x) { x }))) : forall a. (item:(|Some:(|Keep:a -> a|Skip|)|Nothing|))); switch (r) { case (item=(Some(-Skip) as outer)) -> (switch (outer[Int]) { case Some(Keep(f)) -> f(42) case _ -> 0 }, switch (outer[Bool]) { case Some(Keep(f)) -> f(true) case _ -> false }) case _ -> (0,false) }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : (42, true) : (Int, Bool)
+
+A variant binding uses its narrowed payload for the enclosing alias
+{ var (Some(-Skip) as picked) = (Some(Keep(42)) : (|Some:(|Keep:Int|Skip|)|Nothing|)); switch(picked) { case Some(Keep(i)) -> i case _ -> 0 } }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int
+
+A record alias preserves the narrowed field type
+var r = ((item=Keep(42), n=1) : (item:(|Keep:Int|Skip|), n:Int)); switch(r) { case ((item = -Skip, n=_) as picked) -> switch(picked.item) { case Keep(i) -> i } case _ -> 0 }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int
+
+A tuple alias preserves the narrowed field type
+var r = ((Keep(42), 1) : ((|Keep:Int|Skip|), Int)); switch(r) { case ((-Skip, _) as picked) -> switch(picked.1) { case Keep(i) -> i } case _ -> 0 }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int
+
+A record binding uses its narrowed field for the enclosing alias
+{ var ((item = -Skip, n=_) as picked) = ((item=Keep(42), n=1) : (item:(|Keep:Int|Skip|), n:Int)); switch(picked.item) { case Keep(i) -> i } }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int
+
+An enclosing alias preserves initializer evaluation before a failed match
+{ var ((item = -Skip, note = _) as picked) = (item=(Skip : (|Keep:Int|Skip|)), note=chr(-1)); picked.note }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stderr : @.*Invalid_argument\("Char.chr"\).*
+exit : 1
+
+An alias within a list pattern preserves its narrowed payload
+var v = (Some(Keep(42)) : (|Some:(|Keep:Int|Skip|)|Nothing|)); switch([v]) { case [(Some(-Skip) as picked)] -> switch(picked) { case Some(Keep(i)) -> i case _ -> 0 } case _ -> 0 }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int
+
+An alias of the whole list keeps the list's original element type
+switch ([(Keep(42) : (|Keep:Int|Skip|))]) { case ([-Skip] as picked) -> switch (Skip :: picked) { case [Skip, Keep(i)] -> i case _ -> 0 } case _ -> 0 }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int
+
+A later enclosing alias can use types allowed by its own pattern
+var r = (Some((Keep(42), false)) : (|Some:((|Keep:Int|Drop|Skip|),Bool)|Nothing|)); switch(r) { case Some((-Drop, true)) -> 0 case (Some((-Skip, _)) as picked) -> switch(picked) { case Some((Keep(i), _)) -> i case Some((Drop, _)) -> 1 case Nothing -> 0 } case _ -> 2 }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int
+
+A failed pattern leaves a linear payload available to a later alias
+var r = (Some((Keep(linfun() { 42 }), false)) : (|Some:((|Keep:[] (() -@ Int)|Skip|),Bool)|Nothing|)); switch (r) {case (Some((-Skip, true)) as first) -> switch (first) { case Some((Keep(f), _)) -> f() case Nothing -> 0 } case (Some((-Skip, _)) as second) -> switch (second) { case Some((Keep(f), _)) -> f() case Nothing -> 1 } case Some((Skip, _)) -> 2 case Nothing -> 3 }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int
+
+A record binding checks an enclosing annotation after matching
+var r = ((v=B(42)) : (v:(|A|B:Int|))); { var ((v = -A) : (v:(|B:Int|))) = r; 42 }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int
+
+A record switch checks an enclosing annotation after matching
+var r = ((v=B(42)) : (v:(|A|B:Int|))); switch(r) {case ((v = -A) : (v:(|B:Int|))) -> 42 case _ -> 0}
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int
+
+A record case can bind an alias on a nested rest pattern
+sig pick : forall r::Row. ((forall a. (v:(|A|B:a -> a|), z:Bool|r))) -> (Int,Bool) fun pick(r) { switch(r) { case (z=true | ((v = -A | _) as keep)) -> switch (keep.v) {case B(f) -> (f(42), f(true))} case _ -> (0,false) } } pick(((v=B(fun(x){x}), z=true, more=false) : forall a. (v:(|A|B:a -> a|), z:Bool, more:Bool)))
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : (42, true) : (Int, Bool)
+
+A record binding can bind an alias on a nested rest pattern
+var r = ((v=B(42), z=true) : (v:(|A|B:Int|), z:Bool)); { var (z = true | ((v = -A) as keep)) = r; switch (keep.v) {case B(n) -> n} }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int
+
+An enclosing record alias preserves a field narrowed by its rest pattern
+var r = ((v=B(42), z=true) : (v:(|A|B:Int|), z:Bool)); switch (r) {case ((z = true | (v = -A)) as keep) -> switch (keep.v) {case B(n) -> n} case _ -> 0}
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int
+
 Presence polymorphism 1 [13]
 (fun (x : (|Foo| Bar{p}|)) { switch(x) {case Foo -> 1 case _ -> 2  }} )
 stdout : fun : ((|Bar{_}|Foo|)) -> Int

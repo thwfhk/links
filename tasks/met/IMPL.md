@@ -592,6 +592,21 @@ Failed matches keep the original value and the parts already matched
 available to later cases. The evaluator still dispatches on the stored
 value.
 
+#### 5.20 Enclosing aliases of negative patterns
+
+Lowering binds an enclosing alias and checks its annotation after the
+nested pattern succeeds. It rebuilds variant payloads and record or
+tuple fields from the values available in that branch. Record rest
+aliases use the fields left after the preceding parts of the pattern.
+The type arguments of the original value still apply to these parts.
+
+Switch lowering keeps the original scrutinee available on fallthrough.
+Values proved by earlier tests are eligible for an alias at the type
+the source checker assigned to that alias. Direct bindings keep the
+original test order and share the initial value when rebuilding a
+record. A whole-list alias keeps the original element type. Matches
+inside a list element can still narrow that element's own aliases.
+
 ### Deferred optimisation issues
 
 Dead-definition elimination can remove unused calls to `crypt`, `chr`
