@@ -569,6 +569,11 @@ parameter annotation. Do not decide by whichever constraint is visited
 first. Do not infer a new polymorphic or modal common type for different
 branches without an expected type.
 
+When inferring the result of an `if`, `switch` or handler, relative
+prefixes do not affect agreement once the common underlying type is
+known to be absolute. For example, branches of type `<Reader(Int)> Int`
+and `<Reader(Bool)> Int` both yield `Int`.
+
 ### Annotation summary
 
 | Situation | Required information |
@@ -672,27 +677,64 @@ computation's result and does not reinstall the handler. A new handler
 for `D` permits calling it. The presence of an older instance of the
 same interface alone does not remove this relative dependency.
 
+Check uses of captured linear values across the return and operation
+clauses of a shallow handler as alternative branches. A captured
+linear value used in a clause must be used once in every clause,
+including the implicit return clause when present. This is a static
+check on clause paths. The existing resumption rules allow an
+enclosing handler to abort or replay the computation.
+
 For a parameterised deep handler with state types `S1, ..., Sn`, the
 resumption has type `(Q, S1, ..., Sn) -> B` in `E`. Evaluate initial
-state expressions in `E`. The clauses bind the current state and each
-resumption call supplies its next state. Each `Si` must be
-absolute. Keep the existing state syntax and value-usage checks.
+state expressions from left to right in `E`, with the same bindings
+in scope for each expression. Count uses of linear values across all
+initial expressions in sequence. Only the clauses bind the current
+state. Each resumption call supplies its next state. Each `Si` must be
+absolute.
+
+#### Linear state
+
+Each operation and return clause must use every linear state binding
+once on each branch. The implicit return clause leaves the state
+unused, so linear state requires an explicit return clause. Passing a
+linear state value to a resumption as its next state counts as one use.
+This is a static check on each clause. When an enclosing handler
+resumes a captured computation twice, the existing replay rule also
+applies to the captured handler state.
+
+The following handler returns `43`:
+
+```links
+handle(42)(f <- (linfun() { 1 } : [](() -@ Int))) {
+  case n -> n + f()
+}
+```
+
+Changing the clause to `case n -> n` discards `f` and is rejected.
+Calling `f` twice in a branch is also rejected.
 
 ## Native effects
 
 Use `wild` for native side effects. Printing, socket I/O, reading the
 current time, random generation and `gensym` require it. A primitive
-that only computes a result receives a pure type. Check each primitive
-according to what it does.
+that only computes a result receives a pure type. A primitive that can
+use a native effect for any input requires `wild` at every call.
+`show` uses the local time zone when formatting a date, including
+a date in a container. `parseDate` uses it when the string has no
+offset. Both require `wild`. `sleep` has the timing permission
+even while it reports that it is unimplemented. `error` is a
+deterministic runtime failure and has a pure type.
 
 For example, `print` has type `[wild] ((String) -> ())`. A function
 that calls `print` must include `wild` in its effect context. Files,
 top-level expressions and the REPL provide `wild`, so they can call
 such functions. User-defined handlers cannot handle or add `wild`.
 
-The built-in `exit` ends evaluation and requires `wild`. Its argument
-must have an absolute type. Its result type can be instantiated at each
-call.
+The built-in `exit` ends the current evaluation with its argument and
+requires `wild`.
+Its argument must have an absolute, unrestricted type. Its result type
+can be instantiated independently at each call and is unrestricted.
+The signature is `forall a::Abs,b. [wild] ((a) -> b)`.
 
 Recursion, range construction and installing an algebraic handler add
 no `wild` requirement themselves. For example, factorial can have a

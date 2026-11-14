@@ -186,11 +186,41 @@ Depends on milestone 3.
 - [x] **4.4** (`0a9eaaa9`) Implement the reviewed native permission rules. Test
   native calls under absolute annotations, recursion and ranges. Keep
   native primitive classification separate from `ApplyPure`.
+- [ ] **4.5** Fix inference of shared interface arguments. Use known
+  types from handled expressions and clauses before choosing an
+  instance. Check that reordering equally valid constraints produces
+  the same type or the same request for an annotation. Cover known
+  types in branches, local value bindings and local function bodies.
+- [ ] **4.6** Use return and operation clauses when inferring the
+  handler's result. Retain known modal types from aborting clauses
+  and pass expected type information through return bindings. Test
+  default and explicit returns, including a return through a local
+  binding, as well as handlers used as application arguments.
+- [ ] **4.7** Check that member quantifiers cannot escape into an
+  outer type or a shared source annotation. Allow a flexible type
+  variable that is used only within one operation clause to be
+  solved there. Test both uses of the same annotation syntax.
+- [ ] **4.8** Apply the reviewed handler usage rules. Check a captured
+  linear value in all shallow clauses as alternatives. Require each
+  deep clause to use its [linear state](SPEC.md#linear-state) once on
+  each branch. Test one, zero and two uses, including the implicit
+  return, state binder shadowing and passing linear state to a
+  resumption. Check replay through an enclosing handler and sequential
+  state initialisation.
+- [ ] **4.9** Use the same rule for relative prefixes on absolute
+  results in `if`, `switch` and handlers. Test matching underlying
+  types, conflicting underlying types and results that still depend
+  on their context.
+- [ ] **4.10** Keep effectful `crypt` calls when their result is unused.
+  Test the optimised code and a run without optimisation. Check the
+  reviewed `wild` signatures for `show`, `parseDate` and `sleep`,
+  the pure `error` signature, and the existing `exit` signature.
 
 Completion check: every handler and native-effect example in SPEC.md has
 the specified type and result or error. Native dispatch and resumption
 results agree with retained baseline runtime assertions. Mask modalities
-never change operation dispatch.
+never change operation dispatch. The
+[milestone 4 follow-up](IMPL.md#milestone-4-follow-up) checks pass.
 
 ### 5. Integrate the compiler and migrate the library
 
@@ -246,7 +276,7 @@ Depends on milestone 5.
 - [x] **6.3** (`fcb1e97a`) Run final build, regression, IR, source and installation
   checks on the combined revision. Record remaining deferred cases and
   their reasons. Complete this plan only when the in-scope checks pass.
-- [ ] **6.4** After the follow-up changes in 2, 3 and 5, update the
+- [ ] **6.4** After the follow-up changes in 2–5, update the
   SmallLinks guide, review the combined changes and run the affected
   checks below. Record the new tested revision and log paths.
 
@@ -299,10 +329,17 @@ The first implementation is complete on `small-met`. The native compiler
 uses Fresco for files, expressions and REPL sentences. The [migration
 inventory](MIGRATION.md) records the retained and deferred cases.
 
-The follow-up fixes in milestones 2, 3, 5 and 6 are documented.
+The follow-up fixes in milestones 2–6 are documented.
 The approved rules are in [SPEC.md](SPEC.md). The [implementation
 notes](IMPL.md#follow-up-review) give the cases and planned fixes.
 Implementation is paused. The next item is 2.6.
+
+The milestone 4 review settled the handler usage and branch result
+rules. The fixes in items 4.5–4.10 are pending. Run the affected
+handler, effect annotation and native suites with typed frontend
+rechecking and optimisation, followed by the combined milestone 6
+checks. The milestone 4 review draft passed `git diff --check`
+against `98d39ac8`.
 
 ### Milestones 5–6 checks
 

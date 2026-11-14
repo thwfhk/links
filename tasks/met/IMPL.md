@@ -135,18 +135,68 @@ the enclosing scope. State binders are in scope for both kinds of clause.
 
 The modal handler descriptor records the enclosing context, extension
 and instantiated member schemes by resolved label. The alternatives of
-one member use the same rigid quantifier identities. The legacy row
-slots remain for the running compiler. The lowering work in 5.2 needs
-the modal descriptor, the carried return type and the resolved labels.
+one member use the same rigid quantifier identities. Lowering uses the
+checked operation schemes to build the IR handler.
 
-`Frontend.Modal.initial_context` supplies the modal primitive types and
-starts with `wild`. `Lib.modal_type_env` uses an explicit set of native
-permissions independent of `ApplyPure`. It reuses the value types from
-the legacy primitive table. The modal `exit` scheme requires an absolute
-payload and instantiates its result separately. `error` raises a
-deterministic runtime error and is pure. `sleep` retains its timing
-permission while its implementation is pending. See the
+The top-level context supplies `wild`. The primitive signatures
+are in [`core/lib.ml`](../../core/lib.ml). The lowering flag
+`ApplyPure` serves a separate purpose. See the
+[native rules](SPEC.md#native-effects) and
 [milestone 4 checks](PLAN.md#milestone-4-checks).
+
+### Milestone 4 follow-up
+
+The following fixes are planned against source revision `98d39ac8`.
+They use the existing interpreter examples from the review as
+regressions. The [plan](PLAN.md#4-type-operations-handlers-and-native-effects)
+records the checks.
+
+1. `Partial.handler_hints` considers a limited set of expression
+   forms. `annotated_resume_argument` recognises a direct annotated
+   resumption argument. For `Reader(a::Abs)`, moving an annotated
+   absolute function from `k`'s argument into a local binding can
+   hide its type. A `switch` can hide the same information from a
+   `do` call. Collect known types in their own scope and use them
+   before fixing the interface arguments. Keep the change in effect
+   context at nested handlers and modal introductions.
+2. `FrescoTypes.merge_known` currently prefers the first of two
+   conflicting type hints. Reordering `do Put(1)` and
+   `do Put(2 : [] Int)` can change the inferred type of `do Get`
+   from `Int` to `[] Int`. Check constraints for the shared
+   interface argument together. Request an annotation when they
+   still leave more than one choice.
+3. `Partial.infer` reads handler return branches and leaves out
+   operation bodies. Full checking also gives a syntactic identity
+   return special access to the expected result type. Use known
+   types from both kinds of clause. Cover a polymorphic `do Fail`
+   with an aborting clause returning a function annotated
+   `[](() -> Int)`. The result should type-check with an implicit
+   return. Also cover an explicit return that binds the returned
+   value to another name before returning it.
+4. The rigid scope check currently protects every source
+   annotation. Keep the protection for a shared `%t` used both
+   inside and outside the clause. Permit a `%t` used only in the
+   clause to refer to that clause's rigid type, with checks that
+   the type cannot escape through the result or shared arguments.
+5. Return and operation clauses currently have separate usage
+   counts which are added together. This rejects a shallow handler
+   that uses a captured linear value once in each clause. Align all
+   shallow clauses as alternatives, including the inserted return
+   clause. Change the one-group fixture to cover use in every branch
+   and rejection when the return branch omits the use. In deep
+   clauses, check state binders as local values, with the ordinary
+   once-per-branch check for linear values. A clause binder that
+   shadows a state binding cannot supply its use. Keep the
+   unrestricted check for other captured values and count uses in
+   state initialisers sequentially.
+6. Inferred handler results can drop a relative modality when the
+   common body is known to be absolute. The ordinary branch check
+   in `same_branches` can reject the same pair of types. Share the
+   absolute result rule across conditionals, switches and handlers.
+7. `crypt` currently has a `[wild]` signature and keeps the old
+   `PURE` lowering flag. The optimiser can erase an unused call.
+   Lower it as an ordinary application and make the regression
+   check that its evaluation survives optimisation.
 
 ## 5. Compiler and library integration
 
