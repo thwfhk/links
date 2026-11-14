@@ -117,6 +117,15 @@ val unit_comp : computation
 type program = computation
   [@@deriving show]
 
+type move_checkpoint = Track of var * Utility.IntSet.t | Forget of var | Read of Utility.IntSet.t
+
+type move_observations = {
+  checkpoints: move_checkpoint var_map;
+  captures: Utility.IntSet.t var_map;
+}
+
+val empty_move_observations : move_observations
+
 val is_atom : value -> bool
 
 val with_bindings : binding list -> computation -> computation

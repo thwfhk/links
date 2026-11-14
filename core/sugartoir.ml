@@ -159,7 +159,7 @@ sig
     (var list -> tail_computation sem) ->
     tail_computation sem
 
-  val record_captures : env -> StringSet.t Lazy.t -> tail_computation sem -> tail_computation sem
+  val record_captures : ?value:var -> env -> StringSet.t Lazy.t -> tail_computation sem -> tail_computation sem
 
 end
 
@@ -217,7 +217,10 @@ struct
       t
 end
 
-module Interpretation(M : BINDINGMONAD)(Moves : sig val variables : IntSet.t end) : INTERPRETATION =
+module Interpretation(M : BINDINGMONAD)(Moves : sig
+  val variables : IntSet.t
+  val observations : Ir.move_observations ref
+end) : INTERPRETATION =
 struct
   type 'a sem = 'a M.semt
 
@@ -234,9 +237,9 @@ struct
   sig
     val lift_list : value sem list -> value list M.sem
 
-    val lift_alist : (Name.t * value sem) list -> (Name.t * value) list M.sem
+    val lift_fields : (Name.t * value sem) list -> value sem option -> ((Name.t * value) list * value option) M.sem
 
-    val ordered_value : value sem -> value sem
+    val checkpoint : move_checkpoint -> binding
 
     val comp_binding : ?tyvars:tyvar list -> var_info * tail_computation -> var M.sem
 
@@ -285,32 +288,60 @@ struct
     let value_of_untyped_var (s, t) =
       M.bind s (fun x -> lift (Variable x, t))
 
-    (* A later operand can fail before the final IR value is evaluated. *)
-    let ordered_value s =
-      if IntSet.is_empty Moves.variables then s
-      else
-        let typ = sem_type s in
-        bind s (function
-          | Constant _ as value -> lift (value, typ)
-          | value -> value_of_untyped_var (comp_binding (Var.info_of_type typ, Return value), typ))
+    let rec tracked_reads reads = function
+      | Variable var ->
+          let reads = if IntSet.mem var Moves.variables then IntSet.add var reads else reads in
+          Option.fold ~none:reads ~some:(IntSet.union reads)
+            (IntMap.lookup var (!Moves.observations).captures)
+      | Constant _ -> reads
+      | Extend (fields, rest) ->
+          let reads = StringMap.fold (fun _ value reads -> tracked_reads reads value) fields reads in
+          Option.fold ~none:reads ~some:(tracked_reads reads) rest
+      | Project (_, value) | Erase (_, value) | Inject (_, value, _)
+      | TAbs (_, value) | TApp (value, _) | Closure (_, _, value) | Coerce (value, _) ->
+          tracked_reads reads value
+      | ApplyPure (fn, args) -> List.fold_left tracked_reads (tracked_reads reads fn) args
+
+    let checkpoint action =
+      let binder, var = Var.fresh_var_of_type Types.unit_type in
+      let observations = !Moves.observations in
+      Moves.observations := { observations with checkpoints = IntMap.add var action observations.checkpoints };
+      letmv (binder, Ir.unit)
+
+    let separate_value s =
+      let typ = sem_type s in
+      match reify (bind s (fun value -> lift (Return value, typ))) with
+      | bindings, Return value -> bindings, value
+      | _ -> assert false
 
     let lift_list ss =
-      List.fold_right
-        (fun s s' ->
-           bind (ordered_value s)
-             (fun v ->
-                M.bind s'
-                  (fun vs -> lift (v :: vs))))
-        ss (lift [])
+      if IntSet.is_empty Moves.variables then
+        List.fold_right (fun s rest -> bind s (fun v -> M.bind rest (fun vs -> lift (v :: vs)))) ss (lift [])
+      else
+        (* Later operands can have bindings which run before the residual
+           values. Count crossed reads only if that phase is interrupted. *)
+        let bindings, values, _, group =
+          List.fold_left (fun (bindings, values, reads, group) s ->
+            let extracted, value = separate_value s in
+            let bindings, reads, group =
+              if extracted = [] || IntSet.is_empty reads then bindings, reads, group
+              else
+                let group = match group with Some id -> id | None -> Var.fresh_raw_var () in
+                checkpoint (Track (group, reads)) :: bindings, IntSet.empty, Some group in
+            List.rev_append extracted bindings, value :: values, tracked_reads reads value, group
+          ) ([], [], IntSet.empty, None) ss in
+        let bindings = match group with
+          | None -> List.rev bindings
+          | Some group -> List.rev_append bindings [checkpoint (Forget group)] in
+        M.reflect (bindings, List.rev values)
 
-    let lift_alist ss =
-      List.fold_right
-        (fun (name, s) ss ->
-           bind (ordered_value s)
-             (fun v ->
-                M.bind ss
-                  (fun vs -> lift ((name, v) :: vs))))
-        ss (lift [])
+    let lift_fields fields rest =
+      let names, values = List.split fields in
+      match rest with
+      | None -> M.bind (lift_list values) (fun values -> lift (List.combine names values, None))
+      | Some rest -> M.bind (lift_list (rest :: values)) (function
+          | rest :: values -> lift (List.combine names values, Some rest)
+          | [] -> assert false)
   end
   open S
 
@@ -330,12 +361,10 @@ struct
   let var (x, t) = lift (Variable x, t)
 
   let apply (s, ss) =
-    let ss = lift_list ss in
     let t = TypeUtils.return_type (sem_type s) in
-      bind (ordered_value s)
-        (fun v ->
-           M.bind ss
-             (fun vs -> lift (Apply (v, vs), t)))
+    M.bind (lift_list (s :: ss)) (function
+      | fn :: args -> lift (Apply (fn, args), t)
+      | [] -> assert false)
 
   let apply_pure (s, ss) =
     let ss = lift_list ss in
@@ -354,19 +383,11 @@ struct
         (fun field_types (name, s) -> StringMap.add name (sem_type s) field_types)
         StringMap.empty
         fields in
-    let s' = lift_alist fields in
-      match r with
-        | None ->
-            let t = Types.make_record_type field_types in
-              M.bind s'
-                (fun fields ->
-                   lift (Extend (StringMap.from_alist fields, None), t))
-        | Some s ->
-            let t = Types.Record (Types.extend_row field_types (TypeUtils.extract_row (sem_type s))) in
-              bind (ordered_value s)
-                (fun r ->
-                   M.bind s'
-                     (fun fields -> lift (Extend (StringMap.from_alist fields, Some r), t)))
+    let t = match r with
+      | None -> Types.make_record_type field_types
+      | Some s -> Types.Record (Types.extend_row field_types (TypeUtils.extract_row (sem_type s))) in
+    M.bind (lift_fields fields r) (fun (fields, rest) ->
+      lift (Extend (StringMap.from_alist fields, rest), t))
 
   let materialise s =
     let typ = sem_type s in
@@ -379,11 +400,10 @@ struct
        fields once before projecting any inherited fields. *)
     let r = materialise r in
     let fields = List.map (fun (name, field) -> name, materialise field) fields in
-    bind r (fun base ->
-      M.bind (lift_alist fields) (fun values ->
-        let fields = List.map2 (fun (_, field) (name, value) ->
-          name, lift (value, sem_type field)) fields values in
-        change fields (lift (base, sem_type r))))
+    M.bind (lift_fields fields (Some r)) (fun (values, base) ->
+      let fields = List.map2 (fun (_, field) (name, value) ->
+        name, lift (value, sem_type field)) fields values in
+      change fields (lift (Option.get base, sem_type r)))
 
   let record (fields, r) =
     match r with
@@ -404,7 +424,7 @@ struct
               bind r (fun record ->
                 let inherited = StringMap.mapi (fun name _ ->
                   TAbs (qs, Project (name, TApp (record, arguments)))) lifted in
-                M.bind (lift_alist fields) (fun fields_values ->
+                M.bind (lift_fields fields None) (fun (fields_values, _) ->
                   let values = List.fold_left (fun values (name, value) ->
                     StringMap.add name value values) inherited fields_values in
                   let field_types = List.fold_left (fun types (name, field) ->
@@ -543,16 +563,20 @@ struct
 
   (* A function can read a prior linear binding through the global
      environment. Record its move when the source function is created. *)
-  let record_captures (names, types, _) free_names body =
+  let record_captures ?value (names, _, _) free_names body =
     if IntSet.is_empty Moves.variables then body
     else
-      StringSet.fold (fun name body ->
+      let captures = StringSet.fold (fun name captures ->
         match NEnv.find_opt name names with
-        | Some var when IntSet.mem var Moves.variables ->
-            let typ = TEnv.find var types in
-            let move = comp_binding (Var.info_of_type typ, Return (Variable var)) in
-            M.bind move (fun _ -> body)
-        | _ -> body) (Lazy.force free_names) body
+        | Some var when IntSet.mem var Moves.variables -> IntSet.add var captures
+        | _ -> captures) (Lazy.force free_names) IntSet.empty in
+      if IntSet.is_empty captures then body
+      else match value with
+        | Some var ->
+            let observations = !Moves.observations in
+            Moves.observations := { observations with captures = IntMap.add var captures observations.captures };
+            body
+        | None -> M.bind (lift_binding (checkpoint (Read captures)) ()) (fun () -> body)
 
   let do_operation (name, vs, signature) =
     let vs = lift_list vs in
@@ -624,6 +648,13 @@ struct
       vs
 
   let (++) (nenv, tenv, _) (nenv', tenv', eff') = (NEnv.extend nenv nenv', TEnv.extend tenv tenv', eff')
+
+  let rec returns_function name phrase =
+    match WithPos.node phrase with
+    | Sugartypes.Var v | FreezeVar v -> v = name
+    | Checked (value, _) | ModalIntro (value, _) | TAppl (value, _) | TypeAnnotation (value, _) ->
+        returns_function name value
+    | _ -> false
 
   let rec eval : env -> Sugartypes.phrase -> tail_computation I.sem =
     fun env {node=e; pos} ->
@@ -870,10 +901,17 @@ struct
                         ([], with_effects env eff) in
                     let body = eval body_env body in
                     let qs = List.map SugarQuantifier.get_resolved_exn tyvars in
-                      I.record_captures env (lazy (snd (Freevars.binding binding)))
-                      (I.letfun
-                        (Var.make_info ft f scope, (qs, (body_env, ps, body)), location, unsafe)
-                        (fun v -> eval_bindings scope (extend [f] [(v, ft)] env) bs e))
+                    let captures = lazy (snd (Freevars.binding binding)) in
+                    let definition = (Var.make_info ft f scope, (qs, (body_env, ps, body)), location, unsafe) in
+                    (* Anonymous functions lower to a definition followed by
+                       its value. In that case the capture follows the value. *)
+                    if bs = [] && returns_function f e then
+                      I.letfun definition (fun v ->
+                        I.record_captures ~value:v env captures
+                          (eval_bindings scope (extend [f] [(v, ft)] env) bs e))
+                    else
+                      I.record_captures env captures
+                        (I.letfun definition (fun v -> eval_bindings scope (extend [f] [(v, ft)] env) bs e))
                 | Exp e' ->
                     I.comp env (CompilePatterns.Pattern.Any, ev e', eval_bindings scope env bs e)
                 | Funs defs ->
@@ -998,7 +1036,10 @@ struct
     r, I.sem_type s
 end
 
-module OrdinaryMoves = struct let variables = IntSet.empty end
+module OrdinaryMoves = struct
+  let variables = IntSet.empty
+  let observations = ref Ir.empty_move_observations
+end
 module OrdinaryIR = Interpretation(BindingListMonad)(OrdinaryMoves)
 module C = Eval(OrdinaryIR)
 
@@ -1033,7 +1074,8 @@ type result =
   { globals: Ir.binding list;
     program: Ir.program;
     datatype: Types.datatype;
-    context: Context.t }
+    context: Context.t;
+    move_observations: Ir.move_observations }
 
 let program ?(linear_variables = IntSet.empty) context datatype program =
   let (nenv, _, _) as env =
@@ -1043,19 +1085,23 @@ let program ?(linear_variables = IntSet.empty) context datatype program =
     (nenv, venv, tenv.Types.effect_row)
   in
   let program = lower_sugar#program program in
-  let program', _ =
-    if IntSet.is_empty linear_variables then C.compile env program
+  let program', move_observations =
+    if IntSet.is_empty linear_variables then fst (C.compile env program), Ir.empty_move_observations
     else
-      let module Moves = struct let variables = linear_variables end in
+      let module Moves = struct
+        let variables = linear_variables
+        let observations = ref Ir.empty_move_observations
+      end in
       let module ReplIR = Interpretation(BindingListMonad)(Moves) in
       let module Repl = Eval(ReplIR) in
-      Repl.compile env program in
+      let program, _ = Repl.compile env program in
+      program, !Moves.observations in
   let globals, program'', nenv' = C.partition_program program' in
   let nenv'' = Env.String.extend nenv nenv' in
   let venv =
     let tenv = Context.typing_environment context in
     Env.Int.map TypeUtils.erase_modalities (Var.varify_env (nenv'', tenv.Types.var_env))
   in
-  { globals; datatype; program = program'';
+  { globals; datatype; program = program''; move_observations;
     context = Context.({ context with name_environment = nenv'';
                                       variable_environment = venv }) }

@@ -174,8 +174,8 @@ operation in another module.
 
 The REPL retains the types and binding contexts from each successful
 sentence. It also records whether a linear binding has been used. After
-a runtime error, it marks the linear bindings already read by the
-failed sentence and restores the previous compiler scope. A successful
+a runtime error or `exit`, it keeps the linear moves made by the
+interrupted sentence and restores the previous compiler scope. A successful
 file load or module definition also records the uses of linear bindings
 it creates before exporting its environment.
 
@@ -542,6 +542,17 @@ code. Switch alternatives rebuild their rest records under those
 quantifiers. Constant patterns instantiate the field for the comparison
 and keep the quantified type for any binder.
 
+#### 5.15 REPL evaluation order
+
+REPL lowering leaves native operand computations in their ordinary
+places. When a later operand has separate IR bindings, lowering marks
+earlier linear moves for recovery if those bindings interrupt evaluation.
+If the bindings finish, the interpreter clears the marks and observes
+reads during ordinary operand evaluation. Named function declarations
+record captures at the declaration. A function literal records its
+captures when its value is evaluated, including when it occurs in an
+earlier operand interrupted by a later one.
+
 ### Deferred optimisation issues
 
 Dead-definition elimination can remove unused calls to `crypt`, `chr`
@@ -552,3 +563,5 @@ raise. Keep these cases for testing when work on `--optimise` resumes.
 Inlining can move a linear read past an error in the REPL. For example,
 in `{ var g = f; error("fail"); g(41) }`, moving the read of `f` to
 the call to `g` changes whether the interrupted command used up `f`.
+Dead-definition elimination can also remove the unit bindings that
+mark earlier moves for REPL recovery.

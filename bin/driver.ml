@@ -81,23 +81,22 @@ module Phases = struct
   end
 
   module Transform = struct
-    let run : Sugartoir.result -> Backend.result
-      = fun Sugartoir.({ context; datatype; globals; program }) ->
+    let run Sugartoir.({ context; datatype; globals; program; move_observations }) =
       let program' =
         Ir.with_bindings globals program (* TODO(dhil): This looks silly, and I think it may be wrong... *)
       in
       ModalEffects.Names.with_names context.Context.type_names (fun () ->
-        Backend.program context datatype program')
+        Backend.program context datatype program'), move_observations
   end
 
   module Evaluate = struct
     module Eval = Evalir.Eval
 
-    let run ?on_variable ?(propagate_exit = false) Backend.({ context; program; datatype }) =
+    let run ?on_variable ?(propagate_exit = false) (Backend.({ context; program; datatype }), move_observations) =
       let valenv = Context.value_environment context in
       let (valenv', v) =
         let evaluate () =
-          try Eval.run_program ?on_variable valenv program with
+          try Eval.run_program ?on_variable ~move_observations valenv program with
           | Evalir.Exceptions.Early_exit (valenv, value) when not propagate_exit -> valenv, value
         in
         lazy (evaluate ()) |>measure_as<| "run_program"
@@ -122,7 +121,7 @@ module Phases = struct
           match sentence with
           | Sugartypes.Definitions defs ->
              let program' = (defs, None) in
-             let Backend.({ program; _ }) as result =
+             let (Backend.({ program; _ }), _) as result =
                Compile.IR.run ?linear_variables Frontend.({ context; datatype; program = program' })
                |> Transform.run
              in

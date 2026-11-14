@@ -152,6 +152,15 @@ let unit_comp = ([], Return unit)
 type program = computation
   [@@deriving show]
 
+type move_checkpoint = Track of var * Utility.IntSet.t | Forget of var | Read of Utility.IntSet.t
+
+type move_observations = {
+  checkpoints: move_checkpoint var_map;
+  captures: Utility.IntSet.t var_map;
+}
+
+let empty_move_observations = { checkpoints = Utility.IntMap.empty; captures = Utility.IntMap.empty }
+
 let string_of_var = string_of_int
 
 let string_of_value = show_value

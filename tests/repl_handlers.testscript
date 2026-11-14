@@ -91,6 +91,97 @@ fi
 echo "SUCCESS: The REPL tracked linear moves in arguments, closures and lists"
 
 if ! output=$(./links 2>&1 <<'EOF'
+(fun(a,b) { 42 })(chr(-1), { print("application before binding"); 42 });
+[chr(-1), { print("list before binding"); 'a' }];
+(a=chr(-1), z=verify("bad", "pw"));
+var unrelated = (linfun() { 50 } : [] (() -@ Int));
+(fun(a,b) { 42 })(chr(-1), { print("application with binding"); 42 });
+[chr(-1), { print("list with binding"); 'a' }];
+(a=chr(-1), z=verify("bad", "pw"));
+unrelated();
+(fun(a,b) { 42 })(chr(-1), { print("application after consumption"); 42 });
+[chr(-1), { print("list after consumption"); 'a' }];
+(a=chr(-1), z=verify("bad", "pw"));
+EOF
+); then
+    echo "FAILURE: Native failures ended the REPL session"
+    exit 1
+fi
+
+chr_failure='***: Error: Invalid_argument("Char.chr")'
+bcrypt_failure='***: Error: Bcrypt.Bcrypt_error'
+if [[ "$output" != *"application before binding$chr_failure"*"list before binding$chr_failure"*"$bcrypt_failure"*"unrelated = fun"*"application with binding$chr_failure"*"list with binding$chr_failure"*"$bcrypt_failure"*$'\n50 : Int\n'*"application after consumption$chr_failure"*"list after consumption$chr_failure"*"$bcrypt_failure"* ]]; then
+    echo "FAILURE: Tracking an unrelated linear value changed native evaluation order"
+    printf '%s\n' "$output"
+    exit 1
+fi
+
+echo "SUCCESS: Tracking an unrelated linear value preserved native evaluation order"
+
+if ! output=$(./links 2>&1 <<'EOF'
+var later = (linfun() { 51 } : [] (() -@ Int));
+(fun(a,g) { g() })(chr(-1), later);
+later();
+var afterSuccess = (linfun() { 52 } : [] (() -@ Int));
+(fun(a,g,b) { g()+b })(chr(-1), afterSuccess, { print("later operand ran"); 11 });
+afterSuccess();
+var uncaptured = (linfun() { 53 } : [] (() -@ Int));
+if (true) { var x = 3; (fun(a,g) { g() })(chr(-1), linfun() { uncaptured()+x }) } else uncaptured();
+uncaptured();
+var nested = (linfun() { 54 } : [] (() -@ Int));
+(fun((g,x),n) { g()+n+x })((nested, 3), if (true) exit("after nested move") else 2);
+nested();
+var called = (linfun() { 55 } : [] (() -@ Int));
+[called(), { error("after list call"); 42 }];
+called();
+var capturedArgument = (linfun() { 56 } : [] (() -@ Int));
+if (true) { var x = 3; (fun(g,n) { g()+n })(linfun() { capturedArgument()+x }, error("after lambda")) } else capturedArgument();
+capturedArgument();
+var firstField = (linfun() { 57 } : [] (() -@ Int));
+(a=chr(-1), z=firstField);
+firstField();
+var lastField = (linfun() { 58 } : [] (() -@ Int));
+(a=lastField, z=chr(-1));
+lastField();
+EOF
+); then
+    echo "FAILURE: An interrupted linear operand ended the REPL session"
+    exit 1
+fi
+
+if [[ "$output" != *"$chr_failure"*$'\n51 : Int'*"later operand ran$chr_failure"*$'\n52 : Int'*"$chr_failure"*$'\n53 : Int'* ||
+      "$output" != *$'\n"after nested move"\n'*'Linear variable nested has already been used'*'after list call'*'Linear variable called has already been used'*'after lambda'*'Linear variable capturedArgument has already been used'* ||
+      "$output" != *"firstField = fun"*"$chr_failure"*'Linear variable firstField has already been used'*"lastField = fun"*"$chr_failure"*$'\n58 : Int'* ]]; then
+    echo "FAILURE: The REPL tracked a move at the wrong point in operand evaluation"
+    printf '%s\n' "$output"
+    exit 1
+fi
+
+echo "SUCCESS: The REPL tracked only the linear moves reached before interruptions"
+
+if ! output=$(./links 2>&1 <<'EOF'
+effect Stopper { Stop : () => Int; }
+var abandoned = (linfun() { 59 } : [] (() -@ Int));
+{ var n = handle((fun(g,n) { g()+n })(abandoned, do Stop)) { case <Stop => k> -> 1 }; error("after abandoning operand") : Int };
+abandoned();
+var resumed = (linfun() { 60 } : [] (() -@ Int));
+handle((fun(a,g,n) { g()+n })(chr(-1), resumed, do Stop)) { case <Stop => k> -> k(1) };
+resumed();
+EOF
+); then
+    echo "FAILURE: A handled interruption ended the REPL session"
+    exit 1
+fi
+
+if [[ "$output" != *'after abandoning operand'*'Linear variable abandoned has already been used'*"$chr_failure"*$'\n60 : Int'* ]]; then
+    echo "FAILURE: The REPL tracked the wrong linear moves when a handler stopped or resumed an operand"
+    printf '%s\n' "$output"
+    exit 1
+fi
+
+echo "SUCCESS: The REPL tracked linear moves through interrupted and resumed operands"
+
+if ! output=$(./links 2>&1 <<'EOF'
 var movedBeforeExit = (linfun() { 46 } : [] (() -@ Int));
 var skippedByExit = (linfun() { 47 } : [] (() -@ Int));
 var keep = 48;

@@ -18,6 +18,7 @@ type result =
   { globals: Ir.binding list;
     program: Ir.program;
     datatype: Types.datatype;
-    context: Context.t }
+    context: Context.t;
+    move_observations: Ir.move_observations }
 
 val program : ?linear_variables:Utility.IntSet.t -> Context.t -> Types.datatype -> Sugartypes.program -> result

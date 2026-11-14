@@ -21,7 +21,8 @@ module type EVALUATOR = sig
 
   val apply : Value.continuation -> Value.env -> v * v list -> result
   val apply_cont : Value.continuation -> Value.env -> v -> result
-  val run_program : ?on_variable:(Ir.var -> unit) -> Value.env -> Ir.program -> (Value.env * v)
+  val run_program : ?on_variable:(Ir.var -> unit) -> ?move_observations:Ir.move_observations ->
+    Value.env -> Ir.program -> (Value.env * v)
 end
 
 module Exceptions = struct
@@ -66,10 +67,16 @@ struct
   (* TODO: explicitly distinguish functions and variables in the
      IR so we don't have to do this check every time we look up a
      variable *)
-  let variable_observer = ref ignore
+  type move_observer = {
+    read : Ir.var -> unit;
+    capture : Ir.var -> unit;
+    checkpoint : Ir.var -> bool;
+  }
+
+  let observer = ref { read = ignore; capture = ignore; checkpoint = (fun _ -> false) }
 
   let lookup_var var env =
-    !variable_observer var;
+    !observer.read var;
     if Lib.is_primitive_var var then Lib.primitive_stub_by_code var
     else
       match lookup_fun_def var with
@@ -101,7 +108,10 @@ struct
 
     match v with
     | Constant c -> Lwt.return (constant c)
-    | Variable var -> Lwt.return (lookup_var var env)
+    | Variable var ->
+        let value = lookup_var var env in
+        !observer.capture var;
+        Lwt.return value
     | Extend (fields, r) ->
         begin
           opt_app (value env) (Lwt.return (`Record [])) r >>= fun res ->
@@ -151,6 +161,7 @@ struct
       apply K.empty env (f, args) >|= snd
     | Closure (f, _, v) ->
       value env v >>= fun v ->
+      !observer.capture f;
       Lwt.return (`FunctionPtr (f, Some v))
     | Coerce (v, _) -> value env v
   and apply (cont : continuation) env : Value.t * Value.t list -> result = function
@@ -197,12 +208,14 @@ struct
          match b with
          | Let (b, (_, tc)) ->
             let var = Var.var_of_binder b in
-            let locals = Value.Env.localise env var in
-            let cont' =
-              K.(let frame = Frame.make (Var.scope_of_binder b) var locals (bs, tailcomp) in
-                 frame &> cont)
-            in
-            tail_computation env cont' tc
+            if !observer.checkpoint var then computation env cont (bs, tailcomp)
+            else
+              let locals = Value.Env.localise env var in
+              let cont' =
+                K.(let frame = Frame.make (Var.scope_of_binder b) var locals (bs, tailcomp) in
+                   frame &> cont)
+              in
+              tail_computation env cont' tc
          (* function definitions are stored in the global fun map *)
          | Fun _ ->
             computation env cont (bs, tailcomp)
@@ -291,18 +304,39 @@ struct
   let eval : Value.env -> program -> result =
     fun env -> computation env K.empty
 
-  let run_program ?(on_variable = ignore) env program =
-    let previous = !variable_observer in
-    variable_observer := on_variable;
-    Fun.protect ~finally:(fun () -> variable_observer := previous) (fun () ->
+  let run_program ?(on_variable = ignore) ?(move_observations = Ir.empty_move_observations) env program =
+    let previous = !observer in
+    (* A later binding may exit or abandon its continuation before the
+       residual values run. Its pending reads count on interruption. A
+       normal return reaches Forget before the ordinary reads resume. *)
+    let pending = ref IntMap.empty in
+    let checkpoint var =
+      match IntMap.lookup var move_observations.checkpoints with
+      | None -> false
+      | Some (Track (group, reads)) ->
+          let earlier = Option.value ~default:IntSet.empty (IntMap.lookup group !pending) in
+          pending := IntMap.add group (IntSet.union earlier reads) !pending;
+          true
+      | Some (Forget group) ->
+          pending := IntMap.remove group !pending;
+          true
+      | Some (Read reads) ->
+          IntSet.iter on_variable reads;
+          true in
+    let capture var =
+      Option.iter (IntSet.iter on_variable) (IntMap.lookup var move_observations.captures) in
+    observer := { read = on_variable; checkpoint; capture };
+    Fun.protect ~finally:(fun () -> observer := previous) (fun () ->
       try
         steps_until_pause := steps_between_pauses;
         Lwt_main.run (eval env program)
-      with
-        | NotFound s ->
-            raise (internal_error ("NotFound " ^ s ^
-              " while interpreting."))
-        | Not_found  -> raise (internal_error ("Not_found while interpreting.")))
+      with exn ->
+        let backtrace = Printexc.get_raw_backtrace () in
+        IntMap.iter (fun _ -> IntSet.iter on_variable) !pending;
+        match exn with
+        | NotFound s -> raise (internal_error ("NotFound " ^ s ^ " while interpreting."))
+        | Not_found -> raise (internal_error "Not_found while interpreting.")
+        | _ -> Printexc.raise_with_backtrace exn backtrace)
 end
 
 module rec Eval : EVALUATOR = Evaluator (Value.Continuation.Evaluation (Eval))
