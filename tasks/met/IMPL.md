@@ -327,66 +327,54 @@ See the [extension rule](SPEC.md#modal-record-extension) and the
 
 ### Milestone 4 follow-up
 
-Use the interpreter examples from the review as regressions. See the
-[milestone 4 plan](PLAN.md#4-type-operations-handlers-and-native-effects).
+See the [milestone 4 checks](PLAN.md#milestone-4-follow-up-checks).
 
 #### 4.5 Shared interface arguments
 
-`Partial.handler_hints` considers a limited set of expression
-forms. `annotated_resume_argument` recognises a direct annotated
-resumption argument. For `Reader(a::Abs)`, moving an annotated
-absolute function from `k`'s argument into a local binding can
-hide its type. A `switch` can hide the same information from a
-`do` call. Collect known types in their own scope and use them
-before fixing the interface arguments. Keep the change in effect
-context at nested handlers and modal introductions.
+Partial inference collects separate observations from the handled
+expression and from resumption calls. It tracks local bindings and the
+position of the installed interface occurrence through nested handlers
+and modal locks. A `do` call uses the newest occurrence. A function's
+required context can also constrain an older occurrence.
 
-`FrescoTypes.merge_known` currently prefers the first of two
-conflicting type hints. Reordering `do Put(1)` and
-`do Put(2 : [] Int)` can change the inferred type of `do Get`
-from `Int` to `[] Int`. Check constraints for the shared
-interface argument together. Request an annotation when they
-still leave more than one choice.
+The checker compares candidate arguments against annotations, provided
+types and expected types before fixing the instance. Both orders of
+`do Put(1)` and `do Put(2 : [] Int)` ask for an annotation if both `Int`
+and `[] Int` remain possible. Frontend rechecking uses the instance
+stored in the typed handler and checks the clauses against its schemes.
 
 #### 4.6 Handler result types
 
-`Partial.infer` reads handler return branches and leaves out
-operation bodies. Full checking also gives a syntactic identity
-return special access to the expected result type. Use known
-types from both kinds of clause. Cover a polymorphic `do Fail`
-with an aborting clause returning a function annotated
-`[](() -> Int)`. The result should type-check with an implicit
-return. Also cover an explicit return that binds the returned
-value to another name before returning it.
+Partial inference combines known result types from both kinds of
+clause. When a return forwards the input value, including through local
+aliases, a known absolute result type can guide checking the handled
+expression. A result inferred from another clause can guide the
+instantiation of `do Fail` at a known modal type or a type containing
+one. Clause checking still applies the value restriction.
 
 #### 4.7 Operation clause quantifier scope
 
-The rigid scope check currently protects every source
-annotation. Keep the protection for a shared `%t` used both
-inside and outside the clause. Permit a `%t` used only in the
-clause to refer to that clause's rigid type, with checks that
-the type cannot escape through the result or shared arguments.
+The checker records source annotation occurrences and their enclosing
+operation clauses before solving types. The rigid scope check protects
+annotation variables shared outside a clause, along with its ambient
+context, handler result and interface arguments. It checks each clause
+result within the rigid scope.
 
 #### 4.8 Linear use in handlers
 
-Return and operation clauses currently have separate usage
-counts which are added together. This rejects a shallow handler
-that uses a captured linear value once in each clause. Align all
-shallow clauses as alternatives, including the inserted return
-clause. Change the one-group fixture to cover use in every branch
-and rejection when the return branch omits the use. In deep
-clauses, check state binders as local values, with the ordinary
-once-per-branch check for linear values. A clause binder that
-shadows a state binding cannot supply its use. Keep the
-unrestricted check for other captured values and count uses in
-state initialisers sequentially.
+One usage check covers all shallow clause alternatives, including the
+inserted return. For deep clauses, the checker checks and removes
+clause pattern bindings before it checks uses of state bindings. This
+distinguishes state use from a shadowing binder. Other deep-clause
+captures require unrestricted types. State initialisers contribute
+their uses in sequence.
 
 #### 4.9 Relative prefixes on absolute results
 
-Inferred handler results can drop a relative modality when the
-common body is known to be absolute. The ordinary branch check
-in `same_branches` can reject the same pair of types. Share the
-absolute result rule across conditionals, switches and handlers.
+`if`, `switch` and handlers share the inferred branch result check.
+It checks all branch bodies before deciding whether the common type is
+absolute. This lets a later branch determine whether the relative
+prefixes can be dropped.
 
 ### Milestone 5 follow-up
 

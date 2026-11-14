@@ -225,32 +225,32 @@ Depends on milestone 3.
 - [x] **4.4** (`0a9eaaa9`) Implement the reviewed native permission rules. Test
   native calls under absolute annotations, recursion and ranges. Keep
   native primitive classification separate from `ApplyPure`.
-- [ ] **4.5** Fix inference of shared interface arguments. Use known
+- [x] **4.5** (`13b074fd`) Fix inference of shared interface arguments. Use known
   types from handled expressions and clauses before choosing an
   instance. Check that reordering equally valid constraints produces
   the same type or the same request for an annotation. Cover known
   types in branches, local value bindings and local function bodies.
-- [ ] **4.6** Use return and operation clauses when inferring the
+- [x] **4.6** (`13b074fd`) Use return and operation clauses when inferring the
   handler's result. Retain known modal types from aborting clauses
   and pass expected type information through return bindings. Test
   default and explicit returns, including a return through a local
   binding, as well as handlers used as application arguments.
-- [ ] **4.7** Check that member quantifiers cannot escape into an
+- [x] **4.7** (`13b074fd`) Check that member quantifiers cannot escape into an
   outer type or a shared source annotation. Allow a flexible type
   variable that is used only within one operation clause to be
   solved there. Test both uses of the same annotation syntax.
-- [ ] **4.8** Apply the reviewed handler usage rules. Check a captured
+- [x] **4.8** (`13b074fd`) Apply the reviewed handler usage rules. Check a captured
   linear value in all shallow clauses as alternatives. Require each
   deep clause to use its [linear state](SPEC.md#linear-state) once on
   each branch. Test one, zero and two uses, including the implicit
   return, state binder shadowing and passing linear state to a
   resumption. Check replay through an enclosing handler and sequential
   state initialisation.
-- [ ] **4.9** Use the same rule for relative prefixes on absolute
+- [x] **4.9** (`13b074fd`) Use the same rule for relative prefixes on absolute
   results in `if`, `switch` and handlers. Test matching underlying
   types, conflicting underlying types and results that still depend
   on their context.
-- [ ] **4.10** Check the reviewed `wild` signatures for `show`,
+- [x] **4.10** (`15849dea`) Check the reviewed `wild` signatures for `show`,
   `parseDate` and `sleep`, the pure `error` signature and the existing
   `exit` signature.
 
@@ -429,15 +429,38 @@ The first implementation is complete on `small-met`. The native compiler
 uses Fresco for files, expressions and REPL sentences. The [migration
 inventory](MIGRATION.md) records the retained and deferred cases.
 
-The milestone 2 and 3 follow-ups are complete on `small-met`. The
-coordinating chat reviews the handover before the milestone 4 chat starts
-at item 4.5. There are no blockers for milestone 4. Run the affected
-handler, effect annotation and native suites with typed frontend
-rechecking. Item 4.6 covers partial inference from handler operation
-clauses. Item 5.5 covers interface names across file inputs and preludes,
-and interface signatures in local modules. Item 5.7 repeats the strict
-record and comprehension checks after integration. Complete 6.4 after
-the remaining items in milestones 4 and 5.
+The milestone 2–4 follow-ups are complete on `small-met`. The next
+implementation starts at 5.5, which covers interface names across
+file inputs and preludes, and interface signatures in local modules.
+There are no milestone 4 blockers. Item 5.7 repeats the strict record
+and comprehension checks after integration. Complete 6.4 after the
+remaining milestone 5 items. Optimisation work remains in the
+[deferred list](IMPL.md#deferred-optimisation-issues).
+
+### Milestone 4 follow-up checks
+
+The combined checks used `15849dea` with OCaml 5.4.0. Items 4.5–4.9
+share one compiler commit because interface inference, clause checking
+and branch results use the same handler types and regressions. Logs are
+in `/private/tmp/smalllinks-met-4-follow-up/`.
+
+Independent reviews covered interface scope under nested handlers and
+curried functions, argument evidence and expected types, result hints
+from aborting clauses, member quantifier scope, linear state and
+absolute results. The regressions cover the fixes for the issues found
+in review, including late constraints on branch results and rechecking
+distinct annotations across clauses for one member.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make` and `make all-ci` | Passed. | `build.log`, `ci-build.log` |
+| `opam exec -- ./run-tests unit-tests` | 105 passed. | `unit.log` |
+| `make tests` | 1,092 passed across 42 suites, with two existing ignored cases. All four scripts passed. | `all-regressions.log` |
+| `./test-harness tests/<suite>.tests` | Passed for `handlers` (127), `effect_annotations` (61), `native` (73), `native_permissions` (13), `polymorphism` (66), `typecheck_examples` (34), `recheck_frontend_transformations` (3), `typed_ir` (30) and `modules` (49). | `<suite>.log` |
+| `./test-harness` with frontend rechecking and strict IR checking | All 201 handler, effect annotation and native permission cases passed. | `strict-<suite>.log` |
+| Handler and native specification examples with strict checking | 22 checks passed, including rejected examples and linear state variants. The handler example runner returned `() : ()`. | `spec-examples.log`, `strict-examples.log` |
+| `./tests/repl_handlers.testscript` | Passed. | `repl.log` |
+| `make rule-check` and `git diff --check` | Passed. GNU find was unavailable for the tabs rule. The same patterns passed with `rg`. | `rule-check.log`, `tabs.log`, `diff-check.log` |
 
 ### Milestone 3 follow-up checks
 
