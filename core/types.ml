@@ -659,12 +659,8 @@ let make_restriction_predicate (klass : (module TypePredicate)) restr flexibles 
 
 (** Narrow flexible variables to a compatible restriction. *)
 let make_restriction_transform ?(allow_incompatible=false) subkind =
-  (object(self)
-     inherit type_iter as super
-
-     method! visit_type vars = function
-       | Modal (_, body) when Restriction.is_base subkind -> self#visit_type vars body
-       | t -> super#visit_type vars t
+  (object
+     inherit type_iter
 
      method! visit_var point = function
        | (_, (_, (_, sk)), _) when sk = subkind -> ()
@@ -681,7 +677,7 @@ module Base : Constraint = struct
   open Restriction
 
   module BasePredicate = struct
-    class klass = object(self)
+    class klass = object
       inherit type_predicate as super
 
       method! point_satisfies f vars point =
@@ -699,8 +695,7 @@ module Base : Constraint = struct
         | Meta _ as t  -> super#type_satisfies vars t
         (* Type *)
         | Primitive _ -> true
-        | (Function _ | Lolli _ | AmbientFunction _ | Record _ | Variant _ | ForAll (_::_, _)) -> false
-        | Modal (_, t) -> self#type_satisfies vars t
+        | (Function _ | Lolli _ | AmbientFunction _ | Modal _ | Record _ | Variant _ | ForAll (_::_, _)) -> false
         | ForAll ([], t) -> super#type_satisfies vars t
         (* Effect *)
         | Effect _ as t -> super#type_satisfies vars t

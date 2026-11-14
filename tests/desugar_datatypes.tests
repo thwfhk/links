@@ -138,3 +138,50 @@ exit : 1
 An absolute kind narrows only parameters used in exposed recursive fields
 typename Shift(a,b,c) = (|Here:a|More:Shift(b,Int,c)|); typename Wrap(a::Abs) = a; fun (x : Wrap(Shift(Int,%b,%c))) { x }
 stdout : fun : (Wrap (Shift (Int,a::Abs,b))) -> Wrap (Shift (Int,a::Abs,b))
+
+Base rejects a type argument with an absolute modality
+typename B(a::Base) = a; fun (x : B([] Int)) { x }
+stderr : @.*Type argument .* must satisfy Base.*
+exit : 1
+
+Base rejects a type argument with a relative modality
+effect E { Take : () => (); } typename B(a::Base) = a; fun (x : B(<E> Int)) { x }
+stderr : @.*Type argument .* must satisfy Base.*
+exit : 1
+
+A Base parameter passed to MonoAbs accepts a primitive
+typename M(a::MonoAbs) = a; typename B(b::Base) = M(b); fun (x : B(Int)) { x }
+stdout : fun : (B (Int)) -> B (Int)
+
+A Base parameter passed to MonoAbs rejects an absolute modality
+typename M(a::MonoAbs) = a; typename B(b::Base) = M(b); fun (x : B([] Int)) { x }
+stderr : @.*Type argument .* must satisfy Base.*
+exit : 1
+
+A Base parameter passed to Mono accepts a primitive
+typename M(a::Type(Unl,Mono)) = a; typename B(b::Base) = M(b); fun (x : B(Int)) { x }
+stdout : fun : (B (Int)) -> B (Int)
+
+An alias of a modal type fails a Mono kind check
+typename T = [] Int; typename M(a::Type(Unl,Mono)) = a; fun (x : M(T)) { x }
+stderr : @.*Type argument .* must satisfy Mono.*
+exit : 1
+
+An alias of a modal type fails a MonoAbs kind check
+typename T = [] Int; typename M(a::MonoAbs) = a; fun (x : M(T)) { x }
+stderr : @.*Type argument .* must satisfy Mono.*
+exit : 1
+
+A Base row accepts a primitive field and a Base presence may be absent
+typename B(r::Row(Base),p::Presence(Base)) = (x{p}|r); fun (x : B({y:Int},{-})) { x }
+stdout : fun : (B ({y:Int},{-})) -> B ({y:Int},{-})
+
+A Base row rejects a modal field
+typename B(r::Row(Base)) = (x:Int|r); fun (x : B({y:[] Int})) { x }
+stderr : @.*Type argument .* must satisfy Base.*
+exit : 1
+
+A Base presence rejects a modal payload
+typename B(p::Presence(Base)) = (x{p}); fun (x : B({:[] Int})) { x }
+stderr : @.*Type argument .* must satisfy Base.*
+exit : 1
