@@ -17,7 +17,9 @@ decisions here as implementation proceeds.
 
 ## 1. Reviewed design and baseline
 
-The design review is complete. The baseline inventory is pending.
+The design review and [baseline checks](PLAN.md#implementation-baseline)
+are complete. See the [migration inventory](MIGRATION.md) for the
+affected signatures, tests and examples.
 
 Removed `unsafe_cast` from the native primitive table in `core/lib.ml`.
 Checked upcasts use IR coercions. `tests/native.tests` checks that the

@@ -56,15 +56,15 @@ decisions in the spec. Keep implementation decisions in IMPL.md.
 - [x] **1.1** (`3552e33f`) Read the repository guide, thesis and
   Fresco sources. Draft the syntax, typing and inference contract,
   examples, review choices, milestones and implementation framework.
-- [x] **1.2** Record the approved design decisions in SPEC.md and
+- [x] **1.2** (`21348680`) Record the approved design decisions in SPEC.md and
   update the affected checks.
-- [ ] **1.3** Build and record the starting compiler, native entry points,
+- [x] **1.3** Build and record the starting compiler, native entry points,
   regression suites and IR unit tests. Inventory effect-bearing types
   in primitives, both preludes, standard library modules and examples.
   Classify each affected fixture as a modal translation, a changed
   acceptance expectation, or a dependency on a postponed feature, using
   the criteria in [SPEC.md](SPEC.md#migration-and-deferred-coverage).
-- [ ] **1.4** Add missing baseline tests for retained runtime behaviour:
+- [x] **1.4** Add missing baseline tests for retained runtime behaviour:
   clause contexts, forwarding, shallow and parameterised resumptions,
   and value-linearity use. Separate future modal typing assertions from
   runtime assertions executable by the baseline.
@@ -255,13 +255,32 @@ an explicit inventory.
 
 Milestone 1, item 1.1 is committed as `3552e33f` on `small-met`.
 The user approved the remaining [design decisions](SPEC.md#design-decisions)
-in 1.2.
+in 1.2. Milestone 1 is complete. The [migration inventory](MIGRATION.md)
+names the affected sources and fixtures.
 
-Next action: record the implementation baseline in 1.3. The starting
-compiler source revision is `e117db9da0bca9f45e9a12d2c3df808ec3880a6e`.
+Next action: finish syntax and type representation in milestone 2.
 
-The deferred-case inventory will be populated in 1.3 using the criteria
-in [SPEC.md](SPEC.md#migration-and-deferred-coverage).
+### Implementation baseline
+
+Checks used `21348680` with OCaml 5.4.0 and Dune 3.20.2. Logs are under
+`/private/tmp/smalllinks-met-1-2.WacKXl/`. The handler baseline suite includes the
+eight new cases in 1.4.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make` | Passed. | `baseline-build.log` |
+| `make tests` | 928 cases across 40 suites and all three scripts passed. | `baseline-tests.log` |
+| `opam exec -- ./run-tests unit-tests` | 44 passed. | `baseline-ir.log` |
+| `./links -e '40 + 2'` | Returned `42 : Int`. | `baseline-expression.log` |
+| `./links examples/handlers/tests.links` | The imported handler examples passed. | `baseline-import.log` |
+| `./tests/repl_handlers.testscript` | The definition and call passed. | `baseline-repl.log` |
+| `./links --set=typecheck_only=true examples/extensible-case.links` | Passed. | `baseline-typecheck.log` |
+| `./test-harness tests/handlers.tests` with the eight new cases | 115 passed. | `/private/tmp/small-met-handler-baseline.log` |
+
+The individual suite logs use the `baseline-<suite>.log` names.
+The new handler cases cover runtime scope, forwarding, resumption,
+state evaluation order and linear bindings. The modal typing checks
+remain in [milestones 3 and 4](#3-implement-modal-inference-and-polymorphism).
 
 ### Design approval and `unsafe_cast` removal
 
