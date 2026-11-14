@@ -353,22 +353,20 @@ var record = ((run=fun() { do Ask }) : [Reader] (run:() -> Int));
 The result has type `(n:Int, run:[Reader] (() -> Int))`. Adding `n`
 leaves `run` available to call in the `Reader` context.
 
-**For review.** In `[Reader] (n{-} | r)`, `n` is absent and `r`
+In `[Reader] (n{-} | r)`, `n` is absent and `r`
 stands for the other fields. If `r` contains `run:() -> Int`,
 returning `(n:Int | r)` outside `Reader` would lose the `Reader`
 requirement on `run`. The current checker accepts extension when the
 old record can be used in the current context. This works if the
-context supplies `Reader` or if `r::Row(Abs)`. General extension outside
-`Reader` would need a way to carry the requirement on the unknown
-fields. Should we keep the current limit?
+context supplies `Reader` or if `r::Row(Abs)`. General extension that
+needs to carry a modality on unknown fields is
+[future work](#modal-types-and-data-rows).
 
-In `[Reader] (run{p})` with `p::Presence(Abs)`, `run` is either
-absent or has an absolute type. For example, extending `()` gives
-`(n=1)` and extending `(run=2)` gives `(n=1, run=2)`. The result
-can retain the same `p` in `(n:Int, run{p})` because neither case
-needs the outer `Reader` modality. The current checker rejects the
-extension when it still sees the unknown presence. Should we accept
-this case?
+When extending `[Reader] (run{p})` with `p::Presence(Abs)`, keep
+the same `p` in `(n:Int, run{p})`. The field is either absent or has
+an absolute type. For example, extending `()` gives `(n=1)` and
+extending `(run=2)` gives `(n=1, run=2)`. If the record type has its
+own `forall`, instantiate the record before applying this rule.
 
 ### List linearity
 
@@ -1265,6 +1263,32 @@ The outer `State(Int)` handler cannot provide the missing operation.
    types](#first-class-polymorphism-and-modal-types).
 5. **`escape`.** Handler resumptions remain available. The migration
    inventory lists the examples and tests that require `escape`.
+
+### Modal types and data rows
+
+How should a modality on a record or variant apply to a data-row
+variable or a field whose presence is unknown? In particular, can
+record extension preserve the requirement on unknown inherited fields
+while typing new fields in the current effect context?
+
+One proposal is to apply a modality to each present field's type and
+preserve absent fields. Keep that operation on an unknown row tail
+`r` or presence `p` and apply it when they are instantiated. For
+example, when extending `[Reader] (n{-}, x{p} | r)` with `n=1`, the
+result would have type `(n:Int, x{map([Reader], p)} | map([Reader], r))`.
+Here `map` denotes a type operation. If `r` supplies `run:() -> Int`,
+the result gives `run` type `[Reader] (() -> Int)`. If `p` is absent,
+`x` stays absent. Payload types known to be absolute stay as they are,
+including those covered by `Row(Abs)` or `Presence(Abs)`.
+
+Start with a typing rule that converts a modal record to a record
+with this operation on its fields. Check that the operation commutes
+with substitution and preserves field presence and linearity. Study
+projection and variant matching under the same rules. Work out which
+equalities inference can solve for unknown rows and presences. An
+unwrapped callback and a callback already under `[Reader]` can both
+map to the same type. The solver therefore cannot in general cancel
+the modality when comparing two rows.
 
 ### Modality-parameterised handlers
 

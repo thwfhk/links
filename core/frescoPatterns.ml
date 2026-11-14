@@ -117,6 +117,12 @@ let record_fields pos typ =
         match concrete_field_spec field with
         | Present typ -> Present (wrap FrescoContext.carry typ)
         | Absent -> Absent
+        | Meta _ as presence when Abs.type_satisfies presence ->
+            (* Keep the presence in scope and give lowering a record row. *)
+            begin match wrap (fun _ typ -> typ) presence with
+            | ForAll _ -> error pos "Instantiate the quantified record before extending it"
+            | presence -> presence
+            end
         | _ -> error pos "A modal record field must have known presence before extension") fields in
       Row (fields, tail)
   | _ -> row

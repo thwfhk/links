@@ -14,6 +14,21 @@ Record extension
 {var z = (y="three"); (x=4|z) }
 stdout : (x = 4, y = "three") : (x:Int,y:String)
 
+Modal record extension preserves an absolute presence
+effect Reader { Ask : () => Int; } sig add : forall p::Presence(Abs). ([Reader] (run{p})) -> (n:Int,run{p}) fun add(record) { (n=1 | record) } (add(()), add((run=2)))
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true --optimise
+stdout : ((n = 1), (n = 1, run = 2)) : ((n:Int,run-), (n:Int,run:Int))
+
+Modal record extension rejects a presence without an absolute bound
+effect Reader { Ask : () => Int; } sig add : forall p::Presence. ([Reader] (run{p})) -> (n:Int,run{p}) fun add(record) { (n=1 | record) }
+stderr : @.*A modal record field must have known presence before extension
+exit : 1
+
+Modal record extension requires instantiation of the record's own presence binder
+effect Reader { Ask : () => Int; } fun add(record : (forall p::Presence(Abs). [Reader] (run{p}))) { (n=1 | record) }
+stderr : @.*Instantiate the quantified record before extending it
+exit : 1
+
 Let pattern matching
 {var (x=a,y=(z=b)) = (y=(z=3),x="four"); a}
 stdout : "four" : String

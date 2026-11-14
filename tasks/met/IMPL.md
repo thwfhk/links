@@ -348,11 +348,11 @@ completion checks are pending in [PLAN.md](PLAN.md#milestones).
    [upcasts and record updates](SPEC.md#upcasts-and-record-updates).
 9. **Modal record extension (3.12).** `Fresco.record_fields` converts
    an open record as a whole. `FrescoPatterns.record_fields` carries a
-   prefix on a closed record one field at a time and currently requires
-   known presences. For a field with `p::Presence(Abs)`, the checker could
-   keep `p` because any payload is already absolute. Preserve the scope
-   of any quantifiers on the record when carrying dependencies. See the
-   [review questions](SPEC.md#modal-record-extension).
+   prefix on a closed record one field at a time. It keeps an unknown
+   presence when its kind already requires `Abs`. A record with its own
+   leading quantifier needs instantiation first, so its binders stay in
+   scope and lowering receives a record row. See the
+   [extension rule](SPEC.md#modal-record-extension).
 10. **Interface environments (5.5).** `core/desugarDatatypes.ml` drops
     the signatures registered in a block. `core/chaser.ml` can also fail
     to recognise a module declared there. At the CLI boundary,

@@ -182,9 +182,12 @@ new inference path is completed with its library dependencies.
   extension, and preserve expected element types in list comprehensions.
   Require a discarded record tail in an upcast to be unrestricted.
   Run the corresponding lowering checks in 5.7.
-- [ ] **3.12** Resolve the questions about [modal record
-  extension](SPEC.md#modal-record-extension). Add acceptance and
-  rejection tests for the agreed rules.
+- [x] **3.12** Preserve a field with `Presence(Abs)` when extending a
+  [closed modal record](SPEC.md#modal-record-extension). Cover a field
+  that is absent or present, a presence without an `Abs` bound and a
+  record whose type must be instantiated first. The general interaction
+  with row and presence variables is
+  [future work](SPEC.md#modal-types-and-data-rows).
 
 Completion check: the inference examples in SPEC.md have the specified
 types and annotation requirements. Tests cover both accepted and
@@ -369,11 +372,10 @@ The first implementation is complete on `small-met`. The native compiler
 uses Fresco for files, expressions and REPL sentences. The [migration
 inventory](MIGRATION.md) records the retained and deferred cases.
 
-The follow-up work in milestones 2, 3, 5 and 6 is pending user review.
-Review the planned fixes and settle the open questions in
-[SPEC.md](SPEC.md) before implementation. The
-[implementation notes](IMPL.md#follow-up-review) give the cases and
-source locations.
+Milestone 3.12 is implemented and checked. The other follow-up work in
+milestones 2, 3, 5 and 6 is pending user review.
+The [implementation notes](IMPL.md#follow-up-review) give the cases and
+source locations for the review.
 
 The milestone 4 review settled the handler usage and branch result
 rules. The fixes in items 4.5–4.10 are pending. Run the affected
@@ -411,6 +413,19 @@ the `Base` alias mismatch, the value restriction bypass, the
 argument-order mismatch, the guarded `mu` rejection and the extra
 quantifier from a signature hole. Logs are under
 `/private/tmp/smalllinks-met-record-example.GMczGr/`.
+
+### Milestone 3.12 checks
+
+The checks used `fa9dd1e3` with the `Presence(Abs)` working-tree fix
+and OCaml 5.4.0. Logs are under
+`/private/tmp/smalllinks-met-presence-fix.rdEH3E/`.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk make` | Passed. | `build-sdk.log` |
+| `./test-harness tests/<suite>.tests` for `records`, `effect_annotations`, `handlers`, `presence_type_arg`, `recheck_frontend_transformations` and `typed_ir` | 232 passed. The new acceptance case runs with frontend rechecking, strict IR checks and optimisation. | `<suite>.log` |
+| `./links -e` on modal record extensions and updates | Passed for absent and present absolute fields, a mixed record with a callback, and open rows in both contexts. The rejection checks produced the expected type errors. | `probes.log` |
+| `make rule-check` and `git diff --check` | Passed. The tabs rule used `rg` with the same file patterns. | `rule-check.log`, `tabs.log`, `diff-check.log` |
 
 ### Milestones 5–6 checks
 
