@@ -16,25 +16,18 @@ below record the review.
    interfaces. Use scoped rows of interface instances for effect contexts.
 2. Support absolute, extension and mask modalities. Keep ordinary
    function application and the native evaluation order.
-3. Postpone effect variables and effect quantification. Migrate existing
-   examples that use one ambient effect variable to modal types. Among
-   effect-variable examples, postpone only those that require multiple
-   independent effect variables simultaneously. Ordinary type variables
-   and record and variant row and presence variables remain available.
-4. Postpone term-level masks. A mask modality changes a type's effect
-   context; it does not make an operation skip a runtime handler.
-5. Keep the SmallLinks data types, modules, imports, recursive functions,
+3. Keep the SmallLinks data types, modules, imports, recursive functions,
    value linearity, and deep, shallow and parameterised handlers. Adapt
    their typing and the existing polymorphism controls to modal types.
-6. Switch type inference to Fresco. Use bidirectional typing for
+4. Switch type inference to Fresco. Use bidirectional typing for
    first-class polymorphism and first-class modal types, and reuse Links'
    unification mechanisms for monotypes where they fit. The thesis and
    Fresco implementation are the references listed at the end.
-7. Write list types as `List A` and variant types with `(| |)`.
+5. Write list types as `List A` and variant types with `(| |)`.
    `List` is a built-in type name and cannot be redefined. List and
    variant values keep their existing syntax.
-8. Postpone `escape` and examples that require it. Handler resumptions
-   remain in scope.
+
+See [Future work](#future-work) for deferred features.
 
 ## Design decisions
 
@@ -49,8 +42,8 @@ below record the review.
    can still have its type inferred. Keep local type inference and the
    value restriction.
 3. **R3. Polymorphism controls.** Keep the existing explicit polymorphism
-   forms under Fresco, add `~(e)`, and process leading quantifiers and
-   modalities in their written order.
+   forms under Fresco and add `~(e)`. Use Maetel's formal rule for
+   [variable access](#locks-and-values).
 4. **R4. Absolute types.** Keep `Abs` separate from value linearity.
    Operation arguments, operation results and handler state parameters
    must have absolute types. Keep per-operation polymorphic signatures
@@ -71,6 +64,15 @@ below record the review.
 10. **Range helper.** Range syntax always uses the standard pure
     `intRange` helper. See [Value restriction](#value-restriction).
 11. **Unsafe cast.** Remove the unused `unsafe_cast` primitive.
+12. **Explicit quantification in signatures.** Write every universal
+    quantifier in a source signature. See [Types and
+    annotations](#types-and-annotations).
+13. **Upcasts and record updates.** Use the [checked upcast
+    rules](#upcasts-and-record-updates) and reject repeated field names
+    in a record update.
+14. **Linear lists.** Allow linear elements in `List`. Keep `hd` and
+    `tl` restricted to lists of unrestricted elements. See
+    [List linearity](#list-linearity).
 
 ## Effect contexts and modalities
 
@@ -189,12 +191,16 @@ unchanged. A variable retains the context in which it was bound.
 Access after locks must account for those changes.
 
 A value of absolute type can cross a lock unchanged. For other types,
-the checker consumes the permitted part of the value's modal prefix
-and retains any remaining modality on its type. For example, inside a
+the checker uses the consecutive leading modalities to compute the
+remaining modality. For example, inside a
 handler for `Reader(Int)`, a value of type
 `<Reader(Int), State(Int)> (() -> Int)` retains a `State(Int)`
 requirement. A callback from outside the handler may be carried through
 with a mask modality while remaining unavailable for a call inside it.
+Check variable access across locks before instantiation. Stop at the
+first quantifier when computing the remaining modality. Once access
+succeeds, checking and application process the remaining prefixes in
+their written order.
 
 Reuse SmallLinks' syntactic value-restriction check for generalisation
 and implicit modal introduction, with the conditions in
@@ -295,19 +301,89 @@ angle brackets. Distinguish variant delimiters from existing open
 record rows such as `(|r)`.
 
 Keep `sig f : T`, parameter annotations, `e : T`, `typename`, recursive
-types, and explicit `forall`. Unbound ordinary type, data-row and
-data-presence variables in a signature keep SmallLinks' implicit
-quantification convention. Aliases and explicit `forall` types require
-their variables to be bound. This applies through a leading modality.
-For example, `sig f : [] (forall a. (a, b) -> b)` requires a binder
-for `b`.
+types, and explicit `forall`. In a source `sig`, every universal
+quantifier must be written. An ordinary type, data-row or data-presence
+variable must be bound in the signature or already in scope. Write
+`sig id : forall a. a -> a` for a polymorphic identity.
+The signature `sig id : a -> a` is rejected when `a` is unbound.
+For a polymorphic row tail, write a named binder such as
+`forall r::Row`. A type or row hole in a signature cannot introduce
+an implicit quantifier. The same rule applies whether the signature
+starts with a modality or a quantifier. Unannotated definitions still
+infer polymorphic types.
 
 Remove effect-bearing arrows `{...}->`, `-e->`, `~>`, `~e~>`, and their
 linear forms after migration. `->` and `-@` are the unrestricted and
 linear ambient arrows. Retain `unsafe sig` as a synonym for `sig` with
 the same checks; its old exemption for recursive `wild` use is no
-longer needed. Replace effect upcasts with checked modal conversions.
-Keep non-effect upcasts with their existing checks.
+longer needed.
+
+### Upcasts and record updates
+
+An upcast written `e : B <- A` checks `e` at `A` and gives it type
+`B`. The checker applies the modality conversion rules at each
+modal prefix. It checks list elements and variant payloads from
+source to target. A variant upcast can add alternatives. For
+functions, it checks arguments from target to source and results
+from source to target, with the same arrow linearity.
+
+A record upcast keeps the fields required by the target and can
+omit unrestricted fields. If the target marks a field explicitly
+absent, the source must establish its absence. For example,
+`((x=1,y=true) : (x:Int,y{-}) <- (x:Int,y:Bool))` is rejected. An
+upcast must preserve linear use of fields, including fields in an
+open row. An open target record or an open source variant requires
+the same row tail on both sides. Evaluation returns the original value.
+
+A record update names each field at most once. For example,
+`((x=1) with x=2,x=3)` is rejected.
+
+### Modal record extension
+
+When extending a closed modal record, carry the modality on the
+inherited fields that need it. The new fields use the context of the
+extension.
+
+```links
+effect Reader { Ask : () => Int; }
+var record = ((run=fun() { do Ask }) : [Reader] (run:() -> Int));
+(n=1 | record)
+```
+
+The result has type `(n:Int, run:[Reader] (() -> Int))`. Adding `n`
+leaves `run` available to call in the `Reader` context.
+
+**For review.** In `[Reader] (n{-} | r)`, `n` is absent and `r`
+stands for the other fields. If `r` contains `run:() -> Int`,
+returning `(n:Int | r)` outside `Reader` would lose the `Reader`
+requirement on `run`. The current checker accepts extension when the
+old record can be used in the current context. This works if the
+context supplies `Reader` or if `r::Row(Abs)`. General extension outside
+`Reader` would need a way to carry the requirement on the unknown
+fields. Should we keep the current limit?
+
+In `[Reader] (run{p})` with `p::Presence(Abs)`, `run` is either
+absent or has an absolute type. For example, extending `()` gives
+`(n=1)` and extending `(run=2)` gives `(n=1, run=2)`. The result
+can retain the same `p` in `(n:Int, run{p})` because neither case
+needs the outer `Reader` modality. The current checker rejects the
+extension when it still sees the unknown presence. Should we accept
+this case?
+
+### List linearity
+
+The linearity of `List A` follows that of the element type `A`.
+Lists with linear elements must be used linearly, including when
+stored inside another value. List literals, cons and append may
+construct lists with linear elements. A cons pattern gives access
+to both the head and the tail and checks each binding for linear
+use. The `[]` pattern matches an empty list at any element type.
+
+The built-ins `hd` and `tl` require unrestricted elements because
+they discard part of the list. The same requirement applies to
+other operations that discard or duplicate elements, such as
+`length`, `take` and `drop`. Comprehensions that use unrestricted
+collection helpers follow those helpers' element bounds.
 
 ### Effect interfaces
 
@@ -443,9 +519,9 @@ between these responsibilities clear when restructuring the checker.
 
 ### Value restriction
 
-Use SmallLinks' existing `Utils.is_generalisable` check as the basis
+Use SmallLinks' existing `TypeSugar.is_generalisable` check as the basis
 for generalisation and implicit modal introduction. It checks the
-expression's syntax before introducing quantifiers or modalities:
+expression's syntax before introducing quantifiers or modalities.
 
 1. Variables, literals, function literals and eligible aggregates pass.
 2. Projections, annotations and explicit polymorphism forms pass when
@@ -455,6 +531,12 @@ expression's syntax before introducing quantifiers or modalities:
    existing check that binding patterns cannot fail.
 4. Function calls, operation calls and handler computations fail.
    An empty effect context alone does not make a call eligible.
+
+A binding that can fail a pattern match is ineligible. This includes
+variant patterns when the matched type allows another alternative.
+A computation may return a value whose type is already polymorphic
+or modal. An expected type cannot introduce fresh quantifiers or
+modalities around an ineligible computation.
 
 Apply the check after module desugaring, so module and import
 initialisers are checked as actual bindings. Adapt it to the changed
@@ -496,6 +578,22 @@ R2 keeps inference for simple top-level functions:
    signatures. Local recursive functions keep their surrounding context;
    global recursive functions follow the global rule.
 
+In the following example `f` only calls itself with `Int`. The
+signature puts `forall a` inside the result of the outer arrow.
+
+```links
+sig f : Int -> (forall a. a -> a)
+fun f(n) { if (n == 0) fun(x) { x } else f(n - 1) }
+var g = f(1);
+(g(42), g(true))
+```
+
+This returns `(42, true)`. Without the signature, generalisation
+gives `f` type `forall a::Any. [] (Int -> (a -> a))`. Each call to
+`f` chooses `a` once for the returned function. The call `f(1)` is
+ineligible for generalisation, so the two uses of `g` must agree
+on its argument type.
+
 The inserted global lock also checks captured top-level `var` values.
 For example, a global function inferred under `[]` cannot call a
 captured ambient function which requires the top-level `wild` permission.
@@ -536,38 +634,34 @@ polymorphic parameter annotation or an expected polymorphic type.
 Keep `~ident`, `~fun`, `~linfun`, `$(e)`, `e@`, `/\ [a]. { e }`
 and `e[T]`. Frozen function definitions keep their existing explicit
 polymorphism role and obey the same modal checks. Extend
-freezing to `~(e)` to use Fresco on a compound expression. `~x` and
-`~(x)` agree. Freezing preserves the type obtained after lock checks,
-including its quantified and modal structure, and uses Fresco's
-consistency check without further implicit instantiation. `$(e)`
-retains the value restriction. Effect arguments are postponed.
-
-For ordinary variable uses, instantiate leading quantifiers using the
-available type information before consuming dependent modalities to
-cross locks. Explicit `e[T]` supplies that information directly.
-For example, `forall a::Abs. <Reader(a)> (() -> a)` can be used at
-`Int` inside a `Reader(Int)` handler. A frozen use must preserve
-`forall a` and cannot choose `a = Int` just to cross the lock.
+freezing to `~(e)` to use Fresco on a compound expression. Parentheses
+preserve freezing, so `~x`, `~(x)` and `~((x))` agree. Freezing
+preserves the type obtained after lock checks, including its quantified
+and modal structure, and uses Fresco's consistency check without further
+implicit instantiation. `$(e)` retains the value restriction. Effect
+arguments are postponed.
 
 Explicit type application and `e@` preserve surrounding modalities.
 Given `f : [Reader(Int)] (forall a. (a) -> a)`, `(~f)[Int]`
 retains `[Reader(Int)]`; calling it still requires `Reader(Int)`. Keep type
 variables in scope and compose adjacent modalities in their written
-order. The printer preserves the order of quantifiers and modalities.
-Test both `forall a. [] T` and `[] (forall a. T)`. Processing a mixed
-prefix follows the extension discussed in the Maetel chapter and is
-part of the accepted R3 design. It is not supplied by the reference
-checker.
+order. To use explicit type application to expose a modality beneath
+a quantifier before crossing a lock, bind the applied value outside
+that lock. The printer preserves the order of quantifiers and
+modalities, including in `forall a. [] T` and `[] (forall a. T)`.
 
 Keep inferred `Abs` restrictions in generalised types. Parameterised
 interfaces can leave a choice between making an unknown value type
 absolute and equating interface arguments. For example, comparing
 `<Reader(a)> T` and `<Reader(b)> T` may depend on whether `T` is
-absolute or whether `a` and `b` agree. When the available information
-does not select one solution, request a type or
-parameter annotation. Do not decide by whichever constraint is visited
-first. Do not infer a new polymorphic or modal common type for different
-branches without an expected type.
+absolute or whether `a` and `b` agree. A comparison already holds if
+`T` is known to be absolute or the arguments agree. Use information
+from later constraints. Request a type or parameter annotation when
+that information still leaves a choice. The result must be independent
+of constraint order. The thesis describes the two alternatives. The
+annotation requirement is a SmallLinks rule.
+Without an expected type, branches must agree without introducing
+a new polymorphic or modal common type.
 
 When inferring the result of an `if`, `switch` or handler, relative
 prefixes do not affect agreement once the common underlying type is
@@ -1148,7 +1242,51 @@ The outer `State(Int)` handler cannot provide the missing operation.
    Record `escape` examples and tests as deferred. Keep shared
    continuation code used by handlers.
 9. Keep the [lambda evaluator](MIGRATION.md#installed-examples) deferred
-   for this version.
+   for this version. See [modality-parameterised
+   handlers](#modality-parameterised-handlers) for the proposed extension.
+
+## Future work
+
+1. **Effect variables and effect quantification.** Ordinary value,
+   data-row and data-presence variables remain available. The
+   [migration rules](#migration-and-deferred-coverage) identify examples
+   that need independent effect contexts.
+2. **Term-level masks.** Mask modalities remain available in types.
+   A term-level mask would let evaluation bypass a handler.
+3. **Modality elimination across quantifiers.** The Maetel chapter
+   proposes considering the whole sequence of leading quantifiers
+   and modalities for lock access and subtyping. Defer that extension,
+   including composing modalities across a still-bound quantifier
+   and moving quantifiers during lock access.
+4. **Complete inference for parameterised modality conversions.**
+   The thesis leaves open how to choose between an absolute body
+   and equal interface arguments without losing completeness. SmallLinks
+   uses the annotation rule in [First-class polymorphism and modal
+   types](#first-class-polymorphism-and-modal-types).
+5. **`escape`.** Handler resumptions remain available. The migration
+   inventory lists the examples and tests that require `escape`.
+
+### Modality-parameterised handlers
+
+The thesis gives the typing rule for shallow handlers in §5.7
+“Shallow handlers” (Figure 5.7) and the rule for modality-parameterised
+deep handlers in §5.8 “Modality-parameterised handlers” (Figure 5.8).
+The SmallLinks proposal would combine these two rules.
+
+Explore letting a handler specify the modality from the clause context
+to the handled computation and using it in the type of a shallow
+resumption. The current rule uses the relative extension `<D>` for
+the interfaces `D` installed by the handler. The existing parameterised
+deep handlers take state values.
+
+Work out when a shallow handler can use a fixed input context `E` and
+give its resumption a type such as `[E] ((Q) -> A)`, where `Q` is the
+operation result type and `A` is the handled computation's result type.
+Before restoring the lambda evaluator, check that the wrapper for the
+`Lam` resumption has the absolute type `Expr(a)` that `Var` must return.
+Check that later `Lam` calls reach the newly installed handler, including
+when an older `Lam` handler is in scope, and that other operations
+still reach the enclosing handlers.
 
 ## Design and implementation references
 
@@ -1158,7 +1296,8 @@ The thesis checkout is `~/code/latex/phd-thesis`:
 | --- | --- |
 | `chapters/overview.tex`, Pure programs through Type inference | Effect interfaces, ambient arrows, higher-order functions, absolute kinds and annotation examples. |
 | `chapters/met/met-calculus.tex`, Mode theory and Typing | Scoped rows, modalities, locks, value restriction and deep handlers. |
-| `chapters/met/extensions.tex`, Masks, Parameterised effects, Crisp data types, Polymorphism and Shallow handlers | Mask algebra, scoped interface arguments, dependent fields, polymorphism and shallow resumptions. |
+| `chapters/met/extensions.tex`, Masks, Parameterised effects, Crisp data types and Polymorphism | Mask algebra, scoped interface arguments, dependent fields and polymorphism. |
+| `chapters/met/extensions.tex`, §5.7 “Shallow handlers” and §5.8 “Modality-parameterised handlers” | Shallow resumptions and the deep-handler rule that supplies the modality parameter for the proposed extension. |
 | `chapters/maetel/maetel.tex`, First-class modal types, Type inference algorithm, Extensions and design choices | Fresco inference, residual modalities, kinds, global annotations and leading quantifiers. |
 
 The implementation checkout is

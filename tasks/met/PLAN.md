@@ -4,8 +4,8 @@ The language design and scope are in [SPEC.md](SPEC.md#scope).
 This plan records milestones, dependencies, progress and checks.
 [IMPL.md](IMPL.md) will record significant implementation decisions.
 
-The first implementation is complete on `small-met`. The milestones
-below also track the fixes from the follow-up review.
+Work stays on `small-met`. The first implementation is complete.
+The follow-up items below are pending review before implementation.
 
 ## Tracking
 
@@ -152,15 +152,39 @@ new inference path is completed with its library dependencies.
 - [ ] **3.5** Fix recursive `Abs` checks so they follow the types of the
   fields and respect enclosing modalities. Use the same field requirements
   when checking and narrowing kinds. Test absolute and ambient callback
-  fields, including a recursive reference whose arguments change. Look
-  through leading modalities to detect an explicit `forall` in a
-  signature. Test the same free variable rejection with `forall` before
-  or after the modality, and retain implicit quantification for signatures
-  without a leading `forall`.
+  fields, including a recursive reference whose arguments change.
+  Accept guarded explicit `mu` types under modalities and still reject
+  unguarded recursion.
 - [ ] **3.6** Reject types with a non-identity modality at `Base`.
   Test direct and indirect uses through aliases at `Base`, `Mono` and
   `MonoAbs`. Retain the existing checks on primitive types, row tails
   and field presences.
+- [ ] **3.7** Require explicit universal binders in source signatures.
+  Test type, row and presence variables, holes, leading modalities and
+  lexical references through nested `forall`. Update the default and
+  FreezeML preludes, standard library, active examples and fixtures in
+  the same commit.
+- [ ] **3.8** Apply Maetel's variable access rule before
+  instantiation. Use consecutive leading modalities for the residual.
+  Test access at a still-bound quantifier, absolute access, and explicit
+  type application on both sides of a lock. Make grouped frozen variables
+  behave like `~x`.
+- [ ] **3.9** Use all available partial type information before fixing
+  polymorphic or modal instantiation. Test argument order, curried
+  applications and modal pattern binders. Keep modality conversion
+  independent of constraint order and ask for an annotation when the
+  available constraints leave a choice.
+- [ ] **3.10** Check the value restriction on every path that introduces
+  a quantifier or modality. Cover effectful computations, failing binding
+  patterns, and computations that return an already-polymorphic or modal
+  value. Check that annotation variables cannot escape.
+- [ ] **3.11** Preserve known quantifiers during record projection and
+  extension, and preserve expected element types in list comprehensions.
+  Require a discarded record tail in an upcast to be unrestricted.
+  Run the corresponding lowering checks in 5.7.
+- [ ] **3.12** Resolve the questions about [modal record
+  extension](SPEC.md#modal-record-extension). Add acceptance and
+  rejection tests for the agreed rules.
 
 Completion check: the inference examples in SPEC.md have the specified
 types and annotation requirements. Tests cover both accepted and
@@ -255,13 +279,28 @@ switching the active inference path.
   Test local module handlers and their scope, a custom prelude,
   successive inputs with both isolation settings, and REPL imports
   and failed loads.
+- [ ] **5.7** Preserve the checked types during lowering of quantified
+  record operations and comprehensions. Run the regressions from 3.11
+  through ordinary execution, typed frontend rechecking and strict IR
+  checking. Include a list with modal elements.
+- [ ] **5.8** Support [linear lists](SPEC.md#list-linearity). Update list
+  kinds, inference, pattern lowering and primitive types together.
+  Check that cons and append preserve all the elements and that list
+  patterns split each list once on a matching path. Keep the
+  unrestricted bounds on consumers and comprehension helpers that
+  depend on them. Test empty and non-empty lists, nested patterns and
+  whole-list fallbacks. Reject duplication, discards and calls to `hd`
+  or `tl` on a linear list, including with explicit type application.
+  Run the accepted examples with typed frontend rechecking, strict IR
+  checks and optimisation.
+
+The [lambda evaluator](MIGRATION.md#installed-examples) stays deferred
+for this version. The design records [modality-parameterised
+handlers](SPEC.md#modality-parameterised-handlers) as future work.
 
 Completion check: the default prelude loads; files with imports, `-e`,
 REPL bindings and typecheck-only execution work. Typed frontend and IR
 checks pass, and no active code relies on the old effect-row path.
-
-The [lambda evaluator](MIGRATION.md#installed-examples) stays deferred
-for this version.
 
 ### 6. Verify and document the modal language
 
@@ -277,8 +316,9 @@ Depends on milestone 5.
   checks on the combined revision. Record remaining deferred cases and
   their reasons. Complete this plan only when the in-scope checks pass.
 - [ ] **6.4** After the follow-up changes in 2–5, update the
-  SmallLinks guide, review the combined changes and run the affected
-  checks below. Record the new tested revision and log paths.
+  SmallLinks guide, including the signatures, lock access and linear lists.
+  Review the combined changes and run the affected checks below.
+  Record the new tested revision and log paths.
 
 Completion check: a clean CI build and temporary installation work, all
 in-scope regressions and unit tests pass, printed types can be reused as
@@ -329,10 +369,11 @@ The first implementation is complete on `small-met`. The native compiler
 uses Fresco for files, expressions and REPL sentences. The [migration
 inventory](MIGRATION.md) records the retained and deferred cases.
 
-The follow-up fixes in milestones 2–6 are documented.
-The approved rules are in [SPEC.md](SPEC.md). The [implementation
-notes](IMPL.md#follow-up-review) give the cases and planned fixes.
-Implementation is paused. The next item is 2.6.
+The follow-up work in milestones 2, 3, 5 and 6 is pending user review.
+Review the planned fixes and settle the open questions in
+[SPEC.md](SPEC.md) before implementation. The
+[implementation notes](IMPL.md#follow-up-review) give the cases and
+source locations.
 
 The milestone 4 review settled the handler usage and branch result
 rules. The fixes in items 4.5–4.10 are pending. Run the affected
@@ -340,6 +381,36 @@ handler, effect annotation and native suites with typed frontend
 rechecking and optimisation, followed by the combined milestone 6
 checks. The milestone 4 review draft passed `git diff --check`
 against `98d39ac8`.
+
+### Follow-up review checks
+
+The review used compiler revision `98d39ac8`. Logs are under
+`/private/tmp/smalllinks-met-follow-up-review.CJ9Fkz/`.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `./links --set=show_quantifiers=true -e` on 12 examples | Confirmed current behaviour. The signed recursive example returned `(42, true)`. Without the signature, the second call to `g` failed with `Expected Int, got Bool`. | `examples.log` |
+| Document links and code fences, and `./links -e` on the recursive example from the specification | Passed. | `documents.log` |
+| `make rule-check` | Passed. GNU find was unavailable for the tabs rule. The same file patterns passed with `rg`. | `rule-check.log`, `tabs.log` |
+| `git diff --check` | Passed. | `diff-check.log` |
+
+The recursive result and modal record examples were checked again at
+`a18e3c67` with `./links --set=show_quantifiers=true -e`. Separate
+calls to `f` used different types. Extending the open record outside
+`Reader` succeeded with `r::Row(Abs)`. Direct extension with an absolute
+presence failed, and explicitly converting the record first worked when
+the presence variable was in scope. `hd([1,2])` and `tl([1,2])` returned
+`1` and `[2]`. Document links, `make rule-check` with the same `rg` tabs
+check, and `git diff --check` passed. Logs are under
+`/private/tmp/smalllinks-met-list-review.Dwbgd0/`.
+
+At `a18e3c67`, `./links -e` on the modal record example in SPEC.md
+produced the expected type, and a handler supplied `42` to its `run`
+callback. Further probes reproduced the discarded linear row tail,
+the `Base` alias mismatch, the value restriction bypass, the
+argument-order mismatch, the guarded `mu` rejection and the extra
+quantifier from a signature hole. Logs are under
+`/private/tmp/smalllinks-met-record-example.GMczGr/`.
 
 ### Milestones 5–6 checks
 

@@ -104,9 +104,9 @@ variables shared with frozen definitions monomorphic.
 fields and checks uses of linear values. Updating or extending a
 closed modal record carries its dependencies on the inherited fields.
 An open modal row must be usable in the current context before
-extension. List elements must satisfy the built-in constructor's
-unrestricted kind. Range syntax calls a fixed pure `intRange`
-primitive. Explicit `intRange` calls still use lexical lookup.
+extension. The initial implementation required unrestricted list
+elements. Range syntax calls a fixed pure `intRange` primitive.
+Explicit `intRange` calls still use lexical lookup.
 
 `Frontend.Modal` exposes this checker for source-level tests and
 preserves binding contexts across successive sentences. Tests check
@@ -252,68 +252,133 @@ completion checks are pending in [PLAN.md](PLAN.md#milestones).
 
 1. **Syntax (2.6).** `core/parser.mly` uses the general datatype grammar
    for `=>` and accepts list and modal prefixes as bare list elements.
-   Use a separate operation-signature production for member signatures
-   and handler clause annotations, with optional leading quantifiers.
-   Use a list-element production that accepts an atomic type or a
-   grouped type. Supplying `() => Int` to a type alias with a `Base`
-   parameter currently reaches an internal error. Reject it in the
-   parser and make `Types.Base` reject an operation signature normally
-   if one reaches the kind check. Check both printers and the source
-   types in the library and examples.
+   Give operation signatures their own grammar while keeping quantified
+   handler clause annotations. Supplying `() => Int` to a type alias
+   with a `Base` parameter reaches an internal error in `core/types.ml`.
+   Reject it in the parser and make `Types.Base` reject an operation
+   signature normally if one reaches the kind check. Use a list-element
+   production for atomic or grouped types. Check both printers and the
+   migrated library and example types.
 2. **Names and printing (2.7).** `core/desugarModules.ml` already binds
    interface names in declaration order, and `core/chaser.ml` loads
    imports once per dependency pass. A later REPL import can load a new
    module with the same printed name. `core/modalEffects.ml` prints
    the path stored at declaration time, which can name a newer interface
-   after shadowing. Give both type printers the name scope and use a
-   short or qualified name only if it resolves to the same declaration.
-   If no name resolves to it, mark it as out of scope and include enough
-   information to distinguish declarations, including two loads from the
-   same source location. A print-and-reparse test must compare declaration
-   identities. Use one naming context for both sides of a diagnostic.
-3. **Kinds and binders (3.5–3.6).** The recursive case in `core/types.ml`
+   after shadowing. Give both printers the name scope and use a short or
+   qualified name only when it resolves to the same declaration. Mark
+   declarations with no visible name as out of scope. Use one naming
+   context for both sides of a diagnostic and distinguish repeated loads
+   from the same location. Compare declaration identities in the
+   print-and-reparse test.
+3. **Recursive types and kinds (3.5–3.6).** The recursive case in `core/types.ml`
    checks each alias argument when it sees an alias again. For
    `typename Box(a) = (|Done:[] a|More:Box(a)|);`, the only callback
    field is absolute. The current check rejects `Box(Int -> Int)` as
-   an operation payload. Derive the `Abs` requirements each alias
-   places on its parameters from its fields. An absolute modality
-   needs no further check on its body. Combine the requirements across
-   the recursive group, substituting the arguments at each call until
-   the requirements stop changing. Keep track of fields that row
-   substitution can replace. Use the same requirements to check and
-   narrow kinds. Test `Box(List a)` as the recursive call in `Box`, and
+   an operation payload. Derive `Abs` requirements from the fields, with
+   absolute modalities already satisfying the requirement. Combine the
+   requirements across the recursive group, substituting arguments until
+   the requirements stop changing. Track fields that row substitution can
+   replace, and use the same requirements to check and narrow kinds.
+   Test `Box` recursing as `Box(List a)` and
    `typename Shift(a,b) = (|Here:a|More:Shift(b,Int -> Int)|);`.
    The first case must terminate and accept `Box(Int -> Int)`. The
    second must reject `Shift(Int,Int)` as an operation payload.
 
-   In `core/desugarTypeVariables.ml`, skip leading `Modal` nodes in
-   `sig_allows_implicitly_bound_vars`. When the next node is `Forall`,
-   use the existing rule for an explicit signature, with binders in
-   their written order and scope. Keep references to type variables
-   already in scope inside nested quantifiers.
+   Separately, `core/frescoTypes.ml` can visit
+   the same `mu` binder twice while exposing a modal prefix and report
+   a cycle for `(Leaf : [] (mu a. (|Leaf|More:a|)))`. Stop the guard
+   check at the variant constructor.
 
-   In `core/types.ml`, make the `Base` predicate reject `Modal` directly
-   and remove the special case that narrows the body of a modal type to
-   `Base`. Keep `Base` as a sufficient bound for `Mono` and `Abs`. For
-   `typename M(a::MonoAbs) = a; typename B(b::Base) = M(b);`, both
-   `B([] Int)` and `M([] Int)` should fail, and both aliases should
-   accept `Int`.
-4. **Interface environments (5.5).** `core/desugarDatatypes.ml` drops
-   the signatures registered in a block. `core/chaser.ml` can also fail
-   to recognise a module declared there. At the CLI boundary,
-   `bin/links.ml` carries the values and types of the prelude and of
-   non-isolated inputs, while `core/desugarModules.ml` keeps the name
-   scope only in interactive mode. Carry the source name scope with
-   the compiler context and keep resolved signatures by declaration
-   identity through blocks, recursive definitions, final expressions
-   and frontend rechecks. Restore the enclosing name and alias scopes
-   on leaving a block. Make dependency loading follow the resolver's
-   lexical module and `open` rules. Each file starts with its own list
-   of declarations for duplicate checks. The prelude provides the
-   starting visible names for isolated inputs. Non-isolated inputs
-   and successful REPL inputs carry their scope forward. A failed
-   input preserves the previous scope and interface registry.
+   For `Base`, a kind check in
+   `core/frescoTypes.ml` accepts a `Base` variable as a monotype,
+   but `core/unify.ml` rejects modal types as monotypes. The case
+   `typename M(a::MonoAbs) = a; typename B(b::Base) = M(b);` accepts
+   `B([] Int)` and rejects `M([] Int)`. Make `Base` reject `Modal`
+   and remove the case that narrows the body of a modal type to `Base`.
+   Both aliases should reject `[] Int` and accept `Int`.
+4. **Explicit binders (3.7).** `core/desugarTypeVariables.ml` allows
+   implicit binders based on the outer node of a signature. A leading
+   `[]` can hide a `forall`, so a misspelt type variable can be bound
+   implicitly. Check every source `sig` and `unsafe sig` for unbound
+   type, row and presence variables. Use named binders for row tails
+   that the signature used to quantify implicitly, such as the key
+   row in `sortByBase`. Check anonymous holes such as the `%` in
+   `sig f : forall a. (a, %) -> a`, which currently adds a second
+   quantifier. Keep explicit binders scoped to their type.
+   Migrate the signatures that relied on implicit variables in the
+   body using the existing explicit type abstraction where needed.
+5. **Lock access and freezing (3.8).** `Fresco.variable` can
+   instantiate a variable before checking access. `FrescoContext.access`
+   also looks under `ForAll` and can move quantifiers in its fallback.
+   Apply Maetel's access rule first, including its absolute-type case.
+   Apply explicit type arguments to the type obtained by access. Test
+   binding an explicitly applied value outside a lock. Replace the
+   unit tests that expect instantiation before access or transport
+   through a quantifier. Make `~((f))` behave like `~f`.
+6. **Partial type information (3.9).** The checker can reject
+   `same(~ident, ident)` while accepting `same(ident, ~ident)` for
+   `fun same(x,y) { [x,y] }`. The existing `app(poly)(~id)` test
+   also passes with freezing where reference case A12 uses `app(poly)(id)`.
+   Preserve known types from all the arguments, expected types and
+   modal pattern binders before solving. A conversion of `<Reader(a)> Int`
+   to `<Reader(b)> Int` already holds by `Abs`; the partial pass must
+   leave the interface arguments alone in this case. Keep the approved
+   rule of asking for an annotation if later constraints leave a choice.
+7. **Value restriction (3.10).** In `core/fresco.ml`, `adapt` can open
+   an expected quantifier after ordinary checking has bypassed the
+   value check. `(print("once") : forall a. ())` is accepted. An
+   effectful block ending in a lambda can also receive an expected
+   quantified result. Check eligibility where a prefix is introduced,
+   while allowing computations to return values that already have
+   such a type. In `core/typeSugar.ml`, the variant pattern cases
+   assume assignments always match. Use the checked pattern and type
+   when deciding eligibility. Keep the runtime match failure where the
+   binding is allowed. Test eligible checked literals, including an
+   empty list at `forall a. List a`, and reject escaping type variables.
+8. **Data checking and lowering (3.11 and 5.7).** Preserve inherited
+   quantifiers when projecting or extending a record. Check the
+   expected element type in a list comprehension and keep its modality
+   or quantifiers through frontend rechecking. The record upcast in
+   `core/fresco.ml` checks named fields it omits, but can drop an open
+   tail without checking its linearity. Check that a discarded tail
+   is unrestricted. Test an upcast from `(n:Int | r)` to `(n:Int)`
+   with `r::Row(Any,Any)` containing a linear callback.
+   Duplicate update fields are already rejected by
+   `check_field_names`. See
+   [upcasts and record updates](SPEC.md#upcasts-and-record-updates).
+9. **Modal record extension (3.12).** `Fresco.record_fields` converts
+   an open record as a whole. `FrescoPatterns.record_fields` carries a
+   prefix on a closed record one field at a time and currently requires
+   known presences. For a field with `p::Presence(Abs)`, the checker could
+   keep `p` because any payload is already absolute. Preserve the scope
+   of any quantifiers on the record when carrying dependencies. See the
+   [review questions](SPEC.md#modal-record-extension).
+10. **Interface environments (5.5).** `core/desugarDatatypes.ml` drops
+    the signatures registered in a block. `core/chaser.ml` can also fail
+    to recognise a module declared there. At the CLI boundary,
+    `bin/links.ml` carries the values and types of the prelude and of
+    non-isolated inputs, while `core/desugarModules.ml` keeps the name
+    scope only in interactive mode. Carry source name scope with the
+    compiler context and keep resolved signatures by declaration identity
+    through blocks, recursive definitions, final expressions and frontend
+    rechecks. Restore enclosing name and alias scopes on leaving a block.
+    Follow the resolver's lexical module and `open` rules in dependency
+    loading. Check duplicates per file. Start isolated inputs with the
+    prelude scope and carry scope across non-isolated inputs and successful
+    REPL inputs. Preserve the previous scope and registry on failure.
+11. **Linear lists (5.8).** Allow linear elements in the list constructor
+    and make `Types.Unl` check and constrain the element type. Apply the
+    rule in type annotations, literals, cons, append and patterns. In
+    `core/lib.ml`, allow `Nil`, `Cons` and `Concat` at `a::Any`. Keep
+    unrestricted element bounds on native functions that can discard
+    elements, including `hd` and `tl`, and on collection helpers that
+    require them.
 
-The integration commit `fcb1e97a` archived the lambda evaluator.
-It stays deferred for this version. See the
-[migration inventory](MIGRATION.md#installed-examples).
+    `core/compilePatterns.ml` currently tests equality with `Nil` and
+    calls `$$hd` and `$$tl` separately. Replace that lowering with a
+    single internal split into the empty or cons case. Give the cons
+    case both the head and tail. Use it for binding and case patterns,
+    including nested patterns and later alternatives that bind the
+    whole list. Test a fallback after a failed nested pattern and
+    a list stored inside another linear value. Keep the native list
+    representation.
