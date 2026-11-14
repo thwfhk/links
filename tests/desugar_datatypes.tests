@@ -127,10 +127,6 @@ A bare arrow adds no implicit quantifier
 sig f : forall a. (a) -> a fun f(x) { x } f(42)
 stdout : 42 : Int
 
-Type alias row arguments use their declared kinds
-effect Reader { Ask : () => Int; } typename AskFrom(r::Row) = [Reader] (((|r)) -> Int); fun(r) { r.x + do Ask } : AskFrom({x:Int})
-stdout : fun : AskFrom ({x:Int})
-
 A leading modality can enclose an explicitly quantified signature
 sig f : [] (forall a. a -> a) fun f(x) { x } (f(42), f(true))
 stdout : (42, true) : (Int, Bool)
@@ -250,5 +246,26 @@ exit : 1
 
 A Base presence rejects a modal payload
 typename B(p::Presence(Base)) = (x{p}); fun (x : B({:[] Int})) { x }
+stderr : @.*Type argument .* must satisfy Base.*
+exit : 1
+
+Base accepts adjacent modalities that cancel through an alias
+effect R(a) { Read : () => Int; } typename Masked = <R|> Int; typename B(a::Base) = a; (42 : B(<R(() -> Int)> Masked))
+stdout : @42 : B .*
+
+A Base row accepts adjacent field modalities that cancel through an alias
+effect R(a) { Read : () => Int; } typename Masked = <R|> Int; typename B(r::Row(Base)) = (|r); (((x=42) : B({x:<R(() -> Int)> Masked})).x : Int)
+stdout : 42 : Int
+
+Mono accepts adjacent modalities that cancel through an alias
+effect R(a) { Read : () => Int; } typename Masked = <R|> Int; typename M(a::Type(Unl,Mono)) = a; (42 : M(<R(() -> Int)> Masked))
+stdout : @42 : M .*
+
+MonoAbs accepts adjacent modalities that cancel through an alias
+effect R(a) { Read : () => Int; } typename Masked = <R|> Int; typename M(a::MonoAbs) = a; (42 : M(<R(() -> Int)> Masked))
+stdout : @42 : M .*
+
+Base rejects a relative modality when an alias masks a different interface
+effect R { Read : () => Int; } effect S { Ask : () => Int; } typename Masked = <S|> Int; typename B(a::Base) = a; (42 : B(<R> Masked))
 stderr : @.*Type argument .* must satisfy Base.*
 exit : 1

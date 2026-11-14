@@ -204,6 +204,30 @@ let is_type_body = function
 let is_row_body = is_type_body
 let is_field_spec_body = is_type_body
 
+(* Expose aliases and solved variables between adjacent modalities. Leave
+   recursive nodes intact for callers that track cycles. *)
+let rec known_head = function
+  | Alias (_, _, t) | ForAll ([], t) -> known_head t
+  | Meta point as t ->
+      begin match Unionfind.find point with
+      | body when is_type_body body -> known_head body
+      | _ -> t
+      end
+  | Modal (modality, body) ->
+      begin match known_head body with
+      | Modal (inner, body) -> modal (ModalEffects.compose modality inner) body
+      | _ -> Modal (modality, body)
+      end
+  | t -> t
+
+let without_cancelled_modality = function
+  | Modal _ as t ->
+      begin match known_head t with
+      | Modal _ -> t
+      | body -> body
+      end
+  | t -> t
+
 module Transform : TYPE_VISITOR =
 struct
   class visitor = object ((o : 'self_type))
@@ -660,7 +684,9 @@ let make_restriction_predicate (klass : (module TypePredicate)) restr flexibles 
 (** Narrow flexible variables to a compatible restriction. *)
 let make_restriction_transform ?(allow_incompatible=false) subkind =
   (object
-     inherit type_iter
+     inherit type_iter as super
+
+     method! visit_type vars t = super#visit_type vars (without_cancelled_modality t)
 
      method! visit_var point = function
        | (_, (_, (_, sk)), _) when sk = subkind -> ()
@@ -685,7 +711,8 @@ module Base : Constraint = struct
         | Recursive _ -> false
         | _ -> super#point_satisfies f vars point
 
-      method! type_satisfies vars = function
+      method! type_satisfies vars t =
+        match without_cancelled_modality t with
         (* Unspecified kind *)
         | Not_typed -> assert false
         | Var _ | Recursive _ | Closed ->
@@ -813,7 +840,8 @@ module Mono : Constraint = struct
        class klass = object
          inherit type_predicate as super
 
-         method! type_satisfies vars = function
+         method! type_satisfies vars t =
+           match without_cancelled_modality t with
            | ForAll _ -> false
            | t -> super#type_satisfies vars t
        end

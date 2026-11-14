@@ -188,6 +188,9 @@ val normalise_typing_environment : typing_environment -> typing_environment
 val for_all : Quantifier.t list * datatype -> datatype
 val modal : datatype ModalEffects.modality -> datatype -> datatype
 
+val known_head : datatype -> datatype
+val without_cancelled_modality : datatype -> datatype
+
 (** useful types *)
 val unit_type : datatype
 val string_type : datatype

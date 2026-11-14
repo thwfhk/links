@@ -256,7 +256,8 @@ let monotype_predicate ~check_rigid_kinds =
       | (_, (_, (_, restriction)), `Rigid) when check_rigid_kinds ->
           Restriction.is_mono restriction || Restriction.is_base restriction
       | _ -> true
-    method! type_satisfies vars = function
+    method! type_satisfies vars t =
+      match Types.without_cancelled_modality t with
       | ForAll _ | Modal _ | Not_typed -> false
       | t -> super#type_satisfies vars t
   end)#predicates |> fst
@@ -293,22 +294,6 @@ let check_subkind mode var (lin, res) typ =
        let message = Printf.sprintf "Cannot unify the %s type variable %d with the non-%s type %s."
                        (Restriction.to_string res) var (Restriction.to_string res) (string_of_datatype typ)
        in raise (Failure (`Msg message))
-
-(* Keep the recursive type nodes for the unifier's cycle checks, while
-   exposing aliases and solved variables between adjacent modalities. *)
-let rec known_head = function
-  | Alias (_, _, t) | ForAll ([], t) -> known_head t
-  | Meta point as t ->
-      begin match Unionfind.find point with
-      | body when is_type_body body -> known_head body
-      | _ -> t
-      end
-  | Modal (modality, body) ->
-      begin match known_head body with
-      | Modal (inner, body) -> Types.modal (ModalEffects.compose modality inner) body
-      | _ -> Modal (modality, body)
-      end
-  | t -> t
 
 let rec unify' : unify_env -> (datatype * datatype) -> unit =
   let counter = ref 0 in
