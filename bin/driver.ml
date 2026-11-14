@@ -169,8 +169,11 @@ module Phases = struct
         |> Evaluate.run in
       context
     in
-    let helpers = Parse.run context Linkspath.comprehension in
-    let context = load Loader.{ helpers with program_ = DesugarFors.library helpers.program_ } in
+    let helpers, source_code =
+      Links_core.Parse.parse_file ~pp:"" Links_core.Parse.program Linkspath.comprehension in
+    let context = load Loader.{
+      context = { context with Context.source_code };
+      program_ = DesugarFors.library helpers } in
     load (Parse.run context (val_of (Settings.get prelude_file)))
 
   let whole_program ?on_variable ?propagate_exit ?linear_variables initial_context filename =
