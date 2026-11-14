@@ -1,0 +1,60 @@
+Show runs with wild
+sig render : [wild] (() -> String) fun render() { show(42) } render()
+stdout : "42" : String
+
+Show requires wild even for an integer
+sig render : [] (() -> String) fun render() { show(42) } render()
+stderr : @.*Type error: The modalities require different effect contexts.*
+exit : 1
+
+Date parsing runs with wild
+sig parse : [wild] ((String) -> DateTime) fun parse(s) { parseDate(s) } parse("1970-01-01 00:00:00+0") == intToDate(0)
+stdout : true : Bool
+
+Date parsing requires wild even with an explicit offset
+sig parse : [] (() -> DateTime) fun parse() { parseDate("1970-01-01 00:00:00+0") } parse()
+stderr : @.*Type error: The modalities require different effect contexts.*
+exit : 1
+
+Sleep reaches its runtime error with wild
+sig wait : [wild] (() -> ()) fun wait() { sleep(1) } wait()
+stderr : @.*Runtime error: The sleep function is not implemented on the server yet.*
+exit : 1
+
+Sleep requires wild
+sig wait : [] (() -> ()) fun wait() { sleep(1) } wait()
+stderr : @.*Type error: The modalities require different effect contexts.*
+exit : 1
+
+Error can raise in an empty effect context
+sig fail : [] (() -> Int) fun fail() { error("pure failure") } fail()
+stderr : @.*Runtime error: pure failure.*
+exit : 1
+
+Exit ends evaluation with its argument
+sig stop : [wild] (() -> Int) fun stop() { exit(42); 0 } stop()
+stdout : 42 : Int
+
+Exit requires wild
+sig stop : [] (() -> Int) fun stop() { exit(42) } stop()
+stderr : @.*Type error: The modalities require different effect contexts.*
+exit : 1
+
+Exit accepts an absolute function and has a separate result type at each call
+(if (false) exit(()) else true, if (false) exit(fun() { 42 } : [] (() -> Int)) else 42)
+stdout : (true, 42) : (Bool, Int)
+
+Exit rejects an ambient function argument
+exit(fun() { 42 })
+stderr : @.*Type error: Type argument .* must satisfy Abs.*
+exit : 1
+
+Exit rejects an absolute linear argument
+exit(linfun() { 42 } : [] (() -@ Int))
+stderr : @.*Type error: Type argument .* must satisfy Unl.*
+exit : 1
+
+Exit rejects a linear result type argument
+(~exit)[Int, [] (() -@ Int)]
+stderr : @.*Type error: Type argument .* must satisfy Unl.*
+exit : 1
