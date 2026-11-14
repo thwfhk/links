@@ -202,6 +202,11 @@ Operation parameter pattern-matching (9)
 handle(do Move(John)) { case <Move(Alice)> -> 'A' case <Move(Bob)> -> 'B' case <Move(_)> -> 'U' case x -> x }
 stdout : 'U' : Char
 
+An unmatched operation pattern raises a match error
+handle(handle(do Pick(2)) { case <Pick(1)> -> 1 }) { case <Pick(_)> -> 42 }
+stderr : @.*Evalir\.Exceptions\.Wrong.*
+exit : 1
+
 Pattern-matching on continuation parameter (1)
 ignore(fun(m) { handle(m()) { case <Op> -> 0 case x -> x } })
 stdout : () : ()
@@ -281,6 +286,18 @@ Deep Handler composition
 fun h1(m)() { handle(m()) { case <Op1 => k> -> k(1) } } fun h2(m)() { handle(m()) { case <Op2 => k> -> k(2) } } fun h3(m)() { handle(m()) { case <Op3 => k> -> k(3) } } h1(h2(h3(fun() { do Op1 + do Op2 + do Op3 })))()
 stdout : 6 : Int
 
+Deep operation clause can forward its operation to the enclosing handler
+handle(handle(do Ask + 1) { case <Ask => k> -> k(do Ask + 1) }) { case <Ask => k> -> k(40) }
+stdout : 42 : Int
+
+Deep return clause runs in the enclosing handler's context
+handle(handle(do Ask) { case <Ask => k> -> k(2) case n -> n + do Ask }) { case <Ask => k> -> k(40) }
+stdout : 42 : Int
+
+Resuming a forwarded operation runs the inner return clause
+handle(handle(do First + do Second) { case <First => k> -> k(20) case n -> n + 1 }) { case <Second => k> -> k(21) }
+stdout : 42 : Int
+
 Combining choice and state handlers
 tests/handlers/choose_and_state.links
 filemode : true
@@ -305,6 +322,10 @@ stdout : 3 : Int
 Shallow handler composition
 { fun h1(m)() { shallowhandle(m()) { case <Op1 -> k> -> h1(fun() { k(1) })() } } fun h2(m)() { shallowhandle(m()) { case <Op2 -> k> -> h2(fun() { k(2) })() } } h1(h2(fun() { do Op1 + do Op2 }))() }
 stdout : 3 : Int
+
+A shallow resumption runs under a new handler and skips the original return clause
+shallowhandle(do Next + do Next) { case <Next => k> -> [handle(k(20)) { case <Next => resume> -> resume(22) }] case n -> [n + 100] }
+stdout : [42] : [Int]
 
 Type ascription, parameterised handlers (1)
 { fun(a : Int)(b : Float)(c : String)(m)() { handle (m())(x <- a, y <- b, z <- c) { case <Op(p) => k> -> k(c,42,p,"Foo") case _ -> x } } }
@@ -349,6 +370,11 @@ stdout : (1, 2, 3, 4) : (Int, Int, Int, Int)
 Parameterised handler with multiple parameters (2)
 handle({do A; do B; do C; do D})(a <- 0, b <- false, (c0, c1) as c <- (true,0), d <- "Hello") { case <A => k> -> k((),a+1,b,c,d) case <B => k> -> k((),a,not(b),c,d) case <C => k> -> k((),a,b,(not(c0), c1+1),d) case <D => k> -> k((),a,b,c,d ^^ " World") case _ -> (a,b,c,d) }
 stdout : (1, true, (false, 1), "Hello World") : (Int, Bool, (Bool, Int), String)
+
+Handler state initialisers run left to right in the enclosing context
+tests/handlers/state_initialisers.links
+filemode : true
+stdout : (42, [20, 21]) : (Int, [Int])
 
 Effect type sugar (1)
 fun(g : (() {A:a,B:(a) => b|_}~> b)) { g }(fun(){error("N/A")})
@@ -436,6 +462,15 @@ stdout : 42 : Int
 Deep handler return clause cannot use a linear local
 { var f = linfun(x) { x + 1 }; handle(41) { case n -> f(n) } }
 stderr : @.*Type error: Variable f of linear type .* is used in a deep handler.*
+exit : 1
+
+Deep handler return clause can use its linear result once
+handle(linfun(n) { n + 1 }) { case f : ((Int) { |%}-@ Int) -> f(41) }
+stdout : 42 : Int
+
+Deep handler return clause cannot use its linear result twice
+handle(linfun(n) { n + 1 }) { case f : ((Int) { |%}-@ Int) -> f(20) + f(20) }
+stderr : @.*Type error: Variable f has linear type .*but is used 2 times.*
 exit : 1
 
 Examples
