@@ -367,10 +367,24 @@ switching the active inference path.
   accepted custom comparison, a declaration returning `String`, a
   scoped redefinition and the built-in comparisons. Run with typed
   frontend rechecking and strict IR checks.
-- [ ] **5.14** Preserve quantified field types when lowering record and
-  tuple patterns. Use the same type application and abstraction as
+- [x] **5.14** (`85ad25b5`) Preserve quantified field types when lowering
+  record and tuple patterns. Use the same type application and abstraction as
   field projection. Under strict IR checking, bind a polymorphic
   function with each pattern and use it at `Int` and `Bool`.
+- [x] **5.15** (`5c48a1d7`) Preserve native evaluation order when the REPL tracks
+  linear moves. Run the same failing expression before and after
+  defining and consuming an unrelated linear value. Keep the checks for
+  moves that run and moves that an interruption skips.
+- [x] **5.16** (`e4f876ea`) Check captures in later comprehension generators. Reject
+  captures of linear values where a generator can run several times or
+  be skipped. Test ordinary source checking and frontend rechecking.
+- [x] **5.17** (`31b37db3`) Resolve each comprehension generator source in the scope
+  outside the comprehension. Test a later source that refers to an
+  outer list shadowed by an earlier generator pattern. Preserve the
+  number and order of evaluations of generator sources.
+- [x] **5.18** (`1c74f64a`, `66ee9476`) Lower an alias of a negative variant pattern at the
+  narrowed type. Run the `(-Tag as x)` regression with default and
+  strict IR settings, including in the full strict handler suite.
 
 Keep the concrete [handler demos](SPEC.md#prelude-and-example-behaviour)
 while the old APIs that let callers choose additional effects are
@@ -404,6 +418,9 @@ Depends on milestone 5.
   [modal record extension](SPEC.md#modal-record-extension).
   Review the combined changes and run the affected checks below.
   Record the new tested revision and log paths.
+- [x] **6.5** (`66ee9476`) Review and verify the combined fixes in 5.14–5.18 with the
+  default runtime path. Include the full strict handler suite. Record
+  the tested revision and check logs.
 
 Completion check: a clean CI build and temporary installation work,
 all in-scope regressions and unit tests pass, the guide matches the
@@ -464,9 +481,21 @@ The final review fixes for milestones 2–4 are complete. Commit
 Items 3.13 and 3.14 cover argument inference and conditional branches.
 Item 2.8 is complete at `66861cb0`. Items 4.11–4.13 cover return
 annotations, forwarding switches and conflicting interface arguments.
-The coordinating chat reviews this handover before milestone 5 starts.
-Item 5.14 and the remaining REPL and comprehension fixes belong to
-milestone 5. There are no blockers for the handover.
+The final review of milestone 5 completed 5.14 at `85ad25b5`. The
+record, polymorphism and collection suites passed with 43, 70 and 61
+cases after `make`. Logs are in `/private/tmp/smalllinks-met-5-14/`.
+Item 5.15 passed all 10 REPL checks with default settings and with
+frontend rechecking and strict IR checks. Logs are in
+`/private/tmp/smalllinks-met-5-15/`. Item 5.16 passed the 66 collection,
+three frontend recheck and 30 typed IR tests. Logs are in
+`/private/tmp/smalllinks-met-5-16/`. Item 5.17 passed the 69 collection
+and 58 module tests, with additional checks of source order, nesting
+and shadowing. Logs are in `/private/tmp/smalllinks-met-5-17/`.
+Item 5.18 passed the full strict handler suite, including `(-Tag as x)`,
+and the pattern suite with both default and strict settings. Logs are
+in `/private/tmp/smalllinks-met-5-18/`. The
+[combined checks in 6.5](#milestone-65-checks) passed on `66ee9476`.
+The separate design proposals remain paused.
 Items 5.5 and 5.7–5.13 share the compiler and library commit
 `7f1f3f8c` because the startup, frontend and IR changes share code and
 checks. Commit `4b63194d` keeps source preprocessing off the bundled
@@ -493,10 +522,11 @@ an unresolved choice of modality. See `4.11-independent-review.log`,
 | Handler example runner with strict checking and a typecheck-only example | Passed. | `strict-examples.log`, `typecheck-only.log` |
 | `make rule-check`, `git diff --check` and the `rg` tabs check | Passed. GNU find was unavailable for the tabs rule. | `rule-check.log`, `diff-check.log`, `tabs.log` |
 
-The strict handler run excludes the negative variant alias
+That strict handler run excluded the negative variant alias
 `(-Tag as x)` probe. It passes with default settings. Strict IR
-checking reports the same mismatch at its narrowed binder on
-`5c6eab2a` and `6c054ee5` (`4.12-refining-pattern-strict.log`).
+checking reported the same mismatch at its narrowed binder on
+`5c6eab2a` and `6c054ee5` (`4.12-refining-pattern-strict.log`). Item 5.18
+fixes it and runs the full strict handler suite.
 
 ### Milestone 2 final review checks
 
@@ -568,6 +598,33 @@ a modal generator's element type through frontend rechecking.
 | Guide code blocks and entry points, plus the handler aggregate under strict checks | All 18 runnable guide blocks and four entry point checks passed. All nine handler assertions passed. | `final-guide.log`, `final-strict-examples.log` |
 | `opam exec -- dune install --profile=ci --prefix="$prefix" links` and `./tests/check-install.sh "$prefix/bin/linx"` | Passed from the fresh build. Outside the checkout the installed interpreter ran the import, empty-prelude comprehension, modal handler and polymorphic examples. | `final-clean-install.log`, `final-clean-install-check.log`, `final-installed-examples.log` |
 | `make rule-check`, `git diff --check` and document links | Passed. An `rg` scan covered the tabs rule because GNU find was unavailable. | `final-rule-check.log`, `final-diff-check.log`, `final-tabs.log`, `final-documents.log` |
+
+### Milestone 6.5 checks
+
+The combined checks used `66ee9476` with OCaml 5.4.0. Logs are
+in `/private/tmp/smalllinks-met-56-defects/`. The independent review
+found that a generated comprehension alias retained the full variant
+type after a negative pattern narrowed it. The fix removed the unused
+alias and added a strict regression for the source pattern. The CI
+build also caught constructor names that needed to be in scope in the
+REPL lowering helper. See `combined-repl-review.log` and
+`ci-build-before-review-fixes.log`.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make all-ci`, including a fresh Dune build directory | Passed. The macOS builds used `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk`. | `final-ci-build.log`, `final-clean-ci-build.log` |
+| `make tests` | 1,201 passed across 42 suites. Two existing cases were ignored. All four scripts passed. | `all-tests.log` |
+| `./test-harness tests/<suite>.tests` on affected suites | All passed, including 70 collection, 58 module, 34 example, 30 typed IR and three frontend recheck tests. | `default-<suite>.log` |
+| `./test-harness tests/<suite>.tests` with frontend rechecking and strict IR checks | Passed for handlers (152), effect annotations (76), collections (70), modules (58), records (43) and patterns (38). All ten handler REPL checks and all nine handler example assertions also passed under strict settings. | `strict-<suite>.log`, `strict-repl.log`, `strict-examples.log` |
+| `opam exec -- ./run-tests unit-tests` | All 105 passed. | `unit-tests.log` |
+| Guide examples and entry points | Passed for 18 runnable blocks, `-e`, file execution, typecheck-only execution and the REPL. | `guide.log` |
+| `opam exec -- dune install --profile=ci --prefix="$prefix" links` from the fresh build and `./tests/check-install.sh "$prefix/bin/linx"` | Passed. The installed interpreter also ran the modal handler, polymorphic identity and generator-shadowing examples outside the checkout. | `install.log`, `install-check.log`, `installed-examples.log` |
+| `make rule-check`, `git diff --check`, the tabs scan and document links | Passed. An `rg` scan covered the tabs rule because GNU find was unavailable. | `rule-check.log`, `diff-check.log`, `tabs.log`, `documents.log` |
+
+Strict IR still rejects a list or variant subpattern when the value it
+matches is quantified. The probes use a field of a quantified record
+and return `(42, true)` with default settings. See
+`quantified-list-variant-probes.log`.
 
 ### Milestone 4 follow-up checks
 
