@@ -58,19 +58,9 @@ represents `Mono` together with `Abs` as `MonoAbs` so both checks apply.
 Legacy effect arrows still serve the active type checker. It reports a
 type error for modal value annotations and uses of declared operations.
 
-### Decisions for review
-
-- **Combined kind spelling.** Both printers use `MonoAbs` for a
-  variable restricted to absolute monotypes. The parser accepts that
-  spelling, including in `Type`, `Row` and `Presence` kinds, so these
-  printed types can be reused as annotations.
-- **Symbolic operators.** An operator such as `<|>` or `><` stays
-  intact when the parser can read it as a term operator. At a type
-  boundary the parser separates adjacent modality brackets.
-- **Declaration order.** Interfaces use the same lookup order as type
-  aliases. An interface can refer to itself and earlier interfaces.
-  Supporting mutually recursive interface declarations would require
-  a separate design decision.
+Both type printers emit the approved `MonoAbs` shorthand. The parser
+separates adjacent modality brackets at a type boundary and preserves
+symbolic term operators such as `<|>` and `><`.
 
 Fresco must expose modal prefixes hidden by aliases when it compares
 types or crosses locks. Milestone 3 also applies declared restrictions

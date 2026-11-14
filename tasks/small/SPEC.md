@@ -378,7 +378,9 @@ are instantiated at each call. Operation arguments and results must
 be absolute. Base types are absolute, data types are absolute when
 their components are absolute, and an absolute modality gives a
 function an absolute type. Use `a::Abs` to require an absolute type
-argument.
+argument and `a::MonoAbs` to require an absolute monotype. An operation
+signature can refer to its own interface and to earlier interfaces
+in scope.
 
 ```links
 effect Reader(a::Abs) {

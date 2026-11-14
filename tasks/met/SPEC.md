@@ -277,12 +277,13 @@ Keep nullary constructors, payload fields and both existing spellings
 of present and absent fields. Explicit row and presence arguments keep
 their existing syntax.
 
-Square and angle brackets in types introduce modalities. In terms,
-`<>` keeps its inequality meaning. Parser and printer checks must
-cover `List`, modal prefixes, variant rows, braced row arguments, `|>`
-and adjacent closing angle brackets. Distinguish variant delimiters
-from existing open record rows such as `(|r)`. Keep symbolic term
-operators such as `<|>` intact.
+Square and angle brackets in types introduce modalities. Adjacent
+angle brackets can delimit separate modalities in a type. In terms,
+`<>` keeps its inequality meaning and symbolic operators such as
+`<|>` stay intact. Parser and printer checks must cover `List`, modal
+prefixes, variant rows, braced row arguments, `|>` and adjacent closing
+angle brackets. Distinguish variant delimiters from existing open
+record rows such as `(|r)`.
 
 Keep `sig f : T`, parameter annotations, `e : T`, `typename`, recursive
 types, and explicit `forall`. Unbound ordinary type, data-row and
@@ -340,9 +341,9 @@ An instance fixes the interface parameters for all its operations and
 calls. A `forall` on an operation signature is instantiated separately
 at each call. This retains SmallLinks' polymorphic operations under R4.
 
-An interface may refer to itself in an operation's type, for example
-to accept a function with a fixed absolute effect context. This uses
-the declared interface name and does not expand an effect-row alias.
+An operation signature can refer to its own interface and to earlier
+interfaces in scope. For example, an interface can accept a function
+whose absolute effect context contains an instance of that interface.
 The argument and result types must still satisfy `Abs`.
 
 Remove `effectname` and operation fields from effect annotations.
@@ -382,10 +383,10 @@ for an absent field or a field with an absolute payload. The internal
 representation should express the independent constraints clearly.
 
 `Abs` does not imply `Unl`, `Base` or `Mono`. `Base` implies `Abs`.
-Fresco's unification metavariables range over monotypes. Existing
-explicit `Mono` annotations also restrict a programmer-written type
-variable. Keep that requirement; when `Mono` and `Abs` both apply,
-enforce both. Effect-variable kinds are postponed.
+Fresco's unification metavariables range over monotypes. Explicit
+`Mono` annotations also restrict a programmer-written type variable.
+Use `MonoAbs` as shorthand for both `Mono` and `Abs`, including in
+`Type`, `Row` and `Presence` kinds. Effect-variable kinds are postponed.
 
 Operation arguments and results must be absolute, including any
 quantified variables on which they depend. A raw callback `(Int) -> Int`
