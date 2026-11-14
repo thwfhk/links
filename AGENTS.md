@@ -104,7 +104,7 @@ effect-type changes, start with:
 
 ```sh
 ./test-harness tests/handlers.tests
-./test-harness tests/effect_sugar.tests
+./test-harness tests/effect_annotations.tests
 ```
 
 Run other affected suites with `./test-harness tests/<suite>.tests`.

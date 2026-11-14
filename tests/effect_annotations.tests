@@ -70,13 +70,13 @@ fun() {} : () {Ask:Int|.}-> ()
 stderr : @.*Parse error:.*
 exit : 1
 
-Effect sugar setting is unknown
+Removed effect sugar setting is unknown
 ()
 args : --set=effect_sugar=true
 stdout : () : ()
 stderr : @.*Unknown setting 'effect_sugar'.*
 
-Effect sugar policy setting is unknown
+Removed effect sugar policy setting is unknown
 ()
 args : --set=effect_sugar_policy=open_default
 stdout : () : ()
