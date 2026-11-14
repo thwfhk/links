@@ -54,7 +54,7 @@ decisions in the spec. Keep implementation decisions in IMPL.md.
 
 ### 1. Review the design and record the baseline
 
-- [x] **1.1** (design draft) Read the repository guide, thesis and
+- [x] **1.1** (`3552e33f`) Read the repository guide, thesis and
   Fresco sources. Draft the syntax, typing and inference contract,
   examples, review choices, milestones and implementation framework.
 - [ ] **1.2** R1–R6, R7.1, R7.3 and R7.4 are resolved. Finish R7.2
@@ -254,9 +254,9 @@ an explicit inventory.
 
 ## Status
 
-Milestone 1, item 1.1 is drafted on `small-met` at source revision
-`e117db9da0bca9f45e9a12d2c3df808ec3880a6e`, plus the uncommitted
-`tasks/met` documents. The compiler has not been changed.
+Milestone 1, item 1.1 is committed as `3552e33f` on `small-met`.
+The compiler remains at source revision
+`e117db9da0bca9f45e9a12d2c3df808ec3880a6e`.
 
 The decisions R1–R6, R7.1, R7.3 and R7.4 are recorded in SPEC.md. The draft
 and milestones use declared effect interfaces, the confirmed signature
