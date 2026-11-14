@@ -318,6 +318,24 @@ linear ambient arrows. Retain `unsafe sig` as a synonym for `sig` with
 the same checks; its old exemption for recursive `wild` use is no
 longer needed.
 
+### Recursive types
+
+Unfolding a recursive alias or a `mu` type must reach a data or function
+type before repeating the same recursive reference. For example,
+`typename Tree = (|Leaf|More:Tree|)` reaches a variant. A `forall` or a
+modality on its own does not give the type a data or function form.
+The current rule rejects `typename Foo = forall a. Foo` because
+unfolding finds another `Foo` before any such form. A modality on a
+valid recursive type is allowed. For example,
+`[] (mu a. (|Leaf|More:a|))` still has a variant below its modality.
+
+### Comparison operators
+
+The comparison operators `==`, `<>`, `<`, `<=`, `>` and `>=` may be
+redefined with `op`. A custom comparison must return `Bool`. An infix
+call uses the comparison definition in scope and checks its arguments
+and effects against that definition's type.
+
 ### Upcasts and record updates
 
 An upcast written `e : B <- A` checks `e` at `A` and gives it type
@@ -613,6 +631,18 @@ A top-level `var` whose type still depends on its binding context keeps
 that dependency when imported or used in another scope; importing it
 cannot grant it `[]`.
 
+### REPL recovery
+
+A command that raises a runtime error or calls `exit` leaves the
+previous definitions in scope and discards all definitions from that
+command. Native effects that already ran, such as printing, still take
+effect. A linear binding from an earlier command is used up if the
+interrupted command used or moved it before stopping. For example, if
+`var g = f` ran before an error, the next command cannot use `f`.
+If the error occurred before the move, `f` is still available.
+
+The REPL continues after `exit(v)` and displays the value `v` by itself.
+
 ### First-class polymorphism and modal types
 
 Use Fresco's separation of partial type information from full checking.
@@ -827,6 +857,7 @@ requires `wild`.
 Its argument must have an absolute, unrestricted type. Its result type
 can be instantiated independently at each call and is unrestricted.
 The signature is `forall a::Abs,b. [wild] ((a) -> b)`.
+At the prompt, see [REPL recovery](#repl-recovery).
 
 Recursion, range construction and installing an algebraic handler add
 no `wild` requirement themselves. For example, factorial can have a
@@ -1242,6 +1273,31 @@ The outer `State(Int)` handler cannot provide the missing operation.
 9. Keep the [lambda evaluator](MIGRATION.md#installed-examples) deferred
    for this version. See [modality-parameterised
    handlers](#modality-parameterised-handlers) for the proposed extension.
+
+### Prelude and example behaviour
+
+Use the standard `concatMap`, `map` and `sortByBase` when evaluating a
+list comprehension. Local definitions of these names still apply to
+explicit calls.
+
+The prelude's `State(d,a)` holds a pure state computation. `runState`
+can run it in pure code. The callbacks passed to `>>=` and `fmap` are
+also pure. `return` requires an absolute argument because it captures
+that value in the state computation. `fmap` and `sequence` can return
+values, including functions, that they produce in the state computation
+without requiring those result types to be absolute.
+
+In the SAT example, `leftBiased` tries the right branch if the left
+branch fails. A final failure from `leftBiased` or `parse` signals
+`Fail` in the caller's context. `parseTextExpression` handles that
+operation and returns `Nothing` on failure.
+
+Keep the fixed effect contexts in the concurrency, transaction, AOP
+and shift/reset demos. For example, a task passed to concurrency's
+`Fork` has context `[wild, Cooperative]`. The transaction example adds
+`State(Bank)`. The old generic APIs let callers choose additional
+effects for the task or saved callback. Those APIs are deferred with
+effect variables.
 
 ## Future work
 

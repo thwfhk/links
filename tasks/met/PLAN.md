@@ -153,8 +153,10 @@ new inference path is completed with its library dependencies.
   fields and respect enclosing modalities. Use the same field requirements
   when checking and narrowing kinds. Test absolute and ambient callback
   fields, including a recursive reference whose arguments change.
-  Accept guarded explicit `mu` types under modalities and still reject
-  unguarded recursion.
+  Apply the [recursive type rule](SPEC.md#recursive-types). Accept a
+  `mu` type under `[]` when its body reaches a variant. Keep the
+  existing rejection of cycles through aliases, quantifiers and
+  modalities alone.
 - [ ] **3.6** Reject types with a non-identity modality at `Base`.
   Test direct and indirect uses through aliases at `Base`, `Mono` and
   `MonoAbs`. Retain the existing checks on primitive types, row tails
@@ -173,7 +175,8 @@ new inference path is completed with its library dependencies.
   polymorphic or modal instantiation. Test argument order, curried
   applications and modal pattern binders. Keep modality conversion
   independent of constraint order and ask for an annotation when the
-  available constraints leave a choice.
+  available constraints leave a choice. Restore the FreezeML test for
+  `map(head)(single(ids))` without explicit type arguments.
 - [ ] **3.10** Check the value restriction on every path that introduces
   a quantifier or modality. Cover effectful computations, failing binding
   patterns, and computations that return an already-polymorphic or modal
@@ -238,10 +241,12 @@ Depends on milestone 3.
   results in `if`, `switch` and handlers. Test matching underlying
   types, conflicting underlying types and results that still depend
   on their context.
-- [ ] **4.10** Keep effectful `crypt` calls when their result is unused.
-  Test the optimised code and a run without optimisation. Check the
-  reviewed `wild` signatures for `show`, `parseDate` and `sleep`,
-  the pure `error` signature, and the existing `exit` signature.
+- [ ] **4.10** Check the reviewed `wild` signatures for `show`,
+  `parseDate` and `sleep`, the pure `error` signature and the existing
+  `exit` signature.
+
+The `--optimise` issues from 4.10 and 4.11 are
+[deferred](IMPL.md#deferred-optimisation-issues).
 
 Completion check: every handler and native-effect example in SPEC.md has
 the specified type and result or error. Native dispatch and resumption
@@ -294,11 +299,39 @@ switching the active inference path.
   depend on them. Test empty and non-empty lists, nested patterns and
   whole-list fallbacks. Reject duplication, discards and calls to `hd`
   or `tl` on a linear list, including with explicit type application.
-  Run the accepted examples with typed frontend rechecking, strict IR
-  checks and optimisation.
+  Run the accepted examples with typed frontend rechecking and strict
+  IR checks.
+- [ ] **5.9** Apply [REPL recovery](SPEC.md#repl-recovery) after runtime
+  errors and early `exit`. Check a linear move before an interruption
+  and a move the interruption skips. Check that an interrupted module
+  leaves no new names in scope and that an exit value is printed without
+  the type of the skipped result.
+- [ ] **5.10** Keep the [pure state helpers](SPEC.md#prelude-and-example-behaviour)
+  and remove the `Abs` requirement on the results produced by `fmap`
+  and the elements produced by `sequence`. Test both with functions
+  created during a state computation. Keep a rejection test for a
+  non-absolute argument captured by `return`.
+- [ ] **5.11** Restore caller handling of `Fail` in the
+  [SAT example](SPEC.md#prelude-and-example-behaviour). Test that
+  `leftBiased` tries the second branch, that a caller can handle final
+  failure from either helper, and that malformed input still gives
+  `Nothing` from `parseTextExpression`.
+- [ ] **5.12** Lower list comprehensions to the
+  [standard helpers](SPEC.md#prelude-and-example-behaviour). Test
+  shadowing with one and several generators and with `orderby`. Check
+  that explicit calls still use local definitions. Run the tests with
+  typed frontend rechecking and strict IR checks.
+- [ ] **5.13** Check [custom comparisons](SPEC.md#comparison-operators)
+  against their definitions in scope and require a `Bool` result.
+  Lower each call to the same definition the checker used. Test an
+  accepted custom comparison, a declaration returning `String`, a
+  scoped redefinition and the built-in comparisons. Run with typed
+  frontend rechecking and strict IR checks.
 
-The [lambda evaluator](MIGRATION.md#installed-examples) stays deferred
-for this version. The design records [modality-parameterised
+Keep the concrete [handler demos](SPEC.md#prelude-and-example-behaviour)
+while the old APIs that let callers choose additional effects are
+deferred. The [lambda evaluator](MIGRATION.md#installed-examples) stays
+deferred for this version. The design records [modality-parameterised
 handlers](SPEC.md#modality-parameterised-handlers) as future work.
 
 Completion check: the default prelude loads; files with imports, `-e`,
@@ -319,7 +352,9 @@ Depends on milestone 5.
   checks on the combined revision. Record remaining deferred cases and
   their reasons. Complete this plan only when the in-scope checks pass.
 - [ ] **6.4** After the follow-up changes in 2–5, update the
-  SmallLinks guide, including the signatures, lock access and linear lists.
+  SmallLinks guide, including signatures, lock access, recursive
+  types, linear lists, REPL recovery, comparisons and comprehension
+  helpers.
   Review the combined changes and run the affected checks below.
   Record the new tested revision and log paths.
 
@@ -329,6 +364,9 @@ annotations, the guide matches the compiler, and deferred features have
 an explicit inventory.
 
 ## Checks
+
+Use the default execution path for follow-up checks. Checks specific to
+`--optimise` are deferred.
 
 1. Run `make` after compiler edits and before tests. Save full output to
    log files. Test `./links -e`, file execution with an import, a REPL
@@ -380,11 +418,24 @@ source locations for the review.
 The milestone 4 review settled the handler usage and branch result
 rules. The fixes in items 4.5–4.10 are pending. Run the affected
 handler, effect annotation and native suites with typed frontend
-rechecking and optimisation, followed by the combined milestone 6
-checks. The milestone 4 review draft passed `git diff --check`
+rechecking, followed by the combined milestone 6 checks.
+The milestone 4 review draft passed `git diff --check`
 against `98d39ac8`.
 
+The integration review recorded the REPL, prelude, SAT, comprehension
+and comparison choices and confirmed the example deferrals. Review
+items 3.5, 3.9 and 5.9–5.13 and the updated 6.4 before starting
+the integration follow-up.
+
 ### Follow-up review checks
+
+The integration review draft at `a3e48a2d` passed `make rule-check`,
+`git diff --check` and checks of the edited document links. GNU find
+was unavailable, so an `rg` scan checked the edited files for tabs.
+Probes with `./links -e` confirmed the existing rejection of `Foo`,
+the incorrect rejection of a variant under `[]`, and the inconsistent
+type of a call to a custom comparison. Logs are under
+`/private/tmp/smalllinks-met-integration-review.TGt6f6/`.
 
 The review used compiler revision `98d39ac8`. Logs are under
 `/private/tmp/smalllinks-met-follow-up-review.CJ9Fkz/`.
@@ -423,9 +474,14 @@ and OCaml 5.4.0. Logs are under
 | Command or check | Result | Log |
 | --- | --- | --- |
 | `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk make` | Passed. | `build-sdk.log` |
-| `./test-harness tests/<suite>.tests` for `records`, `effect_annotations`, `handlers`, `presence_type_arg`, `recheck_frontend_transformations` and `typed_ir` | 232 passed. The new acceptance case runs with frontend rechecking, strict IR checks and optimisation. | `<suite>.log` |
+| `./test-harness tests/<suite>.tests` for `records`, `effect_annotations`, `handlers`, `presence_type_arg`, `recheck_frontend_transformations` and `typed_ir` | 232 passed. The acceptance case ran with frontend rechecking, strict IR checks and optimisation. | `<suite>.log` |
 | `./links -e` on modal record extensions and updates | Passed for absent and present absolute fields, a mixed record with a callback, and open rows in both contexts. The rejection checks produced the expected type errors. | `probes.log` |
 | `make rule-check` and `git diff --check` | Passed. The tabs rule used `rg` with the same file patterns. | `rule-check.log`, `tabs.log`, `diff-check.log` |
+
+At `a3e48a2d` with the working-tree test change,
+`./test-harness tests/records.tests` passed all 35 tests with
+`--optimise` off. Logs are under
+`/private/tmp/smalllinks-met-default-checks.dWIhNT/`.
 
 ### Milestones 5–6 checks
 

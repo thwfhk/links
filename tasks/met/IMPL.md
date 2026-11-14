@@ -193,10 +193,17 @@ records the checks.
    common body is known to be absolute. The ordinary branch check
    in `same_branches` can reject the same pair of types. Share the
    absolute result rule across conditionals, switches and handlers.
-7. `crypt` currently has a `[wild]` signature and keeps the old
-   `PURE` lowering flag. The optimiser can erase an unused call.
-   Lower it as an ordinary application and make the regression
-   check that its evaluation survives optimisation.
+
+### Deferred optimisation issues
+
+Dead-definition elimination can remove unused calls to `crypt`, `chr`
+and `verify` because their primitive definitions use the `PURE` flag.
+`crypt` can use `wild`, and `chr(-1)` and `verify("bad", "pw")` can
+raise. Keep these cases for testing when work on `--optimise` resumes.
+
+Inlining can move a linear read past an error in the REPL. For example,
+in `{ var g = f; error("fail"); g(41) }`, moving the read of `f` to
+the call to `g` changes whether the interrupted command used up `f`.
 
 ## 5. Compiler and library integration
 
@@ -287,7 +294,9 @@ completion checks are pending in [PLAN.md](PLAN.md#milestones).
    Separately, `core/frescoTypes.ml` can visit
    the same `mu` binder twice while exposing a modal prefix and report
    a cycle for `(Leaf : [] (mu a. (|Leaf|More:a|)))`. Stop the guard
-   check at the variant constructor.
+   check at the variant constructor. Keep the existing rejection when
+   unfolding repeats the alias before reaching a data or function
+   type, as in `typename Foo = forall a. Foo`.
 
    For `Base`, a kind check in
    `core/frescoTypes.ml` accepts a `Base` variable as a monotype,
@@ -319,11 +328,13 @@ completion checks are pending in [PLAN.md](PLAN.md#milestones).
    `same(~ident, ident)` while accepting `same(ident, ~ident)` for
    `fun same(x,y) { [x,y] }`. The existing `app(poly)(~id)` test
    also passes with freezing where reference case A12 uses `app(poly)(id)`.
-   Preserve known types from all the arguments, expected types and
-   modal pattern binders before solving. A conversion of `<Reader(a)> Int`
-   to `<Reader(b)> Int` already holds by `Abs`; the partial pass must
-   leave the interface arguments alone in this case. Keep the approved
-   rule of asking for an annotation if later constraints leave a choice.
+   The migrated `map(head)(single(ids))` test adds explicit type
+   arguments. Restore the original call once inference can use the
+   types of both stages. Preserve known types from all the arguments,
+   expected types and modal pattern binders before solving. A conversion
+   of `<Reader(a)> Int` to `<Reader(b)> Int` already holds by `Abs`.
+   The partial pass must leave the interface arguments alone in this
+   case. Ask for an annotation if later constraints leave a choice.
 7. **Value restriction (3.10).** In `core/fresco.ml`, `adapt` can open
    an expected quantifier after ordinary checking has bypassed the
    value check. `(print("once") : forall a. ())` is accepted. An
@@ -382,3 +393,42 @@ completion checks are pending in [PLAN.md](PLAN.md#milestones).
     whole list. Test a fallback after a failed nested pattern and
     a list stored inside another linear value. Keep the native list
     representation.
+12. **REPL recovery (5.9).** `bin/driver.ml` observes reads of existing
+    linear bindings in `core/evalir.ml`. Check that lowering preserves
+    source-level moves before an interruption.
+
+    The built-in `exit` in `core/lib.ml` uses the empty continuation,
+    so the driver receives what looks like a normal result. Distinguish
+    early exit from normal completion when handling a REPL command.
+    On interruption, restore the previous type, value and name scopes
+    and keep only the updates for linear moves that ran. Show the exit
+    value through the REPL's value printer without the enclosing
+    expression's type. Keep the [native `exit` signature](SPEC.md#native-effects).
+13. **State helpers (5.10).** The old `{}~>` state computation and
+    callbacks could use native effects. The approved prelude types
+    keep `[]`, so they can run in pure code. In `prelude.links`, have
+    `fmap` apply its callback inside the state computation and return
+    the result with the updated state. Have `sequence` build its list
+    there while keeping the current order of state updates. This avoids
+    calling `return` with a result that depends on that context. Keep
+    the `Abs` requirement on the argument that `return` captures.
+14. **SAT failure (5.11).** `examples/handlers/sat.links` currently uses
+    `Maybe` inside `leftBiased` and `parse`. Keep that internal
+    representation where it helps backtracking, then signal `Fail` in
+    the caller's context after the local handler has finished if there
+    is no result. Use `maybe` at `parseTextExpression` to handle the
+    outward failure. Preserve the parser's backtracking and diagnostic.
+15. **Standard comprehension helpers (5.12).** `core/desugarFors.ml`
+    generates references to `concatMap`, `map` and `sortByBase` by
+    source name. A local replacement can change the result or cause
+    the frontend recheck to disagree with source typing. Resolve the
+    generated references to the standard definitions and keep explicit
+    source calls tied to their ordinary lexical bindings. Preserve the
+    types of the generated arguments and results through rechecking.
+16. **Custom comparisons (5.13).** `core/fresco.ml` assigns comparison
+    syntax a built-in type by name. `core/sugartoir.ml` uses the binding
+    in scope and still emits a call marked pure. This can print
+    `"changed" : Bool` after `op x < y { "changed" }`. Check the
+    declared operator's result at its definition, then use its resolved
+    binding and type at the call. Choose the call form from that binding
+    so a custom operator can have the effects its type permits.
