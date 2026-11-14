@@ -163,6 +163,17 @@ let conversion_error position message =
   | None -> raise (Error message)
 
 let try_conversion { position; conversion_ambient; source; target; body } =
+  let incompatible_contexts () =
+    let describe () =
+      let pp_arg fmt arg = Format.pp_print_string fmt (Types.string_of_datatype arg) in
+      let print = Format.asprintf "%a" (ModalEffects.pp_modality pp_arg) in
+      let source = print source in
+      let target = print target in
+      conversion_error position
+        (Printf.sprintf "The modalities require different effect contexts: %s and %s" source target) in
+    match position with
+    | Some pos -> ModalEffects.Names.with_source_scope pos describe
+    | None -> describe () in
   if Types.Abs.type_satisfies body then true
   else
     let arguments = ModalEffects.transformation_arguments ~ambient:conversion_ambient source target in
@@ -181,10 +192,10 @@ let try_conversion { position; conversion_ambient; source; target; body } =
         | true, true -> false
         | true, false -> Types.Abs.make_type body; true
         | false, true -> FrescoTypes.transaction (fun () -> constrain_arguments pairs); true
-        | false, false -> conversion_error position "The modalities require different effect contexts"
+        | false, false -> incompatible_contexts ()
         end
     | None when can_be_absolute -> Types.Abs.make_type body; true
-    | None -> conversion_error position "The modalities require different effect contexts"
+    | None -> incompatible_contexts ()
 
 let convert ?position context ~source ~target ~body =
   let conversion = { position; conversion_ambient = context.ambient; source; target; body } in

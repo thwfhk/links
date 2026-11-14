@@ -88,7 +88,8 @@ module Untyped = struct
     let apply : 'a TU.result -> transformer -> 'a TU.result
       = fun (TU.Result { program; state }) (module T) ->
         Debug.if_set Basicsettings.show_stages (fun () -> T.Untyped.name ^"...");
-        select (module T : Untyped.S) state program
+        ModalEffects.Names.with_names state.Context.interface_names (fun () ->
+          select (module T : Untyped.S) state program)
     in
     let (TU.Result { state; program }) =
       Array.fold_left apply TU.(return context' program) transformers
@@ -106,8 +107,9 @@ end
 let check_program context terms program =
   let typing_environment = Context.typing_environment context in
   let program, datatype, terms, tycon_env =
-    Fresco.program ~interfaces:context.Context.effect_interfaces
-      ~aliases:typing_environment.Types.tycon_env terms program in
+    ModalEffects.Names.with_names context.Context.interface_names (fun () ->
+      Fresco.program ~interfaces:context.Context.effect_interfaces
+        ~aliases:typing_environment.Types.tycon_env terms program) in
   let typing_environment = { typing_environment with
     Types.var_env = FrescoContext.environment terms;
     tycon_env } in
@@ -137,8 +139,9 @@ module Modal = struct
 
   let check untyped check context terms program =
     DesugarModules.with_scope_rollback (fun () ->
-      let { program; context; _ } = untyped context program in
-      check context terms program)
+      ModalEffects.Names.with_source_scopes (fun () ->
+        let { program; context; _ } = untyped context program in
+        check context terms program))
 
   let program = check Untyped.run_program check_program
   let interactive = check Untyped.run_sentence check_sentence
@@ -175,15 +178,17 @@ end
 
 let transform show print untyped check select context program =
   DesugarModules.with_scope_rollback (fun () ->
-    FrescoContext.transaction context.Context.fresco_environment (fun () ->
-      Debug.if_set show_pre_frontend_ast
-        (fun () -> Printf.sprintf "AST before frontend transformations:\n%s\n\n" (show program));
-      let { program; context; _ } = untyped context program in
-      let result, _ = check context context.Context.fresco_environment program in
-      let result = Typeability_preserving.run select check print context result in
-      Debug.if_set show_post_frontend_ast
-        (fun () -> Printf.sprintf "AST after frontend transformations:\n%s\n\n" (show result.program));
-      result))
+    ModalEffects.Names.with_source_scopes (fun () ->
+      FrescoContext.transaction context.Context.fresco_environment (fun () ->
+        Debug.if_set show_pre_frontend_ast
+          (fun () -> Printf.sprintf "AST before frontend transformations:\n%s\n\n" (show program));
+        let { program; context; _ } = untyped context program in
+        ModalEffects.Names.with_names context.Context.interface_names (fun () ->
+          let result, _ = check context context.Context.fresco_environment program in
+          let result = Typeability_preserving.run select check print context result in
+          Debug.if_set show_post_frontend_ast
+            (fun () -> Printf.sprintf "AST after frontend transformations:\n%s\n\n" (show result.program));
+          result))))
 
 let program =
   transform Sugartypes.show_program Sugartypes.pp_program Untyped.run_program check_program

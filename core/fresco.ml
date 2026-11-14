@@ -13,19 +13,21 @@ module Usage = TypeSugar.Usage
 let error pos message = raise (Errors.Type_error (pos, message))
 
 let at pos f =
-  match f () with
-  | result -> result
-  | exception Context.Error message -> error pos message
-  | exception Unify.Failure (`Msg message) -> error pos message
-  | exception Unify.Failure (`PresentAbsentClash (label, _, _)) ->
-      error pos ("Incompatible presence for field " ^ label)
-  | exception TypeUtils.TypeDestructionError message -> error pos message
+  ModalEffects.Names.with_source_scope pos (fun () ->
+    match f () with
+    | result -> result
+    | exception Context.Error message -> error pos message
+    | exception Unify.Failure (`Msg message) -> error pos message
+    | exception Unify.Failure (`PresentAbsentClash (label, _, _)) ->
+        error pos ("Incompatible presence for field " ^ label)
+    | exception TypeUtils.TypeDestructionError message -> error pos message)
 
 let consistent pos actual expected =
   try FrescoTypes.consistent actual expected with Unify.Failure _ ->
-    let actual = string_of_datatype actual in
-    let expected = string_of_datatype expected in
-    error pos ("Expected " ^ expected ^ ", got " ^ actual)
+    ModalEffects.Names.with_source_scope pos (fun () ->
+      let actual = string_of_datatype actual in
+      let expected = string_of_datatype expected in
+      error pos ("Expected " ^ expected ^ ", got " ^ actual))
 
 let pure = ModalEffects.Absolute (ModalEffects.context (ModalEffects.extension []))
 let fresh = FrescoTypes.fresh
@@ -1105,7 +1107,7 @@ and infer_node state mode phrase =
         match ModalEffects.newest operation.interface (Context.ambient state.terms) with
         | Some arguments -> arguments
         | None -> error pos (Printf.sprintf "Operation %s requires effect interface %s in the current context"
-                              name (ModalEffects.Interface.name operation.interface)) in
+                              name (ModalEffects.Names.name operation.interface)) in
       let scheme = member_scheme operation interface_arguments in
       let type_args, instance = match explicit with
         | [] ->
@@ -1154,7 +1156,7 @@ and infer_handler state pos mode { sh_expr; sh_effect_cases; sh_value_cases; sh_
       let names = List.map (fun (id, _) -> ModalEffects.Operation.name id)
           (EffectInterfaces.Operations.bindings missing) in
       error pos (Printf.sprintf "Incomplete handler for %s. Missing operation clauses for %s"
-        (ModalEffects.Interface.name interface) (String.concat ", " names))) handled;
+        (ModalEffects.Names.name interface) (String.concat ", " names))) handled;
   let rec identity_body name (body : phrase) = match body.node with
     | Var returned -> name = returned
     | Block ([], body) | TupleLit [body] -> identity_body name body

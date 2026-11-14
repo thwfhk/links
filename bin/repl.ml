@@ -197,7 +197,9 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
                DesugarModules.with_scope_rollback (fun () ->
                  Driver.Phases.whole_program ~on_variable context filename)) with
              | Ok (context, datatype, value) ->
-                 print_value datatype value; context
+                 ModalEffects.Names.with_names context.Context.interface_names (fun () ->
+                   print_value datatype value);
+                 context
              | Error (exn, context) ->
                  Errors.display ~default:(fun _ -> context) (lazy (raise exn))
              end
@@ -347,7 +349,8 @@ let interact : Context.t -> unit
        print_error exn; loop context
     | Ok I.({ sentence; context = context' }) ->
        let context'' =
-         try handle context context' sentence
+         try ModalEffects.Names.with_names context'.Context.interface_names (fun () ->
+           handle context context' sentence)
          with exn -> print_error exn; context'
        in
        loop context''

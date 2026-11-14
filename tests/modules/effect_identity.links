@@ -1,0 +1,8 @@
+effect Reader {
+  Ask : () => Int;
+}
+
+sig readEffect : [Reader] (() -> Int)
+fun readEffect() { do Ask }
+
+handle(readEffect()) { case <Ask => k> -> k(42) }

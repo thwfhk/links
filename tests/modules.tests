@@ -212,6 +212,40 @@ args : --path=tests/modules
 stderr : @.*
 exit : 1
 
+Shadowed interface declarations have distinct identities
+effect Reader { Old : () => Int; } sig first : [Reader] (() -> Int) fun first() { do Old } effect Reader { New : () => Int; } (first : [Reader] (() -> Int))
+stderr : @.*Type error: The modalities require different effect contexts.*
+exit : 1
+
+Interface names in an error use the scope of the failing binding
+module Library { effect Reader { Old : () => Int; } effect Other { Pick : () => Int; } sig first : [Reader] (() -> Int) fun first() { do Old } sig second : [Other] (() -> Int) fun second() { do Pick } var mixed = if (true) first else second; effect Reader { New : () => Int; } } ()
+stderr : @.*Type error: Expected \[Reader\] \(\(\) -> Int\), got \[Other\] \(\(\) -> Int\).*
+exit : 1
+
+An interface arity error names the declaration being used
+module Library { module Nested { effect Reader(a::Abs) { Ask : () => a; } } } open Library; module Library { module Nested { effect Reader { Ask : () => Int; } } } typename T = [Nested.Reader] Int;
+stderr : @.*Arity mismatch: Type Nested\.Reader expects 1 type arguments, but 0 arguments were provided.*
+exit : 1
+
+Shadowing an interface still rejects duplicate operations in its scope
+effect Reader { Ask : () => Int; } effect Reader { Ask : () => Int; } ()
+stderr : @.*Module Error: Duplicate operation Ask.*
+exit : 1
+
+Reopening a module restores its interface and operation names
+module A { effect Reader { Ask : () => Int; } sig first : [Reader] (() -> Int) fun first() { do Ask } } module B { effect Reader { Ask : () => Int; } } open A; open B; var second = fun() { do Ask } : [Reader] (() -> Int); open A; handle(handle(first() + second()) { case <Ask => k> -> k(40) }) { case <B.Ask => k> -> k(2) }
+stdout : 42 : Int
+
+The imported interface fixture can handle its own operation
+./tests/modules/effect_identity.links
+filemode : true
+stdout : 42 : Int
+
+Repeated imports in one input share effect declarations
+import Effect_identity; var first = Effect_identity.readEffect; import Effect_identity; var second = Effect_identity.readEffect; handle(first() + second()) { case <Effect_identity.Ask => k> -> k(21) }
+args : --path=tests/modules
+stdout : 42 : Int
+
 Import via open
 ./tests/modules/import_via_open0.links
 filemode : true

@@ -72,7 +72,8 @@ module Phases = struct
     module IR = struct
       let run : Sugartypes.program Frontend.result -> Sugartoir.result
         = fun Frontend.({ context; datatype; program }) ->
-        Sugartoir.program context datatype program
+        ModalEffects.Names.with_names context.Context.interface_names (fun () ->
+          Sugartoir.program context datatype program)
     end
   end
 
@@ -82,7 +83,8 @@ module Phases = struct
       let program' =
         Ir.with_bindings globals program (* TODO(dhil): This looks silly, and I think it may be wrong... *)
       in
-      Backend.program context datatype program'
+      ModalEffects.Names.with_names context.Context.interface_names (fun () ->
+        Backend.program context datatype program')
   end
 
   module Evaluate = struct

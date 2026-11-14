@@ -20,3 +20,36 @@ if [[ "$output" != *"Unbound type constructor Missing"*"Module Error: Duplicate 
 fi
 
 echo "SUCCESS: The REPL accepted the corrected interface and rejected the duplicate operation"
+
+if ! output=$(./links --path=tests/modules 2>&1 <<'EOF'
+open import Effect_identity;
+var first = readEffect;
+open import Effect_identity;
+var second = readEffect;
+var wrong = handle(first()) { case <Ask => k> -> k(9) };
+handle(second()) { case <Ask => k> -> k(43) };
+open import Effect_identity;
+var mixed = if (true) first else second;
+handle(readEffect()) { case <Ask => k> -> k(44) };
+EOF
+); then
+    echo "FAILURE: The repeated import REPL session exited with an error"
+    printf '%s\n' "$output"
+    exit 1
+fi
+
+if [[ "$output" != *'The modalities require different effect contexts'*$'43 : Int'*'Type error: Expected'*$'44 : Int' ]] ||
+    [[ $(printf '%s\n' "$output" | grep -c '^<stdin>:') != 2 ]]; then
+    echo "FAILURE: The REPL did not keep the declarations from successive imports distinct"
+    printf '%s\n' "$output"
+    exit 1
+fi
+
+hidden_types='Expected \[Effect_identity\.Reader \(out of scope, declaration ([0-9]+)\)\][^,]*, got \[Effect_identity\.Reader \(out of scope, declaration ([0-9]+)\)\]'
+if [[ ! "$output" =~ $hidden_types ]] || [[ "${BASH_REMATCH[1]}" == "${BASH_REMATCH[2]}" ]]; then
+    echo "FAILURE: The REPL diagnostic did not distinguish hidden declarations from repeated imports"
+    printf '%s\n' "$output"
+    exit 1
+fi
+
+echo "SUCCESS: The REPL kept successive imports distinct and identified both hidden declarations"

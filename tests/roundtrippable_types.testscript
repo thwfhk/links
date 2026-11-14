@@ -72,6 +72,16 @@ for engine in roundtrip old; do
     roundtrip "Absent variant fields with the $engine printer" \
         'sig f : forall r::Row. ((|None{-}|Some:Int|r|)) -> (|None{-}|Some:Int|r|) fun f(x) { x }' \
         '~f' --set=types_pretty_printer_engine="$engine" --set=show_quantifiers=true || status=1
+
+    # Library.Nested.Reader now names the new interface. Nested.previous
+    # still has the old interface, so the type ascription checks its identity.
+    roundtrip "Interface identity through an open module with the $engine printer" \
+        'module Library { module Nested { effect Reader { Ask : () => Int; } sig previous : [Reader] (() -> Int) fun previous() { do Ask } } } open Library; module Library { module Nested { effect Reader { Ask : () => Int; } } }' \
+        'Nested.previous' --set=types_pretty_printer_engine="$engine" || status=1
+
+    roundtrip "Mask and extension identity through an open module with the $engine printer" \
+        'module Library { module Nested { effect Reader(a::Abs) { Ask : () => a; } sig previous : (<Reader | Reader(Int)> (() -> Int)) -> (<Reader | Reader(Int)> (() -> Int)) fun previous(f) { f } } } open Library; module Library { module Nested { effect Reader(a::Abs) { Ask : () => a; } } }' \
+        'Nested.previous' --set=types_pretty_printer_engine="$engine" || status=1
 done
 
 exit "$status"

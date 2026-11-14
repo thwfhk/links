@@ -68,11 +68,15 @@ module Desugar = struct
     | Datatype.InterfaceName path ->
         raise (module_error ~pos ("Unbound effect interface " ^ String.concat "." path))
 
+  let interface_name pos id =
+    ModalEffects.Names.with_source_scope pos (fun () -> ModalEffects.Names.name id)
+
   let check_kind pos kind argument =
-    match FrescoTypes.require_kind kind argument with
-    | () -> ()
-    | exception Unify.Failure (`Msg message) -> raise (Type_error (pos, message))
-    | exception Unify.Failure _ -> raise (Type_error (pos, "Type argument has the wrong kind."))
+    ModalEffects.Names.with_source_scope pos (fun () ->
+      match FrescoTypes.require_kind kind argument with
+      | () -> ()
+      | exception Unify.Failure (`Msg message) -> raise (Type_error (pos, message))
+      | exception Unify.Failure _ -> raise (Type_error (pos, "Type argument has the wrong kind.")))
 
   type mode = Check_kinds of (unit -> unit) list ref option
 
@@ -103,14 +107,14 @@ module Desugar = struct
         | Modal (modality, body) ->
             let entry (name, args) =
               let id = interface_id pos name in
-              let name = ModalEffects.Interface.name id in
               let signature = match EffectInterfaces.find id interfaces with
                 | Some signature -> signature
-                | None -> raise (module_error ~pos ("Unbound effect interface " ^ name)) in
+                | None -> raise (module_error ~pos ("Unbound effect interface " ^ interface_name pos id)) in
               let expected = List.length signature.EffectInterfaces.parameters
               and provided = List.length args in
               if expected <> provided then
-                raise (TypeApplicationArityMismatch {pos; name; expected; provided});
+                raise (TypeApplicationArityMismatch
+                  {pos; name = interface_name pos id; expected; provided});
               let arguments = List.map datatype args in
               List.iter2 (fun q argument ->
                 check_argument modal pos (Quantifier.to_kind q) (pk_type, argument))
@@ -303,12 +307,12 @@ object (self)
     | EffectInterface declaration ->
         let id = Option.get declaration.interface_id in
         let parameters = Desugar.desugar_quantifiers declaration.interface_params in
-        let name = ModalEffects.Interface.name id in
         let pos = match declaration.interface_members with
           | member :: _ -> WithPos.pos member.member_signature
           | [] -> Position.dummy in
         List.iter (fun q ->
           if Kind.primary_kind (Quantifier.to_kind q) <> pk_type then
+            let name = Desugar.interface_name pos id in
             raise (module_error ~pos ("Parameters of effect interface " ^ name ^ " must be value types."))) parameters;
         let signature = EffectInterfaces.{ parameters; operations = Operations.empty } in
         let interfaces = EffectInterfaces.add id signature interfaces in

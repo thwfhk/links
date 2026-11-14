@@ -286,6 +286,14 @@ module Scope = struct
   let renew : t -> t
     = fun scopes ->
     { scopes with delta = S.empty }
+
+  let interface_names scope =
+    let rec bindings prefix scope =
+      Seq.append
+        (StringMap.to_seq scope.S.interfaces |> Seq.map (fun (name, id) -> prefix ^ name, id))
+        (StringMap.to_seq scope.S.modules |> Seq.flat_map (fun (name, scope) ->
+           bindings (prefix ^ name ^ ".") scope)) in
+    ModalEffects.Names.of_bindings (bindings "" scope.visible)
 end
 
 let rec desugar_module : ?toplevel:bool -> Epithet.t -> Scope.t -> Sugartypes.binding -> binding list * Scope.t
@@ -299,18 +307,31 @@ let rec desugar_module : ?toplevel:bool -> Epithet.t -> Scope.t -> Sugartypes.bi
      let scope'' = Scope.Extend.module' name scope' scope in
      (bs', scope'')
   | _ -> assert false
-and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
+and desugar ?(toplevel=false) ?names (renamer' : Epithet.t) (scope' : Scope.t) =
   let open Sugartypes in
+  let names = match names with
+    | Some names -> names
+    | None -> lazy (Scope.interface_names scope') in
   object(self : 'self_type)
     inherit SugarTraversals.map as super
 
     val mutable scope = scope'
+    val mutable names = names
     val mutable renamer = renamer'
     method get_renamer = renamer
     method get_scope = scope
+    method get_interface_names = Lazy.force names
+
+    method private set_effect_scope new_scope =
+      scope <- new_scope;
+      names <- lazy (Scope.interface_names new_scope)
+
+    method! position pos =
+      ModalEffects.Names.record_scope pos names;
+      pos
 
     method clone =
-      desugar ~toplevel:false renamer scope
+      desugar ~toplevel:false ~names renamer scope
 
     method type_binder : Name.t -> Name.t
       = fun name ->
@@ -360,7 +381,7 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
       let name = declaration.interface_name in
       let qualified = Epithet.qualified_source_name renamer name in
       let id = ModalEffects.Interface.fresh qualified in
-      scope <- Scope.Extend.interface name id scope;
+      self#set_effect_scope (Scope.Extend.interface name id scope);
       let define_member member =
         let name = member.member_name in
         if Scope.defines_operation name scope then
@@ -376,14 +397,14 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
     method open_module pos path =
       try
         let module_scope = Scope.Resolve.module' path scope in
-        scope <- Scope.open_module module_scope scope;
+        self#set_effect_scope (Scope.open_module module_scope scope)
       with Notfound.NotFound _ ->
         raise (Errors.module_error ~pos (Printf.sprintf "Unbound module %s" (Scope.Resolve.best_guess path)))
 
     method import_module pos path =
       try
         let module_scope = Scope.Resolve.module' path scope in
-        scope <- Scope.Extend.synthetic_module path module_scope scope
+        self#set_effect_scope (Scope.Extend.synthetic_module path module_scope scope)
       with Notfound.NotFound _ ->
         raise (Errors.module_error ~pos (Printf.sprintf "Unbound module %s" (Scope.Resolve.best_guess path)))
 
@@ -432,7 +453,9 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
 
     method! phrase phrase =
       match phrase.node with
-      | Operation name -> with_node phrase (Operation (self#resolve_operation phrase.pos name))
+      | Operation name ->
+         ignore (self#position phrase.pos);
+         with_node phrase (Operation (self#resolve_operation phrase.pos name))
       | _ -> super#phrase phrase
 
     method! pattern pattern =
@@ -482,6 +505,7 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
       let open Datatype in
       match datatype.node with
       | Modal (modality, body) ->
+         ignore (self#position datatype.pos);
          let resolve = self#resolve_interface datatype.pos in
          let entries = List.map (fun (reference, args) -> resolve reference, List.map self#datatype args) in
          let modality = match modality with
@@ -505,7 +529,9 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
     method! binding binding =
       match binding.node with
       | EffectInterface declaration ->
-         with_node binding (EffectInterface (self#define_interface binding.pos declaration))
+         let declaration = self#define_interface binding.pos declaration in
+         ignore (self#position binding.pos);
+         with_node binding (EffectInterface declaration)
       | _ -> super#binding binding
 
     method! bindingnode = function
@@ -533,6 +559,7 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
         let fs'' =
           List.fold_right
             (fun {node={ rec_definition = (tvs, funlit); rec_signature = dt; _ } as fn; pos} fs ->
+              ignore (self#position pos);
               let dt' = self#option (fun o -> o#datatype') dt in
               let funlit' = self#funlit funlit in
               make ~pos { fn with rec_definition = (tvs, funlit'); rec_signature = dt' } :: fs)
@@ -582,7 +609,7 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
       | ({ node = Module _; _ } as module') :: bs ->
       (* Affects [scope] and hoists [bs'] *)
          let bs', scope' = desugar_module ~toplevel renamer scope module' in
-         scope <- scope'; bs' @ self#bindings bs
+         self#set_effect_scope scope'; bs' @ self#bindings bs
       | b :: bs ->
          let b = self#binding b in
          b :: self#bindings bs
@@ -614,7 +641,7 @@ let with_scope_rollback f =
      scope := previous_scope;
      Printexc.raise_with_backtrace exn backtrace
 
-let desugar_program : Sugartypes.program -> Sugartypes.program
+let desugar_program_with_names : Sugartypes.program -> Sugartypes.program * ModalEffects.Names.t
   = fun program ->
   let interacting = Basicsettings.System.is_interacting () in
   (* TODO move to this logic to the loader. *)
@@ -625,15 +652,19 @@ let desugar_program : Sugartypes.program -> Sugartypes.program
   let result = desugar#program program in
   (* Printf.fprintf stderr "After elaboration:\n%s\n%!" (Sugartypes.show_program result); *)
   ignore (if interacting then (scope := desugar#get_scope; renamer := desugar#get_renamer));
-  result
+  result, desugar#get_interface_names
 
+let desugar_program program = fst (desugar_program_with_names program)
 
-let desugar_sentence : Sugartypes.sentence -> Sugartypes.sentence
+let desugar_sentence_with_names : Sugartypes.sentence -> Sugartypes.sentence * ModalEffects.Names.t
   = fun sentence ->
   let sentence = Chaser.add_dependencies_sentence sentence in
   let visitor = desugar ~toplevel:true !renamer !scope in
   let result = visitor#sentence sentence in
-  scope := visitor#get_scope; renamer := visitor#get_renamer; result
+  scope := visitor#get_scope; renamer := visitor#get_renamer;
+  result, visitor#get_interface_names
+
+let desugar_sentence sentence = fst (desugar_sentence_with_names sentence)
 
 let desugar_datatype datatype =
   (desugar !renamer !scope)#datatype datatype
@@ -644,10 +675,10 @@ module Untyped = struct
   let name = "modules"
 
   let program state program =
-    let program' = desugar_program program in
-    return state program'
+    let program, interface_names = desugar_program_with_names program in
+    return Context.{ state with interface_names } program
 
   let sentence state sentence =
-    let sentence' = desugar_sentence sentence in
-    return state sentence'
+    let sentence, interface_names = desugar_sentence_with_names sentence in
+    return Context.{ state with interface_names } sentence
 end

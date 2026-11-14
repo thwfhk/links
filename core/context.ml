@@ -4,6 +4,7 @@ type t =
   { typing_environment: Types.typing_environment; (* TODO remove. *)
     fresco_environment: FrescoContext.t;
     effect_interfaces: EffectInterfaces.t;
+    interface_names: ModalEffects.Names.t;
     name_environment: Ir.var Env.String.t;        (* TODO remove. *)
     value_environment: Value.env;
     variable_environment: Types.datatype Env.Int.t; (* TODO remove. *)
@@ -16,6 +17,7 @@ let empty =
   { typing_environment = Types.empty_typing_environment;
     fresco_environment = FrescoContext.create Env.String.empty;
     effect_interfaces = EffectInterfaces.empty;
+    interface_names = ModalEffects.Names.empty;
     variable_environment = Env.Int.empty;
     name_environment = Env.String.empty;
     value_environment = Value.Env.empty;

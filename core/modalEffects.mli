@@ -22,6 +22,20 @@ module Operation : sig
   val show : t -> string
 end
 
+module Names : sig
+  type t
+
+  val empty : t
+  val of_bindings : (string * Interface.t) Seq.t -> t
+  val with_names : t -> (unit -> 'a) -> 'a
+  val name : Interface.t -> string
+
+  (** Keep lexical name scopes for the duration of a frontend pass. *)
+  val with_source_scopes : (unit -> 'a) -> 'a
+  val record_scope : SourceCode.Position.t -> t Lazy.t -> unit
+  val with_source_scope : SourceCode.Position.t -> (unit -> 'a) -> 'a
+end
+
 type 'a extension
 type 'a context
 type mask

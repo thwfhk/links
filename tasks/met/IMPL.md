@@ -215,16 +215,21 @@ explicit `mu` binders and nested lists.
 
 #### 2.7 Interface names and printing
 
-`core/desugarModules.ml` binds interface names in declaration order.
-`core/chaser.ml` loads imports once per dependency pass. A later REPL
-import can load a new module with the same printed name. `core/modalEffects.ml` prints
-the path stored at declaration time, which can name a newer interface
-after shadowing. Give both printers the name scope and use a short or
-qualified name only when it resolves to the same declaration. Mark
-declarations with no visible name as out of scope. Use one naming
-context for both sides of a diagnostic and distinguish repeated loads
-from the same location. Compare declaration identities in the
-print-and-reparse test.
+The module resolver builds a map from each interface identity to its
+shortest visible source name. Both type printers use the map from the
+completed input when displaying a result. For frontend errors, use the
+scope recorded at the source position for both sides of the comparison.
+The frontend discards those source scopes at the end of the pass.
+When no visible name resolves to an interface, its display includes
+the original path, an out-of-scope mark and its declaration number.
+The number also distinguishes repeated loads from the same location.
+
+The roundtrip checks use a shorter module path that still names the
+old declaration after the original path is shadowed. Rechecking the
+expression against the printed type verifies the identity. The
+[interface environment work](#55-interface-environments) still covers
+source name scope across non-isolated file inputs and custom preludes,
+and interface signatures in local modules.
 
 ### Milestone 3 follow-up
 

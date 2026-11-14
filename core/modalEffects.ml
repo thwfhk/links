@@ -26,6 +26,61 @@ end
 
 module Interface_map = Map.Make (Interface)
 
+module Names = struct
+  type t = string Interface_map.t
+
+  let empty = Interface_map.empty
+
+  let of_bindings bindings =
+    Seq.fold_left (fun names (name, interface) ->
+      Interface_map.update interface (function
+        | Some previous when
+            (String.length previous, previous) <= (String.length name, name) -> Some previous
+        | _ -> Some name) names) empty bindings
+
+  let current = Domain.DLS.new_key (fun () -> None)
+  let source_scopes = Domain.DLS.new_key (fun () -> None)
+
+  let with_value key value f =
+    let previous = Domain.DLS.get key in
+    Domain.DLS.set key value;
+    Fun.protect f ~finally:(fun () -> Domain.DLS.set key previous)
+
+  let with_names names f = with_value current (Some (Lazy.from_val names)) f
+
+  (* Use the source object to tell separately parsed inputs apart. *)
+  let position_key pos =
+    let open SourceCode.Position in
+    let first = start pos in
+    if first = Lexing.dummy_pos then None
+    else Option.map (fun code ->
+      Oo.id code, first.Lexing.pos_cnum, (finish pos).Lexing.pos_cnum) (code pos)
+
+  let with_source_scopes f = with_value source_scopes (Some (Hashtbl.create 64)) f
+
+  let record_scope pos names =
+    match Domain.DLS.get source_scopes, position_key pos with
+    | Some scopes, Some key -> Hashtbl.replace scopes key names
+    | _ -> ()
+
+  let with_source_scope pos f =
+    match Domain.DLS.get source_scopes, position_key pos with
+    | Some scopes, Some key ->
+        (match Hashtbl.find_opt scopes key with
+         | Some names -> with_value current (Some names) f
+         | None -> f ())
+    | _ -> f ()
+
+  let name interface =
+    let name = Interface.name interface in
+    match Domain.DLS.get current with
+    | None -> name
+    | Some names ->
+        match Interface_map.find_opt interface (Lazy.force names) with
+        | Some name -> name
+        | None -> Printf.sprintf "%s (out of scope, declaration %d)" name interface.Interface.id
+end
+
 type 'a extension = 'a list list Interface_map.t
 type 'a context = { wild : bool; instances : 'a extension }
 type mask = int Interface_map.t
@@ -275,7 +330,7 @@ let fold_map_arguments f init modality =
 let pp_modality pp_arg fmt modality =
   let open Format in
   let pp_entries pp = pp_print_list ~pp_sep:(fun fmt () -> pp_print_string fmt ", ") pp in
-  let pp_interface fmt interface = pp_print_string fmt (Interface.name interface) in
+  let pp_interface fmt interface = pp_print_string fmt (Names.name interface) in
   let pp_instance fmt (interface, args) =
     pp_interface fmt interface;
     match args with

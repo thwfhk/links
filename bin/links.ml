@@ -43,13 +43,13 @@ let _ =
             |> sync)
 
 
-let print_simple datatype value =
+let print_simple context datatype value =
   let oc = stdout in
   if Settings.get Repl.printing_types
-  then Printf.fprintf oc
-         "%s : %s\n%!"
-         (Value.string_of_value value)
-         (Types.string_of_datatype datatype)
+  then ModalEffects.Names.with_names context.Context.interface_names (fun () ->
+    Printf.fprintf oc "%s : %s\n%!"
+      (Value.string_of_value value)
+      (Types.string_of_datatype datatype))
   else Printf.fprintf oc "%s\n%!" (Value.string_of_value value)
 
 let handle_errors comp =
@@ -59,13 +59,13 @@ let process_file context file =
   let (context', datatype, value) =
     handle_errors (lazy (Driver.Phases.whole_program context file))
   in
-  print_simple datatype value; context'
+  print_simple context' datatype value; context'
 
 let process_expr context expr_string =
   let (context', datatype, value) =
     handle_errors (lazy (Driver.Phases.evaluate_string context expr_string))
   in
-  print_simple datatype value; context'
+  print_simple context' datatype value; context'
 
 let isolate
   = Settings.(flag ~default:true "isolation"

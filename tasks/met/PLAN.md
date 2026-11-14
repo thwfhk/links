@@ -102,7 +102,7 @@ Depends on milestone 1.
   traversals, substitution, free-variable collection, kinds and both
   type printers. Cover interface arguments, modal prefixes, quantifiers
   and their combinations with list and variant types.
-- [ ] **2.6** Enforce the reviewed surface syntax. Restrict `=>` to
+- [x] **2.6** (`a566ff95`) Enforce the reviewed surface syntax. Restrict `=>` to
   interface member signatures and handler clause annotations. Reject
   nested list and modal element types without parentheses, and migrate
   any affected source or printer output. Test both unary arrow forms,
@@ -428,7 +428,8 @@ inventory](MIGRATION.md) records the retained and deferred cases.
 Item 3.12 is complete. The reviewed follow-up decisions are in
 [SPEC.md](SPEC.md). The [implementation notes](IMPL.md#follow-up-review)
 record the cases and planned fixes. The user authorised sequential
-implementation. Items 2.6 and 2.7 are in progress on `small-met`.
+implementation. Item 2.6 is complete and item 2.7 is in progress on
+`small-met`.
 
 The coordinating chat reviews each handover before starting the next
 stage. Continue through the remaining items in milestones 3, 4 and 5
@@ -438,8 +439,8 @@ native suites with typed frontend rechecking.
 
 ### Milestone 2 follow-up checks
 
-Logs are in `/private/tmp/smalllinks-met-12.iA9tXw/`. The first check
-used `010c0f87` with the 2.6 changes and OCaml 5.4.0.
+Logs are in `/private/tmp/smalllinks-met-12.iA9tXw/`. The first checks
+used the 2.6 compiler changes in `a566ff95` and OCaml 5.4.0.
 
 | Command or check | Result | Log |
 | --- | --- | --- |
@@ -447,8 +448,28 @@ used `010c0f87` with the 2.6 changes and OCaml 5.4.0.
 | `./test-harness tests/modal_syntax.tests` and `./test-harness tests/roundtrippable_types.tests` | 33 and 9 passed. | `modal-syntax-2.6.log`, `2.6-roundtrippable_types.log` |
 | `./test-harness` on `handlers`, `effect_annotations`, `polymorphism` and `typecheck_examples` | 118, 40, 56 and 34 passed. | `2.6-<suite>.log` |
 | `tests/roundtrippable_types.testscript` from `010c0f87` | 12 passed. | `roundtrip-syntax-2.6.log` |
+| `./links -e` on the quantified handler annotation, with frontend rechecking and strict IR checks | Returned `42 : Int`. | `2.6-strict-handler.log` |
+| `opam exec -- menhir --table --dump --explain` on the old and new grammar | No conflicts in either grammar. | `/private/tmp/links-met-26-menhir.axHkzh/` |
 | `make rule-check` | Passed. GNU find was unavailable for the tabs rule. The same file patterns passed with `rg`. | `2.6-rule-check.log`, `2.6-tabs.log` |
 | `git diff --check` for the 2.6 files | Passed. | `2.6-diff-check.log` |
+
+The combined checks used `a566ff95` with the 2.7 changes and OCaml
+5.4.0. Independent review checked both printer paths, lexical scope
+in annotation and function diagnostics, and REPL recovery after a
+failed `@load` and `@withtype`. Review fixes made source name maps
+lazy, displayed the original modalities in a mismatch, and resolved
+the interface named in an arity error against the failing scope.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make all-ci` | Passed. | `2.7-ci-build.log` |
+| `make tests` | 997 passed across 41 suites, with two existing ignored pattern tests. All four scripts passed. | `2.7-tests.log` |
+| `./test-harness` on `handlers` and `effect_annotations` | 118 and 40 passed. | `2.7-handlers.log`, `2.7-effect_annotations.log` |
+| `opam exec -- ./run-tests unit-tests` | All 101 passed. | `2.7-unit-tests.log` |
+| Handler aggregate with frontend rechecking and strict IR checks | All nine assertions passed. | `2.7-strict-handler-examples.log` |
+| `opam exec -- dune install --profile=ci --prefix="$prefix" links` and `tests/check-install.sh "$prefix/bin/linx"` | Passed. Installed `linx` also printed `[Effects.Reader]` on a function type outside the checkout. | `2.7-install.log`, `2.7-install-check.log` |
+| `make rule-check`, `git diff --check` and the `rg` tabs check | Passed. GNU find was unavailable. | `2.7-rule-check.log`, `2.7-diff-check.log`, `2.7-tabs.log` |
+| REPL `@load`, `@withtype` and scope review probes | Passed. | `/private/tmp/smalllinks-met-2.7-review.faExXe/` |
 
 ### Historical check records
 
