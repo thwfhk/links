@@ -286,3 +286,13 @@ Two frozen arguments must have consistent interface arguments
 effect Reader(a::Abs) { Ask : () => a; } fun same(x,y) { [x,y] } var x = (42 : <Reader(Int)> Int); var y = (41 : <Reader(Bool)> Int); same(~x,~y)
 stderr : @.*Type error: Expected <Reader\(Bool\)> \(Int\), got <Reader\(Int\)> \(Int\).*
 exit : 1
+
+A frozen argument fixes a polymorphic operation's type argument
+effect Reader { Ask : () => Int; } effect State { Get : () => Int; } effect Pick { Choose : forall a::Abs. (a,a) => Bool; } var x = (42 : <Reader> Int); var y = (41 : <State> Int); (handle(do Choose(~x,y)) { case <Choose(_,_) => k> -> k(true) }, handle(do Choose(y,~x)) { case <Choose(_,_) => k> -> k(true) })
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : (true, true) : (Bool, Bool)
+
+A polymorphic operation still needs an annotation for competing ordinary arguments
+effect Reader { Ask : () => Int; } effect State { Get : () => Int; } effect Pick { Choose : forall a::Abs. (a,a) => Bool; } var x = (42 : <Reader> Int); var y = (41 : <State> Int); handle(do Choose(x,y)) { case <Choose(_,_) => k> -> k(true) }
+stderr : @.*Type error: A modality conversion needs a type or parameter annotation.*
+exit : 1

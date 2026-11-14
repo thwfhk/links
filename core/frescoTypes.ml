@@ -317,7 +317,7 @@ let instantiate_with ~through_modal ?(expected = Not_typed) ?(required = Not_typ
       in
       arguments, Instantiate.datatype substitutions body)
 
-let instantiate ?expected typ = instantiate_with ~through_modal:false ?expected typ
+let instantiate ?expected ?frozen typ = instantiate_with ~through_modal:false ?expected ?frozen typ
 let instantiate_prefix ?expected ?required ?frozen typ =
   instantiate_with ~through_modal:true ?expected ?required ?frozen typ
 

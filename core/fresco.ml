@@ -174,8 +174,10 @@ let operation_label (phrase : phrase) =
       Some (label, name, args)
   | _ -> None
 
-let instantiate_operation scheme arguments result =
-  let instantiate result = FrescoTypes.instantiate ~expected:(operation_hint arguments result) scheme in
+let instantiate_operation ?frozen scheme arguments result =
+  let frozen = Option.map (fun arguments -> operation_hint arguments Not_typed) frozen in
+  let instantiate result =
+    FrescoTypes.instantiate ~expected:(operation_hint arguments result) ?frozen scheme in
   match instantiate result with
   | instance -> instance
   | exception (Unify.Failure _ as exn) ->
@@ -431,7 +433,10 @@ module Partial = struct
           | None -> operation_scheme operation
           | Some arguments -> member_scheme operation arguments in
         let signature = match explicit with
-          | [] -> snd (instantiate_operation scheme (List.map infer_here arguments) expected)
+          | [] ->
+              let hints = List.map (fun arg -> argument arg (infer_here arg)) arguments in
+              snd (instantiate_operation ~frozen:(required_arguments hints)
+                scheme (argument_types hints) expected)
           | args -> FrescoTypes.apply scheme (List.map (fun (_, arg) ->
               let kind, typ = Option.get arg in kind, copy typ) args) in
         begin match head signature with
@@ -1576,7 +1581,8 @@ and infer_node ?(allow_intro = true) state mode phrase =
       let type_args, instance = match explicit with
         | [] ->
             let hints = Partial.arguments state.interfaces state.terms arguments in
-            instantiate_operation scheme (Partial.argument_types hints) (hint mode)
+            instantiate_operation ~frozen:(Partial.required_arguments hints)
+              scheme (Partial.argument_types hints) (hint mode)
         | args ->
             let args = List.map (fun (_, arg) -> Option.get arg) args in
             args, FrescoTypes.apply scheme args in

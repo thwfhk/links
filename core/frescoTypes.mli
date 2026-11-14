@@ -24,8 +24,9 @@ val probe : (unit -> 'a) -> 'a
 val with_rigids : protected:datatype list -> Quantifier.t list -> (unit -> 'a) -> 'a
 
 (** Use known type information to instantiate leading quantifiers. [Not_typed]
-    marks missing information. The caller checks the resulting type. *)
-val instantiate : ?expected:datatype -> datatype -> type_arg list * datatype
+    marks missing information. [frozen] supplies hints from arguments checked
+    for consistency. The caller checks the resulting type. *)
+val instantiate : ?expected:datatype -> ?frozen:datatype -> datatype -> type_arg list * datatype
 
 (** Also instantiate quantifiers under leading modalities and keep those modalities.
     Use [frozen] for arguments that require consistency, then prefer the known
