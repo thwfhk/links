@@ -567,6 +567,15 @@ sources before binding any generator patterns. The patterns extend a
 scope shared by the body, filter and sort keys. The lowering used for
 the generator sources still nests the same list callbacks.
 
+#### 5.18 Negative variant aliases
+
+The default branch of a negative pattern receives the variant type with
+the excluded tags removed. Bind aliases and apply annotations in that
+branch. If an earlier test gave the exact tag, reconstruct the variant
+from its payload at the alias's type. A later clause can test the
+original variant with its own set of tags. The scrutinee is evaluated
+once before the tests.
+
 ### Deferred optimisation issues
 
 Dead-definition elimination can remove unused calls to `crypt`, `chr`

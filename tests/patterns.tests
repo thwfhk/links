@@ -150,6 +150,22 @@ Negative pattern [12]
 (fun(x) { switch(x) { case (-(Foo, Bar, Baz) as x) -> x case _ -> Quux }})(FooBar)
 stdout : FooBar : (|Bar{-}|Baz{-}|Foo{-}|FooBar|Quux|_|)
 
+An annotated negative alias binds the narrowed value in a variable binding
+{ var ((-Tag : (|Other|)) as x) = (Other : (|Tag|Other|)); x }
+stdout : Other : (|Other|)
+
+A negative alias keeps the payload of a tag known from an earlier clause
+switch ((A(2) : (|A:Int|B|C|))) { case A(1) -> 1 case (-B as r) -> switch(r) { case A(n) -> n case C -> 3 } case B -> 4 }
+stdout : 2 : Int
+
+A later negative alias uses its own excluded tags
+switch (((C : (|A|B|C|)), false)) { case (-A, true) -> 1 case ((-B as r), _) -> switch(r) { case A -> 2 case C -> 3 } case _ -> 4 }
+stdout : 3 : Int
+
+A positive clause can follow a failed clause with a negative pattern
+switch (((C : (|A|B|C|)), false)) { case (-A, true) -> 1 case (B, _) -> 2 case _ -> 3 }
+stdout : 3 : Int
+
 Presence polymorphism 1 [13]
 (fun (x : (|Foo| Bar{p}|)) { switch(x) {case Foo -> 1 case _ -> 2  }} )
 stdout : fun : ((|Bar{_}|Foo|)) -> Int

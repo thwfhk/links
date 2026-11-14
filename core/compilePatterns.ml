@@ -200,11 +200,35 @@ type raw_clause = Pattern.t list * raw_bound_computation
 type clause = annotated_pattern list * bound_computation
 type annotated_clause = annotation * clause
 
+(* Compile away top-level As and HasType patterns. *)
+let rec reduce_pattern : Pattern.t -> annotated_pattern = function
+  | Pattern.As (binder, pattern) ->
+      let annotations, pattern = reduce_pattern pattern in
+      Pattern.Binder binder :: annotations, pattern
+  | Pattern.HasType (pattern, t) ->
+      let annotations, pattern = reduce_pattern pattern in
+      Pattern.Type t :: annotations, pattern
+  | pattern -> [], pattern
 
+let negative_cases names t rejected =
+  let _, t = TypeUtils.split_quantified_type t in
+  let cases, remaining = StringSet.fold (fun name (cases, row) ->
+    let payload, row = TypeUtils.split_row name row in
+    let binder, var = Var.fresh_var_of_type payload in
+    StringMap.add name (binder, rejected name var payload) cases, row)
+    names (StringMap.empty, TypeUtils.extract_row t) in
+  cases, Types.Variant remaining
 
 let let_pattern : raw_env -> Pattern.t -> value * Types.datatype -> computation * Types.datatype -> computation =
   fun env pat (value, value_type) (body, body_type) ->
     let failure = [], Special (Wrong body_type) in
+    let rec bind_annotations t value annotations body =
+      match annotations with
+      | [] -> body t value
+      | Pattern.Binder binder :: rest ->
+          with_bindings [letmv (binder, value)] (bind_annotations t value rest body)
+      | Pattern.Type t :: rest ->
+          bind_annotations t (Coerce (value, t)) rest body in
     let rec lp t pat value body =
       match pat with
         | Pattern.Nil ->
@@ -228,37 +252,17 @@ let let_pattern : raw_env -> Pattern.t -> value * Types.datatype -> computation 
               if Types.is_empty_row row && Types.is_closed_row row then None
               else Some (Var.fresh_binder_of_type remaining, ([], Special (Wrong body_type))) in
             [], Case (value, cases, default)
-        | Pattern.Negative names ->
-           (* The following expands the negative pattern into
-              a switch-case expression:
-
-              [| var -(l1,...,lN) = value; body |]
-            = switch (value) {
-                case l1 -> Wrong
-                     ...
-                case lN -> Wrong
-                case _  -> body
-              }
-            *)
-            let negative_cases, t' =
-              StringSet.fold
-                (fun label (cases, t) ->
-                  let case_type = TypeUtils.variant_at label t in
-                  let case_binder = Var.fresh_binder_of_type case_type in
-                  let body = ([], Special (Wrong body_type)) in
-                  let cases' = StringMap.add label (case_binder, body) cases in
-                  let t' =
-                    let row = TypeUtils.extract_row t in
-                    Types.Variant (Types.row_with (label, Types.Absent) row)
-                  in
-                  (cases', t'))
-                names (StringMap.empty, t)
-            in
-            let success_case =
-              let case_binder = Var.fresh_binder_of_type t' in
-              (case_binder, body)
-            in
-            [], Case (value, negative_cases, Some success_case)
+        | Pattern.Negative _ | Pattern.As _ | Pattern.HasType _ ->
+            let annotations, pattern = reduce_pattern pat in
+            begin match pattern with
+            | Pattern.Negative names ->
+                let cases, narrowed = negative_cases names t (fun _ _ _ -> failure) in
+                let binder, var = Var.fresh_var_of_type narrowed in
+                let body = bind_annotations narrowed (Variable var) annotations (fun _ _ -> body) in
+                [], Case (value, cases, Some (binder, body))
+            | pattern ->
+                bind_annotations t value annotations (fun t value -> lp t pattern value body)
+            end
         | Pattern.Record (fields, rest) ->
             let body =
               match rest with
@@ -288,12 +292,6 @@ let let_pattern : raw_env -> Pattern.t -> value * Types.datatype -> computation 
             with_bindings
               [letmv (xb, value)]
               body
-        | Pattern.As (xb, pattern) ->
-            with_bindings
-              [letmv (xb, value)]
-              (lp t pattern value body)
-        | Pattern.HasType (pat, t) ->
-           lp t pat (Coerce (value, t)) body
         | Pattern.Operation _ -> assert false (* This pattern cannot appear in a let expression *)
     in
       lp value_type pat value body
@@ -320,16 +318,6 @@ let get_clauses_pattern_sort : clause list -> Pattern.sort =
   function
   | (((_, pattern)::_, _)::_) -> get_pattern_sort pattern
   | _ -> assert false
-
-(* compile away top-level As and HasType patterns *)
-let rec reduce_pattern : Pattern.t -> annotated_pattern = function
-  | Pattern.As (binder, pattern) ->
-      let annotations, pattern = reduce_pattern pattern in
-        Pattern.Binder binder :: annotations, pattern
-  | Pattern.HasType (pattern, t) ->
-      let annotations, pattern = reduce_pattern pattern in
-      Pattern.Type t :: annotations, pattern
-  | pattern -> [], pattern
 
 (* reduce a raw clause to a clause  *)
 let reduce_clause : raw_clause -> clause =
@@ -639,7 +627,7 @@ and match_negative
       | _ -> assert false in
     match pattern with
     | Pattern.Negative names ->
-      let context, _cexp =
+      let context, cexp =
         if mem_context var env then
           lookup_context var env
         else
@@ -649,44 +637,18 @@ and match_negative
         match context with
         | Pattern.CVariant name when StringSet.mem name names ->
           def env
-        | Pattern.CVariant _name ->
-          let body = apply_annotation (Variable var) (annotation, body) in
+        | Pattern.CVariant _ ->
+          let body = apply_annotation cexp (annotation, body) in
           match_cases vars [(ps, body)] def env
-        | Pattern.CNVariant names' ->
-          let diff = StringSet.diff names names' in
-          let cs = StringSet.union names names' in
-
-          let cases =
-            StringSet.fold
-              (fun name cases ->
-                  let case_type = TypeUtils.variant_at name t in
-(*                             let inject_type = TypeUtils.inject_type name case_type in *)
-                  let (case_binder, case_variable) = Var.fresh_var_of_type case_type in
-                  let match_env = bind_type case_variable case_type env in
-                  let match_env =
-                    bind_context var
-                      (Pattern.CVariant name,
-                       Inject (name, Variable case_variable, t)) match_env
-                  in
-                  StringMap.add name (case_binder, def match_env) cases)
-              diff
-              StringMap.empty in
-          let default_type =
-            StringSet.fold
-              (fun name t ->
-                 let _, t = TypeUtils.split_variant_type name t in t) cs t in
-          let (default_binder, default_variable) = Var.fresh_var_of_type default_type in
-          let default_env = bind_type default_variable default_type env in
-          let default_env =
-            bind_context
-              var
-              (Pattern.CNVariant cs, Variable default_variable)
-              default_env in
-          let body = apply_annotation (Variable var) (annotation, body) in
-          ([], Case (Variable var,
-                      cases,
-                      Some (default_binder,
-                            match_cases vars [(ps, body)] def default_env)))
+        | Pattern.CNVariant _ ->
+          let cases, narrowed = negative_cases names t (fun name payload payload_type ->
+            let env = bind_type payload payload_type env in
+            let env = bind_context var (Pattern.CVariant name, Inject (name, Variable payload, t)) env in
+            def env) in
+          let binder, narrowed_var = Var.fresh_var_of_type narrowed in
+          let body = apply_annotation (Variable narrowed_var) (annotation, body) in
+          (* A later clause tests its own labels on the original variant. *)
+          [], Case (Variable var, cases, Some (binder, match_cases vars [(ps, body)] def env))
         | _ -> assert false
       end
     | _ -> assert false
