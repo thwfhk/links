@@ -108,7 +108,7 @@ Depends on milestone 1.
   any affected source or printer output. Test both unary arrow forms,
   `List A` and `List(A)`, the reserved `effect` keyword and the rejection
   of empty interfaces.
-- [ ] **2.7** Check that sequential interface declarations and repeated
+- [x] **2.7** (`9b9a1e10`) Check that sequential interface declarations and repeated
   imports follow the same scope as `typename`. Preserve the identities
   of earlier references and the existing rule against duplicate operation
   names. Test shadowing and reopening modules and repeated imports in one
@@ -428,12 +428,14 @@ inventory](MIGRATION.md) records the retained and deferred cases.
 Item 3.12 is complete. The reviewed follow-up decisions are in
 [SPEC.md](SPEC.md). The [implementation notes](IMPL.md#follow-up-review)
 record the cases and planned fixes. The user authorised sequential
-implementation. Item 2.6 is complete and item 2.7 is in progress on
-`small-met`.
+implementation. The milestone 2 follow-up is complete on `small-met`.
+The coordinating chat reviews the handover before milestone 3 starts
+at item 3.5. No cross-stage dependency blocks milestone 3. Item 5.5
+still covers interface names across file inputs and preludes, and
+interface signatures in local modules.
 
-The coordinating chat reviews each handover before starting the next
-stage. Continue through the remaining items in milestones 3, 4 and 5
-in order, then complete 6.4.
+Continue through the remaining items in milestones 3, 4 and 5 in order,
+then complete 6.4.
 For milestone 4, run the affected handler, effect annotation and
 native suites with typed frontend rechecking.
 
@@ -453,7 +455,7 @@ used the 2.6 compiler changes in `a566ff95` and OCaml 5.4.0.
 | `make rule-check` | Passed. GNU find was unavailable for the tabs rule. The same file patterns passed with `rg`. | `2.6-rule-check.log`, `2.6-tabs.log` |
 | `git diff --check` for the 2.6 files | Passed. | `2.6-diff-check.log` |
 
-The combined checks used `a566ff95` with the 2.7 changes and OCaml
+The combined checks used the compiler changes in `9b9a1e10` and OCaml
 5.4.0. Independent review checked both printer paths, lexical scope
 in annotation and function diagnostics, and REPL recovery after a
 failed `@load` and `@withtype`. Review fixes made source name maps
