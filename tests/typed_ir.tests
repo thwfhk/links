@@ -78,6 +78,24 @@ function pattern matching has right effects (#691)
 sig f : forall a. (List a) -> a fun f ([x]) { x }
 stdout : () : ()
 
+Function upcasts preserve argument count and variance
+var f = (fun(x) { x.n } : ((n:Int, m:Bool) -> Int) <- ((n:Int) -> Int)); f((n=42,m=true))
+stdout : 42 : Int
+
+An upcast cannot add an argument to a function
+var f = (fun(x) { x } : ((Int, Int) -> Int) <- (Int -> Int)); f(40, 2)
+stderr : @.*Function upcast requires the same number of arguments.*
+exit : 1
+
+An upcast may forget an unrestricted record tail
+var discard = /\ [r::Row]. { fun(x:(n:Int | r)) { (x : (n:Int) <- (n:Int | r)).n } }; discard((n=42,flag=true))
+stdout : 42 : Int
+
+An upcast cannot forget a potentially linear record tail
+var discard = /\ [r::Row(Any,Any)]. { fun(x:(n:Int | r)) { (x : (n:Int) <- (n:Int | r)).n } }; discard((n=42,run=linfun(){1}))
+stderr : @.*Expected an unrestricted value, found linear type.*
+exit : 1
+
 Freshen type variables when turning a lambda into a named function (#871)
 var foo = (fun(f) { f })(fun(x) { x }); ()
 exit : 0

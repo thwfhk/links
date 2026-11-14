@@ -643,8 +643,14 @@ let rec check_upcast pos context ~source ~target =
           check_row_upcast pos context ~sub:target ~super:source ~record:true
       | Variant source, Variant target ->
           check_row_upcast pos context ~sub:source ~super:target ~record:false
-      | AmbientFunction (l1, domain1, result1), AmbientFunction (l2, domain2, result2) when l1 = l2 ->
-          check_upcast pos context ~source:domain2 ~target:domain1;
+      | (AmbientFunction (l1, _, result1) as source),
+        (AmbientFunction (l2, _, result2) as target) when l1 = l2 ->
+          let source_args = TypeUtils.arg_types source in
+          let target_args = TypeUtils.arg_types target in
+          if List.length source_args <> List.length target_args then
+            error pos "Function upcast requires the same number of arguments";
+          List.iter2 (fun source target -> check_upcast pos context ~source ~target)
+            target_args source_args;
           check_upcast pos context ~source:result1 ~target:result2
       | source, target ->
           begin match list_item source, list_item target with
@@ -668,13 +674,16 @@ and check_row_upcast pos context ~sub ~super ~record =
     | Absent, _ when not record -> ()
     | sub, Some super when FrescoTypes.equal sub super -> ()
     | _ -> error pos ("Incompatible field " ^ name ^ " in upcast")) subfields;
-  if record then
+  if record then begin
+    if is_closed_row sub then
+      FrescoPatterns.require_unlimited pos (Record (Row (StringMap.empty, supertail)));
     StringMap.iter (fun name field ->
       if not (StringMap.mem name subfields) then
         match concrete_field_spec field with
         | Present t -> FrescoPatterns.require_unlimited pos t
         | Absent -> ()
         | _ -> error pos ("Cannot discard field " ^ name ^ " in upcast")) superfields
+  end
 
 let has_leading_forall typ =
   match snd (Context.prefix typ) with ForAll _ -> true | _ -> false
@@ -1147,10 +1156,14 @@ and infer_node ?(allow_intro = true) state mode phrase =
           bind_all state env, (pat, term generator) :: generators, env :: scopes,
           Usage.combine generator_uses (usage generator))
           (state, [], [], Usage.empty) generators in
-      let output = match list_item expected_bare with
-        | None -> make_list_type (fresh ~subkind:(lin_unl, res_any) ())
-        | Some _ -> expected_bare in
-      let body = infer state (Check output) body in
+      let _, body_hint = Context.prefix (hint mode) in
+      let body = match list_item (head body_hint) with
+        | Some _ -> infer state (Check body_hint) body
+        | None -> infer state Infer body in
+      begin match list_item (head (typ body)) with
+      | Some _ -> ()
+      | None -> consistent pos (typ body) (make_list_type (fresh ~subkind:(lin_unl, res_any) ()))
+      end;
       let where = Option.map (infer state (Check bool_type)) where in
       let orderby = Option.map (fun order ->
         infer state (Check (Record (make_empty_open_row (lin_unl, res_base)))) order) orderby in

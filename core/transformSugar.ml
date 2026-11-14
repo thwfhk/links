@@ -316,18 +316,23 @@ class transform (env : Types.typing_environment) =
               | None -> Types.make_record_type field_types
               | Some t ->
                   begin
-                    match TypeUtils.without_modality t with
-                      | Record row ->
-                          Record (Types.extend_row field_types row)
-                      | t ->
-                          Debug.print ("bad t: " ^ Types.string_of_datatype t);
-                          assert false
+                    let wrap, t = FrescoPatterns.unprefix t in
+                    match t with
+                    | Record row ->
+                        let fields, tail = TypeUtils.extract_row_parts (Types.flatten_row row) in
+                        let fields = StringMap.map (function
+                          | Present t -> Present (wrap FrescoContext.carry t)
+                          | field -> field) fields in
+                        Record (Types.extend_row field_types (Row (fields, tail)))
+                    | t ->
+                        Debug.print ("bad t: " ^ Types.string_of_datatype t);
+                        assert false
                   end
           in
             (o, RecordLit (fields, base), t)
       | Projection (e, name) ->
           let (o, e, t) = o#phrase e in
-          (o, Projection (e, name), TypeUtils.project_type name t)
+          (o, Projection (e, name), FrescoPatterns.project e.pos name t)
       | With (e, fields) ->
           let (o, e, t) = o#phrase e in
           let o, fields, ts =
@@ -335,11 +340,15 @@ class transform (env : Types.typing_environment) =
               (fun o (name, e) -> let o, e, t = o#phrase e in (o, (name, e), t))
               fields
           in
-          let t = match TypeUtils.without_modality t with
+          let wrap, t = FrescoPatterns.unprefix t in
+          let t = match t with
             | Record row ->
                let  (fs, rv) =
                  Types.flatten_row row |> TypeUtils.extract_row_parts
                in
+               let fs = StringMap.map (function
+                 | Present t -> Present (wrap FrescoContext.carry t)
+                 | field -> field) fs in
                let fs = List.fold_left2 (fun fs (name, _) t -> StringMap.add name (Present t) fs) fs fields ts in
                Record (Row (fs, rv))
             | _ -> t

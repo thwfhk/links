@@ -178,6 +178,11 @@ An absolute list function retains the list's element type
 sig keepInts : [] ((List Int) -> List Int) fun keepInts(xs) { xs } keepInts([20, 22])
 stdout : [20, 22] : List Int
 
+A comprehension checks its lambda against the expected modal element type
+effect Reader { Ask : () => Int; } var fns = ((for(x <- [1]) [fun() { x + do Ask }]) : List ([Reader] (() -> Int))); handle(hd(fns)()) { case <Ask => k> -> k(41) }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int
+
 A variant payload must match the declared type
 typename MaybeInt = (| Nothing | Just:Int |); Just(true) : MaybeInt
 stderr : @.*Expected Int, got Bool.*

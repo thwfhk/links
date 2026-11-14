@@ -312,6 +312,16 @@ struct
   let comp_of_value s =
     bind s (fun v -> lift (Return v, sem_type s))
 
+  let under_record_quantifiers s use_record =
+    match TypeUtils.split_quantified_type (sem_type s) with
+    | [], _ -> use_record s
+    | qs, body ->
+        bind s (fun record ->
+          let arguments = List.map Types.type_arg_of_quantifier qs in
+          let result = use_record (lift (TApp (record, arguments), body)) in
+          bind result (fun value ->
+            lift (TAbs (qs, value), Types.for_all (qs, sem_type result))))
+
   (* eval parameters *)
   let constant c = lift (Constant c, Types.Primitive (Constant.type_of c))
   let var (x, t) = lift (Variable x, t)
@@ -335,7 +345,7 @@ struct
   let condition (s, s1, s2) =
     bind s (fun v -> lift (If (v, reify s1, reify s2), sem_type s1))
 
-  let record (fields, r) =
+  let extend_record (fields, r) =
     let field_types =
       List.fold_left
         (fun field_types (name, s) -> StringMap.add name (sem_type s) field_types)
@@ -355,9 +365,53 @@ struct
                    M.bind s'
                      (fun fields -> lift (Extend (StringMap.from_alist fields, Some r), t)))
 
+  let materialise s =
+    let typ = sem_type s in
+    bind s (fun value ->
+      if Ir.is_atom value then lift (value, typ)
+      else value_of_untyped_var (comp_binding (Var.info_of_type typ, Return value), typ))
+
+  let change_record fields r change =
+    (* IR values can contain primitive calls. Evaluate the base and new
+       fields once before projecting any inherited fields. *)
+    let r = materialise r in
+    let fields = List.map (fun (name, field) -> name, materialise field) fields in
+    bind r (fun base ->
+      M.bind (lift_alist fields) (fun values ->
+        let fields = List.map2 (fun (_, field) (name, value) ->
+          name, lift (value, sem_type field)) fields values in
+        change fields (lift (base, sem_type r))))
+
+  let record (fields, r) =
+    match r with
+    | None -> extend_record (fields, None)
+    | Some r ->
+        let qs, body = TypeUtils.split_quantified_type (sem_type r) in
+        match qs with
+        | [] -> extend_record (fields, Some r)
+        | _ ->
+            change_record fields r (fun fields r ->
+              let row = TypeUtils.extract_row body in
+              let inherited, _ = Types.extract_row_parts (Types.flatten_row row) in
+              let arguments = List.map Types.type_arg_of_quantifier qs in
+              let lifted = StringMap.filter_map (fun _ field ->
+                match Types.concrete_field_spec field with
+                | Types.Present typ -> Some (Types.for_all (qs, typ))
+                | _ -> None) inherited in
+              bind r (fun record ->
+                let inherited = StringMap.mapi (fun name _ ->
+                  TAbs (qs, Project (name, TApp (record, arguments)))) lifted in
+                M.bind (lift_alist fields) (fun fields_values ->
+                  let values = List.fold_left (fun values (name, value) ->
+                    StringMap.add name value values) inherited fields_values in
+                  let field_types = List.fold_left (fun types (name, field) ->
+                    StringMap.add name (sem_type field) types) lifted fields in
+                  lift (Extend (values, None), Types.make_record_type field_types))))
+
   let project (s, name) =
-    let t = TypeUtils.project_type name (sem_type s) in
-      bind s (fun v -> lift (Project (name, v), t))
+    under_record_quantifiers s (fun record ->
+      let t = TypeUtils.project_type name (sem_type record) in
+      bind record (fun value -> lift (Project (name, value), t)))
 
   let erase (s, names) =
     let t = TypeUtils.erase_type names (sem_type s) in
@@ -378,7 +432,13 @@ struct
            StringSet.add name names)
         StringSet.empty
         fields in
-    record (fields, Some (erase (s, names)))
+    let qs, _ = TypeUtils.split_quantified_type (sem_type s) in
+    match qs with
+    | [] -> record (fields, Some (erase (s, names)))
+    | _ ->
+        change_record fields s (fun fields s ->
+          let remaining = under_record_quantifiers s (fun record -> erase (record, names)) in
+          record (fields, Some remaining))
 
   let inject (name, s, t) =
       bind s (fun v -> lift (Inject (name, v, t), t))

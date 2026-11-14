@@ -486,8 +486,13 @@ let compare_quantifiers qs1 qs2 msg occurrence =
 let rec runtime_subtype equal source target =
   equal source target ||
   match TypeUtils.concrete_type source, TypeUtils.concrete_type target with
-  | T.AmbientFunction (ls, sdom, scod), T.AmbientFunction (lt, tdom, tcod) when ls = lt ->
-      runtime_subtype equal tdom sdom && runtime_subtype equal scod tcod
+  | (T.AmbientFunction (ls, _, scod) as source),
+    (T.AmbientFunction (lt, _, tcod) as target) when ls = lt ->
+      let source_args = TypeUtils.arg_types source in
+      let target_args = TypeUtils.arg_types target in
+      List.length source_args = List.length target_args
+      && List.for_all2 (runtime_subtype equal) target_args source_args
+      && runtime_subtype equal scod tcod
   | T.Application (s, [PrimaryKind.Type, item]), T.Application (t, [PrimaryKind.Type, item'])
       when T.Abstype.equal s T.list && T.Abstype.equal t T.list ->
       runtime_subtype equal item item'
@@ -511,11 +516,13 @@ and runtime_row_subtype equal ~record sub super =
     | T.Meta _, Some (T.Meta _ as field') -> equal (T.Record (T.make_singleton_closed_row (name, field)))
                                                 (T.Record (T.make_singleton_closed_row (name, field')))
     | _ -> false) fields
-  && (not record || StringMap.for_all (fun name field ->
-    StringMap.mem name fields || match T.concrete_field_spec field with
-    | T.Present t -> T.Unl.type_satisfies t
-    | T.Absent -> true
-    | _ -> false) fields')
+  && (not record ||
+      ((not (T.is_closed_row sub) || T.Unl.row_satisfies (T.Row (StringMap.empty, tail')))
+       && StringMap.for_all (fun name field ->
+         StringMap.mem name fields || match T.concrete_field_spec field with
+         | T.Present t -> T.Unl.type_satisfies t
+         | T.Absent -> true
+         | _ -> false) fields'))
 
 
 (* TYPE CHECKING *)
