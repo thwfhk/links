@@ -679,8 +679,10 @@ freezing to `~(e)` to use Fresco on a compound expression. Parentheses
 preserve freezing, so `~x`, `~(x)` and `~((x))` agree. Freezing
 preserves the type obtained after lock checks, including its quantified
 and modal structure, and uses Fresco's consistency check without further
-implicit instantiation. `$(e)` retains the value restriction. Effect
-arguments are postponed.
+implicit instantiation. In an application, a known frozen argument
+can fix a type argument before checking conversions on other arguments
+and on the result. `$(e)` retains the value restriction. Effect arguments
+are postponed.
 
 Explicit type application and `e@` preserve surrounding modalities.
 Given `f : [Reader(Int)] (forall a. (a) -> a)`, `(~f)[Int]`

@@ -124,10 +124,25 @@ let modality_arguments modality =
 
 let same_modality = ModalEffects.equivalent ~equal:(fun _ _ -> true)
 
-let rec collect_hints quantifiers target_bound left_seen right_seen hints source target =
+let complete_hint (primary, typ) =
+  let fill = object (self)
+    inherit Types.Transform.visitor as super
+    method! typ = function
+      | Not_typed -> self, fresh ()
+      | typ -> super#typ typ
+    method! field_spec = function
+      | Not_typed -> self, fresh_presence_variable (lin_any, res_any)
+      | typ -> super#field_spec typ
+    method! row = function
+      | Not_typed -> self, make_empty_open_row (lin_any, res_any)
+      | typ -> super#row typ
+  end in
+  if is_complete typ then primary, typ else snd (fill#type_arg (primary, typ))
+
+let rec collect_hints ~frozen quantifiers target_bound left_seen right_seen hints source target =
   let left_seen, source = head_with_seen' ~reject_cycle:false left_seen source in
   let right_seen, target = head_with_seen' ~reject_cycle:false right_seen target in
-  let collect = collect_hints quantifiers target_bound left_seen right_seen in
+  let collect = collect_hints ~frozen quantifiers target_bound left_seen right_seen in
   let record id kind typ hints =
     if unknown typ || not (TypeVarSet.disjoint target_bound (free_type_vars typ)) then hints
     else IntMap.update id (function None -> Some [kind, typ] | Some args -> Some ((kind, typ) :: args)) hints
@@ -145,7 +160,13 @@ let rec collect_hints quantifiers target_bound left_seen right_seen hints source
       | _ -> hints
       end
   | Modal (lmod, lbody), Modal (rmod, rbody) when same_modality lmod rmod ->
-      let hints = List.fold_left2 collect hints (modality_arguments lmod) (modality_arguments rmod) in
+      (* Only collect argument equalities if conversion needs them.
+         A body that could be absolute leaves the choice to full checking. *)
+      let _, complete = complete_hint (pk_type, rbody) in
+      let hints =
+        if not frozen && Abs.can_type_be complete then hints
+        else List.fold_left2 collect hints (modality_arguments lmod) (modality_arguments rmod)
+      in
       collect hints lbody rbody
   (* Known prefixes can guide a later check even if that check must
      introduce or eliminate a modality or a quantifier. *)
@@ -153,11 +174,11 @@ let rec collect_hints quantifiers target_bound left_seen right_seen hints source
   | _, Modal (_, rbody) -> collect hints source rbody
   | ForAll (_, lbody), ForAll (rqs, rbody) ->
       let target_bound = TypeVarSet.add_quantifiers rqs target_bound in
-      collect_hints quantifiers target_bound left_seen right_seen hints lbody rbody
+      collect_hints ~frozen quantifiers target_bound left_seen right_seen hints lbody rbody
   | ForAll (_, lbody), _ -> collect hints lbody target
   | _, ForAll (rqs, rbody) ->
       let target_bound = TypeVarSet.add_quantifiers rqs target_bound in
-      collect_hints quantifiers target_bound left_seen right_seen hints source rbody
+      collect_hints ~frozen quantifiers target_bound left_seen right_seen hints source rbody
   | AmbientFunction (_, ldom, lcod), AmbientFunction (_, rdom, rcod) ->
       collect (collect hints ldom rdom) lcod rcod
   | Function (ldom, leff, lcod), Function (rdom, reff, rcod)
@@ -186,10 +207,22 @@ let rec collect_hints quantifiers target_bound left_seen right_seen hints source
       collect_args hints l.r_args r.r_args
   | _ -> hints
 
-let rec merge_known left_seen right_seen left right =
+type hint_merge = Prefer_left | Prefer_prefixes | Prefer_required
+
+let conflicting_modalities () =
+  failure "A modality conversion needs a type or parameter annotation"
+
+let known_conflict left right =
+  is_complete left && is_complete right &&
+    not (probe (fun () ->
+      match Unify.consistent (left, right) with
+      | () -> true
+      | exception Unify.Failure _ -> false))
+
+let rec merge_hints mode left_seen right_seen left right =
   let left_seen, left = head_with_seen' ~reject_cycle:false left_seen left in
   let right_seen, right = head_with_seen' ~reject_cycle:false right_seen right in
-  let merge = merge_known left_seen right_seen in
+  let merge = merge_hints mode left_seen right_seen in
   if unknown left then right else if unknown right then left else
   match left, right with
   | AmbientFunction (llin, ldom, lcod), AmbientFunction (rlin, rdom, rcod) when llin = rlin ->
@@ -201,12 +234,25 @@ let rec merge_known left_seen right_seen left right =
   | Modal (lmod, lbody), Modal (rmod, rbody) when same_modality lmod rmod ->
       let _, modality = ModalEffects.fold_map_arguments (fun right left ->
         match right with
-        | right :: rest -> rest, merge left right
+        | right :: rest ->
+            if mode = Prefer_prefixes && known_conflict left right then
+              conflicting_modalities ();
+            rest, merge left right
         | [] -> assert false) (modality_arguments rmod) lmod
       in
       Types.modal modality (merge lbody rbody)
   | Application (lc, largs), Application (rc, rargs) when Abstype.equal lc rc ->
       Application (lc, List.map2 (fun (kind, l) (_, r) -> kind, merge l r) largs rargs)
+  | ForAll _, _ when mode = Prefer_prefixes -> left
+  | _, ForAll _ when mode = Prefer_prefixes -> right
+  | Modal _, Modal _ when mode = Prefer_prefixes -> conflicting_modalities ()
+  | Modal (modality, body), _ when mode = Prefer_prefixes ->
+      Types.modal modality (merge body right)
+  | _, Modal (modality, body) when mode = Prefer_prefixes ->
+      Types.modal modality (merge body left)
+  | _, (ForAll _ | Modal _) when mode = Prefer_required -> left
+  | (ForAll _ | Modal _), _ when mode = Prefer_required -> left
+  | _ when mode = Prefer_required && not (is_complete left) && is_complete right -> right
   | _ -> left
 
 and merge_rows merge l r =
@@ -216,24 +262,12 @@ and merge_rows merge l r =
   let tail = if is_closed_row (Row (lfields, ltail)) then ltail else rtail in
   Row (fields, tail)
 
-let merge_known = merge_known RecIdSet.empty RecIdSet.empty
+let merge_known = merge_hints Prefer_left RecIdSet.empty RecIdSet.empty
+let merge_instantiation_hints = merge_hints Prefer_prefixes RecIdSet.empty RecIdSet.empty
+let merge_required = merge_hints Prefer_required RecIdSet.empty RecIdSet.empty
 
-let complete_hint (primary, typ) =
-  let fill = object (self)
-    inherit Types.Transform.visitor as super
-    method! typ = function
-      | Not_typed -> self, fresh ()
-      | typ -> super#typ typ
-    method! field_spec = function
-      | Not_typed -> self, fresh_presence_variable (lin_any, res_any)
-      | typ -> super#field_spec typ
-    method! row = function
-      | Not_typed -> self, make_empty_open_row (lin_any, res_any)
-      | typ -> super#row typ
-  end in
-  if is_complete typ then primary, typ else snd (fill#type_arg (primary, typ))
-
-let instantiate_with ~through_modal ?(expected = Not_typed) typ =
+let instantiate_with ~through_modal ?(expected = Not_typed) ?(required = Not_typed)
+    ?(frozen = Not_typed) typ =
   let rec split seen quantifiers typ =
     let seen, body = expose ~reject_cycle:true seen typ in
     match body with
@@ -248,12 +282,26 @@ let instantiate_with ~through_modal ?(expected = Not_typed) typ =
   | [] -> [], typ
   | _ -> transaction (fun () ->
       let ids = List.fold_left (fun ids (id, _) -> IntSet.add id ids) IntSet.empty quantifiers in
-      let hints = collect_hints ids TypeVarSet.empty RecIdSet.empty RecIdSet.empty IntMap.empty body expected in
+      let collect ~frozen =
+        collect_hints ~frozen ids TypeVarSet.empty RecIdSet.empty RecIdSet.empty IntMap.empty body in
+      let hints = collect ~frozen:false expected in
+      let required = collect ~frozen:false required in
+      let frozen = collect ~frozen:true frozen in
       let arguments = List.map (fun (id, kind) ->
-        match IntMap.lookup id hints with
-        | None | Some [] -> variable_argument kind
-        | Some ((primary, first) :: rest) ->
-            let typ = List.fold_left (fun typ (_, hint) -> merge_known typ hint) first rest in
+        let merge merge = function
+          | None | Some [] -> Not_typed
+          | Some ((_, first) :: rest) ->
+              List.fold_left (fun typ (_, hint) -> merge typ hint) first rest in
+        let frozen = merge merge_known (IntMap.lookup id frozen) in
+        let required = merge_required frozen (merge merge_known (IntMap.lookup id required)) in
+        let candidates = match IntMap.lookup id hints with
+          | None -> []
+          | Some hints -> List.map (fun (_, hint) -> merge_required required hint) hints in
+        let typ = List.fold_left merge_instantiation_hints required candidates in
+        match typ with
+        | Not_typed -> variable_argument kind
+        | typ ->
+            let primary = fst kind in
             let argument = complete_hint (primary, typ) in
             require_kind kind argument;
             argument) quantifiers
@@ -264,7 +312,8 @@ let instantiate_with ~through_modal ?(expected = Not_typed) typ =
       arguments, Instantiate.datatype substitutions body)
 
 let instantiate ?expected typ = instantiate_with ~through_modal:false ?expected typ
-let instantiate_prefix ?expected typ = instantiate_with ~through_modal:true ?expected typ
+let instantiate_prefix ?expected ?required ?frozen typ =
+  instantiate_with ~through_modal:true ?expected ?required ?frozen typ
 
 let apply typ arguments =
   let rec apply seen typ arguments =

@@ -26,8 +26,11 @@ val with_rigids : protected:datatype list -> Quantifier.t list -> (unit -> 'a) -
     marks missing information. The caller checks the resulting type. *)
 val instantiate : ?expected:datatype -> datatype -> type_arg list * datatype
 
-(** Also instantiate quantifiers under leading modalities and keep those modalities. *)
-val instantiate_prefix : ?expected:datatype -> datatype -> type_arg list * datatype
+(** Also instantiate quantifiers under leading modalities and keep those modalities.
+    Use [frozen] for arguments that require consistency, then prefer the known
+    parts of [required] to conflicting parts of [expected]. *)
+val instantiate_prefix : ?expected:datatype -> ?required:datatype -> ?frozen:datatype
+  -> datatype -> type_arg list * datatype
 
 (** Replace unknown parts of a type hint with fresh metavariables of the
     corresponding primary kind. *)

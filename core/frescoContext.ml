@@ -89,11 +89,6 @@ let excluded context =
 let lookup context name =
   Option.map (fun binding -> binding.datatype) (Env.String.find_opt name context.bindings)
 
-let has_locks context name =
-  match Env.String.find_opt name context.bindings with
-  | Some binding -> context.locks != binding.bound_locks
-  | None -> false
-
 let prefix datatype =
   match FrescoTypes.head datatype with
   | Types.Modal (modality, body) -> modality, body
@@ -105,13 +100,13 @@ let carry modality datatype =
     let inner, body = prefix datatype in
     Types.modal (ModalEffects.compose modality inner) body
 
-let access context name ~prepare =
+let access context name =
   let binding = match Env.String.find_opt name context.bindings with
     | Some { consumed = true; _ } -> raise (Error ("Linear variable " ^ name ^ " has already been used"))
     | Some binding -> binding
     | None -> raise (Error ("Unknown variable " ^ name))
   in
-  let datatype = prepare binding.datatype in
+  let datatype = binding.datatype in
   let rec locks_after composed locks =
     if locks == binding.bound_locks then composed
     else match locks with
@@ -119,43 +114,19 @@ let access context name ~prepare =
     | Root _ -> assert false
   in
   let lock = locks_after ModalEffects.identity context.locks in
-  let residual requirement body =
-    Option.map (fun remaining ->
-      let remaining =
-        ModalEffects.contract_modality ~equal:FrescoTypes.equal ~ambient:context.ambient remaining
-      in
-      Types.modal remaining body
-    ) (ModalEffects.right_residual ~lock ~requirement binding.bound_ambient)
-  in
-  let rec transport seen datatype =
-    match FrescoTypes.head_with_seen seen datatype with
-    | _, Types.Modal (requirement, body) -> residual requirement body
-    | seen, Types.ForAll (quantifiers, body) ->
-        Option.map (fun body -> Types.for_all (quantifiers, body)) (transport seen body)
-    | _, body -> residual ModalEffects.identity body
-  in
-  (* A later mask can account for a lock that the first modal segment
-     cannot cross. Keep the binders around the whole remaining requirement. *)
-  let rec telescope seen requirement quantifiers datatype =
-    match FrescoTypes.head_with_seen seen datatype with
-    | seen, Types.ForAll (qs, body) ->
-        telescope seen requirement (List.rev_append qs quantifiers) body
-    | seen, Types.Modal (modality, body) ->
-        telescope seen (ModalEffects.compose requirement modality) quantifiers body
-    | _, body ->
-        Option.map (fun body -> Types.for_all (List.rev quantifiers, body))
-          (residual requirement body)
-  in
   if ModalEffects.is_identity lock || Types.Abs.type_satisfies datatype then datatype
-  else match transport Types.RecIdSet.empty datatype with
-  | Some transported -> transported
-  | None ->
-      match telescope Types.RecIdSet.empty ModalEffects.identity [] datatype with
-      | Some transported -> transported
-      | None when Types.Abs.can_type_be datatype ->
-          Types.Abs.make_type datatype;
-          datatype
-      | None -> raise (Error ("Cannot access " ^ name ^ " across the change in effect context"))
+  else
+    let requirement, body = prefix datatype in
+    match ModalEffects.right_residual ~lock ~requirement binding.bound_ambient with
+    | Some remaining ->
+        let remaining =
+          ModalEffects.contract_modality ~equal:FrescoTypes.equal ~ambient:context.ambient remaining
+        in
+        Types.modal remaining body
+    | None when Types.Abs.can_type_be datatype ->
+        Types.Abs.make_type datatype;
+        datatype
+    | None -> raise (Error ("Cannot access " ^ name ^ " across the change in effect context"))
 
 let conversion_error position message =
   match position with

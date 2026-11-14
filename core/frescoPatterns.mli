@@ -8,6 +8,12 @@ val require_unlimited : Position.t -> Types.datatype -> unit
 val hint : Pattern.with_pos -> Types.datatype
 val hint_cases : Pattern.with_pos list -> Types.datatype
 
+(** Expose the body and provide a function that restores its leading prefixes. *)
+val unprefix :
+  Types.datatype ->
+  ((FrescoContext.modality -> Types.datatype -> Types.datatype) ->
+    Types.datatype -> Types.datatype) * Types.datatype
+
 val infer :
   ?linear_vars:bool -> ?variants:[ `Closed | `Open ] -> Pattern.with_pos ->
   Pattern.with_pos * Types.environment * Types.datatype

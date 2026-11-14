@@ -214,3 +214,60 @@ An ambient callback added to a recursive presence argument is rejected
 typename Box(p::Presence) = (|Done:(run{p})|More:Box({:Int -> Int})|); effect E { Take : (Box({:Int})) => (); } ()
 stderr : @.*The arguments and result of Take must have absolute types.*
 exit : 1
+
+Type applications on an absolute value can cross a lock
+effect Reader { Ask : () => Int; } var f = (fun(x) { var _ = do Ask; x } : [Reader] (forall a. (a) -> a)); sig run : [Reader] (() -> Int) fun run() { (~f)[Int](42) } handle(run()) { case <Ask => k> -> k(0) }
+stdout : 42 : Int
+
+Type arguments do not reveal the requirement below a quantifier during access
+effect Reader { Ask : () => Int; } var f = (fun(x) { x } : forall a. <Reader |> ((a) -> a)); var g = (fun() { (~f)[Int](42) } : <Reader |> (() -> Int)); g
+stderr : @.*Type error: Cannot access f across the change in effect context.*
+exit : 1
+
+Implicit type arguments do not reveal the requirement below a quantifier during access
+effect Reader { Ask : () => Int; } var f = (fun(x) { x } : forall a. <Reader |> ((a) -> a)); var g = (fun() { f@(42) } : <Reader |> (() -> Int)); g
+stderr : @.*Type error: Cannot access f across the change in effect context.*
+exit : 1
+
+An instance bound before a lock keeps its exposed modality
+effect Reader { Ask : () => Int; } var f = (fun(x) { x } : forall a. <Reader |> ((a) -> a)); var specialised = (~f)[Int]; var g = (fun() { specialised(42) } : <Reader |> (() -> Int)); g
+stdout : fun : <Reader |> (() -> Int)
+
+Partial argument types use the variable type obtained across the lock
+effect Reader { Ask : () => Int; } fun same(x,y) { [x,y] } var f = (fun() { do Ask } : <Reader> (() -> Int)); handle({ var _ = same(~f,~f); var _ = same(f,f); 42 }) { case <Ask => k> -> k(42) }
+stdout : 42 : Int
+
+An absolute body leaves interface arguments independent
+effect Reader(a::Abs) { Ask : () => a; } sig pick : forall a::Abs. (<Reader(a)> Int, a) -> a fun pick(_, x) { x } sig pickSwapped : forall a::Abs. (a, <Reader(a)> Int) -> a fun pickSwapped(x, _) { x } (pick((42 : <Reader(Int)> Int), true), pickSwapped(true, (42 : <Reader(Int)> Int)))
+stdout : (true, true) : (Bool, Bool)
+
+Modal list pattern binders retain their quantified element types in both argument orders
+sig use : forall a. (a, a) -> List a fun use(x, y) { [x,y] } var xs = ([fun(x) { x }] : [] (List (forall a. (a) -> a))); (use(switch (xs) { case x :: _ -> ~x }, fun(y) { y }), use(fun(y) { y }, switch (xs) { case x :: _ -> ~x }))
+stdout : ([fun, fun], [fun, fun]) : (List ([] (forall a.(a) -> a)), List ([] (forall a.(a) -> a)))
+
+Distinct modal arguments need a type annotation
+effect Reader { Ask : () => Int; } effect State { Get : () => Int; } fun same(x,y) { [x,y] } same((42 : <Reader> Int), (41 : <State> Int))
+stderr : @.*Type error: A modality conversion needs a type or parameter annotation.*
+exit : 1
+
+Swapping distinct modal arguments still needs a type annotation
+effect Reader { Ask : () => Int; } effect State { Get : () => Int; } fun same(x,y) { [x,y] } same((41 : <State> Int), (42 : <Reader> Int))
+stderr : @.*Type error: A modality conversion needs a type or parameter annotation.*
+exit : 1
+
+An expected list element type resolves distinct modal arguments in either order
+effect Reader { Ask : () => Int; } effect State { Get : () => Int; } fun same(x,y) { [x,y] } ((same((42 : <Reader> Int), (41 : <State> Int)) : List Int), (same((41 : <State> Int), (42 : <Reader> Int)) : List Int))
+stdout : ([42, 41], [41, 42]) : (List Int, List Int)
+
+A frozen argument fixes the modal type in either curried argument position
+effect Reader { Ask : () => Int; } effect State { Get : () => Int; } fun same(x)(y) { [x,y] } var x = (42 : <Reader> Int); var y = (41 : <State> Int); (same(~((x)))(y), same(y)(~x))
+stdout : ([42, 41], [41, 42]) : (List (<Reader> (Int)), List (<Reader> (Int)))
+
+An application can convert its result after using a frozen argument
+effect Reader { Ask : () => Int; } fun ident(x) { x } var x = (42 : <Reader> Int); (ident(~x) : Int)
+stdout : 42 : Int
+
+Two frozen arguments must have consistent interface arguments
+effect Reader(a::Abs) { Ask : () => a; } fun same(x,y) { [x,y] } var x = (42 : <Reader(Int)> Int); var y = (41 : <Reader(Bool)> Int); same(~x,~y)
+stderr : @.*Type error: Expected <Reader\(Bool\)> \(Int\), got <Reader\(Int\)> \(Int\).*
+exit : 1

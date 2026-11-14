@@ -22,13 +22,11 @@ val protected_types : t -> Types.datatype list
 (** Variables fixed by bindings, the ambient context or the locks. *)
 val excluded : t -> Types.TypeVarSet.t
 
-(** Look up the type before lock checks, for partial type inference. *)
+(** Look up the type at the binding site. *)
 val lookup : t -> string -> Types.datatype option
-val has_locks : t -> string -> bool
 
-(** [prepare] instantiates any required quantifiers before crossing locks.
-    Use the identity function for frozen access. *)
-val access : t -> string -> prepare:(Types.datatype -> Types.datatype) -> Types.datatype
+(** Apply the intervening locks to the bound type before instantiation. *)
+val access : t -> string -> Types.datatype
 
 (** Expose the leading modality through aliases and compose adjacent ones. *)
 val prefix : Types.datatype -> modality * Types.datatype

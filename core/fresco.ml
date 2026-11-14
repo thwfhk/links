@@ -214,10 +214,22 @@ let annotated_resume_argument (resumption : Pattern.with_pos) (body : phrase) =
     | _ -> Not_typed in
   argument body
 
-(* Partial inference carries known structure and holes. It uses no locks and
-   does not constrain variables in the term environment. *)
+(* Partial inference uses the enclosing lock for its term environment and
+   works on copies of flexible variables. *)
 module Partial = struct
   let hole = Not_typed
+
+  type argument = { partial : datatype; frozen : bool }
+
+  let rec frozen_argument phrase =
+    match phrase.node with
+    | Freeze _ | FreezeVar _ | FreezeSection _ -> true
+    | TupleLit [body] | Block ([], body) | Checked (body, _) -> frozen_argument body
+    | _ -> false
+
+  let argument phrase partial = { partial; frozen = frozen_argument phrase }
+  let argument_types = List.map (fun argument -> argument.partial)
+  let required_arguments = List.map (fun argument -> if argument.frozen then argument.partial else hole)
 
   let copy typ =
     let flexibles = Hashtbl.create 8 in
@@ -240,15 +252,23 @@ module Partial = struct
     end in
     snd (visitor#typ typ)
 
-  (* A use of a scheme in checking mode can supply its body, but only a
-     frozen use supplies the leading quantifiers as known structure. *)
-  let instance typ = snd (FrescoTypes.instantiate_prefix typ)
+  let instance ?expected ?frozen typ = snd (FrescoTypes.instantiate_prefix ?expected ?frozen typ)
 
-  let result arguments expected typ =
-    let typ = snd (FrescoTypes.instantiate_prefix ~expected:(function_hint arguments expected) typ) in
+  let has_quantifiers typ =
+    match snd (Context.prefix typ) with ForAll _ -> true | _ -> false
+
+  let carry modality typ =
+    let _, complete = FrescoTypes.complete_hint (pk_type, typ) in
+    if Abs.type_satisfies complete then typ else Types.modal modality typ
+
+  let function_type ?frozen arguments expected typ =
+    let typ = instance ~expected:(function_hint arguments expected) ?frozen typ in
     match snd (Context.prefix typ) with
-    | AmbientFunction (_, _, result) -> result
-    | _ -> hole
+    | AmbientFunction (_, domain, result) -> Some (domain, result)
+    | _ -> None
+
+  let result ?frozen arguments expected typ =
+    Option.fold ~none:hole ~some:snd (function_type ?frozen arguments expected typ)
 
   let agrees left right =
     match head left, head right with
@@ -257,16 +277,18 @@ module Partial = struct
     | _ -> hole
 
   let rec bind_pattern env pattern typ =
+    let wrap, body = FrescoPatterns.unprefix typ in
+    let with_prefix typ = if typ = hole then hole else wrap carry typ in
     let get label =
-      match row_type (snd (Context.prefix typ)) with
-      | Some row -> Option.value ~default:hole (record_field row label)
+      match row_type body with
+      | Some row -> Option.fold ~none:hole ~some:with_prefix (record_field row label)
       | None -> hole
     in
     match pattern.node with
     | Pattern.Variable binder -> Env.bind (Binder.to_name binder) typ env
     | Pattern.As (binder, pattern) ->
         bind_pattern (Env.bind (Binder.to_name binder) typ env) pattern typ
-    | Pattern.HasType (pattern, (_, Some typ)) -> bind_pattern env pattern typ
+    | Pattern.HasType (pattern, (_, Some typ)) -> bind_pattern env pattern (copy typ)
     | Pattern.HasType (pattern, _) -> bind_pattern env pattern typ
     | Pattern.Tuple patterns ->
         List.mapi (fun i pattern -> pattern, get (string_of_int (i + 1))) patterns
@@ -276,10 +298,10 @@ module Partial = struct
         Option.fold ~none:env ~some:(fun pattern -> bind_pattern env pattern hole) rest
     | Pattern.Variant (label, Some pattern) -> bind_pattern env pattern (get label)
     | Pattern.Cons (first, rest) ->
-        let element = Option.value ~default:hole (list_item (head typ)) in
+        let element = Option.fold ~none:hole ~some:with_prefix (list_item body) in
         bind_pattern (bind_pattern env first element) rest typ
     | Pattern.List patterns ->
-        let element = Option.value ~default:hole (list_item (head typ)) in
+        let element = Option.fold ~none:hole ~some:with_prefix (list_item body) in
         List.fold_left (fun env pattern -> bind_pattern env pattern element) env patterns
     | Pattern.Any | Pattern.Nil | Pattern.Negative _ | Pattern.Constant _
     | Pattern.Variant (_, None) | Pattern.Operation _ -> env
@@ -288,8 +310,8 @@ module Partial = struct
     let infer_here = infer interfaces env ?ambient in
     let find name =
       match Env.find_opt name env with
-      | Some typ when frozen -> typ
-      | Some typ -> instance typ
+      | Some typ when frozen || has_quantifiers expected -> typ
+      | Some typ -> instance ~expected typ
       | None -> hole
     in
     match phrase.node with
@@ -299,11 +321,14 @@ module Partial = struct
         then Option.value ~default:hole (Env.find_opt name env)
         else find name
     | Freeze body -> infer_here ~frozen:true body
-    | Checked (_, typ) | ModalIntro (_, typ) | TypeAnnotation (_, (_, Some typ)) | Upcast (_, (_, Some typ), _) -> typ
+    | Checked (_, typ) | ModalIntro (_, typ) | TypeAnnotation (_, (_, Some typ))
+    | Upcast (_, (_, Some typ), _) -> copy typ
     | FnAppl (fn, args) ->
-        let arguments = List.map infer_here args in
+        let hints = List.map (fun arg -> argument arg (infer_here arg)) args in
+        let arguments = argument_types hints in
+        let frozen = function_hint (required_arguments hints) hole in
         let fn = infer_here ~frozen:true ~expected:(function_hint arguments expected) fn in
-        result arguments expected fn
+        result ~frozen arguments expected fn
     | FunLit (_, lin, NormalFunlit (groups, body), _) ->
         let rec lambda env hint = function
           | [] -> infer interfaces env ~expected:hint body
@@ -319,12 +344,12 @@ module Partial = struct
                 | _ -> List.map (fun _ -> hole) patterns, hole
               in
               let arguments = List.map2 (fun pattern hint ->
-                match FrescoPatterns.hint pattern with Not_typed -> hint | typ -> typ) patterns arguments in
+                FrescoTypes.merge_known (copy (FrescoPatterns.hint pattern)) hint) patterns arguments in
               let env = List.fold_left2 bind_pattern env patterns arguments in
               arrow lin arguments (lambda env output groups)
         in
         lambda env expected groups
-    | TupleLit [body] -> infer_here ~expected body
+    | TupleLit [body] -> infer_here ~expected ~frozen body
     | TupleLit items -> make_tuple_type (List.map infer_here items)
     | ListLit (first :: rest, _) ->
         make_list_type (List.fold_left (fun typ item -> agrees typ (infer_here item)) (infer_here first) rest)
@@ -342,9 +367,9 @@ module Partial = struct
         let typ = Option.fold ~none:unit_type ~some:infer_here payload in
         Variant (make_singleton_open_row (label, Present typ) (lin_any, res_any))
     | Projection (record, label) ->
-        let modality, record = Context.prefix (infer_here ~frozen:true record) in
+        let wrap, record = FrescoPatterns.unprefix (infer_here ~frozen:true record) in
         begin match row_type record with
-        | Some row -> Option.fold ~none:hole ~some:(Types.modal modality) (record_field row label)
+        | Some row -> Option.fold ~none:hole ~some:(wrap carry) (record_field row label)
         | None -> hole
         end
     | Conditional (_, yes, no) -> agrees (infer_here ~expected yes) (infer_here ~expected no)
@@ -359,8 +384,9 @@ module Partial = struct
     | TAbstr (qs, body) -> Types.for_all (quantifiers qs, infer_here ~frozen:true body)
     | TAppl (body, args) when List.for_all (fun (_, arg) -> Option.is_some arg) args ->
         let typ = infer_here ~frozen:true body in
-        FrescoTypes.apply typ (List.map (fun (_, arg) -> Option.get arg) args)
-    | Instantiate body -> instance (infer_here ~frozen:true body)
+        FrescoTypes.apply typ (List.map (fun (_, arg) ->
+          let kind, typ = Option.get arg in kind, copy typ) args)
+    | Instantiate body -> instance ~expected (infer_here ~frozen:true body)
     | Generalise body ->
         let typ = infer_here body in
         let contains_no_holes = fst (object
@@ -381,7 +407,8 @@ module Partial = struct
           | Some arguments -> member_scheme operation arguments in
         let signature = match explicit with
           | [] -> snd (instantiate_operation scheme (List.map infer_here arguments) expected)
-          | args -> FrescoTypes.apply scheme (List.map (fun (_, arg) -> Option.get arg) args) in
+          | args -> FrescoTypes.apply scheme (List.map (fun (_, arg) ->
+              let kind, typ = Option.get arg in kind, copy typ) args) in
         begin match head signature with
         | Operation (_, result) -> result
         | _ -> hole
@@ -428,30 +455,64 @@ module Partial = struct
     match binding.node with
     | Val (pattern, (_, value), _, typ) ->
         let typ = match annotation typ with
-          | Some typ -> typ
+          | Some typ -> copy typ
           | None -> infer interfaces env value in
         bind_pattern env pattern typ
     | Fun def ->
         let typ = match annotation def.fun_signature with
-          | Some typ -> typ
+          | Some typ -> copy typ
           | None ->
               let _, fnlit = def.fun_definition in
               infer interfaces env (with_node binding (FunLit (None, def.fun_linearity, fnlit, def.fun_location))) in
         Env.bind (Binder.to_name def.fun_binder) typ env
     | Funs defs ->
         List.fold_left (fun env def ->
-          let typ = Option.value ~default:hole (annotation def.node.rec_signature) in
+          let typ = Option.fold ~none:hole ~some:copy (annotation def.node.rec_signature) in
           Env.bind (Binder.to_name def.node.rec_binder) typ env) env defs
     | _ -> env
 
-  let arguments interfaces context arguments =
-    let env = Env.map copy (Context.environment context) in
+  let accessible_environment context =
+    Context.environment context
+    |> Env.filter_map (fun name original ->
+        try
+          let accessed = FrescoTypes.probe (fun () -> Context.access context name) in
+          match head original, head accessed with
+          | Meta point, Modal _ when (match Unionfind.find point with
+              | Var (_, _, `Flexible) -> true | _ -> false) ->
+              (* A residual around an unsolved variable does not tell us
+                 whether that variable will need its modality. *)
+              None
+          | _ -> Some (copy accessed)
+        with Context.Error _ | Unify.Failure _ -> None)
+
+  let arguments interfaces context ?callee arguments =
+    let env = accessible_environment context in
     let entries = ModalEffects.extension_entries (ModalEffects.context_extension (Context.ambient context)) in
     let ambient = ModalEffects.context (ModalEffects.extension
         (List.map (fun (interface, args) -> interface, List.map copy args) entries)) in
-    List.map (fun argument ->
-      try infer interfaces env ~ambient argument with
-      | Unify.Failure _ | Context.Error _ | Errors.Type_error _ -> hole) arguments
+    let try_infer ?expected argument =
+      try FrescoTypes.transaction (fun () -> infer interfaces env ~ambient ?expected argument) with
+      | Unify.Failure _ | Context.Error _ | Errors.Type_error _ -> hole in
+    let hints = List.map (try_infer ?expected:None) arguments in
+    let hints = match callee with
+    | None -> hints
+    | Some (fn, expected) ->
+        try
+          let domains = FrescoTypes.transaction (fun () ->
+            let expected = copy expected in
+            let fn_hint = function_hint hints expected in
+            let callee = infer interfaces env ~ambient ~expected:fn_hint ~frozen:true fn in
+            match function_type hints expected callee with
+            | None -> None
+            | Some (domain, _) -> Some (tuple_parts fn.pos (List.length arguments) domain)) in
+          begin match domains with
+          | None -> hints
+          | Some domains ->
+              List.map2 (fun expected argument -> try_infer ~expected argument) domains arguments
+              |> List.map2 (fun original refined -> FrescoTypes.merge_known refined original) hints
+          end
+        with Unify.Failure _ | Context.Error _ | Errors.Type_error _ -> hints in
+    List.map2 argument arguments hints
 
   (* These expressions evaluate their immediate children in the same ambient
      context. A nested handler or a modal introduction may change which
@@ -511,15 +572,32 @@ end
 type mode =
   | Infer
   | Check of datatype
-  | Apply of datatype list * mode
+  | Apply of Partial.argument list * mode
 
 let rec hint = function
   | Infer -> Not_typed
   | Check typ -> typ
-  | Apply (args, mode) -> function_hint args (hint mode)
+  | Apply (args, mode) -> function_hint (Partial.argument_types args) (hint mode)
+
+let rec required_hint = function
+  | Infer -> Not_typed
+  | Check typ -> typ
+  | Apply (args, mode) ->
+      match required_hint mode with
+      | Not_typed -> Not_typed
+      | result -> function_hint (List.map (fun _ -> Not_typed) args) result
+
+let rec frozen_hint = function
+  | Infer | Check _ -> Not_typed
+  | Apply (args, mode) ->
+      let arguments = Partial.required_arguments args in
+      let result = frozen_hint mode in
+      if result = Not_typed && List.for_all (( = ) Not_typed) arguments then Not_typed
+      else function_hint arguments result
 
 let instantiate_for mode typ =
-  FrescoTypes.instantiate_prefix ~expected:(hint mode) typ
+  FrescoTypes.instantiate_prefix ~expected:(hint mode) ~required:(required_hint mode)
+    ~frozen:(frozen_hint mode) typ
 
 let callable pos context ~count typ =
   let modality, body = Context.prefix typ in
@@ -744,43 +822,22 @@ let frozen_match pos mode typ =
   | Check expected -> consistent pos typ expected; expected
   | Infer | Apply _ -> typ
 
-let access pos state name prepare =
-  at pos (fun () -> Context.access state.terms name ~prepare)
+let access pos state name =
+  at pos (fun () -> Context.access state.terms name)
 
 let variable pos state mode ~frozen name =
-  let args = ref [] in
-  let prepare typ =
-    let preserve =
-      frozen || match mode with
-      | Check expected -> has_leading_forall expected
-      | Infer -> not (Context.has_locks state.terms name)
-      | Apply _ -> false
-    in
-    if preserve then typ
-    else
-      let arguments, typ = instantiate_for mode typ in
-      args := arguments;
-      typ
-  in
-  let typ = access pos state name prepare in
-  let more_args, typ =
+  let typ = access pos state name in
+  let args, typ =
     if frozen then [], frozen_match pos mode typ
     else adapt pos state.terms mode typ in
-  let all_args = !args @ more_args in
-  let node = if frozen || all_args <> [] then FreezeVar name else Var name in
-  let phrase = set_type_args (make ~pos node) all_args in
+  let node = if frozen || args <> [] then FreezeVar name else Var name in
+  let phrase = set_type_args (make ~pos node) args in
   phrase, typ, Usage.singleton name
 
-let explicit_target pos state body prepare =
-  let rec name : phrasenode -> string option = function
-    | Var name | FreezeVar name -> Some name
-    | Freeze body -> name body.node
-    | _ -> None
-  in
-  match name body.node with
-  | Some name ->
-      Some (with_node body (FreezeVar name), access pos state name prepare, Usage.singleton name)
-  | None -> None
+let rec variable_name : phrasenode -> string option = function
+  | Var name | FreezeVar name -> Some name
+  | Freeze body | TupleLit [body] -> variable_name body.node
+  | _ -> None
 
 let rec infer state mode phrase =
   let pos = phrase.pos in
@@ -829,10 +886,13 @@ and infer_node state mode phrase =
   match phrase.node with
   | Var name -> variable pos state mode ~frozen:false name
   | FreezeVar name -> variable pos state mode ~frozen:true name
-  | Freeze { node = Var name; _ } -> variable pos state mode ~frozen:true name
   | Freeze body ->
-      let body = infer_here Infer body in
-      finish_frozen (term body).node (typ body) (usage body)
+      begin match variable_name body.node with
+      | Some name -> variable pos state mode ~frozen:true name
+      | None ->
+          let body = infer_here Infer body in
+          finish_frozen (term body).node (typ body) (usage body)
+      end
   | Constant c -> finish phrase.node (Primitive (Constant.type_of c)) Usage.empty
   | Checked (body, expected) ->
       let body = infer_node state (Check expected) body in
@@ -850,7 +910,7 @@ and infer_node state mode phrase =
       let body = make ~pos (FunLit (Some arg_types, lin, NormalFunlit (groups, body), location)) in
       wrap_usage pos (Checked (body, typ)) typ usage
   | FnAppl (fn, arguments) ->
-      let hints = Partial.arguments state.interfaces state.terms arguments in
+      let hints = Partial.arguments state.interfaces state.terms ~callee:(fn, hint mode) arguments in
       let fn = infer_here (Apply (hints, mode)) fn in
       let _, domains, output = callable pos state.terms ~count:(List.length arguments) (typ fn) in
       let arguments = List.map2 (fun domain arg -> infer_here (Check domain) arg) domains arguments in
@@ -953,27 +1013,13 @@ and infer_node state mode phrase =
         (Record row) (Usage.combine_many (usage record :: List.map (fun (_, value) -> usage value) fields))
   | TAppl (body, arguments) ->
       let arguments' = List.map (fun (_, arg) -> resolved pos arg) arguments in
-      let prepare typ = FrescoTypes.apply typ arguments' in
-      let body, typ, usage = match explicit_target pos state body prepare with
-        | Some typed -> typed
-        | None ->
-            let body = infer_here Infer body in
-            term body, prepare (typ body), usage body
-      in
-      finish (TAppl (body, arguments)) typ usage
+      let body = infer_explicit_target state body in
+      let instance = FrescoTypes.apply (typ body) arguments' in
+      finish (TAppl (term body, arguments)) instance (usage body)
   | Instantiate body ->
-      let args = ref [] in
-      let prepare typ =
-        let applied, body = instantiate_for mode typ in
-        args := applied;
-        body in
-      let body, typ, usage = match explicit_target pos state body prepare with
-        | Some typed -> typed
-        | None ->
-            let body = infer_here Infer body in
-            term body, prepare (typ body), usage body
-      in
-      finish (tappl' (body, !args)) typ usage
+      let body = infer_explicit_target state body in
+      let arguments, instance = instantiate_for mode (typ body) in
+      finish (tappl' (term body, arguments)) instance (usage body)
   | Generalise body ->
       if not (TypeSugar.is_generalisable body) then error pos "Generalisation requires a value";
       let body = infer_here Infer body in
@@ -1033,7 +1079,7 @@ and infer_node state mode phrase =
         | Section.Minus -> arrow dl_unl [int_type; int_type] int_type, Usage.empty
         | Section.FloatMinus -> arrow dl_unl [float_type; float_type] float_type, Usage.empty
         | Section.Name name ->
-            access pos state name Fun.id, Usage.singleton name in
+            access pos state name, Usage.singleton name in
       prepare phrase.node typ usage
   | Switch (value, cases, _) ->
       let patterns, bodies = List.split cases in
@@ -1109,7 +1155,7 @@ and infer_node state mode phrase =
       let type_args, instance = match explicit with
         | [] ->
             let hints = Partial.arguments state.interfaces state.terms arguments in
-            instantiate_operation scheme hints (hint mode)
+            instantiate_operation scheme (Partial.argument_types hints) (hint mode)
         | args ->
             let args = List.map (fun (_, arg) -> Option.get arg) args in
             args, FrescoTypes.apply scheme args in
@@ -1298,14 +1344,13 @@ and infer_pattern_binding state pattern value =
         end in
   value, pattern, env
 
+and infer_explicit_target state body =
+  match variable_name body.node with
+  | Some name -> variable body.pos state Infer ~frozen:true name
+  | None -> infer state Infer body
+
 and instantiate_binding pos state name mode =
-  let args = ref [] in
-  let prepare typ =
-    let arguments, typ = instantiate_for mode typ in
-    args := arguments;
-    typ in
-  let typ = access pos state name prepare in
-  !args, typ
+  instantiate_for mode (access pos state name)
 
 and lambda state pos lin mode groups body =
   FrescoPatterns.check_duplicates pos (List.concat groups);
@@ -1359,7 +1404,8 @@ and lambda state pos lin mode groups body =
                 let partial = FrescoTypes.merge_known provided typ in
                 let _, expected = FrescoTypes.complete_hint (pk_type, partial) in
                 if partial = Not_typed then infer_pattern pattern
-                else FrescoPatterns.check ~linear_vars expected pattern, expected) hints patterns in
+                else FrescoPatterns.check ~linear_vars expected pattern, expected)
+                (Partial.argument_types hints) patterns in
               let patterns, arguments = List.split pairs in
               patterns, arguments, next_mode
           | Infer ->
@@ -1484,7 +1530,7 @@ and infer_binding ~global state binding =
           fun_frozen = true } in
         finish (bind_type state name typ) (Fun def) (Env.singleton name typ) (usage fn)
     | Funs definitions ->
-        let prepared = List.map (prepare_recursive ~global state) definitions in
+        let prepared = List.map (prepare_recursive ~global) definitions in
         let recursive_env = List.fold_left (fun env (def, _, typ) ->
           Env.bind (Binder.to_name def.node.rec_binder) typ env) Env.empty prepared in
         let recursive_state = bind_all state recursive_env in
@@ -1532,7 +1578,7 @@ and infer_binding ~global state binding =
     | EffectInterface _ | Infix _ -> finish state binding.node Env.empty Usage.empty
     | Module _ | Open _ | Import _ -> error pos "Modules have not been desugared")
 
-and prepare_recursive ~global state def =
+and prepare_recursive ~global def =
   let node = def.node in
   if DeclaredLinearity.is_linear node.rec_linearity then
     error def.pos ("Recursive function " ^ Binder.to_name node.rec_binder ^ " cannot be linear");

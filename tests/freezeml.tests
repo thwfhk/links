@@ -118,15 +118,15 @@ map(poly)(single(~id))
 stdout : [(0, true)] : List (Int, Bool)
 
 Functions on Polymorphic Lists (10)
-(~map)[List (forall a. [] ((a) -> a)), (forall a. [] ((a) -> a))](head)(single(ids))
+map(head)(single(ids))
 stdout : [fun] : List (forall a.[] ((a) -> a))
 
 Application functions (1)
-app(poly)(~id)
+app(poly)(id)
 stdout : (0, true) : (Int, Bool)
 
 Application functions (2)
-revapp(~id)(poly)
+revapp(id)(poly)
 stdout : (0, true) : (Int, Bool)
 
 Application functions (3)
@@ -278,3 +278,15 @@ stdout : fun : forall a.[] ((a) -> ())
 Freezing recursive function outside mutual block, without annotation
 mutual { fun f(x) {()} } ~f
 stdout : fun : forall a.[] ((a) -> ())
+
+Grouped frozen variables preserve their quantifiers
+(~id, ~(id), ~((id)))
+stdout : (fun, fun, fun) : (forall a.[] ((a) -> a), forall a.[] ((a) -> a), forall a.[] ((a) -> a))
+
+Frozen arguments supply quantifiers in either argument position
+fun same(x,y) { [x,y] } fun ident(x) { x } (same(~ident,ident), same(ident,~ident))
+stdout : ([fun, fun], [fun, fun]) : (List (forall a::Any.[] ((a::Any) -> a::Any)), List (forall a::Any.[] ((a::Any) -> a::Any)))
+
+An expected function result determines the shared parameter type
+(choose(inc) : ((Int -> Int) -> (Int -> Int)))
+stdout : fun : ((Int) -> Int) -> (Int) -> Int

@@ -189,25 +189,22 @@ let context_residual _ =
   let outside = FrescoContext.create ~ambient Env.String.empty in
   let quantify, parameter = Types.fresh_type_quantifier (lin_any, res_abs) in
   let requirement = relative [] [reader, [parameter]; state, [Types.int_type]] in
-  let outside =
-    FrescoContext.bind outside "f" (Types.for_all ([quantify], Types.modal requirement arrow))
-  in
+  let datatype = Types.for_all ([quantify], Types.modal requirement arrow) in
+  let outside = FrescoContext.bind outside "f" datatype in
+  let instantiated = Instantiate.apply_type (FrescoContext.access outside "f")
+    [pk_type, Types.int_type] in
+  let outside = FrescoContext.bind outside "instantiated" instantiated in
   let inside = FrescoContext.with_lock outside (relative [] [reader, [Types.int_type]]) in
   let expected = relative [] [state, [Types.int_type]] in
-  let instantiated = FrescoContext.access inside "f" ~prepare:(fun typ ->
-    Instantiate.apply_type typ [pk_type, Types.int_type])
-  in
+  let instantiated = FrescoContext.access inside "instantiated" in
   let residual, _ = FrescoContext.prefix instantiated in
-  assert_bool "explicit instantiation lets the lock supply Reader(Int)"
+  assert_bool "the lock can supply Reader(Int) to the instantiated value"
     (ModalEffects.equivalent ~equal:FrescoTypes.equal residual expected);
-  match FrescoContext.access inside "f" ~prepare:Fun.id with
-  | Types.ForAll ([still_bound], body) ->
-      assert_bool "a frozen access retains the binder" (Quantifier.eq quantify still_bound);
-      let residual, _ = FrescoContext.prefix body in
-      assert_bool "the rigid argument still has a Reader requirement"
-        (not (ModalEffects.transforms ~equal:FrescoTypes.equal
-          ~ambient:(FrescoContext.ambient inside) residual expected))
-  | _ -> assert_failure "Expected the original quantifier around the residual"
+  let residual, body = FrescoContext.prefix (FrescoContext.access inside "f") in
+  assert_bool "the remaining mask is outside the quantifier"
+    (ModalEffects.equivalent ~equal:FrescoTypes.equal residual (relative [reader] []));
+  assert_bool "the quantified type retains its own requirement"
+    (FrescoTypes.equal datatype body)
 
 let mixed_context_residual _ =
   let open CommonTypes in
@@ -217,23 +214,23 @@ let mixed_context_residual _ =
   let extension = relative [] [state, [Types.int_type]] in
   let datatype = Types.modal extension (Types.for_all ([quantify], Types.modal mask arrow)) in
   let outside = FrescoContext.bind (FrescoContext.create Env.String.empty) "f" datatype in
+  let cannot_access name context =
+    assert_raises (FrescoContext.Error ("Cannot access " ^ name ^ " across the change in effect context"))
+      (fun () -> ignore (FrescoContext.access context name)) in
   let inside = FrescoContext.with_lock outside mask in
-  let datatype = FrescoContext.access inside "f" ~prepare:Fun.id in
-  begin match datatype with
-  | Types.ForAll ([still_bound], body) ->
-      assert_bool "transport retains the mixed prefix's quantifier" (Quantifier.eq quantify still_bound);
-      let residual, _ = FrescoContext.prefix body in
-      assert_bool "the lock supplies the mask below the quantifier"
-        (ModalEffects.equivalent ~equal:FrescoTypes.equal residual extension)
-  | _ -> assert_failure "Expected the residual under the original quantifier"
-  end;
+  cannot_access "f" inside;
   let empty = effects [] in
-  let outside =
-    FrescoContext.bind (FrescoContext.create ~ambient:empty Env.String.empty) "f" arrow
-  in
+  let relative_body = Types.for_all ([quantify], Types.modal extension arrow) in
+  let absolute_body = Types.for_all ([quantify], Types.modal (Absolute empty) arrow) in
+  let outside = FrescoContext.bind outside "bare" arrow in
+  let outside = FrescoContext.bind outside "relative" relative_body in
+  let outside = FrescoContext.bind outside "absolute" absolute_body in
   let inside = FrescoContext.with_lock outside (Absolute empty) in
-  assert_raises (FrescoContext.Error "Cannot access f across the change in effect context")
-    (fun () -> ignore (FrescoContext.access inside "f" ~prepare:Fun.id))
+  cannot_access "f" inside;
+  cannot_access "bare" inside;
+  cannot_access "relative" inside;
+  assert_bool "an absolute body crosses the lock with its quantifier intact"
+    (FrescoTypes.equal absolute_body (FrescoContext.access inside "absolute"))
 
 let delayed_conversion _ =
   let open CommonTypes in
@@ -325,8 +322,8 @@ let suite =
     "types" >:: types;
     "unifying interface arguments" >:: unify_types;
     "absolute constraints" >:: absolute_constraints;
-    "instantiating before lock transport" >:: context_residual;
-    "transporting a mixed prefix" >:: mixed_context_residual;
+    "lock access stops at a quantifier" >:: context_residual;
+    "lock access with mixed prefixes" >:: mixed_context_residual;
     "delaying an ambiguous modality conversion" >:: delayed_conversion;
     "shared interface arguments stay monomorphic" >:: shared_argument_generalisation;
     "modal types print and reparse" >:: modal_roundtrip;
