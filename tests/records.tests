@@ -59,6 +59,46 @@ var r = ((id=fun(x) { x }, n=1, ok=true) : forall a. (id:a -> a, n:Int, ok:Bool)
 args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
 stdout : (42, true, true) : (Int, Bool, Bool)
 
+A list pattern preserves a quantified record field's element type
+var r = ((x=[fun(y) { y }]) : forall a. (x:List (a -> a))); switch (r) { case (x=f::_) -> (f(42), f(true)) case _ -> (0,false) }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : (42, true) : (Int, Bool)
+
+A later list case uses the quantified tail after evaluating the record once
+sig source : [wild] (() -> (forall a. (x:List (a -> a)))) fun source() { print("once"); ((x=[fun(y) { y }, fun(y) { y }]) : forall a. (x:List (a -> a))) } switch (source()) { case (x=[]) -> (0,false) case (x=[f]) -> (1,false) case (x=_::fs) -> switch (fs) { case f::_ -> (f(42), f(true)) case [] -> (2,false) } }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : once(42, true) : (Int, Bool)
+
+A failed list pattern leaves quantified linear elements for a later case
+var r = ((x=[linfun(y) { y }, linfun(y) { y }]) : forall a. (x:List (a -@ a))); switch (r) { case (x=[f]) -> (f(42), false) case (x=[f,g]) -> (f(42), g(true)) }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : (42, true) : (Int, Bool)
+
+A list pattern in a tuple binding keeps the element's quantifier
+var r = (([fun(y) { y }], 42) : forall a. (List (a -> a), Int)); { var (f::_, n) = r; (f(n[Int]), f(true)) }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : (42, true) : (Int, Bool)
+
+A list pattern retains both record and element quantifiers
+var r = ((x=[fun(x,y) { (x,y) }]) : forall a. (x:List (forall b. (a,b) -> (a,b)))); switch (r) { case (x=f::_) -> (f(42,true), f(true,42)) case _ -> ((0,false),(false,0)) }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : ((42, true), (true, 42)) : ((Int, Bool), (Bool, Int))
+
+A variant pattern preserves a quantified record field's payload type
+var r = ((x=Some(fun(y) { y })) : forall a. (x:(|Some:a -> a|))); switch (r) { case (x=Some(f)) -> (f(42), f(true)) }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : (42, true) : (Int, Bool)
+
+A variant pattern in a record binding keeps the payload's quantifier
+var r = ((x=Some(fun(y) { y })) : forall a. (x:(|Some:a -> a|))); { var (x=Some(f)) = r; (f(42), f(true)) }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : (42, true) : (Int, Bool)
+
+A negative alias preserves a quantified variant after a failed payload match
+var r = ((x=Some((7,fun(y) { y }))) : forall a. (x:(|None|Some:(Int,a -> a)|))); switch (r) { case (x=Some((0,_))) -> (0,false) case (x=(-None as keep)) -> switch (keep) { case Some((_,f)) -> (f(42), f(true)) } case _ -> (1,false) }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : (42, true) : (Int, Bool)
+
 Record extension preserves quantified inherited fields
 var r = /\ [a]. { (id=fun(x:a) {x}) }; var s = (n=2 | r); var f = s.id; (s.n, f(42), f(true))
 args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true

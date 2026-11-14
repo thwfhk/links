@@ -743,7 +743,8 @@ struct
 
         | Ir.Case (v, cases, default) ->
             let o, v, vt = o#value v in
-            begin match TypeUtils.concrete_type vt with
+            let qs, body = TypeUtils.split_quantified_type vt in
+            begin match body with
             | Variant row as variant ->
                let unwrapped_row = fst (unwrap_row row) |> TypeUtils.extract_row_parts in
                let present_fields, has_bad_presence_polymorphism  =
@@ -776,7 +777,8 @@ struct
                    (fun name  (binder, comp) (o, cases, types) ->
                      let type_binder = Var.type_of_binder binder in
                      Debug.print "1" ;
-                     let type_variant = variant_at ~overstep_quantifiers:false name variant in
+                     let payload = variant_at ~overstep_quantifiers:false name variant in
+                     let type_variant = Types.for_all (qs, payload) in
                      Debug.print "11" ;
                      o#check_eq_types type_binder type_variant (STC orig);
                      let o, b = o#binder binder in
@@ -794,7 +796,7 @@ struct
                          cases
                          variant
                      in
-                     o#check_eq_types expected_default_t actual_default_type (STC orig);
+                     o#check_eq_types (Types.for_all (qs, expected_default_t)) actual_default_type (STC orig);
                      let o, c, t = o#computation c in
                      let o = o#remove_binder b in
                      o, (b, c), t) default in
@@ -806,7 +808,8 @@ struct
             end
         | ListCase (v, nil, (head, tail, cons)) ->
             let o, v, list_type = o#value v in
-            let elem_type = element_type ~overstep_quantifiers:false list_type in
+            let qs, body = TypeUtils.split_quantified_type list_type in
+            let elem_type = Types.for_all (qs, element_type ~overstep_quantifiers:false body) in
             o#check_eq_types elem_type (Var.type_of_binder head) (STC orig);
             o#check_eq_types list_type (Var.type_of_binder tail) (STC orig);
             let o, nil, nil_type = o#computation nil in

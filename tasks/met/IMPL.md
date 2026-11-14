@@ -579,6 +579,19 @@ Comprehension lowering uses the source patterns directly in the body
 and sorting callbacks. The separate callbacks that build the list of
 generator combinations bind full values in their own patterns.
 
+#### 5.19 List and variant patterns in quantified fields
+
+List and variant matches inspect the body of the scrutinee's quantified
+type. Lowering carries those quantifiers onto the head and tail of a
+list and onto the payload and remaining variant in each branch. The
+strict IR checker checks the same binder types. When an earlier match
+establishes a variant's tag, lowering rebuilds the variant from its
+payload under a type abstraction. It applies only the outer type
+arguments, so any quantifiers on the payload itself are preserved.
+Failed matches keep the original value and the parts already matched
+available to later cases. The evaluator still dispatches on the stored
+value.
+
 ### Deferred optimisation issues
 
 Dead-definition elimination can remove unused calls to `crypt`, `chr`

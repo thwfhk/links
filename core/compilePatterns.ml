@@ -43,7 +43,7 @@ struct
   type context =
     | CNil
     | CCons of var * var
-    | CVariant   of string
+    | CVariant   of string * var
     | CNVariant  of StringSet.t
     | CConstant  of Constant.t
     | CNConstant of ConstSet.t
@@ -71,7 +71,7 @@ module PEnv = Env.Int
 
 type nenv = var NEnv.t
 type tenv = Types.datatype TEnv.t
-type penv = (Pattern.context * value) PEnv.t
+type penv = Pattern.context PEnv.t
 
 type env = nenv * tenv * Types.row * penv
 type raw_env = nenv * tenv * Types.row
@@ -210,14 +210,19 @@ let rec reduce_pattern : Pattern.t -> annotated_pattern = function
       Pattern.Type t :: annotations, pattern
   | pattern -> [], pattern
 
+let list_element_type t =
+  let qs, list = TypeUtils.split_quantified_type t in
+  Types.for_all (qs, TypeUtils.element_type ~overstep_quantifiers:false list)
+
 let negative_cases names t rejected =
-  let _, t = TypeUtils.split_quantified_type t in
+  let qs, t = TypeUtils.split_quantified_type t in
   let cases, remaining = StringSet.fold (fun name (cases, row) ->
     let payload, row = TypeUtils.split_row name row in
+    let payload = Types.for_all (qs, payload) in
     let binder, var = Var.fresh_var_of_type payload in
     StringMap.add name (binder, rejected name var payload) cases, row)
     names (StringMap.empty, TypeUtils.extract_row t) in
-  cases, Types.Variant remaining
+  cases, Types.for_all (qs, Types.Variant remaining)
 
 let let_pattern : raw_env -> Pattern.t -> value * Types.datatype -> computation * Types.datatype -> computation =
   fun env pat (value, value_type) (body, body_type) ->
@@ -232,25 +237,26 @@ let let_pattern : raw_env -> Pattern.t -> value * Types.datatype -> computation 
     let rec lp t pat value body =
       match pat with
         | Pattern.Nil ->
-            let head = Var.fresh_binder_of_type (TypeUtils.element_type t) in
+            let head = Var.fresh_binder_of_type (list_element_type t) in
             let tail = Var.fresh_binder_of_type t in
             [], ListCase (value, body, (head, tail, failure))
         | Pattern.Cons (head, tail) ->
-            let xt = TypeUtils.element_type t in
+            let xt = list_element_type t in
             let xb, x = Var.fresh_var_of_type xt in
             let xsb, xs = Var.fresh_var_of_type t in
             let cons = lp xt head (Variable x) (lp t tail (Variable xs) body) in
             [], ListCase (value, failure, (xb, xsb, cons))
         | Pattern.Variant (name, patt) ->
-            let case_type = TypeUtils.variant_at name t in
+            let qs, variant = TypeUtils.split_quantified_type t in
+            let case_type = Types.for_all (qs, TypeUtils.variant_at name variant) in
             let case_binder, case_variable = Var.fresh_var_of_type case_type in
             let body = lp case_type patt (Variable case_variable) body in
             let cases = StringMap.singleton name (case_binder, body) in
-            let remaining = snd (TypeUtils.split_variant_type name t) in
+            let remaining = snd (TypeUtils.split_variant_type name variant) in
             let row = TypeUtils.extract_row remaining in
             let default =
               if Types.is_empty_row row && Types.is_closed_row row then None
-              else Some (Var.fresh_binder_of_type remaining, ([], Special (Wrong body_type))) in
+              else Some (Var.fresh_binder_of_type (Types.for_all (qs, remaining)), failure) in
             [], Case (value, cases, default)
         | Pattern.Negative _ | Pattern.As _ | Pattern.HasType _ ->
             let annotations, pattern = reduce_pattern pat in
@@ -422,16 +428,18 @@ let arrange_record_clauses
              | _ -> assert false
         ) clauses []
 
-(*
-   apply an annotation to an expression
-*)
-let apply_annotation : value -> annotation * bound_computation -> bound_computation =
-  fun v (annotation, body) env ->
+(* Rebuild a known variant at the type recorded on the alias. *)
+let inject_variant name payload typ =
+  let qs, variant = TypeUtils.split_quantified_type typ in
+  let arguments = List.map Types.type_arg_of_quantifier qs in
+  let injected = Inject (name, tapp (Variable payload, arguments), variant) in
+  match qs with
+  | [] -> injected
+  | _ -> TAbs (qs, injected)
+
+let apply_annotation : (Types.datatype -> value) -> annotation * bound_computation -> bound_computation =
+  fun make_value (annotation, body) env ->
     let dummy t = Var.fresh_binder_of_type t in
-    let massage t =
-      function
-        | Inject (name, v, _) -> Inject (name, v, t)
-        | v -> v in
     let env, bs =
       List.fold_right
         (fun a (env, bs) ->
@@ -439,10 +447,10 @@ let apply_annotation : value -> annotation * bound_computation -> bound_computat
              | Pattern.Binder b ->
                  let var = Var.var_of_binder b in
                  let t = Var.type_of_binder b in
-                 let v = massage t v in
+                 let v = make_value t in
                    bind_type var t env, letmv (b, v)::bs
              | Pattern.Type t ->
-                 let v = massage t v in
+                 let v = make_value t in
                    env, (letmv (dummy t, Coerce (v, t)))::bs)
         annotation
         (env, [])
@@ -450,10 +458,10 @@ let apply_annotation : value -> annotation * bound_computation -> bound_computat
       with_bindings bs (body env)
 
 (* apply annotations in an annotated clause list *)
-let apply_annotations : value -> annotated_clause list -> clause list =
-  fun v annotated_clauses ->
+let apply_annotations : (Types.datatype -> value) -> annotated_clause list -> clause list =
+  fun make_value annotated_clauses ->
     List.map (fun (annotation, (ps, body)) ->
-           (ps, apply_annotation v (annotation, body))) annotated_clauses
+           (ps, apply_annotation make_value (annotation, body))) annotated_clauses
 
 (* the entry point to the pattern-matching compiler *)
 let rec match_cases : var list -> clause list -> bound_computation -> bound_computation =
@@ -490,7 +498,7 @@ and match_var : var list -> clause list -> bound_computation -> var -> bound_com
       (List.map (
           function
           | ((annotation, pattern)::ps, body) ->
-                   let body = apply_annotation (Variable var) (annotation, body) in
+                   let body = apply_annotation (const (Variable var)) (annotation, body) in
                    begin
                      match pattern with
                        | Pattern.Variable b ->
@@ -509,66 +517,42 @@ and match_list
     : var list -> (annotated_clause list * annotated_clause list) -> bound_computation -> var -> bound_computation =
   fun vars (nil_clauses, cons_clauses) def var env ->
     let var_val = Variable var in
-    let nil_branch env = match_cases vars (apply_annotations var_val nil_clauses) def env in
+    let nil_branch env = match_cases vars (apply_annotations (const var_val) nil_clauses) def env in
     let cons_branch x xs env =
-      match_cases (x :: xs :: vars) (apply_annotations var_val cons_clauses) def env in
+      match_cases (x :: xs :: vars) (apply_annotations (const var_val) cons_clauses) def env in
     if mem_context var env then
       match lookup_context var env with
-      | Pattern.CNil, _ -> nil_branch env
-      | Pattern.CCons (x, xs), _ -> cons_branch x xs env
+      | Pattern.CNil -> nil_branch env
+      | Pattern.CCons (x, xs) -> cons_branch x xs env
       | _ -> assert false
     else
       let t = lookup_type var env in
-      let elem = TypeUtils.element_type t in
+      let elem = list_element_type t in
       let head, x = Var.fresh_var_of_type elem in
       let tail, xs = Var.fresh_var_of_type t in
-      let nil_env = bind_context var (Pattern.CNil, var_val) env in
-      let cons_env = bind_context var (Pattern.CCons (x, xs), var_val) env in
+      let nil_env = bind_context var Pattern.CNil env in
+      let cons_env = bind_context var (Pattern.CCons (x, xs)) env in
       let cons_env = bind_type x elem (bind_type xs t cons_env) in
       [], ListCase (var_val, nil_branch nil_env, (head, tail, cons_branch x xs cons_env))
-
-
-(*
-  DODGEYNESS:
-
-  I'm not sure if injections are being given the correct type
-  argument in match_variant and match_negative.
-
-  RESOLUTION:
-
-  Aha... the types in the injections are never actually used when the
-  injections are used for context optimisations, so it doesn't
-  matter in these cases.
-
-  Hmm... but there remains another case where the injection is used in
-  apply_annotations. We deal with this by massaging the value to have
-  the correct type in apply_annotations.
-*)
 
 and match_variant
     : var list -> (annotated_clause list) StringMap.t -> bound_computation -> var -> bound_computation =
   fun vars bs def var env ->
-    let t = lookup_type var env in
-
-    let context, cexp =
+    let qs, variant = TypeUtils.split_quantified_type (lookup_type var env) in
+    let context =
       if mem_context var env then
         lookup_context var env
       else
-        Pattern.CNVariant StringSet.empty, Variable var
+        Pattern.CNVariant StringSet.empty
     in
       match context with
-        | Pattern.CVariant name ->
-            if StringMap.mem name bs then
-              match cexp with
-                | Inject (_, (Variable case_variable), _) ->
-                    let annotated_clauses = StringMap.find name bs in
-                    (* let case_type = lookup_type case_variable env in *)
-                      (*                    let inject_type = TypeUtils.inject_type name case_type in *)
-                    let clauses = apply_annotations cexp annotated_clauses in
-                      match_cases (case_variable::vars) clauses def env
-                | _ -> assert false
-            else
-              def env
+        | Pattern.CVariant (name, payload) ->
+            begin match StringMap.find_opt name bs with
+            | None -> def env
+            | Some annotated_clauses ->
+                let clauses = apply_annotations (inject_variant name payload) annotated_clauses in
+                match_cases (payload :: vars) clauses def env
+            end
         | Pattern.CNVariant names ->
             let cases, cs =
               StringMap.fold
@@ -576,17 +560,14 @@ and match_variant
                    if StringSet.mem name names then
                      (cases, cs)
                    else
-                     let case_type = TypeUtils.variant_at name t in
-(*                     let inject_type = TypeUtils.inject_type name case_type in *)
+                     let case_type = Types.for_all (qs, TypeUtils.variant_at name variant) in
                      let (case_binder, case_variable) = Var.fresh_var_of_type case_type in
                      let match_env = bind_type case_variable case_type env in
                      let match_env =
-                       bind_context var
-                         (Pattern.CVariant name,
-                          Inject (name, Variable case_variable, t)) match_env in
+                       bind_context var (Pattern.CVariant (name, case_variable)) match_env in
                      let clauses =
                        apply_annotations
-                         (Inject (name, Variable case_variable, t)) annotated_clauses
+                         (inject_variant name case_variable) annotated_clauses
                      in
                        (StringMap.add name
                           (case_binder,
@@ -596,20 +577,21 @@ and match_variant
                 (StringMap.empty, names) in
 
             let default_type =
-              StringSet.fold
-                (fun name t -> snd (TypeUtils.split_variant_type name t)) cs t in
+              StringMap.fold
+                (fun name _ t -> snd (TypeUtils.split_variant_type name t)) cases variant in
               begin
                 match default_type with
                   | Types.Variant row ->
                       if Types.is_empty_row row && Types.is_closed_row row then
                         ([], Case (Variable var, cases, None))
                       else
+                        let default_type = Types.for_all (qs, default_type) in
                         let default_binder, default_variable = Var.fresh_var_of_type default_type in
                         let default_env = bind_type default_variable default_type env in
                         let default_env =
                           bind_context
                             default_variable
-                            (Pattern.CNVariant cs, Variable default_variable)
+                            (Pattern.CNVariant cs)
                             default_env
                         in
                           ([], Case (Variable var, cases, Some (default_binder, def default_env)))
@@ -627,26 +609,26 @@ and match_negative
       | _ -> assert false in
     match pattern with
     | Pattern.Negative names ->
-      let context, cexp =
+      let context =
         if mem_context var env then
           lookup_context var env
         else
-          Pattern.CNVariant StringSet.empty, Variable var
+          Pattern.CNVariant StringSet.empty
       in
       begin
         match context with
-        | Pattern.CVariant name when StringSet.mem name names ->
+        | Pattern.CVariant (name, _) when StringSet.mem name names ->
           def env
-        | Pattern.CVariant _ ->
-          let body = apply_annotation cexp (annotation, body) in
+        | Pattern.CVariant (name, payload) ->
+          let body = apply_annotation (inject_variant name payload) (annotation, body) in
           match_cases vars [(ps, body)] def env
         | Pattern.CNVariant _ ->
           let cases, narrowed = negative_cases names t (fun name payload payload_type ->
             let env = bind_type payload payload_type env in
-            let env = bind_context var (Pattern.CVariant name, Inject (name, Variable payload, t)) env in
+            let env = bind_context var (Pattern.CVariant (name, payload)) env in
             def env) in
           let binder, narrowed_var = Var.fresh_var_of_type narrowed in
-          let body = apply_annotation (Variable narrowed_var) (annotation, body) in
+          let body = apply_annotation (const (Variable narrowed_var)) (annotation, body) in
           (* A later clause tests its own labels on the original variant. *)
           [], Case (Variable var, cases, Some (binder, match_cases vars [(ps, body)] def env))
         | _ -> assert false
@@ -657,18 +639,18 @@ and match_constant
     : var list -> (annotated_clause list) ConstMap.t -> bound_computation -> var -> bound_computation =
   fun vars bs def var env ->
     let t = lookup_type var env in
-    let context, _cexp =
+    let context =
       if mem_context var env then
         lookup_context var env
       else
-        Pattern.CNConstant ConstSet.empty, Variable var
+        Pattern.CNConstant ConstSet.empty
     in
       match context with
         | Pattern.CConstant constant ->
             if ConstMap.mem constant bs then
               let clauses =
                 apply_annotations
-                  (Variable var)
+                  (const (Variable var))
                   (ConstMap.find constant bs)
               in
                 match_cases vars clauses def env
@@ -680,8 +662,8 @@ and match_constant
               ConstMap.fold
                 (fun constant annotated_clauses (comp, constants) ->
                    let constants = ConstSet.add constant constants in
-                   let env = bind_context var (Pattern.CNConstant constants, Variable var) env in
-                   let clauses = apply_annotations (Variable var) annotated_clauses in
+                   let env = bind_context var (Pattern.CNConstant constants) env in
+                   let clauses = apply_annotations (const (Variable var)) annotated_clauses in
                    let comp =
                      let (nenv, tenv, eff, _) = env in
                        ([],
@@ -765,12 +747,12 @@ and match_record
                          let yb, y = Var.fresh_var_of_type pt in
                            with_bindings
                              [letmv (yb, restored)]
-                             ((apply_annotation (Variable y) (annotation, body)) env)
+                             ((apply_annotation (const (Variable y)) (annotation, body)) env)
                      | (annotation, Pattern.Variable yb) ->
                          let y = Var.var_of_binder yb in
                            with_bindings
                              [letmv (yb, restored)]
-                             ((apply_annotation (Variable y) (annotation, body)) env)
+                             ((apply_annotation (const (Variable y)) (annotation, body)) env)
                      | _ -> assert false
                in
                  rps, body in
@@ -798,7 +780,7 @@ and match_record
 
     let bindings = List.rev bindings in
     let xs = List.rev xs in
-    let clauses = apply_annotations (Variable var) annotated_clauses in
+    let clauses = apply_annotations (const (Variable var)) annotated_clauses in
       with_bindings
         bindings
         (match_cases (xs @ vars) clauses def env)
