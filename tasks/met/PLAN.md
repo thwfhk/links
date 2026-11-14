@@ -116,7 +116,7 @@ Depends on milestone 1.
   interfaces with no visible name as out of scope and distinguish
   shadowed identities in diagnostics. Verify the resolved identities
   in print-and-reparse checks.
-- [ ] **2.8** Fix [printing of shadowed type aliases](IMPL.md#28-shadowed-type-aliases).
+- [x] **2.8** (`66861cb0`) Fix [printing of shadowed type aliases](IMPL.md#28-shadowed-type-aliases).
   After an alias is shadowed, check an earlier value against the type
   printed by each printer. Cover plain aliases and modal aliases that
   refer to visible interfaces. Check that a modal alias with no usable
@@ -454,16 +454,37 @@ inventory](MIGRATION.md) records the retained and deferred cases.
 The milestone 3 fixes from the final review are complete. Commit
 `67f8eded` extends frozen argument inference to polymorphic `do` calls.
 Items 3.13 and 3.14 cover argument inference and conditional branches.
-The coordinating chat reviews the handover before milestone 2 resumes
-at item 2.8. Item 4.11 and the remaining switch and handler diagnostics
-belong to milestone 4. Item 5.14 and the remaining REPL and comprehension
-fixes belong to milestone 5. There are no blockers for the handover.
+Item 2.8 is complete at `66861cb0`. The coordinating chat reviews this
+handover before milestone 4 starts at item 4.11 and the remaining switch
+and handler diagnostics. Item 5.14 and the remaining REPL and
+comprehension fixes belong to milestone 5. There are no blockers for
+the handover.
 Items 5.5 and 5.7–5.13 share the compiler and library commit
 `7f1f3f8c` because the startup, frontend and IR changes share code and
 checks. Commit `4b63194d` keeps source preprocessing off the bundled
 comprehension helpers. The final guide and verification record cover
 the combined revision. Optimisation work remains in the
 [deferred list](IMPL.md#deferred-optimisation-issues).
+
+### Milestone 2 final review checks
+
+The checks used `66861cb0` with OCaml 5.4.0. Logs are in
+`/private/tmp/smalllinks-met-28.1zXgOH/`. Independent review checked
+alias scopes, the REPL and recursive expansions. Its findings led to
+tests for renamed binders, unused alias parameters and arguments that
+grow while unfolding. See [2.8](IMPL.md#28-shadowed-type-aliases) for
+the printing limits.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make all-ci` | Passed. | `final-ci-build.log` |
+| `make tests` | 1,162 passed across 42 suites, with two existing ignored cases. All four scripts passed, including 32 print-and-reparse checks. | `final-all-tests.log` |
+| `./test-harness` on `handlers`, `effect_annotations`, `polymorphism`, `typecheck_examples`, `roundtrippable_types` and `modules` | 131, 76, 70, 34, 18 and 57 passed. | `<suite>.log` |
+| `opam exec -- ./run-tests unit-tests` | All 105 passed. | `unit-tests.log` |
+| Handler aggregate with frontend rechecking and strict IR checks | All nine assertions passed. | `strict-handlers.log` |
+| Temporary CI installation and `./tests/check-install.sh "$prefix/bin/linx"` | Passed. The installed interpreter also expanded a shadowed modal alias from outside the checkout. | `install.log`, `install-check.log` |
+| Both printers on the review probes and a REPL alias listing | Passed. The growing alias showed the out-of-scope marker and the unused parameter case printed a `mu` type. | `review-probes.log` |
+| `make rule-check`, `git diff --check` and the `rg` tabs check | Passed. GNU find was unavailable for the tabs rule. | `rule-check.log`, `diff-check.log`, `tabs.log` |
 
 ### Milestone 3 final review checks
 
