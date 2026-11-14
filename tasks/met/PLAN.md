@@ -58,13 +58,13 @@ decisions in the spec. Keep implementation decisions in IMPL.md.
   examples, review choices, milestones and implementation framework.
 - [x] **1.2** (`21348680`) Record the approved design decisions in SPEC.md and
   update the affected checks.
-- [x] **1.3** Build and record the starting compiler, native entry points,
+- [x] **1.3** (`a69e93ba`) Build and record the starting compiler, native entry points,
   regression suites and IR unit tests. Inventory effect-bearing types
   in primitives, both preludes, standard library modules and examples.
   Classify each affected fixture as a modal translation, a changed
   acceptance expectation, or a dependency on a postponed feature, using
   the criteria in [SPEC.md](SPEC.md#migration-and-deferred-coverage).
-- [x] **1.4** Add missing baseline tests for retained runtime behaviour:
+- [x] **1.4** (`1d94cb21`) Add missing baseline tests for retained runtime behaviour:
   clause contexts, forwarding, shallow and parameterised resumptions,
   and value-linearity use. Separate future modal typing assertions from
   runtime assertions executable by the baseline.
@@ -76,25 +76,25 @@ and the required migrations and deferred features have named entries.
 
 Depends on milestone 1.
 
-- [ ] **2.1** Introduce `List A` and `(| |)` variant type syntax.
+- [x] **2.1** (`2a911a4e`) Introduce `List A` and `(| |)` variant type syntax.
   Update parsers, printers, primitive signature strings,
   preludes, libraries, examples and fixtures together. Preserve term
   syntax and data-row behaviour. Check nested lists, function elements,
   open and closed variants, open record rows and print-and-reparse
   behaviour. Reserve `List`, rename existing aliases that use that name
   and preserve their tests. Reject user declarations of `List`.
-- [ ] **2.2** Exclude `escape` from the first modal version with a clear
+- [x] **2.2** (`bcf3816c`) Exclude `escape` from the first modal version with a clear
   diagnostic. Record dependent tests and examples as deferred. Keep the
   shared continuation machinery required by effect handlers.
-- [ ] **2.3** Add a separate scoped effect-context representation,
+- [x] **2.3** (`eba6c051`) Add a separate scoped effect-context representation,
   using interface identities and type arguments. Keep data-row
   unification intact. Check repeated interface instances with equal and
   different arguments, prefix subeffecting and instance order.
-- [ ] **2.4** Implement modality action, composition, equivalence,
+- [x] **2.4** (`eba6c051`) Implement modality action, composition, equivalence,
   transformations and residuals. Cover repeated masks, absent interfaces,
   interface-argument replacement, and transformations that fail despite
   equal actions at one ambient context.
-- [ ] **2.5** Add effect-interface declarations and the reviewed modal
+- [x] **2.5** (`9de77c76`) Add effect-interface declarations and the reviewed modal
   syntax. Register member signatures and resolve operation references
   through their declarations and modules. Update source types,
   traversals, substitution, free-variable collection, kinds and both
@@ -253,12 +253,38 @@ an explicit inventory.
 
 ## Status
 
-Milestone 1, item 1.1 is committed as `3552e33f` on `small-met`.
-The user approved the remaining [design decisions](SPEC.md#design-decisions)
-in 1.2. Milestone 1 is complete. The [migration inventory](MIGRATION.md)
-names the affected sources and fixtures.
+Milestones 1 and 2 are complete on `small-met`. The
+[migration inventory](MIGRATION.md) names the affected sources and
+fixtures and links to the deferred `escape` cases.
 
-Next action: finish syntax and type representation in milestone 2.
+### Handover to milestone 3
+
+Start Fresco inference from `9de77c76`. Use `ModalEffects`,
+`Types.AmbientFunction`, `Types.Modal`, and the interface registry in
+`Context.effect_interfaces`. Expose leading modalities through aliases
+when comparing types and crossing locks. The active compiler still uses
+the row-based checker. Keep it buildable while Fresco is developed.
+The range-helper lookup and explicit type argument checks are part of
+milestone 3. Review the [implementation decisions](IMPL.md#decisions-for-review)
+before extending their scope. Milestone 3 has no outstanding prerequisites.
+
+### Milestone 2 checks
+
+The combined checks used `9de77c76`. Logs are under
+`/private/tmp/smalllinks-met-1-2.WacKXl/`.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make` and `make all-ci` | Passed. | `final-dev-build.log`, `final-ci-build.log` |
+| `make tests` | 935 passed across 41 suites, with two existing ignored pattern tests. All four scripts passed. | `final-tests.log` |
+| `./test-harness tests/handlers.tests` and `./test-harness tests/effect_annotations.tests` | 115 and 18 passed. Other affected suites passed separately. | `final-handlers.log`, `final-effect_annotations.log`, `final-<suite>.log` |
+| `opam exec -- ./run-tests unit-tests` | All 60 passed, including scoped contexts, modality algebra, kinds, registry lookup and modal print-and-reparse in both engines. | `final-ir.log` |
+| `make rule-check` and `git diff --check bcf3816c..9de77c76` | Passed. GNU find was unavailable for the tabs rule. The same file patterns passed with `rg`. | `final-rules.log`, `final-tabs.log`, `final-diff-check.log` |
+| `opam exec -- dune install --profile=ci --prefix="$prefix" links` and `./tests/check-install.sh "$prefix/bin/linx"` | Passed. Installed `linx` ran the list and import checks and accepted a qualified modal declaration. | `final-install.log`, `final-install-check.log` |
+| `./links` on the two updated guide examples | Returned `2` and `(true, false)`. | `final-guide.log` |
+
+The 2.1 and 2.2 commits also built and passed focused tests on their
+own. Their logs are under `/private/tmp/smalllinks-met-2-1.HYwjYW/`.
 
 ### Implementation baseline
 
