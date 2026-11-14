@@ -118,15 +118,16 @@ Depends on milestone 1.
   in print-and-reparse checks.
 - [x] **2.8** (`66861cb0`) Fix [printing of shadowed type aliases](IMPL.md#28-shadowed-type-aliases).
   After an alias is shadowed, check an earlier value against the type
-  printed by each printer. Cover plain aliases and modal aliases that
-  refer to visible interfaces. Check that a modal alias with no usable
-  name exposes the out-of-scope marker when its interface is hidden.
+  printed by each printer when it can be written in source syntax.
+  Cover plain aliases and modal aliases that refer to visible interfaces.
+  Check the out-of-scope marker when expansion exposes a hidden interface
+  or reaches the recursive alias expansion limit.
 
 Completion check: the migrated list and variant syntax and the modal
 type representation have focused checks. Record, variant and presence
 behaviour remains covered, and `escape` is identified as deferred.
-Printed annotations preserve the identity of interfaces that can be
-named in the current scope.
+Reparsing types printed in source syntax preserves interface identities
+in the current scope. Out-of-scope markers are diagnostic text.
 
 ### 3. Implement modal inference and polymorphism
 
@@ -400,10 +401,11 @@ Depends on milestone 5.
 
 Completion check: a clean CI build and temporary installation work,
 all in-scope regressions and unit tests pass, the guide matches the
-compiler, and deferred features have an explicit inventory. Printed
-types can be reused as annotations when their interface declarations
-have names in the current scope. The printer marks other declarations
-as out of scope. See [Effect interfaces](SPEC.md#effect-interfaces).
+compiler, and deferred features have an explicit inventory. Types
+printed in source syntax can be reused as annotations in the same
+scope. An out-of-scope marker indicates diagnostic text. The printer
+can emit one for an [interface with no usable name](SPEC.md#effect-interfaces)
+or when [recursive alias expansion reaches its limit](IMPL.md#28-shadowed-type-aliases).
 
 ## Checks
 
