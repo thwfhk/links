@@ -275,7 +275,7 @@ Depends on milestone 3.
 - [x] **4.12** (`367b904e`) Propagate expected result types through `switch` returns
   that forward the handler input in every branch. Test a return through
   a pattern alias and a shadowing binding that returns a different value.
-- [ ] **4.13** Report incompatible type requirements for a shared handler
+- [x] **4.13** (`6c054ee5`) Report incompatible type requirements for a shared handler
   interface argument. Preserve the annotation diagnostic when the
   observed types leave a genuine choice or omit a possible modality.
 
@@ -459,20 +459,44 @@ The first implementation is complete on `small-met`. The native compiler
 uses Fresco for files, expressions and REPL sentences. The [migration
 inventory](MIGRATION.md) records the retained and deferred cases.
 
-The milestone 3 fixes from the final review are complete. Commit
+The final review fixes for milestones 2–4 are complete. Commit
 `67f8eded` extends frozen argument inference to polymorphic `do` calls.
 Items 3.13 and 3.14 cover argument inference and conditional branches.
-Item 2.8 is complete at `66861cb0`. The coordinating chat reviews this
-handover before milestone 4 starts at item 4.11 and the remaining switch
-and handler diagnostics. Item 5.14 and the remaining REPL and
-comprehension fixes belong to milestone 5. There are no blockers for
-the handover.
+Item 2.8 is complete at `66861cb0`. Items 4.11–4.13 cover return
+annotations, forwarding switches and conflicting interface arguments.
+The coordinating chat reviews this handover before milestone 5 starts.
+Item 5.14 and the remaining REPL and comprehension fixes belong to
+milestone 5. There are no blockers for the handover.
 Items 5.5 and 5.7–5.13 share the compiler and library commit
 `7f1f3f8c` because the startup, frontend and IR changes share code and
 checks. Commit `4b63194d` keeps source preprocessing off the bundled
 comprehension helpers. The final guide and verification record cover
 the combined revision. Optimisation work remains in the
 [deferred list](IMPL.md#deferred-optimisation-issues).
+
+### Milestone 4 final review checks
+
+The combined checks used `6c054ee5` with OCaml 5.4.0. Logs are in
+`/private/tmp/smalllinks-met-4-defects.DqKn6y/`. Independent review checked redundant
+annotations, changes to the type of a returned value, switch scope and
+pattern narrowing, and the difference between an incompatible type and
+an unresolved choice of modality. See `4.11-independent-review.log`,
+`4.12-independent-review.log` and `4.13-probes.log`.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make` for each fix and `make all-ci` on the combined revision | Passed. | `4.1*-build.log`, `ci-build.log` |
+| `make tests` | 1,183 passed across 42 suites, with two existing ignored cases. All four scripts passed. | `all-tests.log` |
+| `./test-harness` on the affected suites | Passed, including 152 handler, 76 effect annotation, 70 polymorphism, 34 example and 30 typed IR cases. | `<suite>.log` |
+| `opam exec -- ./run-tests unit-tests` | All 105 passed. | `unit-tests.log` |
+| Handler and effect annotation tests with frontend rechecking and strict IR checks | 151 handler and 76 effect annotation cases passed. | `strict-handlers.log`, `strict-effect_annotations.log` |
+| Handler example runner with strict checking and a typecheck-only example | Passed. | `strict-examples.log`, `typecheck-only.log` |
+| `make rule-check`, `git diff --check` and the `rg` tabs check | Passed. GNU find was unavailable for the tabs rule. | `rule-check.log`, `diff-check.log`, `tabs.log` |
+
+The strict handler run excludes the negative variant alias
+`(-Tag as x)` probe. It passes with default settings. Strict IR
+checking reports the same mismatch at its narrowed binder on
+`5c6eab2a` and `6c054ee5` (`4.12-refining-pattern-strict.log`).
 
 ### Milestone 2 final review checks
 
