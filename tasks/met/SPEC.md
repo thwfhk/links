@@ -788,6 +788,11 @@ arguments per interface, shared by all its clauses.
 5. All clauses return `B`. An omitted return clause means the same
    checked `case x -> x` as an explicit identity clause.
 
+A redundant type annotation on a forwarded value keeps the same
+typing. For an effectful input of type `Int`, both `case n -> n`
+and `case n -> (n : Int)` reject an expected `[] Int` result.
+Writing `case n -> (n : [] Int)` supplies the modality explicitly.
+
 Deep handler clauses may capture only unrestricted values from the
 enclosing scope. The state, operation argument and return patterns
 introduce local bindings in their respective clauses. A linear local

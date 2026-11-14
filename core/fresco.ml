@@ -211,7 +211,7 @@ let handler_interfaces interfaces clauses =
     let EffectInterfaces.{ interface; parameters; _ } = lookup_operation pattern.pos interfaces label in
     Interfaces.add interface parameters handled) Interfaces.empty clauses
 
-let identity_return cases =
+let identity_return ?(same_type = fun _ -> false) cases =
   let rec names env (pattern : Pattern.with_pos) = match pattern.node with
     | Pattern.Variable binder -> Some (StringSet.add (Binder.to_name binder) env)
     | Pattern.HasType (pattern, _) -> names env pattern
@@ -220,6 +220,8 @@ let identity_return cases =
   let rec aliases env (body : phrase) = match body.node with
     | Var name -> StringSet.mem name env
     | TupleLit [body] -> aliases env body
+    | TypeAnnotation (body, (_, Some typ)) | Checked (body, typ) ->
+        same_type typ && aliases env body
     | Conditional (_, yes, no) -> aliases env yes && aliases env no
     | Block (bindings, body) ->
         let rec block env = function
@@ -233,6 +235,11 @@ let identity_return cases =
   | [] -> true
   | [pattern, body] -> Option.fold ~none:false ~some:(fun env -> aliases env body) (names StringSet.empty pattern)
   | _ -> false
+
+let redundant_return_annotation returned typ =
+  match head typ with
+  | Modal _ | ForAll _ -> false
+  | _ -> FrescoTypes.equal (Lazy.force returned) typ
 
 (* Partial inference uses the enclosing lock for its term environment and
    works on copies of flexible variables. *)
@@ -570,11 +577,13 @@ module Partial = struct
 
   and handler_result interfaces env ?ambient entries expected handler =
     let modality = extension (Interfaces.bindings entries) in
-    let input_expected =
-      if identity_return handler.sh_value_cases && (Interfaces.is_empty entries || absolute expected)
-      then expected else hole in
-    let input = infer_safely (fun () -> infer interfaces env ?ambient:(locked modality ambient)
-        ~expected:input_expected handler.sh_expr) in
+    let returned = lazy (carry modality
+      (handler_input interfaces env ?ambient ~frozen:true modality hole handler)) in
+    let input =
+      if expected <> hole && (Interfaces.is_empty entries || absolute expected) &&
+         identity_return ~same_type:(redundant_return_annotation returned) handler.sh_value_cases
+      then handler_input interfaces env ?ambient modality expected handler
+      else handler_input interfaces env ?ambient modality hole handler in
     let returned = if FrescoTypes.unknown input then hole else carry modality input in
     let params = Option.fold ~none:[] ~some:(fun p -> p.shp_bindings) handler.sh_descr.shd_params in
     let params = List.map (fun (pat, value) -> pat, infer_safely (fun () -> infer interfaces env ?ambient value)) params in
@@ -599,6 +608,10 @@ module Partial = struct
     match List.filter (fun typ -> not (FrescoTypes.unknown (head typ))) (returns @ operations) with
     | [] -> hole
     | first :: rest -> List.fold_left join first rest
+
+  and handler_input interfaces env ?ambient ?frozen modality expected handler =
+    infer_safely (fun () -> infer interfaces env ?ambient:(locked modality ambient)
+      ?frozen ~expected handler.sh_expr)
 
   and infer_safely f =
     try FrescoTypes.transaction f with Unify.Failure _ | Context.Error _ | Errors.Type_error _ -> hole
@@ -968,6 +981,14 @@ module Partial = struct
   let handler_result_hint interfaces context entries expected handler =
     handler_result interfaces (accessible_environment context) ~ambient:(ambient_copy context)
       (Interfaces.map (List.map copy) entries) (copy expected) handler
+
+  let handler_forwards_return interfaces context entries handler =
+    let returned = lazy (
+      let modality = extension (Interfaces.bindings (Interfaces.map (List.map copy) entries)) in
+      let env = accessible_environment context in
+      carry modality (handler_input interfaces env ~ambient:(ambient_copy context)
+        ~frozen:true modality hole handler)) in
+    identity_return ~same_type:(redundant_return_annotation returned) handler.sh_value_cases
 
 end
 
@@ -1722,21 +1743,23 @@ and infer_handler state pos mode ({ sh_expr; sh_effect_cases; sh_value_cases; sh
           (EffectInterfaces.Operations.bindings missing) in
       error pos (Printf.sprintf "Incomplete handler for %s. Missing operation clauses for %s"
         (ModalEffects.Names.name interface) (String.concat ", " names))) handled;
-  let identity_return = identity_return sh_value_cases in
-  let flows_to_input typ = identity_return && (Interfaces.is_empty handled || Partial.absolute typ) in
-  let input_mode = match mode with
-    | Check expected when flows_to_input expected -> Check expected
-    | _ -> Infer in
   let parameters = handler_interfaces state.interfaces sh_effect_cases in
   let provisional = Interfaces.map Partial.fresh_arguments parameters in
+  let forwards_return instances = Partial.handler_forwards_return state.interfaces state.terms instances handler in
+  let flows_to_input forwards typ = forwards && (Interfaces.is_empty handled || Partial.absolute typ) in
+  let input_mode forwards = match mode with
+    | Check expected when flows_to_input forwards expected -> Check expected
+    | _ -> Infer in
   let known_result instances =
     Partial.handler_result_hint state.interfaces state.terms instances Not_typed handler in
-  let input_hint = match input_mode with
+  let provisional_forwarding = forwards_return provisional in
+  let input_hint = match input_mode provisional_forwarding with
     | Check expected -> expected
-    | _ when not identity_return -> Not_typed
+    | _ when not provisional_forwarding -> Not_typed
     | _ ->
         let result = known_result provisional in
-        if not (FrescoTypes.unknown (head result)) && flows_to_input result then result else Not_typed in
+        if not (FrescoTypes.unknown (head result)) && flows_to_input provisional_forwarding result
+        then result else Not_typed in
   let instances, sibling_hint = match sh_descr.shd_modal with
     | Some checked ->
         let added = match checked.shm_extension with
@@ -1750,6 +1773,8 @@ and infer_handler state pos mode ({ sh_expr; sh_effect_cases; sh_value_cases; sh
         let instances = infer_interface_arguments pos state.terms parameters hints in
         let sibling_hint = if hints = [] then input_hint else known_result instances in
         instances, sibling_hint in
+  let forwards_return = forwards_return instances in
+  let input_mode = input_mode forwards_return in
   let entries = Interfaces.bindings instances in
   let modality = extension entries in
   let input_state = under state modality in
@@ -1804,7 +1829,7 @@ and infer_handler state pos mode ({ sh_expr; sh_effect_cases; sh_value_cases; sh
     let check () =
       match input_mode with
       | (Infer | Apply _) when not (FrescoTypes.unknown (head sibling_hint)) &&
-                               flows_to_input sibling_hint && needs_prefix sibling_hint ->
+                               flows_to_input forwards_return sibling_hint && needs_prefix sibling_hint ->
           let _, sibling_hint = FrescoTypes.complete_hint (pk_type, sibling_hint) in
           begin match Context.transaction state.terms (fun () -> check_input ~allow_intro:false (Check sibling_hint)) with
           | result -> result
@@ -1820,10 +1845,13 @@ and infer_handler state pos mode ({ sh_expr; sh_effect_cases; sh_value_cases; sh
             let _, expected = FrescoTypes.complete_hint (pk_type, partial) in
             check_input (Check expected)
         end in
+  let returned = lazy (Context.carry modality (typ input)) in
+  let forwards_return =
+    identity_return ~same_type:(redundant_return_annotation returned) sh_value_cases in
   let returns = List.map2 (fun (pattern, env) body ->
     (* Check a value produced by a clause at its own expected type. The
        forwarding return must retain the type of the handled computation. *)
-    let body = infer ~allow_intro:(not identity_return) (bind_all clause_state env) mode body in
+    let body = infer ~allow_intro:(not forwards_return) (bind_all clause_state env) mode body in
     (pattern, term body), body, clause_usage pattern.pos env body) patterns bodies in
   let output = match mode, returns with
     | Check expected, _ -> expected

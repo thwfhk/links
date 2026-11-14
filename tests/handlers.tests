@@ -401,6 +401,42 @@ Implicit return case (2)
 effect Operation { Op : () => Bool; } handle(do Op) { case <Op => resume> -> resume(true) }
 stdout : true : Bool
 
+A forwarding return cannot introduce a modality for an effectful input
+fun keep(x : [] Int) { x } keep(handle({ print("Input"); 42 }) { case n -> n })
+stderr : @.*Type error: Modal introduction requires a value.*
+exit : 1
+
+A plain ascription on a forwarding return cannot introduce a modality
+fun keep(x : [] Int) { x } keep(handle({ print("Input"); 42 }) { case n -> (n : Int) })
+stderr : @.*Type error: Modal introduction requires a value.*
+exit : 1
+
+A forwarding return checks its ordinary ascription
+handle({ print("Input"); 42 }) { case n -> (n : String) }
+stderr : @.*Type error: Expected String, got Int.*
+exit : 1
+
+A redundant return ascription preserves a modality allowed on a value input
+(handle(42) { case n -> (n : Int) }) : [] Int
+stdout : 42 : [] (Int)
+
+An ordinary return ascription can remove an existing modality
+effect Reader { Ask : () => [] Int; } (handle(do Ask) { case <Ask => k> -> k(42 : [] Int) case n -> (n : Int) }) : [] Int
+stdout : 42 : [] (Int)
+
+An ordinary return ascription can instantiate an existing quantifier
+effect Reader { Ask : () => (forall a::Abs. Int); } (handle(do Ask) { case <Ask => k> -> k(/\ [a::Abs]. { 42 }) case n -> (n : Int) }) : [] Int
+stdout : 42 : [] (Int)
+
+A return can explicitly give the bound value a modality
+fun keep(x : [] Int) { x } keep(handle({ print("Input"); 42 }) { case n -> (n : [] Int) })
+stdout : Input42 : [] (Int)
+
+An explicit return modality preserves state initialisation and operation resumption
+effect Reader { Ask : () => Int; } fun keep(x : [] Int) { x } keep(handle({ print("Input"); do Ask })(s <- { print("State"); 40 }) { case <Ask => k> -> k(s + 2, s) case n -> (n : [] Int) })
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : StateInput42 : [] (Int)
+
 Omission of resumption for nullary operations (1)
 effect Foo { Foo : () => Int; } handle(do Foo) { case <Foo> -> 5 }
 stdout : 5 : Int

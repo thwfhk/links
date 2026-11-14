@@ -425,6 +425,15 @@ It checks all branch bodies before deciding whether the common type is
 absolute. This lets a later branch determine whether the relative
 prefixes can be dropped.
 
+#### 4.11 Redundant annotations on forwarding returns
+
+For expected-type propagation, compare the annotation with the
+partially inferred return binding type before applying the expected
+type. For full clause checking, compare it with the checked binding
+type. A matching ordinary annotation preserves forwarding. Leading
+modalities and quantifiers remain explicit, and ordinary annotations
+can still remove a modality or instantiate a quantifier.
+
 ### Milestone 5 follow-up
 
 #### 5.5 Interface environments
