@@ -364,7 +364,7 @@ struct
       bind s (fun v -> lift (Erase (names, v), t))
 
   let coerce (s, t) =
-    bind s (fun v -> lift (Coerce (v, t), sem_type s))
+    bind s (fun v -> lift (Coerce (v, t), t))
 
   (*
       (r : (l1:A1, ... li:Ai | R) with (l1=v1, ..., li=vi))
@@ -436,15 +436,9 @@ struct
     let xsb : binder list =
       (* It is important to rename the quantifiers in the type to be
          those used in the body of the function. *)
-      match Instantiate.replace_quantifiers ft tyvars with
-        | Types.ForAll (_, t')
-        | t' ->
-            begin match TypeUtils.concrete_type t' with
-              | Types.Function _ | Types.Lolli _ as ft' ->
-                  let args = TypeUtils.arg_types ft' in
-                    List.map (fun arg -> Var.fresh_binder_of_type arg) args
-              | _ -> assert false
-            end in
+      Instantiate.replace_quantifiers ft tyvars
+      |> TypeUtils.arg_types
+      |> List.map Var.fresh_binder_of_type in
 
     let body_type = sem_type body in
     let body =
@@ -467,15 +461,9 @@ struct
            let xsb : binder list =
              (* It is important to rename the quantifiers in the type to be those used in
                 the body of the function. *)
-             match Instantiate.replace_quantifiers ft tyvars with
-               | Types.ForAll (_, t')
-               | t' ->
-                   begin match TypeUtils.concrete_type t' with
-                     | Types.Function _ as ft' ->
-                         let args = TypeUtils.arg_types ft' in
-                           List.map (Var.fresh_binder_of_type) args
-                     | _ -> assert false
-                   end in
+             Instantiate.replace_quantifiers ft tyvars
+             |> TypeUtils.arg_types
+             |> List.map Var.fresh_binder_of_type in
            let body fs =
              let body = body fs in
              let body_type = sem_type body in
@@ -493,9 +481,10 @@ struct
     in
       M.bind (rec_binding defs) rest
 
-  let do_operation (name, vs, t) =
+  let do_operation (name, vs, signature) =
     let vs = lift_list vs in
-    M.bind vs (fun vs -> lift (Special (DoOperation (name, vs, t)), t))
+    let t = TypeUtils.return_type signature in
+    M.bind vs (fun vs -> lift (Special (DoOperation (name, vs, signature)), t))
 
   let handle env (m, val_cases, eff_cases, params, desc) =
     let params =
@@ -569,17 +558,23 @@ struct
                     Instantiate.ArityMismatch (expected, provided) ->
                       raise (Errors.TypeApplicationArityMismatch { pos; name; expected; provided }) in
 
-      let rec is_pure_primitive e =
+      let is_pure_primitive name =
+        let var, _ = lookup_name_and_type name env in
+        Lib.is_primitive_var var && Lib.is_pure_primitive (Lib.primitive_name var) in
+
+      let rec is_pure_primitive_expr e =
         let open Sugartypes in
         match WithPos.node e with
           | TAbstr (_, e)
-          | TAppl (e, _) -> is_pure_primitive e
-          | Var f when Lib.is_pure_primitive f -> true
+          | TAppl (e, _)
+          | Checked (e, _)
+          | ModalIntro (e, _)
+          | TypeAnnotation (e, _) -> is_pure_primitive_expr e
+          | Var f | FreezeVar f -> is_pure_primitive f
           | _ -> false in
 
       let eff = lookup_effects env in
 
-      let instantiate_mb name = instantiate name [(Row, eff)] in
       let cofv = I.comp_of_value in
       let ec = eval env in
       let ev = evalv env in
@@ -590,11 +585,11 @@ struct
           | Var x -> cofv (lookup_var x)
           | FreezeVar x -> cofv (lookup_var x)
           | RangeLit (low, high) ->
-              cofv (I.apply_pure (instantiate_mb "$$intRange", [ev low; ev high]))
+              cofv (I.apply_pure (lookup_var "$$intRange", [ev low; ev high]))
           | ListLit ([], Some t) ->
               cofv (instantiate "Nil" [(Type, t)])
           | ListLit (e::es, Some t) ->
-              cofv (I.apply_pure(instantiate "Cons" [(Type, t); (Row, eff)],
+              cofv (I.apply_pure(instantiate "Cons" [(Type, t)],
                                  [ev e; ev (WithPos.make ~pos (ListLit (es, Some t)))]))
           | Escape (bndr, body) when Binder.has_type bndr ->
              let k  = Binder.to_name bndr in
@@ -609,7 +604,7 @@ struct
               cofv (I.apply_pure (instantiate op tyargs, [ev e1; ev e2]))
           | InfixAppl ((tyargs, BinaryOp.Name "++"), e1, e2) ->
               cofv (I.apply_pure (instantiate "Concat" tyargs, [ev e1; ev e2]))
-          | InfixAppl ((tyargs, BinaryOp.Name n), e1, e2) when Lib.is_pure_primitive n ->
+          | InfixAppl ((tyargs, BinaryOp.Name n), e1, e2) when is_pure_primitive n ->
               cofv (I.apply_pure (instantiate n tyargs, [ev e1; ev e2]))
           | InfixAppl ((tyargs, BinaryOp.Name n), e1, e2) ->
               I.apply (instantiate n tyargs, [ev e1; ev e2])
@@ -627,19 +622,14 @@ struct
           | InfixAppl ((_tyargs, BinaryOp.Or), e1, e2) ->
               I.condition (ev e1, cofv (I.constant (Constant.Bool true)), ec e2)
           | UnaryAppl ((_tyargs, UnaryOp.Minus), e) ->
-              cofv (I.apply_pure(instantiate_mb "negate", [ev e]))
+              cofv (I.apply_pure(lookup_var "negate", [ev e]))
           | UnaryAppl ((_tyargs, UnaryOp.FloatMinus), e) ->
-              cofv (I.apply_pure(instantiate_mb "negatef", [ev e]))
-          | UnaryAppl ((tyargs, UnaryOp.Name n), e) when Lib.is_pure_primitive n ->
+              cofv (I.apply_pure(lookup_var "negatef", [ev e]))
+          | UnaryAppl ((tyargs, UnaryOp.Name n), e) when is_pure_primitive n ->
               cofv (I.apply_pure(instantiate n tyargs, [ev e]))
           | UnaryAppl ((tyargs, UnaryOp.Name n), e) ->
               I.apply (instantiate n tyargs, [ev e])
-          | FnAppl ({node=Var f; _}, es) when Lib.is_pure_primitive f ->
-              cofv (I.apply_pure (I.var (lookup_name_and_type f env), evs es))
-          | FnAppl ({node=TAppl ({node=Var f; _}, tyargs); _}, es)
-               when Lib.is_pure_primitive f ->
-              cofv (I.apply_pure (instantiate f (List.map (snd ->- val_of) tyargs), evs es))
-          | FnAppl (e, es) when is_pure_primitive e ->
+          | FnAppl (e, es) when is_pure_primitive_expr e ->
               cofv (I.apply_pure (ev e, evs es))
           | FnAppl (e, es) ->
               I.apply (ev e, evs es)
@@ -679,7 +669,7 @@ struct
               cofv (I.update
                       (ev e,
                        List.map (fun (name, e) -> (name, ev e)) fields))
-          | TypeAnnotation (e, _) ->
+          | TypeAnnotation (e, _) | Checked (e, _) | ModalIntro (e, _) ->
               (* we might consider getting rid of type annotations before here *)
               ec e
           | Upcast (e, (_, Some t), _) ->
@@ -688,24 +678,9 @@ struct
               cofv (I.inject (name, I.record ([], None), t))
           | ConstructorLit (name, Some e, Some t) ->
               cofv (I.inject (name, ev e, t))
-          | DoOperation (op, ps, Some t) ->
-            let name =
-              let o = (object (o)
-                inherit SugarTraversals.fold as super
-                val mutable opname = None
-
-                method opname = match opname with
-                  | Some name -> name
-                  | None -> failwith "Operation with no name"
-
-                method! phrasenode = function
-                  | Operation name -> opname <- Some name ; o
-                  | p -> super#phrasenode p
-              end)#phrase op in
-              o#opname
-            in
-            let vs = evs ps in
-            I.do_operation (name, vs, t)
+          | DoOperation (({node = Operation name; _} |
+                         {node = TAppl ({node = Operation name; _}, _); _}), ps, Some signature) ->
+            I.do_operation (name, evs ps, signature)
           | Operation _ -> assert false
           | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
              (* it happens that the ambient effects are the right ones
@@ -829,7 +804,7 @@ struct
                              (fs, inner_fts, outer_fts) ->
                           let f = Binder.to_name bndr in
                           let outer  = Binder.to_type bndr in
-                          let (inner, _) = OptionUtils.val_of inner_opt in
+                          let inner = Option.fold ~none:outer ~some:fst inner_opt in
                               (f::fs, inner::inner_fts, outer::outer_fts))
                         (nodes_of_list defs)
                         ([], [], []) in
@@ -943,14 +918,26 @@ end
 
 module C = Eval(Interpretation(BindingListMonad))
 
+let lower_sugar =
+  object
+    inherit SugarTraversals.map
+    (* Fresco has checked the modalities. Only the runtime types and
+       resolved operation labels are needed below this boundary. *)
+    method! typ = TypeUtils.erase_modalities
+    method! type_row = TypeUtils.erase_modalities
+    method! type_field_spec = TypeUtils.erase_modalities
+  end
+
 let desugar_expression : env -> Sugartypes.phrase -> Ir.computation =
-  fun env e ->
-    let (bs, body), _ = C.compile env ([], Some e) in
+  fun (nenv, tenv, eff) e ->
+    let env = nenv, Env.Int.map TypeUtils.erase_modalities tenv, eff in
+    let (bs, body), _ = C.compile env ([], Some (lower_sugar#phrase e)) in
       (bs, body)
 
 let desugar_program : env -> Sugartypes.program -> Ir.binding list * Ir.computation * nenv =
-  fun env p ->
-    let (bs, body), _ = C.compile env p in
+  fun (nenv, tenv, eff) p ->
+    let env = nenv, Env.Int.map TypeUtils.erase_modalities tenv, eff in
+    let (bs, body), _ = C.compile env (lower_sugar#program p) in
       C.partition_program (bs, body)
 
 let desugar_definitions : env -> Sugartypes.binding list -> Ir.binding list * nenv =
@@ -969,15 +956,15 @@ let program : Context.t -> Types.datatype -> Sugartypes.program -> result
   let (nenv, _, _) as env =
     let nenv = Context.name_environment context in
     let tenv = Context.typing_environment context in
-    let venv = Context.variable_environment context in
+    let venv = Env.Int.map TypeUtils.erase_modalities (Context.variable_environment context) in
     (nenv, venv, tenv.Types.effect_row)
   in
-  let program', _ = C.compile env program in
+  let program', _ = C.compile env (lower_sugar#program program) in
   let globals, program'', nenv' = C.partition_program program' in
   let nenv'' = Env.String.extend nenv nenv' in
   let venv =
     let tenv = Context.typing_environment context in
-    Var.varify_env (nenv'', tenv.Types.var_env)
+    Env.Int.map TypeUtils.erase_modalities (Var.varify_env (nenv'', tenv.Types.var_env))
   in
   { globals; datatype; program = program'';
     context = Context.({ context with name_environment = nenv'';

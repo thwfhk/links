@@ -9,7 +9,26 @@ let error t = raise (TypeDestructionError t)
 
 
 let concrete_type = Types.concrete_type'
-let extract_row = Types.extract_row
+let rec without_modality t =
+  match concrete_type t with
+  | Modal (_, body) -> without_modality body
+  | t -> t
+
+let erase_modalities =
+  let visitor = object (self)
+    inherit Types.Transform.visitor as super
+    method! typ = function
+      | Modal (_, body) -> self#typ body
+      | RecursiveApplication app ->
+          let self, args = self#type_args app.r_args in
+          let unwind args = snd (self#typ (app.r_unwind args)) in
+          self, RecursiveApplication { app with r_args = args; r_unwind = unwind }
+      | t -> super#typ t
+  end in
+  let visitor = visitor#set_refresh_tyvars false in
+  fun t -> snd (visitor#typ t)
+
+let extract_row t = Types.extract_row (without_modality t)
 let extract_row_parts = Types.extract_row_parts
 
 let split_row name row =
@@ -36,6 +55,7 @@ let split_row name row =
 
 let rec variant_at ?(overstep_quantifiers=true) name t = match (concrete_type t, overstep_quantifiers) with
   | (ForAll (_, t), true) -> variant_at name t
+  | (Modal (_, t), _) -> variant_at ~overstep_quantifiers name t
   | (Variant row, _) ->
       let t, _ = split_row name row in t
   | (t, _) ->
@@ -43,6 +63,7 @@ let rec variant_at ?(overstep_quantifiers=true) name t = match (concrete_type t,
 
 let rec split_variant_type name t = match concrete_type t with
   | ForAll (_, t) -> split_variant_type name t
+  | Modal (_, t) -> split_variant_type name t
   | Variant row ->
       let t, row = split_row name row in
         Variant (make_singleton_closed_row (name, Present t)), Variant row
@@ -51,6 +72,7 @@ let rec split_variant_type name t = match concrete_type t with
 
 let rec project_type ?(overstep_quantifiers=true) name t = match (concrete_type t, overstep_quantifiers) with
   | (ForAll (_, t), true) -> project_type name t
+  | (Modal (_, t), _) -> project_type ~overstep_quantifiers name t
   | (Record row, _) ->
       let t, _ = split_row name row in
         t
@@ -64,6 +86,7 @@ let rec project_type ?(overstep_quantifiers=true) name t = match (concrete_type 
 let rec erase_type ?(overstep_quantifiers=true) names t =
   match (concrete_type t, overstep_quantifiers) with
   | (ForAll (_, t), true) -> erase_type names t
+  | (Modal (_, t), _) -> erase_type ~overstep_quantifiers names t
   | (Record row, _) ->
     let closed = is_closed_row row in
       let (field_env, row_var) = fst (unwrap_row row) |> extract_row_parts in
@@ -94,6 +117,8 @@ let rec return_type ?(overstep_quantifiers=true) t = match (concrete_type t, ove
   | (ForAll (_, t), true) -> return_type t
   | (Function (_, _, t), _) -> t
   | (Lolli (_, _, t), _) -> t
+  | (AmbientFunction (_, _, t), _) -> t
+  | (Modal (_, t), _) -> return_type ~overstep_quantifiers t
   | (Operation (_, t), _) -> t
   | (t, _) ->
       error ("Attempt to take return type of non-function: " ^ string_of_datatype t)
@@ -104,6 +129,9 @@ let rec arg_types ?(overstep_quantifiers=true) t = match (concrete_type t, overs
       extract_tuple row
   | (Lolli (Record row, _, _), _) ->
      extract_tuple row
+  | (AmbientFunction (_, domain, _), _) ->
+      extract_tuple (flatten_row (extract_row domain))
+  | (Modal (_, t), _) -> arg_types ~overstep_quantifiers t
 (*   | Function (t', _, _) when is_thunk_type t' -> [Types.unit_type] (\* THIS IS A HACK. TODO: Trace down cause of bug. At some point during the compilation process the formal parameter to (() {Op: a -> b} -> c) -> d gets unwrapped yielding a function type composed internally as *)
 (*  Function ((Function (), {Op: a -> b}, c) *)
 (*            , <empty effects>, d) *)
@@ -116,6 +144,8 @@ let rec effect_row ?(overstep_quantifiers=true) t = match (concrete_type t, over
   | (ForAll (_, t), true) -> effect_row t
   | (Function (_, effects, _), _) -> effects
   | (Lolli (_, effects, _), _) -> effects
+  | (AmbientFunction _, _) -> make_empty_closed_row ()
+  | (Modal (_, t), _) -> effect_row ~overstep_quantifiers t
   | (t, _) ->
       error ("Attempt to take effects of non-function: " ^ string_of_datatype t)
 
@@ -124,8 +154,9 @@ let iter_row (iter_func : string -> field_spec -> unit) row  =
   let (field_spec_map, _) = fst (unwrap_row row) |> extract_row_parts in
   Utility.StringMap.iter iter_func field_spec_map
 
-let is_function_type t = match concrete_type t with
+let is_function_type t = match without_modality t with
   | Lolli (_, _, _)
+  | AmbientFunction _
   | Function (_, _, _) -> true
   | _ -> false
 
@@ -136,6 +167,7 @@ let is_builtin_effect = Types.is_builtin_effect
 
 let rec element_type ?(overstep_quantifiers=true) t = match (concrete_type t, overstep_quantifiers) with
   | (ForAll (_, t), true) -> element_type t
+  | (Modal (_, t), _) -> element_type ~overstep_quantifiers t
   | Application (l, [(_pk, t)]), _
       when Types.Abstype.equal l Types.list -> t
   | (t, _) ->

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
 if ! output=$(./links <<'EOF'
+effect Reader { Ask : () => Int; }
+sig ask : [Reader] (() -> Int)
 fun ask() { do Ask };
 handle(ask()) { case <Ask => k> -> k(42) };
 EOF
@@ -9,10 +11,72 @@ EOF
     exit 1
 fi
 
-if [[ "$output" != *$'\nask = fun : '*$'\n42 : Int' ]]; then
+if [[ "$output" != *$'\nask = fun : [Reader] (() -> Int)'*$'\n42 : Int' ]]; then
     echo "FAILURE: The REPL did not return 42 from the handler"
     printf '%s\n' "$output"
     exit 1
 fi
 
 echo "SUCCESS: The REPL ran a handler with default settings"
+
+if ! output=$(./links 2>&1 <<'EOF'
+var linear = (linfun() { 42 } : [] (() -@ Int));
+linear();
+linear();
+var linear = (linfun() { 43 } : [] (() -@ Int));
+linear();
+EOF
+); then
+    echo "FAILURE: The linear binding REPL session exited with an error"
+    exit 1
+fi
+
+if [[ "$output" != *$'42 : Int'*'Linear variable linear has already been used'*$'43 : Int' ]]; then
+    echo "FAILURE: The REPL did not enforce linear use across sentences"
+    printf '%s\n' "$output"
+    exit 1
+fi
+
+echo "SUCCESS: The REPL tracked a linear binding across sentences"
+
+if ! output=$(./links 2>&1 <<'EOF'
+var linear = (linfun() { 42 } : [] (() -@ Int));
+{ var n = linear(); error("after use") };
+linear();
+var unused = (linfun() { 43 } : [] (() -@ Int));
+{ error("before use"); unused() };
+unused();
+EOF
+); then
+    echo "FAILURE: Error recovery ended the REPL session"
+    exit 1
+fi
+
+if [[ "$output" != *'after use'*'Linear variable linear has already been used'*'before use'*$'43 : Int' ]]; then
+    echo "FAILURE: The REPL lost track of which linear bindings ran"
+    printf '%s\n' "$output"
+    exit 1
+fi
+
+echo "SUCCESS: The REPL tracked linear uses before a runtime error"
+
+if ! output=$(./links 2>&1 <<'EOF'
+module Linear {
+  var original = (linfun() { 42 } : [] (() -@ Int));
+  var moved = original;
+}
+Linear.moved();
+Linear.original();
+EOF
+); then
+    echo "FAILURE: A module with a linear binding ended the REPL session"
+    exit 1
+fi
+
+if [[ "$output" != *$'42 : Int'*'Linear variable '*original*' has already been used'* ]]; then
+    echo "FAILURE: The REPL allowed a moved module binding to be reused"
+    printf '%s\n' "$output"
+    exit 1
+fi
+
+echo "SUCCESS: The REPL tracked a linear binding moved within a module"

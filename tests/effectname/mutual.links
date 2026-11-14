@@ -1,7 +1,14 @@
+effect A { A : () => Int; }
+effect B { B : ([A] (() -> Int)) => Int; }
+
 mutual {
-       effectname A = B ;
-       effectname B = {} ;
+  sig f : [A, B] ((Int) -> Int)
+  fun f(n) { if (n == 0) do B(g) else f(n - 1) }
+
+  sig g : [A] (() -> Int)
+  fun g() { do A }
 }
 
-# sig f : () -A-> ()
-# fun f () {}
+handle(handle(f(1)) { case <B(run) => k> -> k(run()) }) {
+  case <A => k> -> k(42)
+}

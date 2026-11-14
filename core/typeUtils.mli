@@ -4,6 +4,8 @@ open CommonTypes
 exception TypeDestructionError of string
 
 val concrete_type : Types.datatype -> Types.datatype
+val without_modality : Types.datatype -> Types.datatype
+val erase_modalities : Types.datatype -> Types.datatype
 
 val project_type : ?overstep_quantifiers:bool -> string -> Types.datatype -> Types.datatype
 val erase_type   : ?overstep_quantifiers:bool -> Utility.stringset -> Types.datatype -> Types.datatype

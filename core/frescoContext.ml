@@ -9,6 +9,7 @@ type binding = {
   datatype : Types.datatype;
   bound_ambient : ambient;
   bound_locks : locks;
+  consumed : bool;
 }
 
 type conversion = {
@@ -30,7 +31,7 @@ exception Error of string
 
 let bind_all context environment =
   let bindings = Env.String.map (fun datatype ->
-    { datatype; bound_ambient = context.ambient; bound_locks = context.locks }
+    { datatype; bound_ambient = context.ambient; bound_locks = context.locks; consumed = false }
   ) environment in
   { context with bindings = Env.String.extend context.bindings bindings }
 
@@ -46,10 +47,17 @@ let with_lock context modality =
     locks = Lock (modality, context.locks) }
 
 let bind context name datatype =
-  let binding = { datatype; bound_ambient = context.ambient; bound_locks = context.locks } in
+  let binding = { datatype; bound_ambient = context.ambient; bound_locks = context.locks;
+    consumed = false } in
   { context with bindings = Env.String.bind name binding context.bindings }
 
 let environment context = Env.String.map (fun binding -> binding.datatype) context.bindings
+
+let consume ~from context name =
+  match Env.String.find_opt name from.bindings, Env.String.find_opt name context.bindings with
+  | Some old, Some current when old == current && not (Types.Unl.can_type_be current.datatype) ->
+      { context with bindings = Env.String.bind name { current with consumed = true } context.bindings }
+  | _ -> context
 
 let lock_types context =
   let rec collect types = function
@@ -99,6 +107,7 @@ let carry modality datatype =
 
 let access context name ~prepare =
   let binding = match Env.String.find_opt name context.bindings with
+    | Some { consumed = true; _ } -> raise (Error ("Linear variable " ^ name ^ " has already been used"))
     | Some binding -> binding
     | None -> raise (Error ("Unknown variable " ^ name))
   in

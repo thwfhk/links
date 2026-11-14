@@ -12,12 +12,14 @@
 typename Tree(a) = (|Leaf:a
                     |Node:(Tree(a),Tree(a))|);
 
+effect Yield(a::Abs) { Yield : (a) => (); }
+
 # Yield operation for (leaf-)values
-sig yield : (a) {Yield:(a) => ()|_}-> ()
+sig yield : forall a::Abs. [Yield(a)] ((a) -> ())
 fun yield(v) {do Yield(v)}
 
 # Post-order tree traversal
-sig walkTree : (Tree(a)) -f-> Comp((), {Yield:(a) => ()|e})
+sig walkTree : forall a::Abs. (Tree(a)) -> [Yield(a)] (() -> ())
 fun walkTree(tree)() {
   switch (tree) {
     case Leaf(v)   -> yield(v)
@@ -26,13 +28,10 @@ fun walkTree(tree)() {
 }
 
 # Convenient type synonyms
-typename Continuation(a, r, e::Eff) = (a) ~e~> r;
-typename Status(a, e::Eff) = mu r . (|Done:()
-                                   |Yielded:(a, Continuation((), r, { |e}))|);
+typename Status(a) = mu r . (|Done:() |Yielded:(a, (()) -> r)|);
 
 # Pauses evaluation of a computation whenever Yield occurs
-sig step : (Comp((), {Yield:(a) => ()|e})) ->
-           (()) {Yield{_}|e}~> Status(a, {wild{_}|f})
+sig step : forall a::Abs. (<Yield(a)> (() -> ())) -> (()) -> Status(a)
 fun step(f)(()) {
   handle (f()) {
     case () -> Done(())
@@ -41,7 +40,7 @@ fun step(f)(()) {
 }
 
 # Facilitates communication between two cooperative tree traversals
-sig sameFringe : (Tree(a), Tree(a)) ~> Bool
+sig sameFringe : forall a::Abs. (Tree(a), Tree(a)) -> Bool
 fun sameFringe(x, y) {
   fun sameFringe_aux(f, g) {
     switch ((f(()), g(()))) {
@@ -52,19 +51,18 @@ fun sameFringe(x, y) {
       case _ -> false
     }
   }
-  var sameFringe_aux = gen2(sameFringe_aux);
   sameFringe_aux(step(walkTree(x)), step(walkTree(y)))
 }
 # Examples
-var t1 = Leaf(42);
-var t2 = Leaf(-42);
+var t1 = Leaf(42) : Tree(Int);
+var t2 = Leaf(-42) : Tree(Int);
 
-var t3 = Node(Leaf(1), Node(Leaf(2), Leaf(3)));
-var t4 = Node(Node(Leaf(1),Leaf(2)), Leaf(3));
-var t5 = Node(Node(Leaf(3), Leaf(2)), Leaf(1));
+var t3 = Node(Leaf(1), Node(Leaf(2), Leaf(3))) : Tree(Int);
+var t4 = Node(Node(Leaf(1),Leaf(2)), Leaf(3)) : Tree(Int);
+var t5 = Node(Node(Leaf(3), Leaf(2)), Leaf(1)) : Tree(Int);
 
-var t6 = Node(Leaf(1), Node(Leaf(2), Node(Leaf(3), Leaf(4))));
-var t7 = Node(Node(Leaf(1),Leaf(2)), Node(Leaf(3), Leaf(4)));
+var t6 = Node(Leaf(1), Node(Leaf(2), Node(Leaf(3), Leaf(4)))) : Tree(Int);
+var t7 = Node(Node(Leaf(1),Leaf(2)), Node(Leaf(3), Leaf(4))) : Tree(Int);
 
 fun examples(correct, incorrect) {
   fun runTest(((t1, t1Name), (t2, t2Name))) {
@@ -84,6 +82,7 @@ fun unitTest() {
   examples(fun(_, _) { true }, fun(_, _) { false })
 }
 
+sig runExamples : [wild] (() -> ())
 fun runExamples() {
   ignore(
     examples(fun(t1, t2) {

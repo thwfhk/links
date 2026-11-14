@@ -58,22 +58,22 @@ exit : 1
 
 Unsafe cast primitive is unavailable
 unsafe_cast(42)
-stderr : @.*Unknown variable unsafe_cast\..*
+stderr : @.*Unknown variable unsafe_cast.*
 exit : 1
 
 XML literal is rejected
 <p>text</p>
-stderr : @.*Unknown variable p\..*
+stderr : @.*Wrong number of arguments.*
 exit : 1
 
 Formlet syntax is rejected
 formlet <p>text</p> yields ()
-stderr : @.*Unknown variable formlet\..*
+stderr : @.*Unknown variable yields.*
 exit : 1
 
 Page syntax is rejected
 page <p>text</p>
-stderr : @.*Unknown variable page\..*
+stderr : @.*Wrong number of arguments.*
 exit : 1
 
 XML type is unavailable
@@ -91,7 +91,7 @@ Angle brackets still work in comparison operators
 stdout : (true, true, true, true) : (Bool, Bool, Bool, Bool)
 
 Handler patterns still accept adjacent angle brackets
-handle(do Ask) { case <Ask=>k> -> k(42) }
+effect Reader { Ask : () => Int; } handle(do Ask) { case <Ask=>k> -> k(42) }
 stdout : 42 : Int
 
 Angle brackets still work inside a regular expression
@@ -150,7 +150,7 @@ stderr : @.*new.*
 exit : 1
 
 Former session exception operation can be resumed
-handle(do SessionFail) { case <SessionFail => k> -> k(42) }
+effect Failure { SessionFail : () => Int; } handle(do SessionFail) { case <SessionFail => k> -> k(42) }
 stdout : 42 : Int
 
 Spawn syntax is rejected
@@ -183,9 +183,9 @@ sig f : () {:Int}-> Int fun f() { 42 }
 stderr : @.*Parse error:.*
 exit : 1
 
-Hear is an ordinary labelled effect field
-sig f : () {hear:Int|_}-> Int fun f() { 42 } f
-stdout : fun : () {hear:() => Int|_}-> Int
+Hear is an ordinary declared operation
+effect Reader { Hear : () => Int; } handle(do Hear) { case <Hear => k> -> k(42) }
+stdout : 42 : Int
 
 Exclamation mark can be defined as an operator
 infixl 6 !; op a ! b { a + b } 19 ! 23
@@ -213,7 +213,7 @@ exit : 1
 
 Relational lens statistics primitive is unavailable
 lensQueryCount()
-stderr : @.*Unknown variable lensQueryCount\..*
+stderr : @.*Unknown variable lensQueryCount.*
 exit : 1
 
 Relational lens setting is unknown
@@ -293,7 +293,7 @@ exit : 1
 
 Table conversion helper is unavailable
 asList([])
-stderr : @.*Unknown variable asList\..*
+stderr : @.*Unknown variable asList.*
 exit : 1
 
 Former database keywords are identifiers
@@ -303,7 +303,7 @@ stdout : 42 : Int
 SPARQL primitive is unavailable
 sparql("", "", "")
 args : --set=typecheck_only=true
-stderr : @.*Unknown variable sparql\..*
+stderr : @.*Unknown variable sparql.*
 exit : 1
 
 Database driver setting is unknown
@@ -323,7 +323,7 @@ exit : 1
 
 Linear continuation marker is rejected
 fun() { xlin; 42 }
-stderr : @.*Unknown variable xlin\..*
+stderr : @.*Unknown variable xlin.*
 exit : 1
 
 Linear operation type arrow is rejected
@@ -332,12 +332,12 @@ stderr : @.*Parse error:.*
 exit : 1
 
 Linear operation pattern arrow is rejected
-handle(do Ask) { case <Ask =@ k> -> k(42) }
+effect Reader { Ask : () => Int; } handle(do Ask) { case <Ask =@ k> -> k(42) }
 stderr : @.*Parse error:.*
 exit : 1
 
-Linear effect row subkind is rejected
-sig f : () { |e::Lin}-> Int fun f() { 42 }
+Unknown linearity subkind is rejected
+sig f : ((|e::Lin)) -> Int fun f(_) { 42 }
 stderr : @.*Invalid subkind: Lin.*
 exit : 1
 
@@ -359,6 +359,6 @@ args : --set=typecheck_ir=true
 stdout : ([1, 2, 3], [4]) : (List Int, List Int)
 
 Range syntax is pure
-(fun() { [1..3] } : () {}-> List Int)
+(fun() { [1..3] } : [] (() -> List Int))
 args : --set=typecheck_ir=true
-stdout : fun : () {}-> List Int
+stdout : fun : [] (() -> List Int)

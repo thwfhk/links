@@ -5,26 +5,23 @@
 typename Two = Bool;
 typename One = ();
 
-# type of a concurrent computation
-typename Co(e::Eff, a) = Comp (a, {Fork  : Two,
-                                   Yield : One,
-                                   Stop  : Zero | e});
+effect Co { Fork : () => Two; Yield : () => One; Stop : () => Zero; }
 
 ## cooperative concurrency interface
-sig fork : Comp(Two, {Fork:Two|_})
+sig fork : [Co] (() -> Two)
 fun fork() {do Fork}
 
-sig yield : Comp(One, {Yield:One|_})
+sig yield : [Co] (() -> One)
 fun yield() {do Yield}
 
-sig stop : Comp(a, {Stop:Zero|_})
+sig stop : [Co] (() -> a)
 fun stop() {switch (do Stop) { }}
 
 # in fact `Yield` is redundant: we could use
 # yield() == if(fork()) {stop()} else {()}
 
 # example abstract concurrent computation
-sig test : Co({ |e}, One)
+sig test : [Co, wild] (() -> One)
 fun test() {
   print("M1 ");
   if(fork()) { print("A1 "); yield(); print ("A2 "); stop() } else {
@@ -45,8 +42,8 @@ fun test() {
 # yields a value returns a pair of the value and a list of unfinished
 # resumptions
 mutual {
-  typename Res(e::Eff, a) = (ResList({ |e}, a)) ~e~> Maybe ((a, ResList({ |e}, a)));
-  typename ResList(e::Eff, a) = (|Cons:(Res({ |e}, a), ResList({ |e}, a))|Nil|);
+  typename Res(a) = (ResList(a)) -> Maybe ((a, ResList(a)));
+  typename ResList(a) = (|Cons:(Res(a), ResList(a))|Nil|);
 }
 
 # Links (following OCaml) only infers recursive types when all
@@ -63,7 +60,7 @@ fun snoc(rs, r) {
   }
 }
 
-sig coop : (Co({ |e}, a)) {Fork{p},Yield{q},Stop{r}|e}~> Res({Fork{p},Yield{q},Stop{r}|e}, a)
+sig coop : forall a::Abs. (<Co> (() -> a)) -> Res(a)
 fun coop(m) {
   handle(m()) {
     case x            -> fun (rs) {Just ((x, rs))}
@@ -85,7 +82,7 @@ fun coop(m) {
   }
 }
 
-sig run : (Co({ |e}, a)) {Fork{p},Yield{q},Stop{r}|e}~> Maybe ((a, ResList({Fork{p},Yield{q},Stop{r}|e}, a)))
+sig run : forall a::Abs. (<Co> (() -> a)) -> Maybe ((a, ResList(a)))
 fun run(m) {
   coop(m)(Nil)
 }

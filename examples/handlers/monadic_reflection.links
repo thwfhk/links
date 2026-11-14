@@ -3,54 +3,63 @@
 typename Unit = (|Unit|);
 
 # State monad
-typename State (a,s) = (s) {}~> (s,a);
+typename State (a,s) = [] ((s) -> (s,a));
 
-sig return : (a) -> State(a, s)
+effect Reflection(s::Abs) { Reflect : forall a::Abs. (State(a,s)) => a; }
+
+sig return : forall a::Abs,s. (a) -> State(a, s)
 fun return(v)(st) {(st, v)}
 
-sig run : (State(a, s), s) {}~> (s, a)
+sig run : (State(a, s), s) -> (s, a)
 fun run(m,st) {m(st)}
 
-sig bind : (State(a, s), (a) {}~> State(b, s)) -> State(b, s)
+sig bind : (State(a, s), [] ((a) -> State(b, s))) -> State(b, s)
 fun bind(m,k)(st) {
   var (st1, x) = run(m, st);
   k(x)(st1)
 }
 
 infixl 1 >>=;
-sig >>= : (State(a, s), (a) {}~> State(b, s)) -> State(b, s)
+sig >>= : (State(a, s), [] ((a) -> State(b, s))) -> State(b, s)
 op m >>= k {bind(m,k)}
 
 sig get : State(s, s)
 fun get(s) {(s,s)}
 
-sig put : (s) -> State(Unit, s)
+sig put : forall s::Abs. (s) -> State(Unit, s)
 fun put(s)(_) {(s, Unit)}
 
 # Reify reflect
-sig reify : (Comp(b, {Reflect: forall a::Type. (State(a, s)) => a |e})) {Reflect{_} |e}~> State(b, s)
+sig reify : forall b::Abs,s::Abs. (<Reflection(s)> (() -> b)) -> (s) -> (s, b)
 fun reify(m) {
   handle(m()) {
-    case x     -> return(x)
-    case <Reflect(m) => k> : ( forall a::Type. (State(a, s)) => a ) -> m >>= k
+    case x     -> fun(st) { return(x)(st) }
+    case <Reflect(m) => k> -> fun(st) {
+      var (st, x) = m(st);
+      k(x)(st)
+    }
   }
 }
 
-sig reflect : (State(a, s)) {Reflect: forall a::Type. (State(a, s)) => a |e}-> a
+sig reflect : forall a::Abs,s::Abs. [Reflection(s)] ((State(a, s)) -> a)
 fun reflect(m) {do Reflect(m)}
 
 
 # Example
+sig getR : forall s::Abs. [Reflection(s)] (() -> s)
 fun getR() {reflect(get)}
+sig putR : forall s::Abs. [Reflection(s)] ((s) -> Unit)
 fun putR(v) {reflect(put(v))}
 
 # Operation polymorphism is necessary for this example to type check.
+sig example : [Reflection(Int), wild] (() -> Unit)
 fun example() {
   var st = getR();
   println("The initial state is " ^^ intToString(st));
   putR(100 + st)
 }
 
+sig runExample : [wild] (() -> (Int, Unit))
 fun runExample() {
-  run(reify(example), 42)
+  reify(example)(42)
 }

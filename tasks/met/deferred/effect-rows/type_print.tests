@@ -1,0 +1,23 @@
+---
+args: --set=types_pretty_printer_engine=old
+---
+
+Anonymous effect tails after operation fields
+fun(_) {} : (() {F:()|_}-> ()) {F:()|_} -> ()
+stdout : fun : (() {F:() => ()|_}-> ()) {F:() => ()|_}-> ()
+
+Single-use effect tails
+fun(_) { } : (() -e-> ()) -f-> ()
+stdout : fun : (() -> ()) -> ()
+
+Shared effect tail in curried arrows
+fun()() { } : () -a-> () -a-> ()
+stdout : fun : () -a-> () -a-> ()
+
+Distinct effect tails across a tuple
+(fun(){}, fun(){}) : (() -a-> (), () -b-> ())
+stdout : (fun, fun) : (() -> (), () -> ())
+
+Type aliases with a shared effect tail
+fun(x) {x} : (Comp(a, { | e })) -f-> Comp(a, { | e })
+stdout : fun : (Comp (a,{ |b })) -> Comp (a,{ |b })

@@ -17,28 +17,29 @@ stdout : (getName = fun, name = "Object") : (name:String|(mu a.getName:((name:St
 filemode : true
 
 Recursive row variable in variant [1]
-sig f : ((|(mu a. Op:() { |a}-> ())|)) {}-> () fun f(_) { () } f
-stdout : fun : ((|(mu a.Op:() { |a}-> ())|)) {}-> ()
+sig f : ((|(mu a. Op:() -> (|a|))|)) -> () fun f(_) { () } f
+stdout : fun : [] (((|(mu a.Op:() -> (|a|))|)) -> ())
 
 Recursive row variable in variant [2]
-sig tsize : ((|( mu t. Node:((|t|),(|t|))|Leaf)|)) ~> Int fun tsize(t) { switch (t) { case Leaf -> 1 case Node(l,r) -> 1 + tsize(l) + tsize(r) } } tsize
-stdout : fun : ((|(mu a.Leaf|Node:((|a|), (|a|)))|)) ~> Int
+sig tsize : ((|(mu t. Node:((|t|),(|t|))|Leaf)|)) -> Int fun tsize(t) { switch (t) { case Leaf -> 1 case Node(l,r) -> 1 + tsize(l) + tsize(r) } } tsize
+stdout : fun : [] (((|(mu a.Leaf|Node:((|a|), (|a|)))|)) -> Int)
 
-Recursive row variable in row type argument
-sig f : Comp ((),{ |(mu a . Bar,Foo:(() { |a}~> _) {}-> ()|_) }) fun f() { () } f
-stdout : fun : Comp ((),{ |(mu a.Bar:(),Foo:(() { |a}~> _) {}-> ()|_)})
+Recursive data row in type argument
+typename Term(r::Row) = (|r|); sig f : (Term({|(mu r . Node:(|r|),Leaf)})) -> () fun f(_) {} f
+stdout : fun : [] ((Term ({ |(mu a.Leaf:(),Node:(|a|))})) -> ())
 
-Recursive row variable in effect signature [1]
-sig w : (() { |(mu a . F:(() { |a}~> ()) => _|e)}~> ()) {F{_}|e}~> () fun w(g) { handle(g()) { case () -> () case <F(h) => res> -> w(h) }} w
-stdout : fun : (() { |(mu a.F:(() { |a}~> ()) => _|c)}~> ()) {F{_}|c}~> ()
+Recursive operation signature
+effect Fold { F : ([Fold] (() -> ())) => (); } sig w : ([Fold] (() -> ())) -> () fun w(g) { handle(g()) { case <F(h) => res> -> w(h) } } w
+stdout : fun : [] (([Fold] (() -> ())) -> ())
 
-Recursive row variable in effect signature [2]
-sig f : () { |(mu a. Op:(() ~e~> ()) -> ())}~> () fun f() { () } f
-stdout : fun : () { |(mu a.Op:(() ~> ()) -> ())}~> ()
+Ambient operation payload is rejected
+effect Fold { F : (() -> ()) => (); }
+exit : 1
+stderr : @.*The arguments and result of F must have absolute types.*
 
 Recursive type variable in codomain
-sig f : (() ~a~> mu b . (|Op:() ~a~> b|)) ~a~> c fun f(m) { switch(m()) { case Op(g) -> f(g) } } f
-stdout : fun : (() ~a~> mu b.(|Op:() ~a~> b|)) ~a~> _
+sig f : (() -> mu b . (|Op:() -> b|)) -> c fun f(m) { switch(m()) { case Op(g) -> f(g) } } f
+stdout : fun : [] ((() -> mu a.(|Op:() -> a|)) -> _)
 
 Mono restriction
 id : (a::(Any,Mono)) -> a::(Any,Mono)

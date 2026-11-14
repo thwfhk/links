@@ -61,7 +61,7 @@ stdout : 1 : Int
 
 Absence typing in variant patterns
 fun f(x) {switch (x) {case A(B) -> B case A(-B as y) -> A(f(y))}} f
-stdout : @^fun : \(\(\|\(mu ([a-z]+)\.A:\(\|B\|\1\|\)\)\|\)\) ~> mu ([a-z]+)\.\(\|A:\2\|B\|_::Any\|\)$
+stdout : fun : [] (((|A:(|B|(mu a.A:(|B|a|))|)|)) -> (|B|(mu b.A:(|B|b|)|_::Any)|))
 
 Redundant pattern [1]
 fun (x) { switch (x) { case x -> x case A -> A }}

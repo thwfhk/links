@@ -3,12 +3,12 @@
 
 typename BinaryTree(a) = (| Leaf | Node: (BinaryTree(a), a, BinaryTree(a)) |);
 
-sig empty : () -> (BinaryTree(a))
+sig empty : [] (() -> BinaryTree(a))
 fun empty() {
   Leaf
 }
 
-sig invert : (BinaryTree(a)) ~> BinaryTree(a)
+sig invert : [] ((BinaryTree(a)) -> BinaryTree(a))
 fun invert(t) {
   switch(t) {
     case Leaf -> Leaf
@@ -16,7 +16,7 @@ fun invert(t) {
   }
 }
 
-sig traverse_preorder : (BinaryTree(a)) ~> List(a)
+sig traverse_preorder : [] ((BinaryTree(a)) -> List a)
 fun traverse_preorder(t) {
   switch(t) {
     case Leaf -> []
@@ -24,7 +24,7 @@ fun traverse_preorder(t) {
   }
 }
 
-sig traverse_inorder : (BinaryTree(a)) ~> List(a)
+sig traverse_inorder : [] ((BinaryTree(a)) -> List a)
 fun traverse_inorder(t) {
   switch(t) {
     case Leaf -> []
@@ -32,7 +32,7 @@ fun traverse_inorder(t) {
   }
 }
 
-sig traverse_postorder : (BinaryTree(a)) ~> List(a)
+sig traverse_postorder : [] ((BinaryTree(a)) -> List a)
 fun traverse_postorder(t) {
   switch(t) {
     case Leaf -> []
@@ -48,7 +48,7 @@ fun traverse_postorder(t) {
 #  - A positive integer if x1 is greater than x2
 # to_add : term to add
 # t: a binary search tree
-sig add : (((a, a) ~%~> Int), a, BinaryTree(a)) ~%~> BinaryTree(a)
+sig add : [] (((a, a) -> Int, a, BinaryTree(a)) -> BinaryTree(a))
 fun add(comp, to_add, t) {
   switch(t) {
     case Leaf -> Node(Leaf, to_add, Leaf)
@@ -65,7 +65,7 @@ fun add(comp, to_add, t) {
 }
 
 
-sig leftmost_child : (((a, a) ~%~> Int), BinaryTree(a)) ~%~> BinaryTree(a)
+sig leftmost_child : [] (((a, a) -> Int, BinaryTree(a)) -> BinaryTree(a))
 fun leftmost_child(comp, t) {
   switch(t) {
     case Leaf -> Leaf # Shouldn't occur unless we're passed a leaf
@@ -88,7 +88,7 @@ fun leftmost_child(comp, t) {
 #  - A positive integer if x1 is greater than x2
 # to_remove : term to add
 # t: a binary search tree
-sig remove : (((a, a) ~%~> Int), a, BinaryTree(a)) ~%~> BinaryTree(a)
+sig remove : [] (((a, a) -> Int, a, BinaryTree(a)) -> BinaryTree(a))
 fun remove(comp, to_remove, t) {
   switch(t) {
     case Leaf -> Leaf

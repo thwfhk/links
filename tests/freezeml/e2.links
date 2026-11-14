@@ -1,4 +1,4 @@
-sig k : forall a,e::Row,f::Row. (a) -e-> (List a) -f-> a
+sig k : forall a. (a) -> (List a) -> a
 fun k(d)(xs) {
   switch(xs) {
     case [] -> d
@@ -6,10 +6,10 @@ fun k(d)(xs) {
   }
 }
 
-sig h : forall e::Row. (Int) -e-> forall a,e::Row. (a) -e-> a
+sig h : (Int) -> forall a. [] ((a) -> a)
 fun h(_) { ~id }
 
-sig lst : List (forall e::Row,a,f::Row. (Int) -e-> (a) -f-> a)
+sig lst : List (forall a. (Int) -> (a) -> a)
 var lst = [];
 
-k($(fun(x){h(x)@}))(lst)
+k((fun(x) { h(x)@ } : forall a. (Int) -> (a) -> a))(lst)

@@ -87,7 +87,7 @@ filemode : true
 stderr : @.*Type error.*
 exit : 1
 
-Top level functions within a mutal do not share type variables
+Top level functions within a mutual block do not share type variables
 ./tests/mutual/sharedTyvar.links
 filemode : true
 stdout : () : ()

@@ -185,26 +185,22 @@ end
 struct
   open PrimaryKind
 
-  let lookup_effects (_nenv, _tenv, eff) = eff
-
   let nil _env t : value =
     TApp (Variable (NEnv.find "Nil" Lib.nenv),
            [(Type, t)])
 
-  let list_head env t : value -> tail_computation = fun v ->
-    let eff = lookup_effects env in
+  let list_head _env t : value -> tail_computation = fun v ->
       Apply
         (TApp
            (Variable (NEnv.find "$$hd" Lib.nenv),
-            [(Type, t); (Row, eff)]),
+            [(Type, t)]),
          [v])
 
-  let list_tail env t : value -> tail_computation = fun v ->
-    let eff = lookup_effects env in
+  let list_tail _env t : value -> tail_computation = fun v ->
       Apply
         (TApp
            (Variable (NEnv.find "$$tl" Lib.nenv),
-            [(Type, t); (Row, eff)]),
+            [(Type, t)]),
          [v])
 end
 open CompileLists
@@ -217,14 +213,11 @@ end
 struct
   open PrimaryKind
 
-  let lookup_effects (_nenv, _tenv, eff) = eff
-
-  let eq env t v1 v2 =
-    let eff = lookup_effects env in
+  let eq _env t v1 v2 =
     ApplyPure
       (TApp
          (Variable (NEnv.find "==" Lib.nenv),
-          [(Type, t); (Row, eff)]),
+          [(Type, t)]),
        [v1; v2])
 end
 open CompileEq
@@ -259,7 +252,12 @@ let let_pattern : raw_env -> Pattern.t -> value * Types.datatype -> computation 
             let case_binder, case_variable = Var.fresh_var_of_type case_type in
             let body = lp case_type patt (Variable case_variable) body in
             let cases = StringMap.singleton name (case_binder, body) in
-              [], Case (value, cases, None)
+            let remaining = snd (TypeUtils.split_variant_type name t) in
+            let row = TypeUtils.extract_row remaining in
+            let default =
+              if Types.is_empty_row row && Types.is_closed_row row then None
+              else Some (Var.fresh_binder_of_type remaining, ([], Special (Wrong body_type))) in
+            [], Case (value, cases, default)
         | Pattern.Negative names ->
            (* The following expands the negative pattern into
               a switch-case expression:
@@ -917,8 +915,7 @@ let compile_cases
       result
 
 (* Handler cases compilation *)
-let handle_parameter_pattern : raw_env -> (Pattern.t * Types.datatype) -> Ir.computation -> (Ir.binder * Ir.value) * ((Ir.computation -> Ir.computation) * Ir.binding list)
-  = fun env (pat, t) body ->
+let handle_parameter_pattern env output_type (pat, t) body =
     let pb, p = Var.fresh_var_of_type t in
     let pb', p' = Var.fresh_var_of_type t in
     let outer_bindings =
@@ -926,16 +923,15 @@ let handle_parameter_pattern : raw_env -> (Pattern.t * Types.datatype) -> Ir.com
       bs @ [letm (pb', tc)]
     in
     let inner_bindings =
-         fun cont -> let_pattern env pat (Variable p, t) (cont, Types.Not_typed)
+         fun cont -> let_pattern env pat (Variable p, t) (cont, output_type)
     in
     (pb, Variable p'), (inner_bindings, outer_bindings)
 
-let compile_handle_parameters : raw_env -> (Pattern.t * Ir.computation * Types.datatype) list -> (Ir.binder * Ir.value) list * ((Ir.computation -> Ir.computation) * Ir.binding list)
-  = fun env parameters ->
+let compile_handle_parameters env output_type parameters =
     List.fold_left
       (fun (bvs, (inner, outer)) (pat, body, t) ->
         let (bv, (inner', outer')) =
-          handle_parameter_pattern env (pat, t) body
+          handle_parameter_pattern env output_type (pat, t) body
         in
         (bv :: bvs, ((fun comp -> inner' (inner comp)), outer' @ outer)))
       ([], ((fun x -> x), [])) parameters
@@ -961,46 +957,29 @@ let compile_handle_cases
      continuation binders for each raw clause, and bind them in their
      respective compiled clause bodies such that each raw continuation
      binder is an alias of the fresh continuation binder. *)
+  let Sugartypes.{ shd_types = (comp_eff, comp_ty, _, output_ty); shd_modal; shd_depth; _ } = desc in
   let (params, (with_parameters, outer_param_bindings)) =
-    compile_handle_parameters (nenv, tenv, eff) params
-  in
+    compile_handle_parameters (nenv, tenv, eff) output_ty params in
+  let modal_types = Option.map (fun modal ->
+    { ih_input_type = comp_ty;
+      ih_output_type = output_ty;
+      ih_operation_types = StringMap.from_alist modal.Sugartypes.shm_operations }) shd_modal in
+  let operation_types = match modal_types with
+    | Some types -> types.ih_operation_types
+    | None -> TypeUtils.row_present_types (Types.Effect comp_eff) in
+  let operation_signature name =
+    match TypeUtils.split_quantified_type (StringMap.find name operation_types) with
+    | _, Types.Operation (domain, result) -> domain, result
+    | _ -> assert false in
   let compiled_effect_cases =  (* The compiled cases *)
     if List.length raw_effect_clauses = 0 then
       StringMap.empty
     else begin
-        let (comp_eff, comp_ty, _, _) = Sugartypes.(desc.shd_types) in
         let variant_type =
-          let (fields, _) = comp_eff |> TypeUtils.extract_row_parts in
-          let fields' =
-            StringMap.filter
-              (fun _ ->
-                function
-                | Types.Present _ -> true
-                | _ -> false)
-              fields
-          in
-          let rec extract t = match TypeUtils.concrete_type t with
-            | Types.Operation (domain, _) ->
-              let (fields, _) = TypeUtils.extract_row domain |> TypeUtils.extract_row_parts in
-              let arity = StringMap.size fields in
-              if arity = 1 then
-                match StringMap.find "1" fields with
-                | Types.Present t -> t
-                | _ -> assert false
-              else
-                domain (* n-ary operation *)
-            | Types.ForAll (_, t) -> extract t
-            | _ -> Types.unit_type (* nullary operation *)
-          in
-          let fields'' =
-            StringMap.map
-              (function
-                | Types.Present t ->
-                  extract t
-                | _ -> assert false)
-              fields'
-          in
-          Types.make_variant_type fields''
+          Types.make_variant_type (StringMap.mapi (fun name _ ->
+            let domain, _ = operation_signature name in
+            let fields = Types.flatten_row (TypeUtils.extract_row domain) in
+            TypeUtils.pack_types (Types.extract_tuple fields)) operation_types)
         in
         let transformed_effect_clauses =
           let raw_cases =
@@ -1031,7 +1010,7 @@ let compile_handle_cases
           let dummy_var = Var.(make_local_info ->- fresh_binder ->- var_of_binder) (variant_type, "_m") in
           let tenv = TEnv.bind dummy_var variant_type tenv in
           let initial_env = (nenv, tenv, eff, PEnv.empty) in (* Need to bind raw continuation binders in tenv and nenv? *)
-          match snd @@ match_cases [dummy_var] transformed_effect_clauses (fun _ -> ([], Special (Wrong comp_ty))) initial_env with
+          match snd @@ match_cases [dummy_var] transformed_effect_clauses (fun _ -> ([], Special (Wrong output_ty))) initial_env with
           | Case (_, clauses, _) -> clauses (* No default effect pattern *)
           | _ -> assert false
         in
@@ -1045,6 +1024,7 @@ let compile_handle_cases
             | Pattern.Any -> []
             | Pattern.Variable b -> [b]
             | Pattern.As (b, p) -> b :: gather_binders p
+            | Pattern.HasType (p, _) -> gather_binders p
             | _ -> assert false
           in
           List.fold_left
@@ -1061,8 +1041,16 @@ let compile_handle_cases
             in
             match StringMap.find effname continuation_binders with
             | [] ->
+               let resume_type = match modal_types with
+                 | None -> Types.Not_typed
+                 | Some _ ->
+                     let _, result = operation_signature effname in
+                     let args, ret = match shd_depth with
+                       | Sugartypes.Deep -> result :: List.map (fun (b, _) -> Var.type_of_binder b) params, output_ty
+                       | Sugartypes.Shallow -> [result], comp_ty in
+                     Types.AmbientFunction (dl_unl, Types.make_tuple_type args, ret) in
                let resume =
-                 Var.(make_local_info ->- fresh_binder) (Types.Not_typed, "_resume")
+                 Var.(make_local_info ->- fresh_binder) (resume_type, "_resume")
                in
                (x, resume, body)
             | [resume] -> (* micro-optimisation: if there is only one
@@ -1087,12 +1075,11 @@ let compile_handle_cases
       end
   in
   let return : binder * computation =
-    let (_, comp_ty, _, _) = Sugartypes.(desc.shd_types) in
     let scrutinee = Var.(make_local_info ->- fresh_binder) (comp_ty, "_return_value") in
     let tenv = TEnv.bind (Var.var_of_binder scrutinee) comp_ty tenv in
     let initial_env = (nenv, tenv, eff, PEnv.empty) in
     let clauses = List.map reduce_clause raw_value_clauses in
-    let body = match_cases [Var.var_of_binder scrutinee] clauses (fun _ -> ([], Special (Wrong comp_ty))) initial_env in
+    let body = match_cases [Var.var_of_binder scrutinee] clauses (fun _ -> ([], Special (Wrong output_ty))) initial_env in
     scrutinee, with_parameters body
   in
   let handle =
@@ -1100,9 +1087,10 @@ let compile_handle_cases
         ih_comp   = m;
         ih_return = return;
         ih_cases  = compiled_effect_cases;
+        ih_types = modal_types;
         ih_depth  =
           let open Sugartypes in
-          match desc.shd_depth  with
+          match shd_depth with
           | Shallow -> Ir.Shallow
           | Deep    -> Ir.Deep params
       }

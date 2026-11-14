@@ -1,6 +1,4 @@
-effectname A = {} ;
-
-sig f : () -A-> ()
-fun f () {}
+sig f : [] (() -> ())
+fun f() {}
 
 f

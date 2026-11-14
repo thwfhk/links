@@ -1,8 +1,7 @@
 # Deep state handlers
 
-# Standard types
-typename Comp(e::Eff, a) = () ~e~> a;
-typename Unit = (|Unit|);
+effect State(a::Abs) { Get : () => a; Put : (a) => (); }
+effect Log(a::Abs) { Log : (a) => (); }
 
 # The run handler forces evaluation of a computation
 fun run(m) {
@@ -12,20 +11,18 @@ fun run(m) {
 }
 
 # Get and put operations
-sig get : Comp({Get:a |_}, a)
+sig get : forall a::Abs. [State(a)] (() -> a)
 fun get() {do Get}
 
-sig put : (a) {Put:(a) => ()|_}~> ()
+sig put : forall a::Abs. [State(a)] ((a) -> ())
 fun put(p) {do Put(p)}
 
 # Println line operation
-sig logVal : (a) {Log:(a) => ()|_}~> ()
+sig logVal : forall a::Abs. [Log(a)] ((a) -> ())
 fun logVal(p) {do Log(p)}
 
 # Stateful computation evaluator
-sig evalState : (s) ->
-                (Comp({Get:s,Put:(s) => () |e}, a)) ->
-                 Comp({Get{_},Put{_}         |e}, a)
+sig evalState : forall s::Abs,a::Abs. (s) -> (<State(s)> (() -> a)) -> () -> a
 fun evalState(st)(m)() {
   (handle(m()) {
     case x -> fun(_)  { x }
@@ -34,6 +31,7 @@ fun evalState(st)(m)() {
   })(st)
 }
 
+sig logState : forall s::Abs,a::Abs. [State(s), Log(s)] ((<State(s)> (() -> a)) -> () -> a)
 fun logState(m)() {
   handle(m()) {
     case <Get => k>    -> var v = get();
@@ -46,8 +44,7 @@ fun logState(m)() {
 }
 
 # Printlns integers to stdout
-sig logPrinter : (Comp({Log:(Int) => () |e}, a)) ->
-                  Comp({Log{_}            |e}, a)
+sig logPrinter : forall a::Abs. [wild] ((<Log(Int)> (() -> a)) -> () -> a)
 fun logPrinter(m)() {
   handle(m()) {
     case x -> x
@@ -57,9 +54,7 @@ fun logPrinter(m)() {
 }
 
 # Log accumulator
-sig logAccumulator : (List a) ->
-                     (Comp({Log:(a) => () |e}, b)) ->
-                      Comp({Log{_}          |e}, (b,List a))
+sig logAccumulator : forall a::Abs,b::Abs. (List a) -> (<Log(a)> (() -> b)) -> () -> (b, List a)
 fun logAccumulator(ps)(m)() {
   (handle(m()) {
     case x -> fun(ps) { (x,ps) }
@@ -68,6 +63,7 @@ fun logAccumulator(ps)(m)() {
 }
 
 # Stateful computation which counts down to zero
+sig count : [State(Int)] (() -> Int)
 fun count() {
     var i = get();
     if (i <= 0) {i}
@@ -76,15 +72,16 @@ fun count() {
 
 # Example 1
 fun example1() {
-  run -<- evalState(5) $ count
+  run(evalState(5)(count))
 }
 
 # Example 2
+sig example2 : [wild] (() -> Int)
 fun example2() {
-  (run -<- logPrinter -<- evalState(5) -<- logState) $ count
+  run(logPrinter(fun() { evalState(5)(fun() { logState(count)() })() }))
 }
 
 # Unit test
 fun unitTest(n) {
-  (run -<- logAccumulator([]) -<- evalState(n) -<- logState) $ count
+  run(logAccumulator([])(fun() { evalState(n)(fun() { logState(count)() })() }))
 }

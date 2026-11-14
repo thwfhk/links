@@ -1,10 +1,13 @@
-typename Zero = (| |);
+effect State(s::Abs) {
+  Get : (()) => s;
+  Put : (s) => ();
+}
 
-typename Comp(e::Row,a) = (() ~e~> a);
+effect Writer {
+  Tell : (String) => ();
+}
 
-sig runState :
-        (Comp ({Get:(()) => s,Put:(s) => ()|e}, a)) ->
-  (s) -> Comp ({Get{_},         Put{_}         |e}, (a, s))
+sig runState : forall s::Abs,a::Abs. (<State(s)> (() -> a)) -> (s) -> () -> (a, s)
 fun runState(m)(s)() {
   (handle(m()) {
      case x  -> fun (s) {(x, s)}
@@ -13,9 +16,7 @@ fun runState(m)(s)() {
    })(s)
 }
 
-sig evalState :
-        (Comp ({Get:(()) => s,Put:(s) => ()|e}, a)) ->
-  (s) -> Comp ({Get{_},         Put{_}         |e}, a)
+sig evalState : forall s::Abs,a::Abs. (<State(s)> (() -> a)) -> (s) -> () -> a
 fun evalState(m)(s)() {
   (handle(m()) {
      case x  -> fun (s) {x}
@@ -24,9 +25,7 @@ fun evalState(m)(s)() {
    })(s)
 }
 
-sig runStringWriter :
-             (Comp ({Tell:(String) => ()|e}, a)) ->
-  (String) -> Comp ({Tell{_}              |e}, (a, String))
+sig runStringWriter : forall a::Abs. (<Writer> (() -> a)) -> (String) -> () -> (a, String)
 fun runStringWriter(m)(s)() {
   (handle(m()) {
      case x -> fun (s) {(x, s)}
@@ -34,8 +33,7 @@ fun runStringWriter(m)(s)() {
    })(s)
 }
 
-sig printer :
-  (Comp ({Tell:(String) => ()}, a)) {}~> a
+sig printer : forall a::Abs. [wild] ((<Writer> (() -> a)) -> a)
 fun printer(m) {
   handle(m()) {
      case x -> x
@@ -44,13 +42,13 @@ fun printer(m) {
 }
 
 
-sig get : () {Get:(()) => s|_}~> s
+sig get : forall s::Abs. [State(s)] (() -> s)
 fun get() {do Get(())}
 
-sig put : (s) {Put:(s) => ()|_}~> ()
+sig put : forall s::Abs. [State(s)] ((s) -> ())
 fun put(s) {do Put(s)}
 
-sig tell : (String) {Tell:(String) => ()|_}~> ()
+sig tell : [Writer] ((String) -> ())
 fun tell(s) {do Tell(s)}
 
 typename Expr =
@@ -81,15 +79,17 @@ fun showExpr(e) {
   }
 }
 
-typename SComp(e::Row, a) = (() {Suspend:((Expr, SComp({ |e}, a))) => a|e}~> a);
+typename Env = List (String, Int);
 
-sig suspend :
-    (Expr) ->
-      (SComp({ |e}, a))
-        {Suspend:((Expr, SComp({ |e}, a))) => a|e}~> a
+effect Suspension {
+  Suspend : ((Expr, [State(Env), Writer, Suspension] (() -> Int))) => Int;
+}
+
+typename SComp = [State(Env), Writer, Suspension] (() -> Int);
+
+sig suspend : (Expr) -> [Suspension] ((SComp) -> Int)
 fun suspend(e)(m) {do Suspend((e,m))}
 
-typename Env = List (String, Int);
 
 fun showEnv(env) {
   fun showEntry((x, i)) {x ^^ "=" ^^ intToString(i)}
@@ -105,8 +105,7 @@ fun showEnv(env) {
 }
 
 mutual {
-  sig bevalStep :
-    (Expr) -> SComp ({Get:(()) => Env, Put: (Env) => ()|e}, Int)
+  sig bevalStep : (Expr) -> SComp
   fun bevalStep(exp)() {
     switch(exp) {
       case Lit(x) -> x
@@ -133,18 +132,14 @@ mutual {
     }
   }
 
-  sig beval : (Expr) {Get:(()) => Env,
-                      Put:(Env) => (),
-                      Suspend:((Expr, SComp({Get:(()) => Env,
-                                             Put:(Env) => ()|e}, Int))) => Int|e}~> Int
+  sig beval : [State(Env), Writer, Suspension] ((Expr) -> Int)
   fun beval(e) {suspend(e)(bevalStep(e))}
 }
 
-var beval = fun (e)() {beval(e)};
+sig computation : (Expr) -> SComp
+fun computation(e)() { beval(e) }
 
-sig force :
-(SComp({          |e}, a)) ~>
-  Comp({Suspend{_}|e}, a)
+sig force : [State(Env), Writer] ((SComp) -> () -> Int)
 fun force(m)() {
   handle(m()) {
     case x        -> x
@@ -152,8 +147,7 @@ fun force(m)() {
   }
 }
 
-sig logger :  (SComp ({Tell:(String) => ()|e}, Int)) ->
-  (String) -> (SComp ({Tell:(String) => ()|e}, Int))
+sig logger : (SComp) -> (String) -> SComp
 fun logger(m)(name)() {
   (handle(m()) {
      case x        -> fun (_) {x}
@@ -167,8 +161,7 @@ fun logger(m)(name)() {
    })(name)
 }
 
-sig dump : (SComp ({Get:(()) => Env,Tell:(String) => ()|e}, Int)) ->
-           (SComp ({Get:(()) => Env,Tell:(String) => ()|e}, Int))
+sig dump : (SComp) -> SComp
 fun dump(m)() {
   handle(m()) {
      case x        -> x
@@ -185,9 +178,21 @@ var e2 = Plus (Assign("x", Lit(3)), Assign("y", Lit(4)));
 sig e3 : Expr
 var e3 = Plus (Plus(Assign ("x", Lit(3)), Assign("y", Lit(4))), Plus (Var("x"), Var("y")));
 
-fun test0(e) {printer(evalState (force (beval(e)))([]))}
-fun test1(e) {printer(evalState (force (logger (beval(e))("eval")))([]))}
-fun test2(e) {printer(evalState (force (dump (beval(e))))([]))}
-fun test3(e) {printer(evalState (force (dump (logger (beval(e))("eval"))))([]))}
+sig test0 : [wild] ((Expr) -> Int)
+fun test0(e) {
+  printer(fun() { evalState(fun() { force(computation(e))() })([] : Env)() })
+}
+sig test1 : [wild] ((Expr) -> Int)
+fun test1(e) {
+  printer(fun() { evalState(fun() { force(logger(computation(e))("eval"))() })([] : Env)() })
+}
+sig test2 : [wild] ((Expr) -> Int)
+fun test2(e) {
+  printer(fun() { evalState(fun() { force(dump(computation(e)))() })([] : Env)() })
+}
+sig test3 : [wild] ((Expr) -> Int)
+fun test3(e) {
+  printer(fun() { evalState(fun() { force(dump(logger(computation(e))("eval")))() })([] : Env)() })
+}
 
 

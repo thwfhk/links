@@ -17,34 +17,34 @@ stderr : @..*
 exit : 1
 
 Polymorphic recursion with signatures
-sig f : (_) ~> Int fun f(x) { ignore(f("a")); ignore(f(1)); 1 } f
-stdout : @fun : \(_\) ~> Int
+sig f : forall a. a -> Int fun f(x) { ignore(f("a")); ignore(f(1)); 1 } f
+stdout : @fun : \[\] \(\(_\) -> Int\)
 
 Invalid "polymorphic recursion"
-sig f : (_) ~> Int fun f(x) { x == 1; f("a"); f(1); 1 }
+sig f : forall a. a -> Int fun f(x) { x == 1; f("a"); f(1); 1 }
 stderr : @..*
 exit : 1
 
 Polymorphic mutual recursion [1]
-mutual { sig f : (_) ~> Int fun f(x) { ignore(g("a")); ignore(g(1)); 1 } sig g : (a) ~> Int fun g(x) { ignore(f("a")); ignore(f(1)); 1 } } f
-stdout : @fun : \(_\) ~> Int
+mutual { sig f : forall a. a -> Int fun f(x) { ignore(g("a")); ignore(g(1)); 1 } sig g : forall a. a -> Int fun g(x) { ignore(f("a")); ignore(f(1)); 1 } } f
+stdout : @fun : \[\] \(\(_\) -> Int\)
 
 Polymorphic mutual recursion [2]
-mutual { sig f : (_) ~> Int fun f(x) { ignore(f("a")); ignore(g(1)); 1 } sig g : (a) ~> Int fun g(x) { ignore(g("a")); ignore(f(1)); 1 } } f
-stdout : @fun : \(_\) ~> Int
+mutual { sig f : forall a. a -> Int fun f(x) { ignore(f("a")); ignore(g(1)); 1 } sig g : forall a. a -> Int fun g(x) { ignore(g("a")); ignore(f(1)); 1 } } f
+stdout : @fun : \[\] \(\(_\) -> Int\)
 
 Polymorphic mutual recursion [3]
-mutual { sig f : (_) ~> Int fun f(x) { ignore(f("a")); ignore(f(1)); ignore(g("a")); ignore(g(1)); 1 } sig g : (a) ~> Int fun g(x) { ignore(f("a")); ignore(f(1)); ignore(g("a")); ignore(g(1)); 1 } } f
-stdout : @fun : \(_\) ~> Int
+mutual { sig f : forall a. a -> Int fun f(x) { ignore(f("a")); ignore(f(1)); ignore(g("a")); ignore(g(1)); 1 } sig g : forall a. a -> Int fun g(x) { ignore(f("a")); ignore(f(1)); ignore(g("a")); ignore(g(1)); 1 } } f
+stdout : @fun : \[\] \(\(_\) -> Int\)
 
 Polymorphic mutual recursion [4]
-mutual { sig f : (_) ~> Int fun f(x) { ignore(g("a")); ignore(g(1)); 1 } sig g : (a) ~> Int fun g(x) { ignore(x == 1); ignore(f("a")); ignore(f(1)); 1 } } f
+mutual { sig f : forall a. a -> Int fun f(x) { ignore(g("a")); ignore(g(1)); 1 } sig g : forall a. a -> Int fun g(x) { ignore(x == 1); ignore(f("a")); ignore(f(1)); 1 } } f
 stderr : @..*
 exit : 1
 
 Polymorphic row recursion
-sig h : ((| _)) ~> Int fun h(x) {h((x,x))} h
-stdout : @fun : \(|_\) ~> Int
+sig h : forall r::Row. ((| r)) -> Int fun h(x) {h((x,x))} h
+stdout : fun : [] (((|_)) -> Int)
 
 Polymorphic functions
 fun cons(x,l) {[x] ++ l} (cons(5, [6]), cons("a", ["b"]))
@@ -59,12 +59,12 @@ sig x : Int var x = 3; x
 stdout : 3 : Int
 
 Value restriction [1]
-sig f : (a) -> a var f = id(id); f
+sig f : forall a. a -> a var f = (fun(x) { x })(fun(x) { x }); f
 stderr : @..*
 exit : 1
 
 Polymorphic result of an operation in a function
-sig foo : () {Read:() => a|r}~> a fun foo() {var x = do Read; x} (handle(foo()) {case <Read => k> -> k(42)}, handle(foo()) {case <Read => k> -> k(true)})
+effect Reader(a::Abs) { Read : () => a; } sig foo : forall a::Abs. [Reader(a)] (() -> a) fun foo() {var x = do Read; x} (handle(foo()) {case <Read => k> -> k(42)}, handle(foo()) {case <Read => k> -> k(true)})
 stdout : (42, true) : (Int, Bool)
 
 Overly general signatures
@@ -72,9 +72,9 @@ sig id : (a) -> b fun id(x) {x}
 stderr : @..*
 exit : 1
 
-Polymorphic effects for curried recursive functions
+Same-context callbacks in curried recursive functions
 fun zipwith(f)(xs)(ys) {switch ((xs, ys)) {case ((x::xs),(y::ys)) -> (f(x)(y))::(zipwith(f)(xs)(ys)) case _ -> []}} zipwith
-stdout : fun : ((a::Any) ~b~> (c::Any) ~b~> d) -> (List a::Any) -> (List c::Any) ~b~> List d
+stdout : fun : [] (((a) -> (b) -> c) -> (List a) -> (List b) -> List c)
 
 Polymorphic function parameters (unannotated)
 fun (f) {(f(42), f(true))}
@@ -82,68 +82,69 @@ stderr : @..*
 exit : 1
 
 Polymorphic function parameters (annotated)
-fun (f : (forall a,e::Row.(a) -e-> a)) {(f(42), f(true))}
-stdout : fun : (forall a,b::Row.(a) -b-> a) -> (Int, Bool)
+fun (f : (forall a. (a) -> a)) {(f(42), f(true))}
+stdout : fun : (forall a.(a) -> a) -> (Int, Bool)
 
 Explicitly polymorphic signatures
-sig choose : forall a,d::Row,e::Row. (a) -d-> (a) -e-> a fun choose(x)(y) {x} choose
-stdout : fun : (a) -> (a) -> a
+sig choose : forall a. (a) -> (a) -> a fun choose(x)(y) {x} choose
+stdout : fun : [] ((a) -> (a) -> a)
 
 Quantifiers in different orders
-fun (x:(forall a,b.(a,b)), y:(forall b,a.(a,b))) {[x,y]}
+fun (x:(forall a,b.(a,b)), y:(forall b,a.(a,b))) {[x@,y@]}
 stdout : fun : (forall a,b.(a, b), forall c,d.(d, c)) -> List (_, _)
 
 Polymorphic function arguments and freeze
-fun poly(f : (forall a::Any,e::Row.(a) -e-> a)) {(f(42), f(true))} poly(~id)
+fun poly(f : (forall a::Any. [] ((a) -> a))) {(f(42), f(true))} poly(~id)
 stdout : (42, true) : (Int, Bool)
 
 Top-level ill-typed polymorphism
-sig foo : forall a.((a) {}~> a) {}~> (Int) {}~> Int fun foo(f){f}
+sig foo : forall a. (a -> a) -> (Int -> Int) fun foo(f){f}
 stderr : @..*
 exit : 1
 
 Polymorphic type aliases (Church numerals)
-typename Nat = forall a.(a) {}~> ((a) {}~> a) {}~> a; sig zero : Nat var zero = fun (z)(s) {z}; sig succ : (Nat) {}~> Nat fun succ(n) {fun (z)(s){s(n(z)(s))}} succ(succ(zero))(0)(fun (x) {x+1})
+typename Nat = forall a. a -> (a -> a) -> a; sig zero : Nat var zero = fun (z)(s) {z}; sig succ : (Nat) -> Nat fun succ(n) {fun (z)(s){s(n(z)(s))}} succ(succ(~zero))@(0)(fun (x) {x+1})
 stdout : 2 : Int
 
-Recursive polymorphic type aliases
-typename Foo = forall a.Foo; sig bar : (Foo) {}~> () fun bar(m) {()} bar
-stdout : fun : (Foo) {}~> ()
+A recursive polymorphic alias requires a data or function constructor
+typename Foo = forall a.Foo; sig bar : (Foo) -> () fun bar(m) {()} bar
+stderr : @.*A recursive type needs a data or function constructor.*
+exit : 1
 
 Extra quantifier with mixed kinds
-sig f : forall a, e::Row.(a) {}~> a fun f(x) {f(x)} f
-stdout : fun : (a) {}~> a
+sig f : forall a, r::Row. (a) -> a fun f(x) {f(x)} f
+stdout : fun : [] ((a) -> a)
 
 Missing quantifier with mixed kinds (1)
-sig f : forall a.(a) ~e~> a fun f(x) {f(x)} f
+sig f : forall a. (a) -> (|One | e|) fun f(x) {f(x)} f
 stderr : @..*
 exit : 1
 
 Missing quantifier with mixed kinds (2)
-sig f : forall e::Eff.(a) ~e~> a fun f(x) {f(x)} f
+sig f : forall r::Row. (a) -> (|One | r|) fun f(x) {f(x)} f
 stderr : @..*
 exit : 1
 
 Missing quantifier with mixed kinds (3)
-sig f : forall a.(a) ~e~> a fun f(x) {x} f
+sig f : forall a. (a) -> (|One | e|) fun f(x) {x} f
 stderr : @..*
 exit : 1
 
 Missing quantifier with mixed kinds (4)
-sig f : forall e::Eff.(a) ~e~> a fun f(x) {x} f
+sig f : forall r::Row. (a) -> (|One | r|) fun f(x) {x} f
 stderr : @..*
 exit : 1
 
 Inner quantifier with free variable
-sig f : (a) -e-> (a, a) fun f(x) {sig g : forall b.(a, b) -e-> (a, b) fun g(x, y) {(x, y)} g(x, x)} f
-stdout : fun : (a) -> (a, a)
+sig f : (a) -> (a, a) fun f(x) {sig g : forall b.(a, b) -> (a, b) fun g(x, y) {(x, y)} g(x, x)} f
+stdout : fun : [] ((a) -> (a, a))
 
-Flexible quantifier elimination (fix introduced in 514187b)
-sig a : (() {A:() |e}~> a) -> () {A{_} |e}~> a fun a(m)() { error("a") } sig b : (() {B:() |e}~> a) -> () {B{_} |e}~> a fun b(m)() { error("b") } sig c : (() {A:(),B:() |e}~> a) {A{_}, B{_} |e}~> a fun c(m) { a(b(m))() }
-stdout : () : ()
+Composing two relative callbacks
+effect Alpha { A : () => (); } effect Beta { B : () => (); } sig alpha : (<Alpha> (() -> Int)) -> Int fun alpha(m) { handle(m()) { case <A => k> -> k(()) } } sig beta : (<Beta> (() -> Int)) -> Int fun beta(m) { handle(m()) { case <B => k> -> k(()) } } alpha(fun() { do A; beta(fun() { do B; 42 }) })
+stdout : 42 : Int
 
-Calling non-instantiated functions
-(~id)(2)
+Call a frozen function after explicit instantiation
+(~id)@(2)
 stdout : 2 : Int
 
 Projecting non-instantiated records
@@ -151,28 +152,28 @@ var x = (id=id); (~x).id(2)
 stdout : 2 : Int
 
 Varying arities of foralls (1)
-(~id) : forall a::Any. forall e::Row. (a) -e-> a
-stdout : fun : (a::Any) -> a::Any
+(~id) : forall a::Any. [] (a -> a)
+stdout : fun : [] ((a::Any) -> a::Any)
 
 Varying arities of foralls (2)
-(~id) : forall a::Any. forall e::Row. forall b. (a) -e-> a
+(~id) : forall a::Any. forall b. [] (a -> a)
 exit : 1
 stderr : @.*Type error:.*
 
 Signatures (fun): free variable on parameter without sig (1)
 fun f(x : a) {x} f
 exit : 0
-stdout : fun : (a) -> a
+stdout : fun : [] ((a) -> a)
 
 Signatures (fun): free variable in body without sig (2)
 fun f(x) {x : a} f
 exit : 0
-stdout : fun : (a) -> a
+stdout : fun : [] ((a) -> a)
 
 Signatures (fun): free variable on parameeter with unquantified sig (3)
 sig f : (a) -> a fun f(x : a) {x} f
 exit : 0
-stdout : fun : (a) -> a
+stdout : fun : [] ((a) -> a)
 
 Signatures (fun): free variable on parameter with quantified sig (4)
 sig f : forall a. (a) -> a fun f(x : a) {x} f
@@ -205,64 +206,56 @@ args : --set=show_quantifiers=true
 Type abstraction: correct, polymorphic body
 /\ [a]. { $(fun(x){x}) }
 exit : 0
-stdout : fun : forall a,b::Any,c::Row.(b::Any) -c-> b::Any
+stdout : fun : forall a,b::Any.(b::Any) -> b::Any
 args : --set=show_quantifiers=true
 
 Type abstraction: correct, use type variable in signature
-/\ [a]. { sig f : (a) {}-> a fun f(x){x : a} f }
+/\ [a]. { sig f : (a) -> a fun f(x){x : a} f }
 exit : 0
-stdout : fun : forall a.(a) {}-> a
+stdout : fun : forall a.(a) -> a
 args : --set=show_quantifiers=true
 
 Type abstraction: correct, use type variable in body
 # Note that we need the signature to enforce a function without effects
-/\ [a]. { sig f : (%b) {}-> %b fun f (x) {x : a} ~f }
+/\ [a]. { sig f : (%b) -> %b fun f (x) {x : a} ~f }
 exit : 0
-stdout : fun : forall a.(a) {}-> a
+stdout : fun : forall a.(a) -> a
 args : --set=show_quantifiers=true
 
 Type abstraction: Ambigous type (1)
-# The lambda has type (%b) -%e-> %b, so we must fail
+# The lambda type has an unknown argument type
 /\ [a]. { fun(x) { x } }
 exit : 1
-stderr : @.*Type error:.*The phrase under a type abstraction must have a unique type.*
+stderr : @.*Type error:.*Type abstraction needs a type annotation.*
 
-Type abstraction: Ambigous type (2)
-# This example is somewhat tricky.
-# One may assume that calling g from the toplevel fixes its effect and we can therefore accept this program.
-# However, If we did allow this, then g wouldn't have a most general type before the call g(): Both
-# forall e :: Row. (Int) -e-> (Int) and
-# forall e :: Row. (Int) -R-> (Int) for any effect row R would be an option.
-# We would like our terms to have most general types at any point, not just at the end of type-checking.
-# Therefore, we require that the body of the /\ must have unqiue type immediately after checking
-# it. Unifying away the flexible variables afterwards doesn't save us.
-var g = /\ [e::Row]. { fun(x) { x + 1 } }; g()
+Type abstraction: the binding needs an annotation before later uses
+var g = /\ [a]. { fun(x) { ignore(x); x } }; g()(42)
 exit : 1
-stderr : @.*Type error:.*The phrase under a type abstraction must have a unique type.*
+stderr : @.*Type error:.*Type abstraction needs a type annotation.*
 
 Type abstraction: correct, shadowing (1)
-sig f : () -a-> (forall b.()) fun f() {  /\ [a]. {  sig g : (a) {}-> a fun g(x){x} ()   } } f
+sig f : (a) -> (forall b.()) fun f(_) {  /\ [a]. {  sig g : (a) -> a fun g(x){x} ()   } } f
 exit : 0
-stdout : fun : forall a::Row.() -a-> forall b.()
+stdout : fun : forall a.[] ((a) -> forall b.())
 args : --set=show_quantifiers=true
 
 Type abstraction: correct, shadowing (2)
 # Like previous version, but this time with an explicit forall on the outer variable a!
-sig f : forall a::Row. () -a-> (forall b.()) fun f() {  /\ [a]. {  sig g : (a) {}-> a fun g(x){x} ()   } } f
+sig f : forall a. (a) -> (forall b.()) fun f(_) {  /\ [a]. {  sig g : (a) -> a fun g(x){x} ()   } } f
 exit : 0
-stdout : fun : forall a::Row.() -a-> forall b.()
+stdout : fun : forall a.[] ((a) -> forall b.())
 args : --set=show_quantifiers=true
 
 Type abstraction: correct, shadowing (3)
-/\ [e::Row]. { sig f : forall e. (e) {}-> e fun f(x){x}  id : ( (Int) -e-> Int ) }
+/\ [e::Row]. { sig f : forall e. (e) -> e fun f(x){x}  id : ((x:Int | e) -> (x:Int | e)) }
 exit : 0
-stdout : fun : forall a::Row.(Int) -a-> Int
+stdout : fun : forall a::Row.((x:Int|a)) -> (x:Int|a)
 args : --set=show_quantifiers=true
 
 Type abstraction: incorrect, violates value restriction
-/\ [e::Row]. {  id(id : ( (Int) -e-> Int )) }
+/\ [e::Row]. {  id(id : ((x:Int | e) -> (x:Int | e))) }
 exit : 1
-stderr : @.*Type error:.*Because of the value restriction, the expression .*cannot be generalised.*
+stderr : @.*Type error:.*Type abstraction requires a value.*
 
 Non-linear generalisation (1)
 {var x = A; ()}

@@ -17,8 +17,6 @@ let runtime_type_error error =
 (* Alias environment *)
 module AliasEnv = Env.String
 
-(* This is done in two stages because the datatype for regexes refers
-   to the String alias *)
 let alias_env : Types.tycon_environment = DefaultAliases.alias_env
 
 let alias_env : Types.tycon_environment =
@@ -33,6 +31,7 @@ type primitive =
 [ Value.t
 | `PFun of Value.t list -> Value.t Lwt.t ]
 
+(* This flag controls ApplyPure independently of a primitive's modal type. *)
 type pure = PURE | IMPURE
 
 let pure_pfun fn = `PFun(fun xs -> Lwt.return (fn xs))
@@ -43,29 +42,18 @@ let mk_binop_fn impl unbox_fn constr = function
 
 let int_op impl pure : primitive * Types.datatype * pure =
   (`PFun (mk_binop_fn impl Value.unbox_int (fun x -> `Int x))),
-  datatype "(Int, Int) -> Int",
+  datatype "[] ((Int, Int) -> Int)",
   pure
 
 let float_op impl pure : primitive * Types.datatype * pure =
   (`PFun (mk_binop_fn impl Value.unbox_float (fun x -> `Float x))),
-  datatype "(Float, Float) -> Float",
+  datatype "[] ((Float, Float) -> Float)",
   pure
 
 let string_op impl pure : primitive * Types.datatype * pure =
   (`PFun (mk_binop_fn impl Value.unbox_string (fun x -> `String x))),
-  datatype "(String, String) -> String",
+  datatype "[] ((String, String) -> String)",
   pure
-
-let conversion_op' ~unbox ~conv ~(box :'a->Value.t): Value.t list -> Value.t = function
-    | [x] -> box (conv (unbox x))
-    | _ -> assert false
-
-let conversion_op ~from ~unbox ~conv ~(box :'a->Value.t) ~into pure : primitive * Types.datatype * pure =
-  let open Types in
-  ((pure_pfun (fun x -> conversion_op' ~unbox ~conv:conv ~box:box x) : primitive),
-   (let q, r = fresh_row_quantifier (lin_any, res_any) in
-      (ForAll ([q], Function (make_tuple_type [from], r, into)) : datatype)),
-   pure)
 
 (* The following functions expect 1 argument. Assert false otherwise. *)
 let float_fn fn pure =
@@ -73,12 +61,15 @@ let float_fn fn pure =
       match args with
         | [c] -> (Value.box_float (fn (Value.unbox_float c)))
         | _ -> assert false),
-   datatype "(Float) -> Float",
+   datatype "[] ((Float) -> Float)",
   pure)
 
 let p1 fn = pure_pfun (function
   | [a] -> fn a
   | _ -> assert false)
+
+let conversion_op ~unbox ~conv ~box signature pure =
+  (p1 (fun x -> box (conv (unbox x))), datatype signature, pure)
 
 let p2 fn = pure_pfun (function
   | [a; b] -> fn a b
@@ -168,7 +159,7 @@ let project_datetime_conv (f: CalendarShow.t -> int) : primitive * Types.datatyp
               let offset = Value.unbox_int offset in
               let ts = CalendarShow.convert ts Time_Zone.UTC (Time_Zone.UTC_Plus offset) in
               Value.box_int (f ts)),
-  datatype "(DateTime, Int) -> Int",
+  datatype "[] ((DateTime, Int) -> Int)",
   PURE)
 
 (* Similar to the above, but for accessors  which do not need conversion offsets
@@ -180,7 +171,7 @@ let project_datetime (f: CalendarShow.t -> int) : primitive * Types.datatype * p
       | Timestamp.Infinity -> raise (runtime_error "Cannot project from 'forever'")
       | Timestamp.MinusInfinity -> raise (runtime_error "Cannot project from beginningOfTime")
       | Timestamp.Timestamp ts -> Value.box_int (f ts)),
-  datatype "(DateTime) -> Int",
+  datatype "[] ((DateTime) -> Int)",
   PURE)
 
 
@@ -193,7 +184,7 @@ let int_range =
        if n = first then items else collect (n - 1) items
      in
      Value.box_list (if first > last then [] else collect last [])),
-   datatype "(Int, Int) -> List Int",
+   datatype "[] ((Int, Int) -> List Int)",
    PURE)
 
 let env : (string * (primitive * Types.datatype * pure)) list = [
@@ -233,81 +224,63 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
   (* Comparisons *)
   "==",
   (p2 (fun v1 v2 -> Value.box_bool (equal v1 v2)),
-   datatype "(a,a) -> Bool",
+   datatype "[] ((a,a) -> Bool)",
    PURE);
 
   "<>",
   (p2 (fun v1 v2 -> Value.box_bool (not (equal v1 v2))),
-   datatype "(a,a) -> Bool",
+   datatype "[] ((a,a) -> Bool)",
    PURE);
 
   "<",
   (p2 (fun v1 v2 -> Value.box_bool (less v1 v2)),
-   datatype "(a,a) -> Bool",
+   datatype "[] ((a,a) -> Bool)",
    PURE);
 
   ">",
   (p2 (fun v1 v2 -> Value.box_bool (less v2 v1)),
-   datatype "(a,a) -> Bool",
+   datatype "[] ((a,a) -> Bool)",
    PURE);
 
 
   "<=",
   (p2 (fun v1 v2 -> Value.box_bool (less_or_equal v1 v2)),
-   datatype "(a,a) -> Bool",
+   datatype "[] ((a,a) -> Bool)",
    PURE);
 
   ">=",
   (p2 (fun v1 v2 -> Value.box_bool (less_or_equal v2 v1)),
-   datatype "(a,a) -> Bool",
+   datatype "[] ((a,a) -> Bool)",
    PURE);
 
   (* Conversions (any missing?) *)
-  "intToString",   conversion_op ~from:(Types.Primitive Primitive.Int)
-                                 ~unbox:Value.unbox_int
-                                 ~conv:string_of_int
+  "intToString",   conversion_op ~unbox:Value.unbox_int ~conv:string_of_int
                                  ~box:Value.box_string
-                                 ~into:Types.string_type
-                                 PURE;
-  "stringToInt",   conversion_op ~from:Types.string_type
-                                 ~unbox:Value.unbox_string
-                                 ~conv:int_of_string
+                                 "[] ((Int) -> String)" PURE;
+  "stringToInt",   conversion_op ~unbox:Value.unbox_string ~conv:int_of_string
                                  ~box:Value.box_int
-                                 ~into:(Types.Primitive Primitive.Int)
-                                 IMPURE;
-  "intToFloat",    conversion_op ~from:(Types.Primitive Primitive.Int)
-                                 ~unbox:Value.unbox_int
-                                 ~conv:float_of_int
+                                 "[] ((String) -> Int)" IMPURE;
+  "intToFloat",    conversion_op ~unbox:Value.unbox_int ~conv:float_of_int
                                  ~box:Value.box_float
-                                 ~into:(Types.Primitive Primitive.Float)
-                                 PURE;
-  "floatToInt",    conversion_op ~from:(Types.Primitive Primitive.Float)
-                                 ~unbox:Value.unbox_float
-                                 ~conv:int_of_float
+                                 "[] ((Int) -> Float)" PURE;
+  "floatToInt",    conversion_op ~unbox:Value.unbox_float ~conv:int_of_float
                                  ~box:Value.box_int
-                                 ~into:(Types.Primitive Primitive.Int)
-                                 PURE;
-  "floatToString", conversion_op ~from:(Types.Primitive Primitive.Float)
-                                 ~unbox:Value.unbox_float
-                                 ~conv:string_of_float'
+                                 "[] ((Float) -> Int)" PURE;
+  "floatToString", conversion_op ~unbox:Value.unbox_float ~conv:string_of_float'
                                  ~box:Value.box_string
-                                 ~into:Types.string_type
-                                 PURE;
-  "stringToFloat", conversion_op ~from:Types.string_type
-                                 ~unbox:Value.unbox_string
-                                 ~conv:float_of_string
+                                 "[] ((Float) -> String)" PURE;
+  "stringToFloat", conversion_op ~unbox:Value.unbox_string ~conv:float_of_string
                                  ~box:Value.box_float
-                                 ~into:(Types.Primitive Primitive.Float)
-                                 IMPURE;
+                                 "[] ((String) -> Float)" IMPURE;
 
   "sysexit",
   (p1 (fun ret -> exit (Value.unbox_int ret)),
-   datatype "(Int) ~> a",
+   datatype "[wild] ((Int) -> a)",
    IMPURE);
 
   "show",
   (p1 (fun v -> Value.box_string (Value.string_of_value v)),
-   datatype "(a) ~> String",
+   datatype "[wild] ((a) -> String)",
    IMPURE);
 
   "exit",
@@ -315,7 +288,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
   (* Return type must be free so that it unifies with things that
      might be used alternatively. E.g.:
      if (test) exit(1) else 42 *)
-   datatype "(a) ~> b",
+   datatype "forall a::Abs,b. [wild] ((a) -> b)",
   IMPURE);
 
   (* Lists and collections *)
@@ -327,13 +300,13 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
   "Cons",
   (p2 (fun x xs ->
          Value.box_list (x :: (Value.unbox_list xs))),
-   datatype "(a, List a) -> List a",
+   datatype "[] ((a, List a) -> List a)",
    PURE);
 
   "Concat",
   (p2 (fun xs ys ->
          Value.box_list (Value.unbox_list xs @ Value.unbox_list ys)),
-   datatype "(List a, List a) -> List a",
+   datatype "[] ((List a, List a) -> List a)",
    PURE);
 
   "intRange", int_range;
@@ -345,7 +318,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
           | [] -> runtime_error "hd() of empty list"
           | x :: _ -> x
       ),
-   datatype "(List a) ~> a",
+   datatype "[] ((List a) -> a)",
   IMPURE);
 
   "tl",
@@ -354,17 +327,17 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
             | [] -> runtime_error "tl() of empty list"
             | _x :: xs -> Value.box_list xs
       ),
-   datatype "(List a) ~> List a",
+   datatype "[] ((List a) -> List a)",
   IMPURE);
 
-  (* HACK: tame versions of head and tail for use in pattern matching *)
+  (* Internal versions of head and tail for pattern lowering. *)
   "$$hd",
   (p1 (fun lst ->
         match (Value.unbox_list lst) with
           | [] -> runtime_error "hd() of empty list"
           | x :: _ -> x
       ),
-   datatype "(List a) -> a",
+   datatype "[] ((List a) -> a)",
   IMPURE);
 
   "$$tl",
@@ -373,29 +346,29 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
             | [] -> runtime_error "tl() of empty list"
             | _x :: xs -> Value.box_list xs
       ),
-   datatype "(List a) -> List a",
+   datatype "[] ((List a) -> List a)",
   IMPURE);
 
   "length",
   (p1 (Value.unbox_list ->- List.length ->- Value.box_int),
-   datatype "(List a) -> Int",
+   datatype "[] ((List a) -> Int)",
   PURE);
 
   "Sum",
   (p1 (Value.unbox_list ->- List.fold_left (fun x y -> x + Value.unbox_int y) 0 ->- Value.box_int),
-   datatype "(List Int) -> Int",
+   datatype "[] ((List Int) -> Int)",
    PURE);
 
   "take",
   (p2 (fun n l ->
          Value.box_list (Utility.take (Value.unbox_int n) (Value.unbox_list l))),
-   datatype "(Int, List a) ~> List a",
+   datatype "[] ((Int, List a) -> List a)",
   PURE);
 
   "drop",
   (p2 (fun n l ->
          Value.box_list (Utility.drop (Value.unbox_int n) (Value.unbox_list l))),
-   datatype "(Int, List a) ~> List a",
+   datatype "[] ((Int, List a) -> List a)",
   PURE);
 
   "max",
@@ -404,7 +377,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
            | `List [] -> `Variant ("Nothing", `Record [])
            | `List (x::xs) -> `Variant ("Just", List.fold_left max2 x xs)
            | _ -> raise (runtime_type_error "Internal error: non-list passed to max")),
-   datatype "(List a) ~> (|Just:a | Nothing:()|)",
+   datatype "[] ((List a) -> (|Just:a | Nothing:()|))",
   PURE);
 
   "min",
@@ -413,46 +386,45 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
            | `List [] -> `Variant ("Nothing", `Record [])
            | `List (x::xs) -> `Variant ("Just", List.fold_left min2 x xs)
            | _ -> raise (runtime_type_error "Internal error: non-list passed to min")),
-   datatype "(List a) ~> (|Just:a | Nothing:()|)",
+   datatype "[] ((List a) -> (|Just:a | Nothing:()|))",
   PURE);
 
   "least",
   (p2 (fun x y -> if less x y then x else y),
-   datatype "(DateTime, DateTime) ~> DateTime",
+   datatype "[] ((DateTime, DateTime) -> DateTime)",
   PURE);
 
   "greatest",
   (p2 (fun x y -> if less x y then y else x),
-   datatype "(DateTime, DateTime) ~> DateTime",
+   datatype "[] ((DateTime, DateTime) -> DateTime)",
   PURE);
 
   "debug",
   (p1 (fun message -> Debug.print (Value.unbox_string message);
                       `Record []),
-   datatype "(String) ~> ()",
+   datatype "[wild] ((String) -> ())",
   IMPURE);
 
   "print",
   (p1 (fun msg -> print_string (Value.unbox_string msg); flush stdout; `Record []),
-   (* datatype "(String) ~> ()", *)
-   datatype "(String) ~> ()",
+   datatype "[wild] ((String) -> ())",
   IMPURE);
 
   "not",
   (p1 (Value.unbox_bool ->- not ->- Value.box_bool),
-   datatype "(Bool) -> Bool",
+   datatype "[] ((Bool) -> Bool)",
   PURE);
 
   "negate",
-  (p1 (Value.unbox_int ->- (~-) ->- Value.box_int), datatype "(Int) -> Int",
+  (p1 (Value.unbox_int ->- (~-) ->- Value.box_int), datatype "[] ((Int) -> Int)",
   PURE);
 
   "negatef",
-  (p1 (fun f -> Value.box_float (-. (Value.unbox_float f))), datatype "(Float) -> Float",
+  (p1 (fun f -> Value.box_float (-. (Value.unbox_float f))), datatype "[] ((Float) -> Float)",
   PURE);
 
   "error",
-  (p1 (Value.unbox_string ->- runtime_error), datatype "(String) ~> a",
+  (p1 (Value.unbox_string ->- runtime_error), datatype "[] ((String) -> a)",
   IMPURE);
 
   "sleep",
@@ -462,7 +434,8 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
          `Record []*)
       runtime_error "The sleep function is not implemented on the server yet"
       ),
-   datatype "(Int) ~> ()",
+   (* Keep the timing permission while sleep is unimplemented. *)
+   datatype "[wild] ((Int) -> ())",
   IMPURE);
 
   (* Date / time functions *)
@@ -470,13 +443,13 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
   "serverTime",
   (pure_pfun (fun _ ->
                Value.box_int(int_of_float(Unix.time()))),
-   datatype "() ~> Int",
+   datatype "[wild] (() -> Int)",
    IMPURE);
 
   "serverTimeMilliseconds",
   (pure_pfun (fun _ ->
                Value.box_int(time_milliseconds())),
-   datatype "() ~> Int",
+   datatype "[wild] (() -> Int)",
    IMPURE);
 
 
@@ -492,7 +465,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
                    |> int_of_float
                    |> Value.box_int
            | _ -> assert false),
-   datatype "(DateTime) ~> Int",
+   datatype "[] ((DateTime) -> Int)",
    IMPURE);
 
   "intToDate",
@@ -502,7 +475,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
        |> UnixTimestamp.to_utc_calendar
        |> Timestamp.timestamp
        |> Value.box_datetime),
-  datatype "(Int) ~> DateTime",
+  datatype "[] ((Int) -> DateTime)",
   IMPURE);
 
   "dateYear", (project_datetime_conv CalendarShow.year);
@@ -520,7 +493,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
           |> floor
           |> int_of_float
           |> Value.box_int),
-  datatype "(DateTime) -> Int",
+  datatype "[] ((DateTime) -> Int)",
   PURE);
 
   (* We are precise to three decimal places. *)
@@ -534,7 +507,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
           |> int_of_float
           |> Value.box_int
     ),
-  datatype "(DateTime) -> Int",
+  datatype "[] ((DateTime) -> Int)",
   PURE);
 
 
@@ -543,12 +516,12 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
       Value.unbox_string str
        |> Timestamp.parse_user_string
        |> Value.box_datetime),
-  datatype "(String) ~> DateTime",
+  datatype "[wild] ((String) -> DateTime)",
   IMPURE);
 
   "now",
   (pure_pfun (fun _ -> Value.box_datetime (Timestamp.now ())),
-    datatype "() -> DateTime",
+    datatype "[wild] (() -> DateTime)",
     IMPURE);
 
   (* Returns UTC offset of local time. For example, if local time is British
@@ -557,7 +530,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
   (pure_pfun (fun _ ->
       CalendarLib.Time_Zone.(gap UTC Local)
       |> Value.box_int),
-    datatype "() ~> Int",
+    datatype "[wild] (() -> Int)",
     IMPURE);
 
   "showUTC",
@@ -571,7 +544,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
         | Timestamp.MinusInfinity -> "-infinity"
       in
       Value.box_string str),
-  datatype "(DateTime) ~> String",
+  datatype "[] ((DateTime) -> String)",
   IMPURE);
 
   "forever",
@@ -586,12 +559,12 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
 
   "ord",
   (p1 (fun c -> Value.box_int (Char.code (Value.unbox_char c))),
-   datatype "(Char) -> Int",
+   datatype "[] ((Char) -> Int)",
   PURE);
 
   "chr",
   (p1 (fun n -> (Value.box_char (Char.chr (Value.unbox_int n)))),
-   datatype "(Int) -> Char",
+   datatype "[] ((Int) -> Char)",
   PURE);
 
   (* some trig functions *)
@@ -611,7 +584,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
           let regex = Regex.compile_ocaml (Linksregex.Regex.ofLinks r)
           and string = Value.unbox_string s in
             Value.box_bool (Str.string_match regex string 0)),
-    datatype "(String, Regex) -> Bool",
+    datatype "[] ((String, Regex) -> Bool)",
     PURE));
 
   (* regular expression matching with grouped matched results as a list *)
@@ -632,7 +605,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
     with
        NotFound _ -> accumMatches ((`String "")::l) (i - 1)) in
        accumMatches [] ngroups)),
-     datatype "(String, Regex) ~> List String",
+     datatype "[] ((String, Regex) -> List String)",
    PURE));
 
   (* regular expression substitutions --- don't yet support global substitutions *)
@@ -646,7 +619,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
            Value.box_string (Utility.decode_escapes (Str.replace_first regex tmpl string))
         | Any | StartAnchor | EndAnchor | Simply _ | Seq _ | Quote _ | Group _
           | Range _ | Alternate _ | Repeat _ -> assert false),
-    datatype "(String, Regex) ~> String",
+    datatype "[] ((String, Regex) -> String)",
     PURE));
 
 (* FIXME: should these functions return a Maybe Char/Maybe String? *)
@@ -658,7 +631,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
               Value.box_char ((Value.unbox_string s).[int i])
         with
         Invalid_argument _ -> runtime_error "charAt: invalid index"),
-    datatype ("(String, Int) ~> Char"),
+    datatype "[] ((String, Int) -> Char)",
     IMPURE));
 
   ("strsub",
@@ -668,33 +641,33 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
           Value.box_string (String.sub (Value.unbox_string s) (int start) (int len))
         with
         Invalid_argument _ -> runtime_error "strsub: invalid arguments"),
-    datatype "(String, Int, Int) ~> String",
+    datatype "[] ((String, Int, Int) -> String)",
     IMPURE));
 
   ("strlen",
    (p1 (fun s -> match s with
           | `String s -> `Int (String.length s)
           |  _ -> raise (runtime_type_error "strlen got wrong arguments")),
-    datatype ("(String) ~> Int "),
+    datatype "[] ((String) -> Int)",
     PURE));
 
   ("strescape",
    (p1 (function
           | `String s -> `String (String.escaped s)
           | _ -> raise (runtime_type_error "strescape got wrong arguments")),
-   datatype ("(String) ~> String "),
+   datatype "[] ((String) -> String)",
    IMPURE));
 
   ("strunescape",
    (p1 (function
           | `String s -> `String (Scanf.unescaped s)
           | _ -> raise (runtime_type_error "Internal error: strunescape got wrong arguments")),
-   datatype ("(String) ~> String "),
+   datatype "[] ((String) -> String)",
    IMPURE));
 
    ("strContains",
     (p2 (fun s c -> Value.box_bool (String.contains (Value.unbox_string s) (Value.unbox_char c))),
-    datatype ("(String, Char) ~> Bool"),
+    datatype "[] ((String, Char) -> Bool)",
     PURE)
   );
 
@@ -710,7 +683,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
            in
              aux 0 chars;
              Value.box_string (Bytes.to_string s)),
-    datatype ("(List Char) ~> String"),
+    datatype "[] ((List Char) -> String)",
     PURE));
 
   ("explode",
@@ -725,19 +698,19 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
                let chars = aux ((String.length s) - 1) [] in
              Value.box_list (List.map Value.box_char chars)
                | _  -> raise (runtime_type_error "Internal error: non-String in implode")),
-    datatype ("(String) ~> List Char"),
+    datatype "[] ((String) -> List Char)",
     PURE));
 
   (* non-deterministic random number generator *)
   "random",
   (pure_pfun (fun _ -> (Value.box_float (Random.float 1.0))),
-   datatype "() -> Float",
+   datatype "[wild] (() -> Float)",
    IMPURE);
 
     "gensym",
     (let idx = ref 0 in
      pure_pfun (fun _ -> let i = !idx in idx := i+1; (Value.box_int i)),
-      datatype "() -> Int",
+      datatype "[wild] (() -> Int)",
       IMPURE);
 
     "connectSocket",
@@ -756,7 +729,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
                     Unix.set_nonblock sock;
                     `Variant ("Just", Value.box_socket (Unix.in_channel_of_descr sock, Unix.out_channel_of_descr sock))
                   with _ -> `Variant ("Nothing", `Record [])),
-     datatype "(String, Int) ~> (|Nothing|Just:Socket|)",
+     datatype "[wild] ((String, Int) -> (|Nothing|Just:Socket|))",
      IMPURE);
     "writeToSocket",
     (p2 (fun messagev socketv ->
@@ -765,7 +738,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
                   output_string outc message;
                   flush outc;
                   `Record []),
-     datatype "(String, Socket) ~> ()",
+     datatype "[wild] ((String, Socket) -> ())",
      IMPURE);
     "readFromSocket",
     (p1 (fun socketv ->
@@ -776,32 +749,32 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
                   with
                     Sys_blocked_io ->
                     `Variant ("Nothing", `Record [])),
-     datatype "(Socket) ~> (|Nothing|Just:String|)",
+     datatype "[wild] ((Socket) -> (|Nothing|Just:String|))",
      IMPURE);
     "closeSocket",
     (p1 (fun socketv ->
                   let (inc, _) = Value.unbox_socket socketv in
                   Unix.shutdown (Unix.descr_of_in_channel inc) Unix.SHUTDOWN_SEND;
                   `Record []),
-     datatype "(Socket) ~> ()",
+     datatype "[wild] ((Socket) -> ())",
      IMPURE);
     (* Crypt API *)
 
     "crypt",
     (p1 (Value.box_string -<- Bcrypt.string_of_hash -<- (fun s -> Bcrypt.hash ?count:None ?seed:None s) -<- Value.unbox_string),
-    datatype "(String) ~> String",
+    datatype "[wild] ((String) -> String)",
     PURE);
 
     "verify",
     (p2 (fun str -> Value.box_bool -<- (Bcrypt.verify (Value.unbox_string str)) -<- Bcrypt.hash_of_string -<- Value.unbox_string),
-    datatype "(String, String) ~> Bool",
+    datatype "[] ((String, String) -> Bool)",
     PURE);
 
     (* CLI *)
     "getArgs",
     (pure_pfun (fun _ ->
             Value.(box_list (List.map box_string (Settings.get_rest_arguments ())))),
-     datatype "() ~> List String",
+     datatype "[wild] (() -> List String)",
      IMPURE)
 ]
 
@@ -839,43 +812,6 @@ let is_primitive_var var =
 
 let type_env : Types.environment =
   List.fold_right (fun (n, (_,t,_)) env -> Env.String.bind n t env) env Env.String.empty
-
-(* Native permissions are independent of the flag used for IR ApplyPure.
-   Keep sleep's timing permission while its implementation is pending.
-   Deterministic runtime failures such as error do not require wild. *)
-let wild_primitives = StringSet.of_list [
-  "sysexit"; "show"; "exit"; "debug"; "print"; "sleep";
-  "serverTime"; "serverTimeMilliseconds"; "parseDate"; "now"; "utcOffset";
-  "random"; "gensym"; "connectSocket"; "writeToSocket"; "readFromSocket";
-  "closeSocket"; "crypt"; "getArgs";
-]
-
-let modal_function ~wild domain result =
-  let context = ModalEffects.context ~wild (ModalEffects.extension []) in
-  Types.modal (ModalEffects.Absolute context) (Types.AmbientFunction (dl_unl, domain, result))
-
-let modal_type_env =
-  let open Types in
-  let modal_type name datatype =
-    let wild = StringSet.mem name wild_primitives in
-    if name = "exit" then
-      let payload_q, payload = fresh_type_quantifier (lin_unl, res_abs) in
-      let result_q, result = fresh_type_quantifier (lin_unl, res_any) in
-      for_all ([payload_q; result_q], modal_function ~wild (make_tuple_type [payload]) result)
-    else
-      let quantifiers, body = TypeUtils.split_quantified_type datatype in
-      match body with
-      | Function (domain, _, result) ->
-          (* These primitives have first-order signatures. Reuse the value
-             types and keep only the quantifiers they use. *)
-          let typ = modal_function ~wild domain result in
-          let free = free_type_vars typ in
-          let quantifiers = List.filter (fun q -> TypeVarSet.mem (Quantifier.to_var q) free) quantifiers in
-          for_all (quantifiers, typ)
-      | _ -> datatype
-  in
-  Env.String.fold (fun name datatype env ->
-    Env.String.bind name (modal_type name datatype) env) type_env Env.String.empty
 
 let typing_env = {Types.var_env = type_env;
                   Types.rec_vars = StringSet.empty;

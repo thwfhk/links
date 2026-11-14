@@ -1,14 +1,16 @@
 # Toggle on/off
 
 # State operations
-sig get : () {Get:s |_}-> s
+effect State(s::Abs) { Get : () => s; Put : (s) => (); }
+
+sig get : forall s::Abs. [State(s)] (() -> s)
 fun get() {do Get}
 
-sig put : (s) {Put:(s) => () |_}-> ()
+sig put : forall s::Abs. [State(s)] ((s) -> ())
 fun put(st) {do Put(st)}
 
 # Stateful computation
-sig toggle : Comp(Bool, {Get:Bool,Put:(Bool) => () |_})
+sig toggle : [State(Bool)] (() -> Bool)
 fun toggle() {
   var bit = get();
   put(not(bit));
@@ -16,9 +18,7 @@ fun toggle() {
 }
 
 # State handler
-sig runState : (Comp(a, {Get:s,Put:(s) => () |e})) -> # Stateful computation
-               (s)                                       -> # Initial state
-                Comp((a,s), {Get{_},Put{_} |e})    # Stateless computation
+sig runState : forall s::Abs,a::Abs. (<State(s)> (() -> a)) -> (s) -> () -> (a,s)
 fun runState(m)(st)() {
   var run = handle(m()) {
     case x      -> fun(ret_st) { (x,ret_st) }

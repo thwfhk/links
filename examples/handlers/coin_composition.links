@@ -1,3 +1,8 @@
+effect Choice { Choose : () => Bool; }
+effect Failure { Fail : forall a::Abs. () => a; }
+
+typename Toss = (|Heads|Tails|);
+
 fun intersperse(y, xs) {
    switch (xs) {
      case []      -> []
@@ -21,6 +26,7 @@ fun showToss(toss) {
   }
 }
 
+sig positive : forall a::Abs. (<Choice> (() -> a)) -> a
 fun positive(m) {
   handle(m()) {
     case x -> x
@@ -28,6 +34,7 @@ fun positive(m) {
   }
 }
 
+sig allChoices : forall a::Abs. (<Choice> (() -> a)) -> () -> List a
 fun allChoices(m)() {
   handle(m()) {
     case x -> [x]
@@ -35,6 +42,7 @@ fun allChoices(m)() {
   }
 }
 
+sig failure : forall a::Abs. (<Failure> (() -> a)) -> () -> List a
 fun failure(m)() {
   handle(m()) {
     case x -> [x]
@@ -49,18 +57,21 @@ fun failure(m)() {
 #   }
 # }
 
+sig toss : [Choice] (() -> Toss)
 fun toss() {
   if (do Choose) Heads else Tails
 }
 
+sig drunkToss : [Choice, Failure] (() -> Toss)
 fun drunkToss() {
   if (do Choose) toss() else do Fail
 }
 
+sig run : [wild] (() -> ())
 fun run() {
-  var xs = allChoices(failure(drunkToss))();
+  var xs = allChoices(fun() { failure(drunkToss)() })();
   println(showList(showList(showToss))(xs));
-  var ys = failure(allChoices(drunkToss))();
+  var ys = failure(fun() { allChoices(drunkToss)() })();
   println(showList(showList(showToss))(ys));
   ()
   # var zs = allChoicesShallow(toss)();

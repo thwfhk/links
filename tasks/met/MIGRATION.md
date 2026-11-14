@@ -85,7 +85,7 @@ and its five files under `tests/stdlibtests/binaryTree/`.
 
 ## Installed examples
 
-All 35 `.links` files under [examples](../../examples) have entries in
+At the baseline, all 35 `.links` files under [examples](../../examples) had entries in
 [`tests/typecheck_examples.tests`](../../tests/typecheck_examples.tests).
 The table uses paths relative to `examples/`; each row includes its
 typecheck registration. Any retired example needs matching changes
@@ -103,13 +103,13 @@ to the installation list in `examples/dune` or
 | `handlers/coins.links` | Translate local `Comp` and `CF` uses, `choice`, `choose`, `fail`, `allResults`, `drunkToss`, `drunkTosses`, `rand`, `randomResult`, `persevere`, `maybeResult`, `handleRandom`. Use complete Choice, Failure and Rand interfaces in each handler. `randomResult` handles Choice and invokes Rand from its enclosing clause; `handleRandom` calls native `random`. |
 | `handlers/count.links`, `handlers/toggle.links`, `handlers/deep_state.links`, `handlers/shallow_state.links` | Translate `get`, `put`, `toggle`, `count`, `runState`, `evalState`, `logVal`, `logPrinter`, `logAccumulator` and `compify`. Group Get and Put in one State interface, and Log separately. Use a new handler for calls through shallow resumptions and a shared invocation context for `compify`. Preserve state and log results in `unitTest`. |
 | `handlers/light_switch.links` | Translate `LState`, `get`, `put`, `toggle`, `flickering`, `flickering_st`, `evalState`, `evalState0`, `logState`. Give the inner `logState` an explicit Get clause forwarding to the outer State handler; pass the current history to its resumption. Keep Put forwarding and the `unitTest` comparison. |
-| `handlers/transaction.links` | Translate Queue/Bank data and State/Abort requirements in `runState`, `beginTransaction`, `transfer`, `abort` and `example`. `beginTransaction` must explicitly forward Get and pass the current transaction state when it resumes. For the demo, fix `Co`, Fork's closure payload and the queue of resumptions used by `schedule` at the named interfaces and `wild` the demo needs. Check the recursive queue type for `Abs` because `runQ` is handler state. Defer the generic fork API wherever the payload must retain a varying outer context under a separately chosen fork/handler context. |
-| `handlers/concurrency.links` | Translate the concrete `test` and scheduler combinations using fixed absolute recursive `Co`/Fork and `Proc`/Enqueue/Dequeue payloads where needed. Cover `fork`, `yield`, `enqueue`, `dequeue`, `dequeueAndRun`, `runNext`, `runAll`, `scheduleBreadthFirst`, `scheduleDepthFirst`, `scheduleRandom` and `zipQueue`; the random scheduler requires `wild`. Defer generic payloads that must keep an independently chosen queue/process context after the current scheduler removes its own interface. The current file declares the demo and leaves the final invocation commented out. |
+| `handlers/transaction.links` | Translate Queue/Bank data and State/Abort requirements in `runState`, `beginTransaction`, `transfer`, `abort` and `example`. `beginTransaction` must explicitly forward Get and pass the current transaction state when it resumes. The concrete demo fixes `Co` and Fork's payload at State, Cooperative and `wild`. The scheduler passes its queue of ambient resumptions through handler result functions in one shared context. Defer the generic fork API wherever the payload must retain a varying outer context under a separately chosen fork/handler context. |
+| `handlers/concurrency.links` | Translate the concrete `test` and all three scheduler combinations with a fixed absolute `Co` payload for Fork and an explicit queue of ambient resumptions. The demo and random selection require `wild`. The separate `zipQueue` handler retains Enqueue and Dequeue with an absolute interface argument. Defer generic payloads that must keep an independently chosen queue/process context after the current scheduler removes its own interface. The current file declares the demo and leaves the final invocation commented out. |
 | `handlers/coop.links`, `handlers/monadic_reflection.links` | Translate `Co`, `Res`, `ResList`, `fork`, `yield`, `stop`, `test`, `coop`, `run` with cooperative resumptions in the same enclosing context. Translate `State`, `return`, `run`, `bind`, `>>=`, `get`, `put`, `reify`, `reflect`, `getR`, `putR`: use an absolute pure state function for Reflect's payload and an `Abs` operation result quantifier. Check the native permission of the printing `example` and `runExample`. |
 | `handlers/aop.links`, `handlers/aop2.links` | Translate `runState`, `evalState`, `runStringWriter`, `printer`, `get`, `put`, `tell`, `Env`, `bevalStep`, `beval`, `suspend`, `force`, `logger`, `dump` and `test0`–`test3`. For the concrete evaluator use a fixed absolute recursive Suspend payload for the known State/Writer/Suspend interfaces and native calls. Keep reissuing Suspend in the enclosing clause where the code does so. Defer the syntax of `SComp(e,a)` as an alias taking an effect argument. Verify that fixing the operation payload still permits all four advice combinations. |
 | `handlers/exceptions.links` | Translate `input`, `sumUp`, `fail`, `parseInt`, `prompt`, `catchFail`, `printResult`, `catchResume`, `sumUpSilently`, `example1`, `example2`, `unitTest`. Input and Fail need separate interfaces; `prompt` handles Input and calls Fail in the enclosing context. Compose the resulting relative callbacks with their known types; preserve the printing and silent cases. |
 | `handlers/fringe.links` | Translate `Tree`, `yield`, `walkTree`, `Continuation`, `Status`, `step` and `sameFringe`. `walkTree` yields absolute leaves. Store deep resumptions in `Status` in the enclosing context of `step` and run both in the same context. `sameFringe_aux` has a pure comparison and shares the context of those resumptions; its old `gen2` use and `step`'s second row do not require two independent resumption contexts for this program. Keep `unitTest` and the printing `runExamples`. |
-| `handlers/lambda.links` | Translate `freshVar` with `wild`. Translate `Var`, `Expr`, `Step`, `lam`, `var_`, `lit`, `step`, `subst`, `app`, `catchAll`, `id`, `add`, `add3`, `exThreePlusSeven`; declare Lam and Var separately and give Var a fixed absolute closure result. The shallow `step` keeps the Lam dependency on its returned body. Check the example's use of a supplied absolute `Expr` through nested handlers. |
+| `handlers/lambda.links` | Defer the [lambda evaluator](deferred/independent-effects/lambda.links). Its shallow Lam resumption must keep the caller's Lam context when the evaluator sends a closure through Var. Var requires an absolute payload and result, so an absolute annotation on the replacement closure cannot preserve the resumption's relative requirement. Remove the installed example and its typecheck registration together. |
 | `handlers/nim.links` | Translate `Player`, `GameTree`, `GameState`, `move`, `aliceTurn`, `bobTurn`, `game`, `ns`, `ps`, `naive`, `perfect`, `validMoves`, `bfs`, `reifyMove`, `pvb`, `gametree`. Translate Move/Cheat/Rand/State requirements in `bobStrat`, `check`, `checkedGame`, `aliceCheats`, `aliceCheats2`, `cheatReport`, `cheatLose`, `cpReport`, `cpLose`, `rand`, `ms`, `mixed`, `randomFloat`, `notReallyRandom`, `strategy`, `get`, `put`, `state`, `scorerecorder`, `boardPrinter`, `repeatGame`–`repeatGame3` and their helpers. Preserve explicit Move forwarding and the return-only handlers in `scorerecorder` and `boardPrinter`. Replace optional Move presence in `strategy` by an ambient dependency, with an added Move instance for its input computation. |
 | `handlers/number_games.links`, `handlers/u2_puzzle.links` | Translate `Answer`, `readInt`, `guess`, `input`, `mySecret`, `logger`; preserve Guess forwarding and native printing. Translate `U2`, `Side`, `Ordering`, `showMembers`, `choose`, `fail`, `selectParty`, `solve` and their helpers with independent Choose/Fail interfaces and absolute choice payloads. |
 | `handlers/pi.links` | Translate `yield`, `await`, `abort`, `Point`, `randomPoints`, `take`, `computePi`, `Resumption`, `Step`, `step`, `exchange`, `Consumer`, `Producer`, `copipe`, `pipe`, `catch` and the estimators. Keep Await and Yield separate, store deep resumptions in the common enclosing context, and restore the appropriate interface before calling a shallow resumption. Preserve `wild` for random points and display. |
@@ -146,7 +146,7 @@ the configuration file and per-case arguments which still apply.
 | `effect_annotations.tests`: Named effect presences can be shared across rows; Flexible effect tail and presence variables; The printer keeps an anonymous tail's effect kind | Defer the old effect-row presence variables, inference and effect-kind printing. Retain the handler's shared-context behaviour with an ambient context and explicit interfaces. |
 | `effect_annotations.tests`: Braced record presence and absence; Braced effect presence and absence; Polymorphic nullary operation shorthand | Translate the braced data-row case unchanged apart from the surrounding function type. Change the effect-field cases to interface declarations and check the polymorphic operation's own `Abs` quantifier. |
 | `effect_annotations.tests`: Linear arrows can have open or closed wild rows; Closed empty effects do not admit wild; Dot syntax in effect rows is rejected; Removed effect sugar setting is unknown; Removed effect sugar policy setting is unknown | Translate the native permission checks, including a linear function. Change the invalid syntax case to check that old effect arrows are rejected. Keep both unknown-setting checks. |
-| `effectname.tests` and `effectname/*.links` (12 files) | Translate `simple-decl`, `zero`, `one`, `two`, `typenames`, `nested-decl`, `handler` and `underscore` into declarations, type arguments, scoped contexts and handler tests as applicable. Change `two-nested` to check that repeated instances stay distinct, `effect-same-name` to reject duplicate operation names, `recursive` to check a permitted self-reference with an absolute payload and reject its ambient counterpart, and `mutual` to check declaration lookup. Retire tests of effect-alias expansion and effect arguments after preserving these behaviours. |
+| `effectname.tests` and `effectname/*.links` (12 files) | Translate `simple-decl`, `zero`, `one`, `two`, `typenames`, `nested-decl`, `handler` and `underscore` into declarations, type arguments, scoped contexts and handler tests as applicable. Change `two-nested` to check that repeated instances stay distinct, `effect-same-name` to reject duplicate operation names, `recursive` to check a permitted self-reference with an absolute payload and reject its ambient counterpart, and `mutual` to check declaration lookup. Defer tests of effect-alias expansion and effect arguments. The active `underscore` fixture checks an absolute callback against a relative interface requirement. |
 | `native.tests`: Handler patterns still accept adjacent angle brackets; Former session exception operation can be resumed | Translate with declared Ask and SessionFail. Retain the angle-bracket spelling and result. |
 | `native.tests`: Foreign function declaration and block; Mailbox effect shorthand; Hear is an ordinary labelled effect field; Linear operation type/pattern arrows and linear effect row subkind | Preserve unsupported native-language checks. Use a current type in the foreign cases, an interface declaration to demonstrate legal operation labels, and current interface/handler forms around the disallowed arrow. The old effect field and subkind forms become syntax rejections. |
 
@@ -186,3 +186,45 @@ The SmallLinks examples and active regressions contain no term-mask
 programs. A future reference test relying on executing an ambient
 callback through a handler it must bypass needs the postponed term
 mask. Keep mask-type and value-transport tests in scope.
+
+## Archived effect-row fixtures
+
+- [Effect annotations](deferred/effect-rows/effect_annotations.tests)
+  recorded shared, flexible and anonymous effect-row variables. The
+  active suite checks relative callbacks and preserves data presence
+  annotations.
+- [Generalise (1–2)](deferred/effect-rows/handlers.tests) checked
+  row-generalising coercions and the printed effect-row argument of
+  `Comp`. The active suite checks the absolute thunk type and the
+  annotated resumption.
+- [Effect alias declarations](deferred/effect-rows/effectname-declarations.links)
+  exercised effect-alias expansion with open and closed effect
+  arguments. The active suite checks declared interfaces, alias
+  signatures and scoped instances.
+- [Underscore in an effect alias application](deferred/effect-rows/effectname-underscore.links)
+  used an anonymous effect-row argument. The active fixture checks
+  that an absolute callback with a fixed interface satisfies a
+  handler's relative requirement.
+- [Datatype desugaring](deferred/effect-rows/desugar_datatypes.tests)
+  checked a required effect argument and a restriction on anonymous
+  tails of effect aliases. The active suite checks data-row arguments
+  and kind errors.
+- [Parser](deferred/effect-rows/parser.tests) used recursive effect rows
+  in signatures. The active cases check an interface that refers to
+  itself through an absolute operation payload and rejects the
+  ambient payload.
+- [Type printing](deferred/effect-rows/type_print.tests) checked
+  anonymous, shared and distinct effect-row tails. The active cases
+  check printing ambient and absolute arrows.
+
+## Modal regressions in the native runner
+
+[Effect annotations](../../tests/effect_annotations.tests),
+[effect interfaces](../../tests/effectname.tests) and
+[handlers](../../tests/handlers.tests) run the syntax, typing and
+behaviour checks from [the modal design](SPEC.md#accepted-and-rejected-programs).
+They cover inferred and annotated callbacks, nested instances, absolute
+payloads and results, relative resumptions, mask transport, complete
+interfaces and the native permission. The higher-rank checks use a
+frozen function with a declared value quantifier. The REPL handler
+fixture uses the operation declaration in a later sentence.

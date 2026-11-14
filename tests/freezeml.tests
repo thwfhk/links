@@ -4,47 +4,47 @@ config: tests/freezeml.config
 
 Polymorphic Instantiation (1)
 fun(x)(y) { y }
-stdout : fun : forall a,b::Row,c::Any,d::Row.(a) -b-> (c::Any) -d-> c::Any
+stdout : fun : forall a,b::Any.(a) -> (b::Any) -> b::Any
 
 Polymorphic Instantiation (1•)
 $(fun(x)(y) { y })
-stdout : fun : forall a,b::Row,c::Any,d::Row.(a) -b-> (c::Any) -d-> c::Any
+stdout : fun : forall a,b::Any.(a) -> (b::Any) -> b::Any
 
 Polymorphic Instantiation (2)
 choose(id)
-stdout : fun : ((a) -b-> a) -c-> (a) -b-> a
+stdout : fun : ([] ((a) -> a)) -> [] ((a) -> a)
 
 Polymorphic Instantiation (2•)
 choose(~id)
-stdout : fun : (forall a,b::Row.(a) -b-> a) -c-> forall a,b::Row.(a) -b-> a
+stdout : fun : (forall a.[] ((a) -> a)) -> forall a.[] ((a) -> a)
 
 Polymorphic Instantiation (3)
 choose([])(ids)
-stdout : [] : List (forall a,b::Row.(a) -b-> a)
+stdout : [] : List (forall a.[] ((a) -> a))
 
 Polymorphic Instantiation (4)
-fun(x : (forall a,e::Row. (a) -e-> a)) { x(x) }
-stdout : fun : forall a::Row,b,c::Row.(forall d,e::Row.(d) -e-> d) -a-> (b) -c-> b
+fun(x : (forall a. (a) -> a)) { x(x) }
+stdout : fun : forall a.(forall b.(b) -> b) -> (a) -> a
 
 Polymorphic Instantiation (4•)
-fun(x : (forall a,e::Row. (a) -e-> a)) { x(~x) }
-stdout : fun : forall a::Row.(forall b,c::Row.(b) -c-> b) -a-> forall b,c::Row.(b) -c-> b
+fun(x : (forall a. (a) -> a)) { x(~x) }
+stdout : fun : (forall a.(a) -> a) -> forall a.(a) -> a
 
 Polymorphic Instantiation (5)
 id(auto)
-stdout : fun : (forall a,b::Row.(a) -b-> a) -c-> forall d,e::Row.(d) -e-> d
+stdout : fun : [] ((forall a.[] ((a) -> a)) -> forall b.[] ((b) -> b))
 
 Polymorphic Instantiation (6)
 id(auto')
-stdout : fun : (forall a,b::Row.(a) -b-> a) -c-> (d) -e-> d
+stdout : fun : [] ((forall a.[] ((a) -> a)) -> (b) -> b)
 
 Polymorphic Instantiation (6•)
 id(~auto')
-stdout : fun : forall a,b::Row,c::Row.(forall d,e::Row.(d) -e-> d) -b-> (a) -c-> a
+stdout : fun : forall a.[] ((forall b.[] ((b) -> b)) -> (a) -> a)
 
 Polymorphic Instantiation (7)
 choose(id)(auto)
-stdout : fun : (forall a,b::Row.(a) -b-> a) -c-> forall a,b::Row.(a) -b-> a
+stdout : fun : [] ((forall a.[] ((a) -> a)) -> forall b.[] ((b) -> b))
 
 Polymorphic Instantiation (8)
 choose(id)(auto')
@@ -54,27 +54,27 @@ stderr : @.*Type error:.*
 Polymorphic Instantiation (9)
 tests/freezeml/a9.links
 filemode : true
-stdout : fun : forall a,b::Row.(a) -b-> a
+stdout : fun : forall a.[] ((a) -> a)
 
 Polymorphic Instantiation (10)
 poly(~id)
 stdout : (0, true) : (Int, Bool)
 
 Polymorphic Instantiation (11)
-poly($(fun(x:_::(Unl,Any)) { x }))
+poly((fun(x) { x } : forall a. [] ((a) -> a)))
 stdout : (0, true) : (Int, Bool)
 
 Polymorphic Instantiation (12)
-id(poly)($(fun(x:_::(Unl,Any)) { x }))
+id(poly)((fun(x) { x } : forall a. [] ((a) -> a)))
 stdout : (0, true) : (Int, Bool)
 
 Inference of Polymorphic Arguments (1)
-fun(f : (forall a,e::Row. (a) -e-> a)) { (f(1), f(true)) }
-stdout : fun : forall a::Row.(forall b,c::Row.(b) -c-> b) -a-> (Int, Bool)
+fun(f : (forall a. (a) -> a)) { (f(1), f(true)) }
+stdout : fun : (forall a.(a) -> a) -> (Int, Bool)
 
 Inference of Polymorphic Arguments (2)
-fun(xs : List (forall a,e::Row. (a) -e-> a)) { poly(head(xs)) }
-stdout : fun : forall a::Row.(List (forall b,c::Row.(b) -c-> b)) -a-> (Int, Bool)
+fun(xs : List (forall a. [] ((a) -> a))) { poly(head(xs)) }
+stdout : fun : (List (forall a.[] ((a) -> a))) -> (Int, Bool)
 
 Functions on Polymorphic Lists (1)
 length(ids)
@@ -82,44 +82,44 @@ stdout : 1 : Int
 
 Functions on Polymorphic Lists (2)
 tail(ids)
-stdout : [] : List (forall a,b::Row.(a) -b-> a)
+stdout : [] : List (forall a.[] ((a) -> a))
 
 Functions on Polymorphic Lists (3)
 head(ids)
-stdout : fun : forall a,b::Row.(a) -b-> a
+stdout : fun : forall a.[] ((a) -> a)
 
 Functions on Polymorphic Lists (4)
 single(id)
-stdout : [fun] : List ((a) -b-> a)
+stdout : [fun] : List ([] ((a) -> a))
 
 Functions on Polymorphic Lists (4•)
 single(~id)
-stdout : [fun] : List (forall a,b::Row.(a) -b-> a)
+stdout : [fun] : List (forall a.[] ((a) -> a))
 
 Functions on Polymorphic Lists (5)
 ~id :: ids
-stdout : [fun, fun] : List (forall a,b::Row.(a) -b-> a)
+stdout : [fun, fun] : List (forall a.[] ((a) -> a))
 
 Functions on Polymorphic Lists (6)
-$(fun(x:_::(Unl,Any)) { x }) :: ids
-stdout : [fun, fun] : List (forall a,b::Row.(a) -b-> a)
+(fun(x) { x } : forall a. [] ((a) -> a)) :: ids
+stdout : [fun, fun] : List (forall a.[] ((a) -> a))
 
 Functions on Polymorphic Lists (7)
 single(inc) ++ single(id)
-stdout : [fun, fun] : List ((Int) -a-> Int)
+stdout : [fun, fun] : List ([] ((Int) -> Int))
 
 Functions on Polymorphic Lists (8)
 tests/freezeml/c8.links
 filemode : true
-stdout : fun : forall a,b::Row.(a) -b-> a
+stdout : fun : forall a.[] ((a) -> a)
 
 Functions on Polymorphic Lists (9)
 map(poly)(single(~id))
 stdout : [(0, true)] : List (Int, Bool)
 
 Functions on Polymorphic Lists (10)
-map(head)(single(ids))
-stdout : [fun] : List (forall a,b::Row.(a) -b-> a)
+(~map)[List (forall a. [] ((a) -> a)), (forall a. [] ((a) -> a))](head)(single(ids))
+stdout : [fun] : List (forall a.[] ((a) -> a))
 
 Application functions (1)
 app(poly)(~id)
@@ -146,7 +146,7 @@ stderr : @.*Type error:.*
 η-expansion (2)
 tests/freezeml/e2.links
 filemode : true
-stdout : fun : forall a::Row,b,c::Row.(Int) -a-> (b) -c-> b
+stdout : fun : forall a.(Int) -> (a) -> a
 
 η-expansion (3)
 tests/freezeml/e3.links
@@ -161,19 +161,19 @@ stdout : 0 : Int
 
 FreezeML programs (1)
 fun id(x) { x } ~id
-stdout : fun : forall a::Any,b::Row.(a::Any) -b-> a::Any
+stdout : fun : forall a::Any.[] ((a::Any) -> a::Any)
 
 FreezeML programs (2)
 var ids = [~id]; ~ids
-stdout : [fun] : List (forall a,b::Row.(a) -b-> a)
+stdout : [fun] : List (forall a.[] ((a) -> a))
 
 FreezeML programs (5)
 auto(~id)
-stdout : fun : forall a,b::Row.(a) -b-> a
+stdout : fun : forall a.[] ((a) -> a)
 
 FreezeML programs (6)
 head(ids) :: ids
-stdout : [fun, fun] : List (forall a,b::Row.(a) -b-> a)
+stdout : [fun, fun] : List (forall a.[] ((a) -> a))
 
 FreezeML programs (7)
 head(ids)@(3)
@@ -181,29 +181,29 @@ stdout : 3 : Int
 
 FreezeML programs (8)
 choose (head(ids))
-stdout : fun : (forall a,b::Row.(a) -b-> a) -c-> forall a,b::Row.(a) -b-> a
+stdout : fun : (forall a.[] ((a) -> a)) -> forall a.[] ((a) -> a)
 
 FreezeML programs (8•)
 choose (head(ids)@)
-stdout : fun : ((a) -b-> a) -c-> (a) -b-> a
+stdout : fun : ([] ((a) -> a)) -> [] ((a) -> a)
 
 FreezeML programs (9)
 var f = revapp(~id); f(poly)
 stdout : (0, true) : (Int, Bool)
 
 Explicit application of presence and row arguments
-sig getBar : forall p::Presence,r::Row. ((bar:Int,foo{p}|r)) {}~> Int fun getBar(r) { r.bar } ((~getBar)[{-},{z:Bool}]((bar=3,z=true)), (~getBar)[{:Int},{}]((bar=4,foo=42)))
+sig getBar : forall p::Presence,r::Row. ((bar:Int,foo{p}|r)) -> Int fun getBar(r) { r.bar } ((~getBar)[{-},{z:Bool}]((bar=3,z=true)), (~getBar)[{:Int},{}]((bar=4,foo=42)))
 stdout : (3, 4) : (Int, Int)
 
 Explicit application rejects a row for a presence parameter
-sig getBar : forall p::Presence,r::Row. ((bar:Int,foo{p}|r)) {}~> Int fun getBar(r) { r.bar } (~getBar)[{},{z:Bool}]((bar=3,z=true))
-stderr : @.*Type error: The term.*while we're trying to instantiate it with.*
+sig getBar : forall p::Presence,r::Row. ((bar:Int,foo{p}|r)) -> Int fun getBar(r) { r.bar } (~getBar)[{},{z:Bool}]((bar=3,z=true))
+stderr : @.*Type error: Expected a Presence type argument, got Row.*
 exit : 1
 
 Do not generalise non-values
 $(id(2))
 exit : 1
-stderr : @.*Because of the value restriction.*
+stderr : @.*Generalisation requires a value.*
 
 Do not infer polymorphic arguments (1)
 fun(f) { (poly(~f), f(42) + 1) }
@@ -226,11 +226,11 @@ exit : 1
 stderr : @.*Type error:.*
 
 Instantiate a monomorphic parameter with a record
-sig monoIdentity : forall a::Type(Unl,Mono),e::Row. (a) -e-> a fun monoIdentity(x) { x } monoIdentity((x=42,y=true))
+sig monoIdentity : forall a::Type(Unl,Mono). (a) -> a fun monoIdentity(x) { x } monoIdentity((x=42,y=true))
 stdout : (x = 42, y = true) : (x:Int,y:Bool)
 
 Reject a frozen polymorphic function as a monomorphic argument
-sig monoIdentity : forall a::Type(Unl,Mono),e::Row. (a) -e-> a fun monoIdentity(x) { x } monoIdentity(~id)
+sig monoIdentity : forall a::Type(Unl,Mono). (a) -> a fun monoIdentity(x) { x } monoIdentity(~id)
 exit : 1
 stderr : @.*Type error:.*
 
@@ -249,27 +249,32 @@ var x = auto(~id); x(42)
 stdout : 42 : Int
 
 Recursive functions have monomorphic inner types
-mutual { sig f : forall a. (a) {}-> () fun f(x) {()}    fun g(x) {g(~f)} }
+mutual { sig f : forall a. (a) -> () fun f(x) {()}    fun g(x) {g(~f)} }
 exit : 1
 stderr : @.*Type error:.*
 
 Generalization of recursive functions
-mutual { sig f : forall a. (a) {}-> () fun f(x) {()}    fun g(x) {x} } g(~f)
+mutual { sig f : forall a. (a) -> () fun f(x) {()}    fun g(x) {x} } g(~f)
 exit : 0
-stdout : fun : forall a.(a) {}-> ()
+stdout : fun : forall a.[] ((a) -> ())
 
 Freezing recursive function inside mutual block, with annotation
-mutual { sig f : forall a. (a) {}-> () fun f(x) {()}    fun g(x: (forall a. (a) {}-> ())) {g(~f)} }
+mutual { sig f : forall a. (a) -> () fun f(x) {()}    fun g(x: (forall a. [] ((a) -> ()))) {g(~f)} }
 stdout : () : ()
 
-Freezing recursive function inside mutual block, without annotation
+Freezing a recursive function does not infer a modal parameter
 mutual { fun f(x) {()}    fun g(x) {g(~f); ()} } ~g
-stdout : fun : forall a,b::Row,c::Row.((a) -b-> ()) ~c~> ()
+exit : 1
+stderr : @.*Type error: Expected a::Any, got \[\] .*
+
+Freezing a monomorphic recursive function with a modal parameter
+mutual { fun f(x) {()} fun g(x : [] ((Int) -> ())) {g(~f); ()} } ~g
+stdout : fun : [] (([] ((Int) -> ())) -> ())
 
 Freezing recursive function outside mutual block, with annotation
-mutual { sig f : forall a. (a) {}-> () fun f(x) {()} } ~f
-stdout : fun : forall a.(a) {}-> ()
+mutual { sig f : forall a. (a) -> () fun f(x) {()} } ~f
+stdout : fun : forall a.[] ((a) -> ())
 
 Freezing recursive function outside mutual block, without annotation
 mutual { fun f(x) {()} } ~f
-stdout : fun : forall a,b::Row.(a) -b-> ()
+stdout : fun : forall a.[] ((a) -> ())

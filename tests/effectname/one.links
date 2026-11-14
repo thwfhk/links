@@ -1,6 +1,6 @@
-effectname A = {E: () => ()} ;
+effect A { E : () => (); }
 
-sig f : () -A-> ()
-fun f () { do E() }
+sig f : [A] (() -> ())
+fun f() { do E() }
 
 f

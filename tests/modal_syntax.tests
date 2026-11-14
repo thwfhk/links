@@ -39,7 +39,7 @@ exit : 1
 
 An absolute interface parameter rejects an ambient function
 effect Reader(a::Abs) { Ask : () => a; } typename T = [Reader(Int -> Int)] Int;
-stderr : @.*Argument 1 of Reader must satisfy Abs\..*
+stderr : @.*Type argument .* must satisfy Abs.*
 exit : 1
 
 An operation payload must be absolute
@@ -62,12 +62,15 @@ typename T = [wild, wild] Int;
 stderr : @.*`wild` can appear only once.*
 exit : 1
 
-The legacy checker rejects modal expression types
-42 : [] Int
-stderr : @.*Checking expressions with modal types requires the modal type checker\..*
+A value can have an absolute type
+42 : [] (Int)
+stdout : 42 : [] (Int)
+
+Calling a declared operation requires its interface
+effect Reader { Ask : () => Int; } do Ask
+stderr : @.*Operation Ask requires effect interface Reader.*
 exit : 1
 
-The legacy checker rejects calls to declared operations
-effect Reader { Ask : () => Int; } do Ask
-stderr : @.*Calling a declared operation requires the modal type checker\..*
-exit : 1
+Handler calls use the resolved module operation
+module Effects { effect Reader { Ask : () => Int; } } handle(do Effects.Ask) { case <Effects.Ask => k> -> k(42) }
+stdout : 42 : Int

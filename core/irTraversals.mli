@@ -39,6 +39,7 @@ sig
     method tail_computation :
       tail_computation -> ('self_type * tail_computation * Types.datatype)
     method special : special -> ('self_type * special * Types.datatype)
+    method handler_case : Types.datatype option -> effect_case -> ('self_type * effect_case * Types.datatype)
     method bindings : binding list -> ('self_type * binding list)
     method computation : computation -> ('self_type * computation * Types.datatype)
     method binding : binding -> ('self_type * binding)

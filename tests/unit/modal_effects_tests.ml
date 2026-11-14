@@ -296,7 +296,7 @@ let modal_roundtrip _ =
   let typ = read {|
     forall a::Abs,r::Row(Abs),p::Presence(Abs).
       [wild, Effects.Reader(a)]
-      ((List (Int -> a), List ([] (Int -@ a)), (ready{p}|r)) ->
+      ((List (Int -> a), [] (Int -@ a), (ready{p}|r)) ->
         (| None | Some: <Effects.Reader | Effects.Reader(Int)> List a |))
   |} in
   Settings.synchronise_defined ();

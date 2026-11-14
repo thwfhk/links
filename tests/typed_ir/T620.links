@@ -3,5 +3,5 @@ fun foo() {
   ()
 }
 
-sig bar : () ~> ()
+sig bar : [] (() -> ())
 var bar = foo;

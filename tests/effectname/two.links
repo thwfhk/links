@@ -1,7 +1,7 @@
-effectname A = {} ;
-effectname B(a,e::Eff) = { E: () => a | e } ;
+effect A { A : () => (); }
+effect B(a::Abs) { E : () => a; }
 
-sig f : () -B((),{ |A})-> ()
-fun f () { do E() }
+sig f : [A, B(())] (() -> ())
+fun f() { do A(); do E() }
 
 f

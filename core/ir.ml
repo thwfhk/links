@@ -83,6 +83,12 @@ and handler = {
     ih_cases: effect_case name_map;
     ih_return: binder * computation;
     ih_depth: handler_depth;
+    ih_types: handler_types option;
+}
+and handler_types = {
+    ih_input_type: Types.datatype;
+    ih_output_type: Types.datatype;
+    ih_operation_types: Types.datatype name_map;
 }
 and handler_depth = | Deep of (binder * value) list | Shallow
   [@@deriving show]

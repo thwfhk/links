@@ -77,7 +77,6 @@ let restriction_of_string p =
   | "Mono"    -> res_mono
   | "Abs"     -> res_abs
   | "MonoAbs" -> res_mono_abs
-  | "Eff"     -> res_effect
   | rest      ->
      raise (ConcreteSyntaxError (pos p, "Invalid kind restriction: " ^ rest))
 
@@ -96,14 +95,13 @@ let kind_of p =
   function
   (* primary kind abbreviation  *)
   | "Type"     -> (Some pk_type, None)
-  | "Row"      -> (Some pk_row, None) (* either a value row or an effect row *)
+  | "Row"      -> (Some pk_row, None)
   | "Presence" -> (Some pk_presence, None)
   (* subkind of type abbreviations *)
   | "Any"      -> (Some pk_type, Some (lin_any, res_any))
   | "Base"     -> (Some pk_type, Some (lin_unl, res_base))
   | "Abs"      -> (Some pk_type, Some (lin_unl, res_abs))
   | "MonoAbs"  -> (Some pk_type, Some (lin_unl, res_mono_abs))
-  | "Eff"      -> (Some pk_row , Some (lin_unl, res_effect))
   | k          -> raise (ConcreteSyntaxError (pos p, "Invalid kind: " ^ k))
 
 let subkind_of p =
@@ -113,7 +111,6 @@ let subkind_of p =
   | "Base"    -> Some (lin_unl, res_base)
   | "Abs"     -> Some (lin_unl, res_abs)
   | "MonoAbs" -> Some (lin_unl, res_mono_abs)
-  | "Eff"     -> Some (lin_unl, res_effect)
   | sk        -> raise (ConcreteSyntaxError (pos p, "Invalid subkind: " ^ sk))
 
 let named_quantifier name kind freedom = SugarQuantifier.mk_unresolved name kind freedom
@@ -141,17 +138,6 @@ let attach_row_subkind (r, subkind) =
        Datatype.Open stv'
     | _ -> assert false
   in attach_subkind_helper update subkind
-
-let attach_presence_subkind (t, subkind) =
-  let update sk =
-    match t with
-    | Datatype.Var stv ->
-       let (x, _, freedom) = SugarTypeVar.get_unresolved_exn stv in
-       let stv' = SugarTypeVar.mk_unresolved x sk freedom in
-       Datatype.Var stv'
-    | _ -> assert false
-  in attach_subkind_helper update subkind
-
 
 type recursive_row_syntax = Both_rows | Record_row | Variant_row
 
@@ -188,14 +174,11 @@ let parseRegexFlags f =
               | _ -> assert false) (asList f 0 [])
 
 
-let named_typevar ?(is_eff=false) name freedom : SugarTypeVar.t =
-  SugarTypeVar.mk_unresolved name ~is_eff:is_eff None freedom
+let named_typevar name freedom : SugarTypeVar.t =
+  SugarTypeVar.mk_unresolved name None freedom
 
-let fresh_typevar ?(is_eff=false) freedom : SugarTypeVar.t =
-  named_typevar ~is_eff:is_eff "$" freedom
-
-let fresh_effects =
-  ([], Datatype.Open (fresh_typevar ~is_eff:true `Rigid))
+let fresh_typevar freedom : SugarTypeVar.t =
+  named_typevar "$" freedom
 
 let absolute_modality p entries =
   let wild, entries = List.partition_map (function
@@ -288,7 +271,7 @@ let any = any_pat dp
 %token EOF
 %token EQ IN
 %token FUN LINFUN FROZEN_FUN FROZEN_LINFUN RARROW LOLLI FATRARROW VAR OP
-%token SQUIGRARROW SQUIGLOLLI TILDE
+%token TILDE
 %token IF ELSE
 %token MINUS MINUSDOT
 %token SWITCH CASE
@@ -320,7 +303,7 @@ let any = any_pat dp
 %token <string> SLASHFLAGS
 %token UNDERSCORE AS
 %token <Operators.Associativity.t> FIXITY
-%token TYPENAME EFFECTNAME EFFECT
+%token TYPENAME EFFECT
 %token LT GT NEQ BARGT
 %token <string> OPERATOR
 
@@ -463,8 +446,6 @@ signature:
 
 typedecl:
 | TYPENAME constructor_name typeargs_opt EQ datatype                 { alias $loc $2 $3 (Typename   ( $5     , None)) }
-| EFFECTNAME constructor_name typeargs_opt EQ LBRACE erow RBRACE     { alias $loc $2 $3 (Effectname ( $6     , None)) }
-| EFFECTNAME constructor_name typeargs_opt EQ effect_app             { alias $loc $2 $3 (Effectname (([], $5), None)) }
 
 effect_interface:
 | EFFECT constructor_name typeargs_opt LBRACE effect_member+ RBRACE
@@ -724,38 +705,13 @@ just_datatype:
 | datatype EOF                                                 { $1 }
 
 datatype:
-| mu_datatype | straight_arrow | squiggly_arrow | fat_arrow    { with_pos $loc $1 }
-
-arrow_prefix:
-| LBRACE erow RBRACE                                           { $2            }
-
-straight_arrow_prefix:
-| arrow_prefix                                                 { $1       }
-| MINUS nonrec_eff_var | MINUS kinded_nonrec_row_var           { ([], $2) }
-| MINUS effect_app                                             { ([], $2) }
-
-squig_arrow_prefix:
-| arrow_prefix                                                 { $1       }
-| TILDE nonrec_eff_var | TILDE kinded_nonrec_row_var           { ([], $2) }
-| TILDE effect_app                                             { ([], $2) }
+| mu_datatype | straight_arrow | fat_arrow    { with_pos $loc $1 }
 
 straight_arrow:
-| parenthesized_datatypes
-  straight_arrow_prefix RARROW datatype                        { Datatype.Function ($1, $2, $4) }
-| parenthesized_datatypes
-  straight_arrow_prefix LOLLI datatype                         { Datatype.Lolli    ($1, $2, $4) }
 | parenthesized_datatypes RARROW datatype                      { Datatype.AmbientArrow (dl_unl, $1, $3) }
 | parenthesized_datatypes LOLLI datatype                       { Datatype.AmbientArrow (dl_lin, $1, $3) }
 | unary_domain RARROW datatype                                 { Datatype.AmbientArrow (dl_unl, [$1], $3) }
 | unary_domain LOLLI datatype                                  { Datatype.AmbientArrow (dl_lin, [$1], $3) }
-
-squiggly_arrow:
-| parenthesized_datatypes
-  squig_arrow_prefix SQUIGRARROW datatype                      { Datatype.Function ($1, row_with_wp $2, $4) }
-| parenthesized_datatypes
-  squig_arrow_prefix SQUIGLOLLI datatype                       { Datatype.Lolli    ($1, row_with_wp $2, $4) }
-| parenthesized_datatypes SQUIGRARROW datatype                 { Datatype.Function ($1, row_with_wp fresh_effects, $3) }
-| parenthesized_datatypes SQUIGLOLLI datatype                  { Datatype.Lolli    ($1, row_with_wp fresh_effects, $3) }
 
 fat_arrow:
 | parenthesized_datatypes FATRARROW datatype                   { Datatype.Operation ($1, $3) }
@@ -854,14 +810,14 @@ type_arg_list:
 type_arg:
 | datatype                                                     { Datatype.Type $1     }
 | braced_fieldspec                                             { Datatype.Presence $1 }
-| LBRACE erow RBRACE                                           { Datatype.Row $2      }
+| LBRACE data_row_argument RBRACE                                           { Datatype.Row $2      }
 
 datatypes:
 | separated_nonempty_list(COMMA, datatype)                     { $1 }
 
-erow:
-| efields                                                      { $1                    }
-| /* empty */                                                  { ([], Datatype.Closed) }
+data_row_argument:
+| fields                                                      { $1 }
+| /* empty */                                                 { ([], Datatype.Closed) }
 
 fields_def(field_prod, sep, row_var_prod, kinded_row_var_prod):
 | field_prod                                                   { ([$1], Datatype.Closed) }
@@ -965,24 +921,6 @@ vfield:
 | constructor_name                                                            { ($1, present) }
 | constructor_name fieldspec                                        { ($1, $2)      }
 
-efields:
-| efield                                                      { ([$1], Datatype.Closed                 ) }
-| soption(efield) VBAR eff_var                                 { ( $1 , $3                                ) }
-| soption(efield) VBAR kinded_row_var                          { ( $1 , $3                                ) }
-| soption(efield) VBAR effect_app                              { ( $1 , $3                                ) }
-| efield COMMA efields                                         { ( $1::fst $3, snd $3                     ) }
-
-efield:
-| effect_label efieldspec                                       { ($1, $2)      }
-
-effect_label:
-| constructor_name                                                            { $1 }
-| VARIABLE                                                     { $1 }
-
-effect_app:
-| constructor_name                                                            { Datatype.EffectApplication($1, []) }
-| constructor_name LPAREN type_arg_list RPAREN                      { Datatype.EffectApplication($1, $3) }
-
 fieldspec:
 | braced_fieldspec                                             { $1 }
 | COLON datatype                                               { Datatype.Present $2 }
@@ -996,30 +934,6 @@ braced_fieldspec:
 | LBRACE UNDERSCORE RBRACE                                     { Datatype.Var (fresh_typevar `Rigid)    }
 | LBRACE PERCENT RBRACE                                        { Datatype.Var (fresh_typevar `Flexible) }
 
-efieldspec:
-| ebraced_fieldspec                                             { $1 }
-| COLON datatype                                               { Datatype.Present $2 }
-| MINUS                                                        { Datatype.Absent }
-
-ebraced_fieldspec:
-| LBRACE COLON datatype RBRACE                                 { Datatype.Present $3 }
-| LBRACE MINUS RBRACE                                          { Datatype.Absent }
-// | LBRACE VARIABLE RBRACE                                       { Datatype.Var (named_typevar ~is_eff:true $2 `Rigid) }
-// | LBRACE PERCENTVAR RBRACE                                     { Datatype.Var (named_typevar ~is_eff:true $2 `Flexible) }
-// | LBRACE UNDERSCORE RBRACE                                     { Datatype.Var (fresh_typevar ~is_eff:true `Rigid)    }
-// | LBRACE PERCENT RBRACE                                        { Datatype.Var (fresh_typevar ~is_eff:true `Flexible) }
-| LBRACE nonrec_epresence_var RBRACE                           { $2 }
-| LBRACE kinded_epresence_var RBRACE                           { $2 }
-
-kinded_epresence_var:
-| nonrec_epresence_var subkind                                 { attach_presence_subkind ($1, $2) }
-
-nonrec_epresence_var:
-| VARIABLE                                                     { Datatype.Var (named_typevar ~is_eff:true $1 `Rigid   ) }
-| PERCENTVAR                                                   { Datatype.Var (named_typevar ~is_eff:true $1 `Flexible) }
-| UNDERSCORE                                                   { Datatype.Var (fresh_typevar ~is_eff:true `Rigid)    }
-| PERCENT                                                      { Datatype.Var (fresh_typevar ~is_eff:true `Flexible) }
-
 nonrec_row_var:
 | VARIABLE                                                     { Datatype.Open (named_typevar $1 `Rigid   ) }
 | PERCENTVAR                                                   { Datatype.Open (named_typevar $1 `Flexible) }
@@ -1030,21 +944,8 @@ row_var:
 | nonrec_row_var                                               { $1 }
 | LPAREN MU VARIABLE DOT fields RPAREN                         { Datatype.Recursive (named_typevar $3 `Rigid, $5) }
 
-kinded_nonrec_row_var:
-| nonrec_row_var subkind                                       { attach_row_subkind ($1, $2) }
-
 kinded_row_var:
 | row_var subkind                                              { attach_row_subkind ($1, $2) }
-
-nonrec_eff_var:
-| VARIABLE                                                     { Datatype.Open (named_typevar ~is_eff:true $1 `Rigid   ) }
-| PERCENTVAR                                                   { Datatype.Open (named_typevar ~is_eff:true $1 `Flexible) }
-| UNDERSCORE                                                   { Datatype.Open (fresh_typevar ~is_eff:true `Rigid)    }
-| PERCENT                                                      { Datatype.Open (fresh_typevar ~is_eff:true `Flexible) }
-
-eff_var:
-| nonrec_eff_var                                               { $1 }
-| LPAREN MU VARIABLE DOT fields RPAREN                         { Datatype.Recursive (named_typevar ~is_eff:true $3 `Rigid, $5) }
 
 vrow_var:
 /* This uses the usual nonrec_row_var, because a variant version would be exactly the same. */

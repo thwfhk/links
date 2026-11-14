@@ -1,7 +1,10 @@
 # Choice example.
 # links> enumerate(choice);
 
+effect Choice { Choose : () => Bool; }
+
 # The choice computation
+sig choice : [Choice] (() -> Int)
 fun choice() {
   var x = if (do Choose()) { 2 }
           else { 4 };
@@ -15,7 +18,7 @@ fun choice() {
 #
 
 # The "positive" handler
-sig positive : (Comp(a, {Choose:Bool |e})) -> Comp(a, {Choose{_} |e})
+sig positive : forall a::Abs. (<Choice> (() -> a)) -> () -> a
 fun positive(m)() {
   handle(m()) {
     case <Choose => k> -> k(true)
@@ -24,7 +27,7 @@ fun positive(m)() {
 }
 
 # The "I'll-take-everything" handler
-sig enumerate : (Comp(a, {Choose:Bool |e})) -> Comp(List a, {Choose{_} |e})
+sig enumerate : forall a::Abs. (<Choice> (() -> a)) -> () -> List a
 fun enumerate(m)() {
   handle(m()) {
     case <Choose => k> -> k(true) ++ k(false)

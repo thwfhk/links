@@ -1,15 +1,11 @@
 # Shallow state handlers
 
-# Standard types
-typename Comp(a, e::Eff) = () ~e~> a;
-typename Unit = (|Unit|);
+effect State(a::Abs) { Get : () => a; Put : (a) => (); }
+effect Log(a::Abs) { Log : (a) => (); }
 
-# Convenient auxiliary function: turns a shallow continuation into a
-# computation.
-sig compify : ((a) ~e~> b) -> ((a) -> Comp(b, { |e}))
-fun compify(k)(x) {
-  fun() {k(x)}
-}
+# Turn a continuation into a computation in the same context.
+sig compify : ((a) -> b) -> (a) -> () -> b
+fun compify(k)(x)() { k(x) }
 
 # The run handler forces evaluation of a computation
 fun run(m) {
@@ -19,65 +15,59 @@ fun run(m) {
 }
 
 # Get and put operations
-sig get : Comp(a, {Get:a |_})
+sig get : forall a::Abs. [State(a)] (() -> a)
 fun get() {do Get}
 
-sig put : (a) {Put:(a) => ()|_}~> ()
+sig put : forall a::Abs. [State(a)] ((a) -> ())
 fun put(p) {do Put(p)}
 
 # Print line operation
-sig logVal : (a) {Log:(a) => ()|_}~> ()
+sig logVal : forall a::Abs. [Log(a)] ((a) -> ())
 fun logVal(p) {do Log(p)}
 
 # Stateful computation evaluator
-sig evalState : (s) -f->
-                (Comp(a, {Get:s,Put:(s) => () |e})) -f->
-                 Comp(a, {Get{_},Put{_}|e})
+sig evalState : forall s::Abs,a::Abs. (s) -> (<State(s)> (() -> a)) -> () -> a
 fun evalState(st)(m)() {
   (shallowhandle(m()) {
     case x -> fun(_)  { x }
-    case <Get -> k>    -> fun(st) { var k = compify(k); run -<- evalState(st) $ k(st) }
-    case <Put(p) -> k>  -> fun(_)  { var k = compify(k); run -<- evalState(p)  $ k(()) }
+    case <Get -> k>    -> fun(st) { evalState(st)(fun() { compify(k)(st)() })() }
+    case <Put(p) -> k>  -> fun(_)  { evalState(p)(fun() { compify(k)(())() })() }
   })(st)
 }
 
+sig logState : forall s::Abs,a::Abs. [State(s), Log(s)] ((<State(s)> (() -> a)) -> () -> a)
 fun logState(m)() {
   shallowhandle(m()) {
-    case <Get -> k>    -> var k = compify(k);
-                      var v = get();
-                      logState(k(v))()
-    case <Put(p) -> k>  -> var k = compify(k);
-                      logVal(p);
+    case <Get -> k>    -> var v = get();
+                      logState(fun() { compify(k)(v)() })()
+    case <Put(p) -> k>  -> logVal(p);
                       var v = put(p);
-                      logState(k(v))()
+                      logState(fun() { compify(k)(v)() })()
     case x -> x
   }
 }
 
 # Prints integers to stdout
-sig logPrinter : (Comp(a, {Log:(Int) => () |e})) -f-> Comp(a, {Log{_}|e})
+sig logPrinter : forall a::Abs. [wild] ((<Log(Int)> (() -> a)) -> () -> a)
 fun logPrinter(m)() {
   shallowhandle(m()) {
     case x -> x
-    case <Log(p) -> k>  -> var k = compify(k);
-                      print(intToString(p));
-                      logPrinter(k(()))()
+    case <Log(p) -> k>  -> print(intToString(p));
+                      logPrinter(fun() { compify(k)(())() })()
   }
 }
 
 # Log accumulator
-sig logAccumulator : (List a) -f->
-                     (Comp(b,       {Log:(a) => () |e})) -f->
-                      Comp((b,List a), {Log{_}|e})
+sig logAccumulator : forall a::Abs,b::Abs. (List a) -> (<Log(a)> (() -> b)) -> () -> (b, List a)
 fun logAccumulator(ps)(m)() {
   shallowhandle(m()) {
     case x -> (x,ps)
-    case <Log(p) -> k> -> var k = compify(k);
-                     run -<- logAccumulator(p :: ps) $ k(())
+    case <Log(p) -> k> -> logAccumulator(p :: ps)(fun() { compify(k)(())() })()
   }
 }
 
 # Stateful computation which counts down to zero
+sig count : [State(Int)] (() -> Int)
 fun count() {
     var i = get();
     if (i <= 0) {i}
@@ -86,15 +76,16 @@ fun count() {
 
 # Example 1
 fun example1() {
-  run -<- evalState(5) $ count
+  run(evalState(5)(count))
 }
 
 # Example 2
+sig example2 : [wild] (() -> Int)
 fun example2() {
-  (run -<- logPrinter -<- evalState(5) -<- logState) $ count
+  run(logPrinter(fun() { evalState(5)(fun() { logState(count)() })() }))
 }
 
 # Unit test
 fun unitTest(n) {
-  (run -<- logAccumulator([]) -<- evalState(n) -<- logState) $ count
+  run(logAccumulator([])(fun() { evalState(n)(fun() { logState(count)() })() }))
 }

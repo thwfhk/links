@@ -1,13 +1,17 @@
 # Pi estimation
 
 # Operations
-sig yield : (a) {Yield: (a) => () |_}-> ()
+effect Await(a::Abs) { Await : () => a; }
+effect Yield(a::Abs) { Yield : (a) => (); }
+effect Abort { Abort : () => Zero; }
+
+sig yield : forall a::Abs. [Yield(a)] ((a) -> ())
 fun yield(x) { do Yield(x) }
 
-sig await : () {Await:a |_}-> a
+sig await : forall a::Abs. [Await(a)] (() -> a)
 fun await() { do Await }
 
-sig abort : () {Abort:Zero |e}-> a
+sig abort : [Abort] (() -> a)
 fun abort() {
   switch (do Abort) { }
 }
@@ -25,7 +29,7 @@ fun insideUnitCircle(p) {
 }
 
 # Streams of random points
-sig randomPoints : () {Yield: (Point) => () |_}~> a
+sig randomPoints : [Yield(Point), wild] (() -> a)
 fun randomPoints() {
   var p = makePoint(random(), random());
   yield(p);
@@ -33,7 +37,7 @@ fun randomPoints() {
 }
 
 # Synchronous take operation
-sig take : (Int, Comp(b, {Yield: (a) => () |e})) {Yield{_} |e}~> List a
+sig take : forall a::Abs,b. (Int, <Yield(a)> (() -> b)) -> List a
 fun take(n, m) {
   handle(m())(n <- n, st <- []) {
     case _ -> st
@@ -45,7 +49,7 @@ fun take(n, m) {
 
 # Compute pi
 
-sig computePi : (Int) -> Comp(a, {Yield: (Float) => () |_})
+sig computePi : (Int) -> [Yield(Float), wild] (() -> a)
 fun computePi(n)() {
   fun loop(total, count) {
      # Synchronously take `n' random points
@@ -70,6 +74,7 @@ fun computePi(n)() {
 }
 
 # Display pi estimation
+sig renderEstimations : (Int) -> [Await(Float), wild] (() -> ())
 fun renderEstimations(n)() {
   fun eraser(n)() {
     fun loop(n) {
@@ -98,6 +103,7 @@ fun renderEstimations(n)() {
   loop(0, n, eraser(len))
 }
 
+sig collectEstimations : (Int) -> [Await(Float)] (() -> List Float)
 fun collectEstimations(n)() {
   fun loop(n, acc) {
     if (n <= 0) acc
@@ -107,14 +113,14 @@ fun collectEstimations(n)() {
 }
 
 # Multi-handler
-typename Resumption(a, e::Eff, r) = (a) ~e~> r;
-typename Step(a, e::Eff, r) =
+typename Resumption(a, r) = (a) -> r;
+typename Step(a, r) =
                 (mu b . (|Done:r
-                         |Yielded:(a, Resumption((), { |e}, b))
-                         |Awaits:Resumption(a, { |e}, b)
+                         |Yielded:(a, Resumption((), b))
+                         |Awaits:Resumption(a, b)
                          |));
 
-sig step : (Comp(b, {Await:a, Yield: (a) => () |e})) {Await{q}, Yield{p} |e}~> Step(a, { Await{q}, Yield{p} |e}, b)
+sig step : forall a::Abs,b::Abs. (<Await(a), Yield(a)> (() -> b)) -> Step(a, b)
 fun step(f) {
   handle(f()) {
     case x        -> Done(x)
@@ -123,7 +129,7 @@ fun step(f) {
   }
 }
 
-sig exchange : (Comp(b, {Await:a, Yield: (a) => () |e}), Comp(b, {Await:a, Yield: (a) => () |e})) { Await{_}, Yield{_} |e}~> b
+sig exchange : forall a::Abs,b::Abs. (<Await(a), Yield(a)> (() -> b), <Await(a), Yield(a)> (() -> b)) -> b
 fun exchange(f, g) {
   fun exchange_aux(f, g) {
     switch( (f, g) ) {
@@ -137,11 +143,11 @@ fun exchange(f, g) {
 }
 
 # Shallow handler
-typename Consumer(a, e::Eff, b) = (a) {Abort:Zero, Await:a |e}~> b;
-typename Producer(a, e::Eff, b) = () {Abort:Zero, Yield:(a) => () |e}~> b;
+typename Consumer(a::Abs, b) = <Await(a)> ((a) -> b);
+typename Producer(a::Abs, b) = <Yield(a)> (() -> b);
 
 mutual {
-  sig copipe : (Consumer(a, { Yield{q} |e}, b), Producer(a, { Await{p} |e}, _)) {Abort:Zero, Await{p}, Yield{q} |e}~> b
+  sig copipe : forall a::Abs,b::Abs,c::Abs. [Abort, wild] ((Consumer(a,b), Producer(a,c)) -> b)
   fun copipe(receiver, sender) {
     shallowhandle(sender()) {
       case _ -> abort()
@@ -149,7 +155,7 @@ mutual {
     }
   }
 
-  sig pipe : (Producer(a, { Await{p} |e}, _), Comp(b, {Abort:Zero, Await:a, Yield{q} |e})) {Abort:Zero, Await{p}, Yield{q} |e}~> b
+  sig pipe : forall a::Abs,b::Abs,c::Abs. [Abort, wild] ((Producer(a,c), <Await(a)> (() -> b)) -> b)
   fun pipe(sender, receiver) {
     shallowhandle(receiver()) {
       case x -> x
@@ -158,6 +164,7 @@ mutual {
   }
 }
 
+sig catch : forall a::Abs. (<Abort> (() -> a)) -> a
 fun catch(m) {
   handle(m()) {
     case x -> x
@@ -166,12 +173,14 @@ fun catch(m) {
 }
 
 
+sig example : [wild] ((Int) -> ())
 fun example(n) {
   catch(fun() {
     pipe(computePi(30000), renderEstimations(n))
   })
 }
 
+sig unitTest : [wild] (() -> List Float)
 fun unitTest() {
   catch(fun() {
     pipe(computePi(30000), collectEstimations(5))

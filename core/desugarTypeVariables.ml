@@ -7,15 +7,11 @@
   This pass reports errrors about type variables occuring in positions where
   they are not allowed to (e.g., an unbound, named variable occuring in a
   context where no type variables must be bound implicitly).
-  However, see the restriction on anonymous effect variables below.
+  Anonymous row variables are resolved by the next pass.
 
   Likewise, all occurences of QUnresolved from {Sugartypes.SugarQuantifier.t}
   are replaced by appropriate QResolved*
 
-  Handling of anonymous effect variables: This pass ignores all anonymous effect
-  variables, i.e., it leaves them as TUnresolved. Further, it does not report
-  errors about such variables in places where they are not allowed.  Both must
-  be dealt with later.
 *)
 
 open CommonTypes
@@ -415,8 +411,6 @@ object (o : 'self)
 
   method! row_var =
     let open Datatype in function
-    | EffectApplication _ as ea ->
-        super#row_var ea
     | Closed -> o, Closed
     | Open srv as orig when is_anonymous srv ->
        (* This transformation pass does not check whether anonymous row variables

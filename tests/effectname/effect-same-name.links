@@ -1,8 +1,4 @@
-effectname A(a,b,e::Eff) = { E: () => a, E: () => b | e } ;
-
-sig f : () -A(Int, Bool, {})-> Int
-fun f () {
-    do E()
+effect A {
+  E : () => Int;
+  E : () => Bool;
 }
-
-f

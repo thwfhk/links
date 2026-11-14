@@ -151,6 +151,9 @@ struct
         val found_recursion = false
         method get_result () = found_recursion
 
+        method! typ = function
+          | T.RecursiveApplication _ as t -> {< found_recursion = true >}, t
+          | t -> super#typ t
 
         method! meta_type_var point = match Unionfind.find point with
           | T.Recursive _ -> ({< found_recursion = true >}, point)
@@ -178,9 +181,11 @@ let rec is_toplevel_rec_type = function
   | T.Meta mtv ->
      begin match Unionfind.find mtv with
        | T.Recursive _ -> true
-       | _ -> false
+       | T.Var _ | T.Closed -> false
+       | t -> is_toplevel_rec_type t
      end
   | T.Alias (_, _, t') -> is_toplevel_rec_type t'
+  | T.RecursiveApplication _ -> true
   | _ -> false
 
 let is_toplevel_rec_row  row =
@@ -330,7 +335,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
          end
       | ForAll (qs, t) ->
          begin match t2 with
-         | ForAll (qs', t') ->
+         | ForAll (qs', t') when List.length qs = List.length qs' ->
             let (context', quantifiers_match) =
               List.fold_left2 (fun (context, prev_eq) lqvar rqvar ->
                   let lid, _ = lqvar in
@@ -477,6 +482,40 @@ let compare_quantifiers qs1 qs2 msg occurrence =
       occurrence)
   qs1
   qs2
+
+let rec runtime_subtype equal source target =
+  equal source target ||
+  match TypeUtils.concrete_type source, TypeUtils.concrete_type target with
+  | T.AmbientFunction (ls, sdom, scod), T.AmbientFunction (lt, tdom, tcod) when ls = lt ->
+      runtime_subtype equal tdom sdom && runtime_subtype equal scod tcod
+  | T.Application (s, [PrimaryKind.Type, item]), T.Application (t, [PrimaryKind.Type, item'])
+      when T.Abstype.equal s T.list && T.Abstype.equal t T.list ->
+      runtime_subtype equal item item'
+  | T.Record source, T.Record target ->
+      runtime_row_subtype equal ~record:true target source
+  | T.Variant source, T.Variant target -> runtime_row_subtype equal ~record:false source target
+  | (T.Function _ | T.Lolli _), (T.Function _ | T.Lolli _) -> T.is_sub_type (source, target)
+  | _ -> false
+
+and runtime_row_subtype equal ~record sub super =
+  let fields, tail = TypeUtils.extract_row_parts (T.flatten_row sub) in
+  let fields', tail' = TypeUtils.extract_row_parts (T.flatten_row super) in
+  (T.is_closed_row sub || equal (T.Row (StringMap.empty, tail)) (T.Row (StringMap.empty, tail')))
+  && StringMap.for_all (fun name field ->
+    match T.concrete_field_spec field, Option.map T.concrete_field_spec (StringMap.find_opt name fields') with
+    | T.Present sub, Some (T.Present super) ->
+        if record then runtime_subtype equal super sub else runtime_subtype equal sub super
+    | T.Absent, None -> not record || T.is_absent_from_row name super
+    | T.Absent, Some _ when not record -> true
+    | T.Absent, Some T.Absent -> true
+    | T.Meta _, Some (T.Meta _ as field') -> equal (T.Record (T.make_singleton_closed_row (name, field)))
+                                                (T.Record (T.make_singleton_closed_row (name, field')))
+    | _ -> false) fields
+  && (not record || StringMap.for_all (fun name field ->
+    StringMap.mem name fields || match T.concrete_field_spec field with
+    | T.Present t -> T.Unl.type_satisfies t
+    | T.Absent -> true
+    | _ -> false) fields')
 
 
 (* TYPE CHECKING *)
@@ -659,8 +698,9 @@ struct
               end
             else
               begin
-              ensure (eq_types (SVal orig) (o#extract_type_equality_context ())
-                               (vt, t) || is_sub_type (vt, t))
+              let equal source target =
+                eq_types (SVal orig) (o#extract_type_equality_context ()) (source, target) in
+              ensure (runtime_subtype equal vt t)
                 (let vt_str = string_of_datatype vt in
                  let t_str  = string_of_datatype ~refresh_tyvar_names:false t in
                  Printf.sprintf "coercion error: %s is not a subtype of %s"
@@ -683,8 +723,10 @@ struct
             let o, f, ft = o#value f in
             let o, args, argtypes = o#list (fun o -> o#value) args in
             let exp_argstype = arg_types ~overstep_quantifiers:false ft in
-            let effects = effect_row ~overstep_quantifiers:false ft in
-            ensure_effect_rows_compatible (o#extract_type_equality_context ()) allowed_effects effects (STC orig);
+            (match concrete_type ft with
+             | Function (_, effects, _) | Lolli (_, effects, _) ->
+                 ensure_effect_rows_compatible (o#extract_type_equality_context ()) allowed_effects effects (STC orig)
+             | _ -> ());
             check_eq_type_lists (o#extract_type_equality_context ()) exp_argstype argtypes (STC orig);
             o, Apply (f, args), return_type ~overstep_quantifiers:false ft
 
@@ -776,7 +818,9 @@ struct
             let o, v, t = o#value v in
             (* TODO: What is the correct argument type for v, since it expects a continuation? *)
               o, CallCC v, return_type ~overstep_quantifiers:false t
-        | Handle ({ ih_comp; ih_cases; ih_return; ih_depth }) ->
+        | Handle ({ ih_types = Some types; _ } as handler) ->
+            o#modal_handler handler types (SSpec special)
+        | Handle ({ ih_comp; ih_cases; ih_return; ih_depth; ih_types = None }) ->
           (* outer effects is R_d in the IR formalization *)
           let outer_effects = Types.flatten_row allowed_effects  in
           let outer_effects_parts = TypeUtils.extract_row_parts outer_effects in
@@ -879,7 +923,12 @@ struct
           | _ -> ());
 
 
-          o, Handle { ih_comp = comp; ih_cases = cases; ih_return = return; ih_depth = depth}, return_t
+          o, Handle { ih_comp = comp; ih_cases = cases; ih_return = return; ih_depth = depth; ih_types = None }, return_t
+
+        | DoOperation (name, vs, (Operation (domain, result) as signature)) ->
+            let o, vs, argument_types = o#list (fun o -> o#value) vs in
+            o#check_eq_types domain (make_tuple_type argument_types) (SSpec special);
+            o, DoOperation (name, vs, signature), result
 
         | DoOperation (name, vs, t) -> (* TODO perform checks specific to this constructor *)
           let (o, vs, vs_t) = o#list (fun o -> o#value) vs in
@@ -902,6 +951,57 @@ struct
       in
       fun special -> translate_helper_exns special_inner special (SSpec special)
 
+    method modal_handler handler types occurrence =
+      let o, comp, input = o#computation handler.ih_comp in
+      o#check_eq_types types.ih_input_type input occurrence;
+      let o, depth, states = match handler.ih_depth with
+        | Shallow -> o, Shallow, []
+        | Deep parameters ->
+            let o, parameters, states = o#list (fun o (binder, value) ->
+              let o, value, actual = o#value value in
+              let expected = Var.type_of_binder binder in
+              o#check_eq_types expected actual occurrence;
+              let o, binder = o#binder binder in
+              o, (binder, value), expected) parameters in
+            o, Deep parameters, states in
+      let o, return_binder = o#binder (fst handler.ih_return) in
+      o#check_eq_types types.ih_input_type (Var.type_of_binder return_binder) occurrence;
+      let o, return_body, returned = o#computation (snd handler.ih_return) in
+      o#check_eq_types types.ih_output_type returned occurrence;
+      let o = o#remove_binder return_binder in
+      ensure (StringMap.size handler.ih_cases = StringMap.size types.ih_operation_types)
+        "Handler case count does not match its operation signatures" occurrence;
+      let o, cases = StringMap.fold (fun label (argument, resume, body) (o, cases) ->
+        let scheme = match StringMap.find_opt label types.ih_operation_types with
+          | Some scheme -> scheme
+          | None -> raise_ir_type_error ("Missing handler signature for " ^ label) occurrence in
+        let qs, signature = split_quantified_type scheme in
+        let domain, result = match signature with
+          | Operation (domain, result) -> domain, result
+          | _ -> raise_ir_type_error ("Invalid operation signature for " ^ label) occurrence in
+        let previous = o#get_type_var_env in
+        let o = List.fold_left (fun o (id, kind) -> o#add_typevar_to_context id kind) o qs in
+        let argument_type = pack_types (extract_tuple (flatten_row (extract_row domain))) in
+        o#check_eq_types argument_type (Var.type_of_binder argument) occurrence;
+        let resume_args, resume_result = match depth with
+          | Deep _ -> result :: states, types.ih_output_type
+          | Shallow -> [result], types.ih_input_type in
+        let resume_type = AmbientFunction (dl_unl, make_tuple_type resume_args, resume_result) in
+        o#check_eq_types resume_type (Var.type_of_binder resume) occurrence;
+        let o, argument = o#binder argument in
+        let o, resume = o#binder resume in
+        let o, body, actual = o#computation body in
+        o#check_eq_types types.ih_output_type actual occurrence;
+        let o = o#remove_binder argument in
+        let o = o#remove_binder resume in
+        o#set_type_var_env previous, StringMap.add label (argument, resume, body) cases)
+        handler.ih_cases (o, StringMap.empty) in
+      let o = match depth with
+        | Shallow -> o
+        | Deep parameters -> List.fold_left (fun o (b, _) -> o#remove_binder b) o parameters in
+      let handler = { handler with ih_comp = comp; ih_cases = cases;
+        ih_return = (return_binder, return_body); ih_depth = depth } in
+      o, Handle handler, types.ih_output_type
 
    method! bindings : binding list -> ('self_type * binding list) =
       fun bs ->
@@ -993,7 +1093,9 @@ struct
             | None -> o
         in
 
-        (if is_recursive then o#impose_presence_of_effect Types.wild_present occurrence);
+        (match concrete_type exp_unquant_t with
+         | Function _ | Lolli _ when is_recursive -> o#impose_presence_of_effect Types.wild_present occurrence
+         | _ -> ());
 
         let previous_tyenv = o#get_type_var_env in
         let o = List.fold_left
@@ -1010,13 +1112,13 @@ struct
         let o, _ = o#set_allowed_effects previously_allowed_effects in
 
 
-        let is_linear = not (Types.Unl.type_satisfies exp_unquant_t) in
         let actual_ft_unquant =
-          Types.make_function_type
-            ~linear:is_linear
-            parameter_types
-            exp_effects_substed
-            body_type in
+          match concrete_type exp_unquant_t with
+          | AmbientFunction (linearity, _, _) ->
+              AmbientFunction (linearity, make_tuple_type parameter_types, body_type)
+          | _ ->
+              let linear = not (Types.Unl.type_satisfies exp_unquant_t) in
+              Types.make_function_type ~linear parameter_types exp_effects_substed body_type in
         let actual_overall_funtype = Types.for_all (tyvars, actual_ft_unquant) in
 
         (* Compare the overall types. Note that the effects are actually unncessary here:

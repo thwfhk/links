@@ -32,13 +32,11 @@ class transform : Types.typing_environment ->
 object ('self)
   val var_env : Types.environment
   val tycon_env : Types.tycon_environment
-  val effect_row : Types.row
-
   method get_var_env     : unit -> Types.environment
   method get_tycon_env   : unit -> Types.tycon_environment
 
-  method backup_envs     :  Types.environment * Types.tycon_environment * Types.row
-  method restore_envs    : (Types.environment * Types.tycon_environment * Types.row) -> 'self
+  method backup_envs     :  Types.environment * Types.tycon_environment
+  method restore_envs    : (Types.environment * Types.tycon_environment) -> 'self
 
   method with_var_env     : Types.environment -> 'self
 
@@ -46,15 +44,13 @@ object ('self)
   method bind_binder     : Binder.with_pos -> 'self
 
   method lookup_type     : Name.t -> Types.datatype
-  method lookup_effects  : Types.row
-  method with_effects    : Types.row -> 'self
 
   method binder          : Binder.with_pos -> 'self * Binder.with_pos
   method binding         : binding -> 'self * binding
   method bindingnode     : bindingnode -> 'self * bindingnode
   method binop           : BinaryOp.t -> 'self * BinaryOp.t * Types.datatype
   method constant        : Constant.t -> 'self * Constant.t * Types.datatype
-  method funlit          : Types.row -> funlit -> 'self * funlit * Types.datatype
+  method funlit          : funlit -> 'self * funlit * Types.datatype
   method iterpatt        : iterpatt -> 'self * iterpatt
 
   method quantifiers     : SugarQuantifier.t list -> 'self * SugarQuantifier.t list
@@ -86,8 +82,6 @@ object ('self)
 *)
   method unary_op        : UnaryOp.t -> 'self * UnaryOp.t * Types.datatype
 end
-
-val fun_effects : Types.datatype -> Sugartypes.Pattern.with_pos list list -> Types.row
 
 type program_transformer = Types.typing_environment -> Sugartypes.program -> Sugartypes.program
 type sentence_transformer = Types.typing_environment -> Sugartypes.sentence -> Sugartypes.sentence

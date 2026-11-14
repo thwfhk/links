@@ -10,7 +10,6 @@ val is_primitive : string -> bool
 val is_primitive_var : Var.var -> bool
 val is_pure_primitive : string -> bool
 val type_env : Types.environment
-val modal_type_env : Types.environment
 val typing_env : Types.typing_environment
 val nenv : Var.var Env.String.t
 

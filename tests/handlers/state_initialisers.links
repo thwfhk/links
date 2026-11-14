@@ -1,3 +1,5 @@
+effect Step { Next : (Int) => Int; }
+
 handle(
   handle(do Next(0))(first <- do Next(20), second <- do Next(21)) {
     case <Next(_) => k> -> k(first + second + 1, first, second)

@@ -5,7 +5,7 @@ fun example() {
     Cons(1, Cons(2, Cons(3, Nil)))
 }
 
-sig map : (((a) ~%~> b), VariantList(a)) ~> VariantList(b)
+sig map : (((a) -> b), VariantList(a)) -> VariantList(b)
 fun map(f, xs) {
   switch (xs) {
     case Nil -> Nil

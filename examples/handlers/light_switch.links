@@ -1,8 +1,10 @@
 # Stateful operations
-sig get : () {Get:s |_}-> s
+effect State(s::Abs) { Get : () => s; Put : (s) => (); }
+
+sig get : forall s::Abs. [State(s)] (() -> s)
 fun get() {do Get}
 
-sig put : (s) {Put:(s) => ()|_}-> ()
+sig put : forall s::Abs. [State(s)] ((s) -> ())
 fun put(st) {do Put(st)}
 
 #
@@ -11,7 +13,7 @@ fun put(st) {do Put(st)}
 typename LState = (|On|Off|);
 
 # Toggle the light switch
-sig toggle : Comp((), {Get:LState,Put:(LState) => ()|_})
+sig toggle : [State(LState)] (() -> ())
 fun toggle() {
   switch (get()) {
     case Off -> put(On)
@@ -20,18 +22,21 @@ fun toggle() {
 }
 
 # Light fickering
+sig flickering : (Int) -> [State(LState)] (() -> ())
 fun flickering(n)() {
   if (n <= 0) ()
   else { toggle(); flickering(n-1)() }
 }
 
 # State gathering light flickering
+sig flickering_st : (Int) -> [State(LState)] (() -> List LState)
 fun flickering_st(n)() {
   if (n <= 0) []
   else { toggle(); get() :: flickering_st(n-1)() }
 }
 
 # Parameterised (deep) handlers are built-in
+sig evalState : forall s::Abs,a::Abs. (s, <State(s)> (() -> a)) -> a
 fun evalState(st, m) {
   handle(m())(st <- st) {
     case x -> x
@@ -40,14 +45,17 @@ fun evalState(st, m) {
   }
 }
 
+sig logState : forall s::Abs,a::Abs. [State(s)] ((<State(s)> (() -> a)) -> () -> (a, List s))
 fun logState(m)() {
   handle(m())(history <- []) {
     case x -> (x, history)
+    case <Get => resume> -> resume(get(), history)
     case <Put(p) => resume> -> resume(put(p), history ++ [p])
   }
 }
 
 # Parameterised handlers can be simulated via a technique known as parameter-passing
+sig evalState0 : forall s::Abs,a::Abs. (s, <State(s)> (() -> a)) -> a
 fun evalState0(st, m) {
   (handle(m()) {
     case x -> fun(_) { x }
@@ -61,8 +69,8 @@ fun unitTest(n) {
   var states  = evalState(Off, flickering_st(n));
   var states0 = evalState0(Off, flickering_st(n));
 
-  var (_, log)  = evalState(Off, logState(flickering(n)));
-  var (_, log0) = evalState0(Off, logState(flickering(n)));
+  var (_, log)  = evalState(Off, fun() { logState(flickering(n))() });
+  var (_, log0) = evalState0(Off, fun() { logState(flickering(n))() });
 
   states == states0 && log == log0 && log == states
   #(states, states0, log, log0)

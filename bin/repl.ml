@@ -193,14 +193,14 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
         ((fun context args ->
           match args with
           | [filename] ->
-             Errors.display
-               ~default:(fun _ -> context)
-               (lazy
-                  (let (context', datatype, value) =
-                     DesugarModules.with_scope_rollback (fun () ->
-                       Driver.Phases.whole_program context filename)
-                   in
-                   print_value datatype value; context'))
+             begin match Driver.Phases.recover_linear_bindings context (fun on_variable ->
+               DesugarModules.with_scope_rollback (fun () ->
+                 Driver.Phases.whole_program ~on_variable context filename)) with
+             | Ok (context, datatype, value) ->
+                 print_value datatype value; context
+             | Error (exn, context) ->
+                 Errors.display ~default:(fun _ -> context) (lazy (raise exn))
+             end
           | _ -> prerr_endline "syntax: @load \"filename\""; context),
          "load in a Links source file, extending the current environment");
 
@@ -225,7 +225,7 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
           in
           match args with
           | [] -> prerr_endline "syntax: @withtype type"; context
-          | _ -> let t = DesugarDatatypes.read ~aliases (String.concat " " args) in
+          | _ -> let t = DesugarDatatypes.read ~interfaces:context.Context.effect_interfaces ~aliases (String.concat " " args) in
                  StringSet.iter
                    (fun id ->
                      try begin
@@ -311,22 +311,18 @@ let handle previous_context current_context = function
      let valenv = Context.value_environment current_context in
      Env.String.fold
        (fun name var () ->
-         let v, t =
+         let v =
            (* Function values are bound in a global table, whereas
               other values are bound in the value environment. *)
            match Tables.lookup Tables.fun_defs var with
-           | None ->
-              let v = Value.Env.find var valenv in
-              let t = Env.String.find name var_env' in
-              v, t
-           | Some (finfo, _, None, _) ->
-              `FunctionPtr (var, None), Var.info_type finfo
+           | None -> Value.Env.find var valenv
+           | Some (_, _, None, _) -> `FunctionPtr (var, None)
            | _ -> assert false
          in
          Printf.printf "%s = %s : %s\n%!"
            (Module_hacks.Name.prettify name)
            (Value.string_of_value v)
-           (Types.string_of_datatype t))
+           (Types.string_of_datatype (Env.String.find name var_env')))
        nenv'
        (); current_context
   | `Expression (datatype, value) ->
@@ -345,10 +341,11 @@ let interact : Context.t -> unit
   Printf.printf "%s%!" (val_of (Settings.get welcome_note));
   let rec loop context =
     Parse.Readline.prepare_prompt ps1;
-    match DesugarModules.with_scope_rollback (fun () -> I.readline ps1 context) with
-    | exception exn ->
+    match Driver.Phases.recover_linear_bindings context (fun on_variable ->
+      DesugarModules.with_scope_rollback (fun () -> I.readline ~on_variable ps1 context)) with
+    | Error (exn, context) ->
        print_error exn; loop context
-    | I.({ sentence; context = context' }) ->
+    | Ok I.({ sentence; context = context' }) ->
        let context'' =
          try handle context context' sentence
          with exn -> print_error exn; context'

@@ -43,7 +43,7 @@ fun memberToString(member) {
   }
 }
 
-sig showMembers : (List U2) ~> String
+sig showMembers : (List U2) -> String
 fun showMembers(members) {
   switch (members) {
     case [] -> ""
@@ -75,16 +75,19 @@ fun compareMembers(x, y) {
 # Either side of the bridge.
 typename Side = List U2;
 
+effect Choice(a::Abs) { Choose : (List a) => a; }
+effect Failure { Fail : () => Zero; }
+
 # Non-determinstic choice.
-sig choose : (List a) {Choose:(List a) => a|_}-> a
+sig choose : forall a::Abs. [Choice(a)] ((List a) -> a)
 fun choose(xs) { do Choose(xs) }
 
 # Failure.
-sig fail : () {Fail:Zero|_}-> a
+sig fail : [Failure] (() -> a)
 fun fail() { switch (do Fail) { } }
 
 # Selects one or two to cross the bridge.
-sig selectParty : (Side) {Choose:(Side) => U2, Fail:Zero|_}~> List U2
+sig selectParty : [Choice(U2), Failure] ((Side) -> List U2)
 fun selectParty(side) {
   var m1 = choose(side);
   var m2 = choose(side);
@@ -111,7 +114,7 @@ fun without(xs, ys) {
 }
 
 # The main loop.
-sig solve : (Bool, Int, (List U2, List U2)) {Choose:(List U2) => U2, Fail:Zero|_}~> List (List U2, Bool)
+sig solve : [Choice(U2), Failure] ((Bool, Int, (List U2, List U2)) -> List (List U2, Bool))
 fun solve(forward, timeLeft, sides) {
   fun step(sideFrom, sideTo) {
     var party = selectParty(sideFrom);
@@ -143,6 +146,7 @@ fun solutions() {
   }
 }
 
+sig printSolution : [wild] ((List (List U2, Bool)) -> ())
 fun printSolution(sol) {
   switch (sol) {
     case []-> ()
@@ -153,6 +157,7 @@ fun printSolution(sol) {
   }
 }
 
+sig printSolutions : [wild] ((List (List (List U2, Bool))) -> ())
 fun printSolutions(sols) {
   switch (sols) {
     case [] -> ()

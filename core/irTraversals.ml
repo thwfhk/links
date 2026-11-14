@@ -48,6 +48,7 @@ module type IR_VISITOR = sig
     method tail_computation :
       tail_computation -> ('self_type * tail_computation * Types.datatype)
     method special : special -> ('self_type * special * Types.datatype)
+    method handler_case : Types.datatype option -> effect_case -> ('self_type * effect_case * Types.datatype)
     method bindings : binding list -> ('self_type * binding list)
     method computation : computation -> ('self_type * computation * Types.datatype)
     method binding : binding -> ('self_type * binding)
@@ -272,7 +273,7 @@ struct
         | CallCC v ->
             let o, v, t = o#value v in
               o, CallCC v, deconstruct (return_type ~overstep_quantifiers:true) t
-    | Handle ({ ih_comp; ih_cases; ih_return; ih_depth }) ->
+    | Handle ({ ih_comp; ih_cases; ih_return; ih_depth; ih_types } as handler) ->
        let (o, comp, _) = o#computation ih_comp in
            (* TODO FIXME traverse parameters *)
            let (o, depth) =
@@ -289,24 +290,26 @@ struct
                 o, Deep (List.rev bindings)
              | Shallow -> o, Shallow
            in
-       let (o, cases, _branch_types) =
-         o#name_map
-               (fun o (x, resume, c) ->
-                 let (o, x) = o#binder x in
-         let (o, resume) = o#binder resume in
-         let (o, c, t) = o#computation c in
-         o, (x, resume, c), t)
-           ih_cases
-       in
+       let (o, cases) = StringMap.fold (fun label case (o, cases) ->
+         let scheme = Option.bind ih_types (fun types -> StringMap.find_opt label types.ih_operation_types) in
+         let o, case, _ = o#handler_case scheme case in
+         o, StringMap.add label case cases) ih_cases (o, StringMap.empty) in
            let (o, return, t) =
              let (o, b) = o#binder (fst ih_return) in
              let (o, comp, t) = o#computation (snd ih_return) in
              o, (b, comp), t
            in
-       o, Handle { ih_comp = comp; ih_cases = cases; ih_return = return; ih_depth = depth}, t
-    | DoOperation (name, vs, t) ->
+       let t = Option.fold ~none:t ~some:(fun types -> types.ih_output_type) ih_types in
+       o, Handle { handler with ih_comp = comp; ih_cases = cases; ih_return = return; ih_depth = depth }, t
+    | DoOperation (name, vs, signature) ->
        let (o, vs, _) = o#list (fun o -> o#value) vs in
-       (o, DoOperation (name, vs, t), t)
+       (o, DoOperation (name, vs, signature), return_type signature)
+
+    method handler_case _scheme (argument, resume, body) =
+      let o, argument = o#binder argument in
+      let o, resume = o#binder resume in
+      let o, body, t = o#computation body in
+      o, (argument, resume, body), t
 
    method bindings : binding list -> ('self_type * binding list) =
       fun bs ->
@@ -537,7 +540,7 @@ module ElimDeadDefs = struct
 
     method init b =
       let x = Var.var_of_binder b in
-      o#with_env (IntMap.add x 0 env)
+      o#with_env (IntMap.update x (function None -> Some 0 | count -> count) env)
 
     method initrec b =
       let x = Var.var_of_binder b in
@@ -647,6 +650,9 @@ module ElimDeadDefs = struct
     method is_dead x =
       IntMap.mem x env && (IntMap.find x env = 0)
 
+    method is_unused_local b =
+      Var.Scope.is_local (Var.scope_of_binder b) && o#is_dead (Var.var_of_binder b)
+
     method is_dead_rec f =
       IntMap.mem f env && (IntMap.find f env = 0
           && (not (IntMap.mem f mutrec_env) || fst (IntMap.find f mutrec_env) = 0))
@@ -657,10 +663,13 @@ module ElimDeadDefs = struct
             begin
               let o, b = o#binding b in
                 match b with
-                  | Let (b, (_tyvars, _)) when o#is_dead (Var.var_of_binder b) ->
+                  | Let (b, (_tyvars, _)) when o#is_unused_local b ->
                       o#bindings bs
-                  | Fun {fn_binder = b; _} when o#is_dead (Var.var_of_binder b) ->
+                  | Fun {fn_binder = b; _} when o#is_unused_local b ->
                       o#bindings bs
+                  | Rec ({ fn_binder; _ } :: _) when Var.Scope.is_global (Var.scope_of_binder fn_binder) ->
+                      let o, bs = o#bindings bs in
+                      o, b :: bs
                   | Rec defs ->
                       Debug.if_set show_rec_uses (fun () -> "Rec block:");
                       let fs, defs =
@@ -744,6 +753,13 @@ let ir_type_mod_visitor tyenv type_visitor =
             | DoOperation (name, vallist, datatype) ->
                let (_, datatype) = type_visitor#typ datatype in
                super#special (DoOperation (name, vallist, datatype))
+            | Handle handler ->
+                let typ t = snd (type_visitor#typ t) in
+                let ih_types = Option.map (fun types ->
+                  { ih_input_type = typ types.ih_input_type;
+                    ih_output_type = typ types.ih_output_type;
+                    ih_operation_types = StringMap.map typ types.ih_operation_types }) handler.ih_types in
+                super#special (Handle { handler with ih_types })
             | other -> super#special other
 
           method! binder b =

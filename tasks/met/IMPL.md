@@ -161,8 +161,44 @@ permission while its implementation is pending. See the
 
 ## 5. Compiler and library integration
 
-Pending implementation.
+The file, expression and REPL drivers now call Fresco. The parser and
+surface type representation use ambient arrows and declared effect
+interfaces. The old source checker was removed. Its value restriction
+and variable usage counts are shared by the modal checker.
+
+The primitive table gives native functions their modal signatures
+directly and keeps the separate `ApplyPure` flag. The two preludes and
+standard library use ambient callbacks where arguments and results
+share the invocation context. The pure state helpers give stored state
+functions a fixed context and require captured state values to be
+absolute. The [migration inventory](MIGRATION.md) records the changes
+to `Comp`, `gen0`–`gen2` and examples that used effect arguments.
+
+Typed frontend passes carry the types of terms under modal
+introductions and preserve the checked operation schemes. The optional
+frontend recheck uses the incoming Fresco environment and rolls back
+changes to compiler types after checking. The compiler erases modalities
+from IR types after frontend checks. The IR checker verifies the
+runtime types of operation calls, handler results, state and
+resumptions. Runtime dispatch uses the resolved operation label, so a
+module can declare an operation with the same source name as an
+operation in another module.
+
+The REPL retains the types and binding contexts from each successful
+sentence. It also records whether a linear binding has been used. After
+a runtime error, it marks the linear bindings already read by the
+failed sentence and restores the previous compiler scope.
 
 ## 6. Review and final verification
 
-Pending implementation.
+Separate reviews covered source checking and lowering. Changes from
+the reviews preserve generator scope, known modal variant payloads
+and quantified arguments under a modality. Frontend rechecking keeps
+the rigid parameters of an already checked operation. IR checking
+handles recursive data types, and the optimiser keeps handler-local
+bindings and exported prelude definitions live where they are needed.
+
+The [SmallLinks guide](../small/SPEC.md) describes the modal language.
+The [verification record](PLAN.md#milestones-56-checks) records the
+combined checks, and the [migration inventory](MIGRATION.md) links to
+the deferred fixtures.

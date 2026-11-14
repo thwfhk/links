@@ -1,7 +1,8 @@
 # Delimited continuations using handlers
 
-sig reset : (Comp(b, {Shift: (((a) {Shift{p}|e}~> b) {Shift{p}|e}~> b) => a|e}))
-             {Shift{p}|e}~> b
+effect Shift(a::Abs,b::Abs) { Shift : ([] (((a) -> b) -> b)) => a; }
+
+sig reset : forall a::Abs,b::Abs. (<Shift(a,b)> (() -> b)) -> b
 fun reset(m) {
   handle(m()) {
     case x        -> x
@@ -9,22 +10,23 @@ fun reset(m) {
   }
 }
 
-sig shift : (((a) {Shift{p}|e}~> b) {Shift{p}|e}~> b)
-             {Shift:(((a) {Shift{p}|e}~> b) {Shift{p}|e}~> b) => a|e}~> a
+sig shift : forall a::Abs,b::Abs. [Shift(a,b)] (([] (((a) -> b) -> b)) -> a)
 fun shift(f) { do Shift(f) }
 
+sig comp : [Shift(Int,Int)] (() -> Int)
 fun comp() {
     var x = shift(fun(k) { k(k(k(7))) });
     x  * 2 + 1
 }
 
+sig yield : forall a::Abs. [Shift((),List a)] ((a) -> ())
 fun yield(x) {
   shift(fun(k) {
     x :: k(())
   })
 }
 
-sig example : () {Shift{_} |_}~> List Int
+sig example : () -> List Int
 fun example() {
   reset(fun() {
     yield(1);

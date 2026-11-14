@@ -134,8 +134,18 @@ struct
         let o = match s with
           | DoOperation (_, _, t) ->
             o#typ t
+          | Handle { ih_types = Some types; _ } ->
+              let o = (o#typ types.ih_input_type)#typ types.ih_output_type in
+              StringMap.fold (fun _ t o -> o#typ t) types.ih_operation_types o
           | _ -> o in
         o#super_special s
+
+      method! handler_case scheme case =
+        let qs = Option.fold ~none:[] ~some:TypeUtils.quantifiers scheme in
+        let o = List.fold_left (fun o q -> o#quantifier q) o qs in
+        let o, case, t = o#super_handler_case scheme case in
+        let o = List.fold_left (fun o q -> o#quantifier_remove q) o qs in
+        o, case, t
 
 
       method typ t =
@@ -171,6 +181,8 @@ struct
       method super_value = super#value
 
       method super_special = super#special
+
+      method super_handler_case = super#handler_case
 
 
       method create_fenv_entry =

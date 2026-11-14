@@ -1,5 +1,5 @@
 # from Prelude
-sig lf : ((a) -e-> b) -> (a) -e-@ b
+sig lf : ((a) -> b) -> (a) -@ b
 fun lf(f) {
   linfun (x) {
     f(x)

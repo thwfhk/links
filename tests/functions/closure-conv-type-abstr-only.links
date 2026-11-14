@@ -4,11 +4,11 @@ fun poly(x) {
   ()
 }
 
-sig outer : (b) ~> Int
+sig outer : (b) -> Int
 fun outer (x) {
   fun inner() {
     #force usage of type variable of outer function
-    var dummy = poly : (b) ~> ();
+    var dummy = poly : (b) -> ();
     42
   }
   inner()

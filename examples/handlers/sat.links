@@ -7,7 +7,7 @@ typename Expr = (|Var:String
                  |Const:Bool|);
 
 # Converts an expression into a string
-sig exprToString : (Expr) ~> String
+sig exprToString : (Expr) -> String
 fun exprToString(expr) {
    fun parens(s) { "(" ^^ s ^^ ")" }
    switch (expr : Expr) {
@@ -36,15 +36,18 @@ fun exprToString(expr) {
   }
 }
 
+effect Choice { Choose : () => Bool; }
+effect Failure { Fail : () => Zero; }
+
 # run
-sig run : (Comp(a, { |e})) ~e~> a
+sig run : (() -> a) -> a
 fun run(m) {m()}
 
 # failure
-sig fail : forall a, e::Eff . () {Fail:Zero|e}-> a
+sig fail : [Failure] (() -> a)
 fun fail() {switch(do Fail) { }}
 
-sig maybe : (Comp(a, {Fail:Zero|e})) -> Comp(Maybe(a), { Fail{_} |e})
+sig maybe : forall a::Abs. (<Failure> (() -> a)) -> () -> Maybe(a)
 fun maybe(m)() {
   handle(m()) {
     case x -> Just(x)
@@ -52,35 +55,33 @@ fun maybe(m)() {
   }
 }
 
-# left biased choice
+# Left-biased choice with backtracking on failure.
+sig leftBiased : forall a::Abs. (<Choice, Failure> (() -> a)) -> () -> Maybe(a)
 fun leftBiased(m)() {
   handle(m()) {
-    case x -> x
+    case x -> Just(x)
+    case <Fail> -> Nothing
     case <Choose => k> ->
-      fun its(c)() {k(c)}
-      switch (run $ maybe(its(true))) {
-        case Just(x) -> x
-        case Nothing ->
-          switch (run $ maybe(its(false))) {
-            case Just(x) -> x
-            case Nothing -> fail()
-          }
+      switch (k(true)) {
+        case Just(x) -> Just(x)
+        case Nothing -> k(false)
       }
-   }
+  }
 }
 
 # choice combinator
-sig choose : () {Choose: Bool |_}-> Bool
+sig choose : [Choice] (() -> Bool)
 fun choose() { do Choose }
 
 infixl 3 <|>;
+sig <|> : [Choice] ((() -> a, () -> a) -> a)
 op lhs <|> rhs {
   if (choose()) lhs()
   else rhs()
 }
 
 # Returns a free variable, if any, in a given expression
-sig freeVariable : (Expr) -> Comp(Maybe(String), {Choose:Bool |_})
+sig freeVariable : (Expr) -> [Choice] (() -> Maybe(String))
 fun freeVariable(expr)() {
   switch (expr : Expr) {
      case Const(_)   -> Nothing
@@ -92,7 +93,7 @@ fun freeVariable(expr)() {
 }
 
 # Guess valuation
-sig guessVariable : (String, Bool, Expr) ~> Expr
+sig guessVariable : (String, Bool, Expr) -> Expr
 fun guessVariable(x,val,expr) {
     fun guess(expr) { guessVariable(x,val,expr) }
 
@@ -124,7 +125,7 @@ fun isConstTrue(expr) {
 }
 
 # Simplify expressions
-sig simplify : (Expr) ~> Expr
+sig simplify : (Expr) -> Expr
 fun simplify(expr) {
     switch (expr : Expr) {
       case Var(name) -> Var(name)
@@ -158,7 +159,7 @@ fun simplify(expr) {
 }
 
 # Extract the value from the Const constructor
-sig fromConst : (Expr) ~> Bool
+sig fromConst : (Expr) -> Bool
 fun fromConst(expr) {
   switch (expr) {
     case Const(b) -> b
@@ -167,7 +168,7 @@ fun fromConst(expr) {
 }
 
 # Simple satisfiability checker
-sig satisfiable : (Expr) -> Comp(Bool, {Choose:Bool |e})
+sig satisfiable : (Expr) -> [Choice] (() -> Bool)
 fun satisfiable(expr)() {
    switch (freeVariable(expr)()) {
       case Nothing -> fromConst(expr)
@@ -181,7 +182,7 @@ fun satisfiable(expr)() {
 ##
 
 # Apply De Morgan's Laws to get rid of negations
-sig fixNegations : (Expr) ~> Expr
+sig fixNegations : (Expr) -> Expr
 fun fixNegations(expr) {
   var f = fixNegations;
   switch (expr) {
@@ -201,7 +202,7 @@ fun fixNegations(expr) {
 }
 
 # Distribute OR over AND
-sig distribute : (Expr) ~> Expr
+sig distribute : (Expr) -> Expr
 fun distribute(expr) {
   var d = distribute;
   switch (expr : Expr) {
@@ -221,7 +222,7 @@ fun distribute(expr) {
 }
 
 # Convert an expression into CNF
-sig cnf : (Expr) ~> Expr
+sig cnf : (Expr) -> Expr
 fun cnf(expr) {
   var e = distribute(fixNegations(expr));
   if (e == expr) expr
@@ -232,7 +233,7 @@ sig ex1 : Expr
 var ex1 = Or(Var("a"),Not(And(Var("b"),Or(Var("a"),Var("c")))));
 
 fun check(e) {
- var res = run -<- maybe -<- leftBiased $ satisfiable(cnf(simplify(e)));
+ var res = run(leftBiased(satisfiable(cnf(simplify(e)))));
  switch (res) {
    case Just(r) -> r
    case Nothing -> error("Unhandled error.")
@@ -258,37 +259,40 @@ fun literalPolarity(e,x) {
 ####
 
 # Parsing
-typename Parser(a, e::Eff) =
-  () {Choose: Bool, Satisfies: ((Char) {}~> Bool) => Char,
-      Peek: Maybe(Char), Fail: Zero |e}~> a;
-typename ExprParser(e::Eff) = Parser(Expr, { |e});
+effect Tokens {
+  Satisfies : ([] ((Char) -> Bool)) => Char;
+  Peek : () => Maybe(Char);
+}
 
-sig satisfies : ((Char) {}~> Bool) -> Parser(Char, { |_})
+typename Parser(a) = [Choice, Tokens, Failure] (() -> a);
+typename ExprParser = Parser(Expr);
+
+sig satisfies : ([] ((Char) -> Bool)) -> Parser(Char)
 fun satisfies(pred)() {
   do Satisfies(pred)
 }
 
-sig char : (Char) -> Parser(Char, { |_})
+sig char : (Char) -> Parser(Char)
 fun char(c) { satisfies(fun(k) { k == c }) }
 
-sig peek : Parser(Maybe(Char), { |_})
+sig peek : Parser(Maybe(Char))
 fun peek() { do Peek }
 
-sig succeed : (a) -> Parser(a, { |_})
+sig succeed : forall a::Abs. (a) -> Parser(a)
 fun succeed(x)() { x }
 
-sig many : (Parser(a, { |e})) ~> Parser(List a, { |e})
+sig many : (Parser(a)) -> Parser(List a)
 fun many(p)() {
   if (choose()) p() :: many(p)()
   else []
 }
 
-sig many1 : (Parser(a, { |e})) -> Parser(List a, { |e})
+sig many1 : (Parser(a)) -> Parser(List a)
 fun many1(p)() {
   p() :: many(p)()
 }
 
-sig while : (Parser(a, { |e})) ~> Parser((), { |e})
+sig while : (Parser(a)) -> Parser(())
 fun while(p)() {
   if (choose()) { ignore(p()); while(p)() }
   else ()
@@ -300,19 +304,19 @@ fun isLetter(c) {
   || (ord(c) >= 97 && ord(c) <= 122)
 }
 
-sig parseLetter : Parser(Char, { |_})
+sig parseLetter : Parser(Char)
 fun parseLetter() {
   satisfies(isLetter)()
 }
 
-sig parseString : (String) -> Parser(String, { |_})
+sig parseString : (String) -> Parser(String)
 fun parseString(str)() {
    var cs = explode(str);
    iter(fun(c) { ignore(run(char(c))) }, cs);
    str
 }
 
-sig parseName : Parser(String, { |_})
+sig parseName : Parser(String)
 fun parseName() {
   var cs = many1(parseLetter)();
   implode(cs)
@@ -325,10 +329,10 @@ fun isWhitespace(c) {
   || ord(c) == ord('\n')
 }
 
-sig whitespace : Parser((), { |_})
+sig whitespace : Parser(())
 fun whitespace() { while(satisfies(isWhitespace))() }
 
-sig parens : (Parser(a, { |e})) -> Parser(a, { |e})
+sig parens : (Parser(a)) -> Parser(a)
 fun parens(p)() {
   ignore(char('(')());
   ignore(whitespace());
@@ -338,7 +342,7 @@ fun parens(p)() {
   result
 }
 
-sig parseEof : Parser((), { |_})
+sig parseEof : Parser(())
 fun parseEof() {
   switch (peek()) {
     case Nothing -> ()
@@ -364,7 +368,7 @@ fun parseEof() {
 #        |   tt | ff | var
 
 mutual {
-  sig parseE : ExprParser({ |_})
+  sig parseE : ExprParser
   fun parseE() {
     ignore(whitespace());
     var expr = parseOr();
@@ -372,7 +376,7 @@ mutual {
     expr
   }
 
-  sig parseOr : ExprParser({ |_})
+  sig parseOr : ExprParser
   fun parseOr() {
     var lhs = parseAnd();
 
@@ -388,7 +392,7 @@ mutual {
     }
   }
 
-  sig parseAnd : ExprParser({ |_})
+  sig parseAnd : ExprParser
   fun parseAnd() {
     var lhs = parseNeg();
 
@@ -404,7 +408,7 @@ mutual {
     }
   }
 
-  sig parseNeg : ExprParser({ |_})
+  sig parseNeg : ExprParser
   fun parseNeg() {
     switch (peek()) {
       case Nothing -> fail()
@@ -420,7 +424,7 @@ mutual {
     }
   }
 
-  sig parseAtomicExpr : ExprParser({ |_})
+  sig parseAtomicExpr : ExprParser
   fun parseAtomicExpr() {
     var name = parseName();
     ignore(whitespace());
@@ -431,49 +435,48 @@ mutual {
     }
   }
 
-  sig parseParenthesisedOrAtomicExpr : ExprParser({ |_})
+  sig parseParenthesisedOrAtomicExpr : ExprParser
   fun parseParenthesisedOrAtomicExpr() {
     if (choose()) parens(parseOr)()
     else parseAtomicExpr()
   }
 
-  sig parse : (Parser(a, {Choose{_},Satisfies{_},Peek{_},Fail{_}|e}), List Char) ->
-              Comp(a, {Choose-,Satisfies-,Peek-,Fail: Zero |e})
+  sig parse : forall a::Abs. [wild] ((Parser(a), List Char) -> () -> Maybe(a))
   fun parse(m, input)() {
     handle(m())(tokens <- input) {
-      case x -> x
+      case x -> Just(x)
+      case <Fail> -> Nothing
       case <Peek => resume> ->
          switch (tokens) {
             case []        -> resume(Nothing, tokens)
             case tok :: _  -> resume(Just(tok), tokens)
          }
       case <Satisfies(pred) => resume> ->
-         var pred = gen1(pred);
          switch (tokens) {
            case c :: tokens ->
               if (pred(c)) resume(c, tokens)
-              else fail()
-           case _ -> fail()
+              else Nothing
+           case _ -> Nothing
          }
       case <Choose => resume> ->
-        switch(run $ maybe(fun() { resume(true, tokens) })) {
-          case Just(x) -> x
+        switch(resume(true, tokens)) {
+          case Just(x) -> Just(x)
           case Nothing ->
-             switch(run $ maybe(fun() { resume(false, tokens) })) {
-               case Just(x) -> x
-               case Nothing -> println("Parsing failed, left: " ^^ implode(tokens)); fail()
+             switch(resume(false, tokens)) {
+               case Just(x) -> Just(x)
+               case Nothing -> println("Parsing failed, left: " ^^ implode(tokens)); Nothing
              }
         }
     }
   }
 }
 
-sig parseTextExpression : (String) ~> Maybe(Expr)
+sig parseTextExpression : [wild] ((String) -> Maybe(Expr))
 fun parseTextExpression(textualInput) {
-  var parse = gen0(maybe(parse(parseE, explode(textualInput))));
-  parse()
+  parse(parseE, explode(textualInput))()
 }
 
+sig unitTest : [wild] (() -> List Bool)
 fun unitTest() {
    [ parseTextExpression(exprToString(ex1)) == Just(ex1)
    , check(ex1)

@@ -57,7 +57,6 @@ class map :
     method datatype        : Datatype.with_pos -> Datatype.with_pos
     method datatypenode    : Datatype.t -> Datatype.t
     method datatype'       : datatype' -> datatype'
-    method row'            : row' -> row'
     method type_arg        : Datatype.type_arg -> Datatype.type_arg
     method type_arg'       : type_arg' -> type_arg'
     method constant        : Constant.t -> Constant.t
@@ -135,7 +134,6 @@ class fold :
     method datatype        : Datatype.with_pos -> 'self
     method datatypenode    : Datatype.t -> 'self
     method datatype'       : datatype' -> 'self
-    method row'            : row' -> 'self
     method type_arg        : Datatype.type_arg -> 'self
     method type_arg'       : type_arg' -> 'self
     method constant        : Constant.t -> 'self
@@ -182,7 +180,6 @@ object ('self)
   method datatype        : Datatype.with_pos -> 'self * Datatype.with_pos
   method datatypenode    : Datatype.t -> 'self * Datatype.t
   method datatype'       : datatype' -> 'self * datatype'
-  method row'            : row' -> 'self * row'
   method type_arg'       : type_arg' -> 'self * type_arg'
   method directive       : directive -> 'self * directive
   method fieldspec       : Datatype.fieldspec -> 'self * Datatype.fieldspec

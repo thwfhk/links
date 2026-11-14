@@ -1,7 +1,7 @@
 mutual {
-  sig f : () {hear{a} |_}~> ()
-  fun f() { g() }
+  sig f : ((hear{a}, anchor:Int)) -> Int
+  fun f(r) { r.anchor }
 
-  sig g : () {hear{_} |a}~> ()
-  fun g() { f() }
+  sig g : ((| a)) -> Bool
+  fun g(_) { true }
 }

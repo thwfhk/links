@@ -3,13 +3,13 @@
 typename Status = (|Unknown|Valid|Invalid|);
 typename Sudoku = (name:String,grid:List (List Maybe(Int)),status:Status);
 
-sig emptySudoku : () ~> Sudoku
+sig emptySudoku : () -> Sudoku
 fun emptySudoku() {
   var range = [0..8];
   (name="empty", grid=map(fun(_) { map(fun(_) { Nothing }, range) }, range), status=Unknown)
 }
 
-sig dup : (List a) ~> List a
+sig dup : (List a) -> List a
 fun dup(xs) {
   fun aux(xs, visited, dups) {
     switch (xs) {
@@ -50,7 +50,7 @@ var testSudoku = (name="b", grid=map(fun(xs) {
                            , status=Unknown);
 
 
-sig >>= : (Maybe(a), (a) ~e~> Maybe(b)) ~e~> Maybe(b)
+sig >>= : (Maybe(a), (a) -> Maybe(b)) -> Maybe(b)
 op m >>= f {
   switch (m) {
     case Nothing -> Nothing
@@ -61,7 +61,7 @@ op m >>= f {
 sig return : (a) -> Maybe(a)
 fun return(x) {Just(x)}
 
-sig checkSudoku : (Sudoku) ~> Status
+sig checkSudoku : (Sudoku) -> Status
 fun checkSudoku(sudoku) {
   fun allDefined(g) {
     if (all(isJust, concat(g))) Just(g)

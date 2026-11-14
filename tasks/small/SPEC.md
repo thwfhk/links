@@ -207,8 +207,8 @@ The program returns `42`.
 
 ### Type annotations and aliases
 
-SmallLinks infers types and effects. Use these forms to write types
-explicitly.
+SmallLinks infers ordinary types. Write a signature when a global
+function needs effects supplied by its caller.
 
 | Form | Use |
 | --- | --- |
@@ -223,8 +223,9 @@ In a function type, each arrow follows one group of arguments.
 - `((Int, Bool)) -> String` takes one tuple argument.
 - `(Int) -> (Int) -> Int` takes its arguments in two separate calls.
 
-See [Effect annotation syntax](#effect-annotation-syntax) for function
-types in aliases and explicit `forall` types.
+Use `Int -> Int` as shorthand for `(Int) -> Int`. Type annotations and
+printed types use `List Int` for lists and `(| One | Many:Int |)` for variants.
+`List` is a built-in type name.
 
 ## Advanced features
 
@@ -250,7 +251,7 @@ toInt(Succ(Succ(Zero)))
 
 ### Rows
 
-Rows describe record fields, variant alternatives and operations.
+Rows describe record fields and variant alternatives.
 
 | Form | Meaning |
 | --- | --- |
@@ -264,8 +265,8 @@ Use `{x:Int}` to supply a row as a type argument, `{:Int}` to supply
 a present field and `{-}` to supply an absent field.
 
 In a quantifier, use `a::Type` for a type variable, `r::Row` for a row
-variable, `p::Presence` for a presence variable and `e::Eff` for an
-effect row variable. `a::Base` limits a type variable to primitive
+variable and `p::Presence` for a presence variable. `a::Base` limits
+a type variable to primitive
 types. In a row tail such as `(x:Int | r::Base)`, `r::Base` limits the
 remaining fields to primitive types.
 
@@ -289,13 +290,18 @@ fun isOne(v) { switch (v) { case One -> true case _ -> false } }
 (isOne(One), isOne(Many(3)))
 ```
 
-### FreezeML
+### Polymorphism
 
-An ordinary use of a polymorphic variable instantiates its type.
+Fresco uses annotations and expected types to check polymorphic
+values and modal types. A higher-rank parameter needs a polymorphic
+annotation or an expected type that supplies the quantifier.
+A function call, operation or handler computation cannot introduce
+quantifiers or a modality implicitly. Lambdas, literals and eligible
+records, lists and conditionals can introduce them.
 
 | Form | Use |
 | --- | --- |
-| `~ident` | Keep the quantified type of `ident`. |
+| `~ident`, `~(e)` | Keep the quantifiers and modalities after checking access to the value. |
 | `$(e)` | Generalise the type of a value. |
 | `e@` | Instantiate a polymorphic expression. |
 | `/\ [a]. { e }` | Introduce a type variable explicitly. |
@@ -305,10 +311,10 @@ An ordinary use of a polymorphic variable instantiates its type.
 call at both `Int` and `Bool`. The result is `(42, true)`.
 
 ```links
-sig ident : forall a,e::Row. (a) -e-> a
+sig ident : forall a. [] (a -> a)
 fun ident(x) { x }
 
-fun poly(f : (forall a,e::Row. (a) -e-> a)) { (f(42), f(true)) }
+fun poly(f : (forall a. [] (a -> a))) { (f(42), f(true)) }
 poly(~ident)
 ```
 
@@ -316,15 +322,16 @@ poly(~ident)
 call supplies `Int` and returns `42`.
 
 ```links
-var keep = /\ [a]. { fun(x:a) { x } : (a) {}~> a };
+var keep = /\ [a]. { fun(x:a) { x } : (a) -> a };
 (~keep)[Int](42)
 ```
 
 ### Linear types
 
-- Use `linfun` to create a linear function. Its type uses `-@` or `~@`.
+- Use `linfun` to create a linear function. Its type uses `-@`.
 - Use a linear local or parameter once on each branch of its scope.
 - A linear closure can capture a linear value.
+- The REPL tracks the use of a linear binding across sentences.
 
 ```links
 {
@@ -336,72 +343,79 @@ var keep = /\ [a]. { fun(x:a) { x } : (a) {}~> a };
 This returns `42`. Adding a second call to `f` in the block is a
 type error.
 
-### Effect annotation syntax
+### Effect contexts and modal types
 
-An arrow records the effects a function can perform when called. In
-these forms, `A` and `B` stand for value types and `e` stands for a
-row variable.
+An ambient effect context lists the available effect interfaces. A
+bare arrow uses that context for the function body, arguments and
+result. An absolute modality `[E] T` gives `T` a fixed context `E`.
+A relative modality changes the current context.
 
-| Form | Meaning |
+| Type | Context for the body of the type |
 | --- | --- |
-| `(A) -> B` | The arrow introduces a fresh open effect row. |
-| `(A) {}-> B` | The effect row is closed and empty. |
-| `(A) {Ask:() => Int \| e}-> B` | The row contains `Ask`, which takes no arguments and returns `Int`, and has tail `e`. |
-| `(A) -e-> B` | The effect row is `e`. This abbreviates `(A) {\|e}-> B`. |
-| `(A) ~> B` | The fresh effect row contains `wild`. |
-| `(A) ~e~> B` | The effect row extends `e` with `wild`. |
-| `(A) {}~> B` | The row is closed and contains only `wild`. |
+| `A -> B` | The current context. |
+| `[] (A -> B)` | The empty context. |
+| `[Reader(Int)] (() -> Int)` | A context containing `Reader(Int)`. |
+| `[wild] (String -> ())` | A context with permission for native effects. |
+| `<Reader(Int)> (() -> Int)` | The current context with a new `Reader(Int)` instance. |
+| `<Reader \|> (() -> Int)` | The current context with its newest `Reader` instance removed. |
+| `<Reader \| Reader(Bool)> (() -> Bool)` | Remove the newest `Reader` instance, then add `Reader(Bool)`. |
 
-- **Sharing rows.** Each bare `->` introduces its own row. To share
-  a tail, use the same named variable in each row and write the
-  presence fields each row needs.
-- **Row variables and alias arguments.** Supply all alias arguments,
-  including row arguments. Aliases and explicit `forall` types
-  require their row variables to be bound. In signatures with
-  implicit quantification, `_` denotes a fresh rigid variable and
-  `%` denotes a fresh flexible variable.
-- **Matching effects at a call.** The top-level effect row is
-  `{wild:()}`. A call matches the function's effect row against the
-  current row. A function with a closed empty row needs an empty
-  current row.
-- **The `wild` effect.** Recursive calls, list ranges, handlers and
-  functions such as `print` require `wild`. You can write `(A) ~> B`
-  as `(A) {wild:() | _}-> B` and `(A) {}~> B` as `(A) {wild:()}-> B`.
+Put parentheses around an arrow beneath a modality. Modalities can
+also occur in data types, as in `List ([] (Int -> Int))`. A mask in
+a type changes which context the value requires. It leaves handler
+dispatch unchanged.
 
-**Effect aliases.** Use `effectname` to name an effect row. Write an
-operation field as `Ask:() => a` or `Ask:a` for an operation with no
-arguments. For an operation with arguments, list their types before
-`=>`, as in `Put:(Int) => ()`. The example supplies an empty row
-argument to `Reader`, adds `wild` with `~>` and returns `42`.
+SmallLinks checks an unannotated global function in the empty context
+and gives its type an outer `[]`. Local functions use their surrounding
+context. The top-level expression and global `var` initialisers
+have `wild`. Use `[wild]` in the signature of a function that prints,
+reads the time or performs other native effects. Recursion, ranges
+and algebraic handlers can run in the empty context.
+
+Declare operations in an effect interface. Interface parameters fix
+the types shared by its operations, and an operation's own quantifiers
+are instantiated at each call. Operation arguments and results must
+be absolute. Base types are absolute, data types are absolute when
+their components are absolute, and an absolute modality gives a
+function an absolute type. Use `a::Abs` to require an absolute type
+argument.
 
 ```links
-effectname Reader(a,e::Eff) = {Ask:() => a | e};
+effect Reader(a::Abs) {
+  Ask : () => a;
+}
 
-sig ask : () { |Reader(Int,{})}~> Int
+sig ask : [Reader(Int)] (() -> Int)
 fun ask() { do Ask }
 
 handle(ask()) { case <Ask => k> -> k(42) }
 ```
 
+This returns `42`. Calling `ask()` needs an available `Reader(Int)`
+instance. See the [modal effect types design](../met/SPEC.md)
+for the inference rules and examples.
+
 ## Algebraic effects and handlers
 
-Use `do Op(args)` to invoke an operation. An operation with no
-arguments can be written `do Op`. The operation label starts with a
-capital letter and is unqualified. The effect row of the computation
-must admit the operation.
+Use `do Op(args)` to invoke a declared operation. An operation with no
+arguments can be written `do Op`. Use a qualified name such as
+`do Effects.Ask` when the operation belongs to a module. A call uses the
+newest available instance of the interface that declares the operation.
 
-A handler has clauses for operation calls and for the value returned
-by its computation. If there is no return clause, the handler returns
-the value unchanged. The handler forwards an operation if it has no
-clause for the operation's label. If it has clauses for the label and
-all their argument patterns fail, evaluation raises a match error.
-Operations in a handler's clause run in the enclosing context.
+A handler installs one instance of each interface it handles and
+covers every operation of each installed interface. Operations from
+other interfaces are forwarded. When a handler owns an operation and
+all its argument patterns fail, evaluation raises a match error.
+Operation and return clauses run in the enclosing context. The default
+return clause returns the value and preserves any effects it requires.
 An operation clause can bind a resumption `k`. Call `k` with the result
 of the operation to continue the computation.
 A clause may call `k` several times. A clause such as
 `case <Stop> -> 0` discards the resumption.
 
 ```links
+effect Choice { Choose : () => Bool; }
+
 handle(if (do Choose) 1 else 2) {
   case <Choose => k> -> k(true) ++ k(false)
   case n -> [n]
@@ -409,30 +423,33 @@ handle(if (do Choose) 1 else 2) {
 ```
 
 This returns `[1, 2]`. In a deep handler, written `handle`, a
-resumption reinstalls the handler and has the handler's result type
-and output effects. In a shallow handler, written `shallowhandle`,
-the resumption continues the computation without reinstalling the
-handler and has the input computation's result type and effects.
-Here the shallow handler supplies `20` for the first `Next` and
-the enclosing handler supplies `22` for the second. The result
-is `42`.
+resumption reinstalls the handler and returns the handler's result.
+In a shallow handler, written `shallowhandle`, a resumption continues
+the computation and returns the computation's result. It requires a
+new handler for the same interfaces.
 
 ```links
-handle(
-  shallowhandle(do Next + do Next) {
-    case <Next => k> -> k(20)
-  }
-) {
-  case <Next => k> -> k(22)
+effect Counter { Next : () => Int; }
+
+shallowhandle(do Next + do Next) {
+  case <Next => k> ->
+    handle(k(20)) { case <Next => next> -> next(22) }
 }
 ```
 
+This returns `42`.
+
 A parameterised deep handler takes initial values after the computation.
-Each call to `k` supplies the operation result followed by the next
-values of the parameters. Here `Get` returns the current state and
-`Put` changes it.
+The initial values must be absolute. Each call to `k` supplies the
+operation result followed by the next values of the parameters.
+Here `Get` returns the current state and `Put` changes it.
 
 ```links
+effect State(a::Abs) {
+  Get : () => a;
+  Put : (a) => ();
+}
+
 handle({
   var n = do Get;
   do Put(n + 2);
@@ -446,22 +463,24 @@ handle({
 This returns `42`.
 
 An operation can have a polymorphic signature. In this example,
-`Fail` can return any type `a`, so `pick` can use it at both `Bool`
+`Fail` can return any absolute type `a`, so `pick` can use it at both `Bool`
 and `Int`. The handler turns failure into `Nothing`.
 
 ```links
-sig attempt : (() {Fail:forall a. () => a | e}~> b) {Fail{_} | e}~> Maybe(b)
+effect Failure { Fail : forall a::Abs. () => a; }
+
+sig attempt : forall b::Abs. (<Failure> (() -> b)) -> Maybe(b)
 fun attempt(action) {
   handle(action()) {
-    case <Fail> : (forall a. () => a) -> Nothing
+    case <Fail> -> Nothing
     case value -> Just(value)
   }
 }
 
-sig pick : () {Fail:forall a. () => a}~> Int
+sig pick : [Failure] (() -> Int)
 fun pick() { if (do Fail) 42 else do Fail }
 
-(attempt(fun() { 42 }), attempt(pick))
+(attempt(fun() { 42 }), attempt(fun() { pick() }))
 ```
 
 This returns `(Just(42), Nothing)`. See the

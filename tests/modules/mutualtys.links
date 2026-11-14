@@ -1,9 +1,9 @@
 module T {
   mutual {
-    typename A = B;
-    typename B = A;
+    typename A = (| Stop | Next:B |);
+    typename B = List A;
   }
 }
 
 open T;
-()
+Next([Stop]) : A

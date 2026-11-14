@@ -31,7 +31,9 @@ fun stateExamplesEquals((x,xs),(y,ys)) {
   x == y && xs == ys
 }
 
-var stateExamplesToString = pairToString(intToString, listToString(intToString));
+sig stateExamplesToString : [] (((Int, List Int)) -> String)
+var stateExamplesToString =
+  fun(pair) { pairToString(intToString, listToString(intToString))(pair) };
 
 import Shallow_state;
 fun shallow_state() {
@@ -70,12 +72,14 @@ fun light_switch() {
 
 # Satisfiability and parsing
 import Sat;
+sig sat : [wild] (() -> ())
 fun sat() {
   assert((==), [true, true], Sat.unitTest(), listToString(boolToString), "Sat")
 }
 
 # Pi estimation
 import Pi;
+sig pi : [wild] (() -> ())
 fun pi() {
   assert((==), true, all(fun(pi) { pi > 3.0 && pi < 4.0 }, Pi.unitTest()), boolToString, "Pi")
 }
@@ -87,8 +91,9 @@ fun delim() {
 }
 
 # Test runner
+sig runTests : [wild] (() -> ())
 fun runTests() {
-   var tests = [ shallow_state
+   var tests : List ([wild] (() -> ())) = [ shallow_state
                , deep_state
                , deep_pipes
                , exceptions

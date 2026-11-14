@@ -1,17 +1,19 @@
+sig assert : [wild] ((Bool, String) -> ())
 fun assert(ok, msg) {
   if (not(ok)) debug("assertion failed: " ^^ msg) else ()
 }
 
-sig ignore : (a) -> ()
+sig ignore : [] ((a) -> ())
 fun ignore (_) { () }
 
+sig println : [wild] ((String) -> ())
 fun println(msg) {
   print(msg ^^ "\n")
 }
 
 # Don't use a for comprehension to define concatMap, as
 # for comprehensions are desugared into concatMap!
-unsafe sig concatMap : ((a) -b-> List c, List a) -b-> List c
+sig concatMap : [] (((a) -> List c, List a) -> List c)
 fun concatMap(f, l) {
   switch (l) {
     case [] -> []
@@ -19,7 +21,7 @@ fun concatMap(f, l) {
   }
 }
 
-unsafe sig map : ((a) -b-> c, List a) -b-> List c
+sig map : [] (((a) -> c, List a) -> List c)
 fun map(f, l) {
   switch (l) {
     case []     -> []
@@ -39,7 +41,7 @@ fun iter(f, xs) {
 }
 
 # TBD: rename this 'sortOn' to follow Haskell usage?
-sig sortBy : ((a) ~b~> c, List a) ~b~> List a
+sig sortBy : [] (((a) -> c, List a) -> List a)
 fun sortBy (f, l) {
   switch (l) {
     case [] -> []
@@ -51,7 +53,7 @@ fun sortBy (f, l) {
   }
 }
 
-unsafe sig sortByBase : ((a) -b-> (| _::Base), List a) -b-> List a
+sig sortByBase : [] (((a) -> (| _::Base), List a) -> List a)
 fun sortByBase(f, l) {
   switch (l) {
     case [] -> []
@@ -154,7 +156,7 @@ fun unzip(l) {
   }
 }
 
-sig zip : (List a, List b) ~> List (a, b)
+sig zip : [] ((List a, List b) -> List (a, b))
 fun zip(l, r) {
   switch ((l, r)) {
     case ([], []) -> []
@@ -174,7 +176,7 @@ fun flip(f) {
   fun(x,y) { f(y,x) }
 }
 
-sig curry : ((a, b) -d-> c) -> (a) -> (b) -d-> c
+sig curry : [] (((a, b) -> c) -> (a) -> (b) -> c)
 fun curry(f) {
   fun (x)(y) { f(x,y) }
 }
@@ -214,7 +216,7 @@ fun mapi(f, xs) {
   mi(0, xs)
 }
 
-sig substAt : (List a, Int, a) ~> List a
+sig substAt : [] ((List a, Int, a) -> List a)
 fun substAt(xs, i, y) {
   switch (xs) {
     case [] -> []
@@ -255,7 +257,7 @@ fun join(glue,list) {
 # elemBy :: ((a) -> (a) -> Bool) -> (a) -> ([a]) -> Bool
 # notElemBy :: ((a) -> (a) -> Bool) -> (a) -> ([a]) -> Bool
 # span :: ((a) -> Bool) -> ([a]) -> ([a],[a])
-sig span : ((a) ~b~> Bool, List a) ~b~> (List a, List a)
+sig span : [] (((a) -> Bool, List a) -> (List a, List a))
 fun span(p, xs) {
   fun go(acc, xs, p) {
     switch(xs) {
@@ -272,12 +274,12 @@ fun span(p, xs) {
 }
 # splitAt :: Int -> ([a]) -> ([a],[a])
 
-sig takeWhile : ((a) ~b~> Bool, List a) ~b~> List a
+sig takeWhile : [] (((a) -> Bool, List a) -> List a)
 fun takeWhile(pred, list) {
   first(span(pred, list))
 }
 
-sig dropWhile : ((a) ~b~> Bool, List a) ~b~> List a
+sig dropWhile : [] (((a) -> Bool, List a) -> List a)
 fun dropWhile(pred, list) {
   second(span(pred, list))
 }
@@ -299,12 +301,12 @@ fun dropWhile(pred, list) {
 #   else 0
 # }
 
-sig abs : (Int) -> Int
+sig abs : [] ((Int) -> Int)
 fun abs(i) {
   if (i < 0) -i else i
 }
 
-sig init : (List a) ~> List a
+sig init : [] ((List a) -> List a)
 fun init(list) {
   switch (list) {
     case [y] -> []
@@ -314,7 +316,7 @@ fun init(list) {
 
 fun curtail(list) { init(list) }
 
-sig last : (List a) ~> a
+sig last : [] ((List a) -> a)
 fun last(list) {
   switch (list) {
     case [x] -> x
@@ -330,12 +332,12 @@ fun intercalate(bone, rushes) {
   }
 }
 
-sig unlines : (List String) ~> String
+sig unlines : [] ((List String) -> String)
 fun unlines(ws) {
   implode(intercalate(explode("\n"), map(explode, ws)))
 }
 
-sig unwords : (List String) ~> String
+sig unwords : [] ((List String) -> String)
 fun unwords(ws) {
   implode(intercalate(explode(" "), map(explode, ws)))
 }
@@ -369,7 +371,7 @@ fun unwords(ws) {
 # Option types
 typename Maybe (a) = (|Nothing | Just:a|);
 
-sig isJust : (Maybe (a)) -> Bool
+sig isJust : [] ((Maybe (a)) -> Bool)
 fun isJust(x) {
   switch (x) {
     case Just (x) -> true
@@ -377,7 +379,7 @@ fun isJust(x) {
   }
 }
 
-sig search : ((a) ~b~> Bool, List a) ~b~> Maybe (a)
+sig search : [] (((a) -> Bool, List a) -> Maybe (a))
 fun search(p,l) {
   switch (l) {
     case [] -> Nothing
@@ -386,7 +388,7 @@ fun search(p,l) {
   }
 }
 
-sig find : ((a) ~b~> Bool, List a) ~b~> a
+sig find : [] (((a) -> Bool, List a) -> a)
 fun find(p,l) {
   switch (l) {
     case [] -> error("Not_found")
@@ -395,7 +397,7 @@ fun find(p,l) {
   }
 }
 
-sig fromJust : (Maybe (a)) ~> a
+sig fromJust : [] ((Maybe (a)) -> a)
 fun fromJust(x) {
   switch (x) {
     case Just (x) -> x
@@ -403,7 +405,7 @@ fun fromJust(x) {
   }
 }
 
-sig fromMaybe : (Maybe (a), a) -> a
+sig fromMaybe : [] ((Maybe (a), a) -> a)
 fun fromMaybe(x, y) {
   switch (x) {
     case Just (x) -> x
@@ -414,7 +416,7 @@ fun fromMaybe(x, y) {
 
 # FIXME: for some reason placing this further up the file where it should be
 # leads to an error
-sig empty : (List a) -> Bool
+sig empty : [] ((List a) -> Bool)
 fun empty(l) {
   switch (l) {
     case [] -> true
@@ -422,7 +424,7 @@ fun empty(l) {
   }
 }
 
-unsafe sig sum : (List Int) -> Int
+sig sum : [] ((List Int) -> Int)
 fun sum(ns) {
   switch (ns) {
     case [] -> 0
@@ -430,7 +432,7 @@ fun sum(ns) {
   }
 }
 
-unsafe sig sumF : (List Float) -> Float
+sig sumF : [] ((List Float) -> Float)
 fun sumF(ns) {
   switch (ns) {
     case [] -> 0.0
@@ -464,7 +466,7 @@ fun maximum(a,b) {
   else { b }
 }
 
-unsafe sig max_list : (List Int) -> Int
+sig max_list : [] ((List Int) -> Int)
 fun max_list(ns) {
   switch (ns) {
     case [] -> min_int
@@ -472,7 +474,7 @@ fun max_list(ns) {
  }
 }
 
-unsafe sig maxF_list : (List Float) -> Float
+sig maxF_list : [] ((List Float) -> Float)
 fun maxF_list(ns) {
   switch (ns) {
     case [] -> neg_infinity
@@ -480,7 +482,7 @@ fun maxF_list(ns) {
   }
 }
 
-unsafe sig min_list : (List Int) -> Int
+sig min_list : [] ((List Int) -> Int)
 fun min_list(ns) {
   switch (ns) {
     case [] -> max_int
@@ -488,7 +490,7 @@ fun min_list(ns) {
   }
 }
 
-unsafe sig minF_list : (List Float) -> Float
+sig minF_list : [] ((List Float) -> Float)
 fun minF_list(ns) {
   switch (ns) {
     case [] -> infinity
@@ -498,7 +500,7 @@ fun minF_list(ns) {
 
 # association lists
 # TBD: memassoc is an old LISP word. Perhaps a more modern name would fit better?
-sig memassoc : (a,List (a,b)) ~> Bool
+sig memassoc : [] ((a,List (a,b)) -> Bool)
 fun memassoc(x,l) {
   switch (l) {
     case []    -> false
@@ -506,7 +508,7 @@ fun memassoc(x,l) {
   }
 }
 
-sig lookup : (a,List (a,b)) ~> Maybe (b)
+sig lookup : [] ((a,List (a,b)) -> Maybe (b))
 fun lookup(x,l) {
   switch (l) {
     case [] -> Nothing
@@ -515,7 +517,7 @@ fun lookup(x,l) {
   }
 }
 
-sig assoc : (String,List (String,b)) ~> b
+sig assoc : [] ((String,List (String,b)) -> b)
 fun assoc(x,l) {
   switch (l) {
     case []    -> error("Not found " ^^ x)
@@ -524,7 +526,7 @@ fun assoc(x,l) {
   }
 }
 
-sig assocDefault : (String,List (String,b),b) ~> b
+sig assocDefault : [] ((String,List (String,b),b) -> b)
 fun assocDefault(x,l,d) {
   switch (l) {
     case []    -> d
@@ -533,7 +535,7 @@ fun assocDefault(x,l,d) {
   }
 }
 
-sig removeAssoc : (a,List (a,b)) ~> List (a,b)
+sig removeAssoc : [] ((a,List (a,b)) -> List (a,b))
 fun removeAssoc(x,l) {
   switch (l) {
     case [] -> []
@@ -542,7 +544,7 @@ fun removeAssoc(x,l) {
   }
 }
 
-sig assocAll : (String,List (String,b)) ~> List b
+sig assocAll : [] ((String,List (String,b)) -> List b)
 fun assocAll(x,l) {
   switch (l) {
     case []    -> []
@@ -553,23 +555,21 @@ fun assocAll(x,l) {
   }
 }
 
-sig isInt : (String) -> Bool
+sig isInt : [] ((String) -> Bool)
 fun isInt (x) { x =~ /-?[0-9]+$/ }
 
-sig isFloat : (String) -> Bool
+sig isFloat : [] ((String) -> Bool)
 fun isFloat (x) { x =~ /-?[0-9]+(\.[0-9]+)?$/ }
 
 fun dedup(l) {
-  # an unsafe local definition of elem, only for use within dedup!
-  # (ensures dedup is tame, while keeping the global def of elem wild)
-  unsafe sig elem : (a,List a) -b-> Bool
+  sig elem : (a,List a) -> Bool
   fun elem(x, l) {
     switch (l) {
       case [] -> false
       case hd::tl -> x == hd || x `elem` tl
     }
   }
-  unsafe sig aux : (List a,List a) -> List a
+  sig aux : (List a,List a) -> List a
   fun aux(vl, rl) {
     switch (rl) {
       case [] -> []
@@ -583,26 +583,26 @@ fun dedup(l) {
   aux([]:List a, l)
 }
 
-sig concatMapKey : ((a) -b-> List c, List (a,List d)) -b-> List c
+sig concatMapKey : [] (((a) -> List c, List (a,List d)) -> List c)
 fun concatMapKey(f, l) {
   for (x <- l) f(x.1)
 }
 
 # XXX: I believe the arguments are in the wrong order, but see sortBy
-sig groupBy : ((a) -b-> c, List a) -b-> List (c, List a)
+sig groupBy : [] (((a) -> c, List a) -> List (c, List a))
 fun groupBy(f, l) {
   var is = dedup(map(f, l));
   for (i <- is) [(i, filter(fun (x) { f(x) == i }, l))]
 }
 
-sig groupByMap : ((a) -b-> c, List (d,List a)) -b-> List ((c,d), List a)
+sig groupByMap : [] (((a) -> c, List (d,List a)) -> List ((c,d), List a))
 fun groupByMap(f, xs) {
   for (x <- xs) 
     for (k <- dedup(map(f,x.2))) 
       [((k,x.1), filter(fun (v) { f(v) == k }, x.2))]
 }
 
-unsafe sig lookupG : (a,List (a,List b)) -> List b
+sig lookupG : [] ((a,List (a,List b)) -> List b)
 fun lookupG(x,l) {
   switch (l) {
     case [] -> []
@@ -611,35 +611,35 @@ fun lookupG(x,l) {
   }
 }
 
-sig aggBy : (List (a, List b), (List b) -c-> d) -c-> List (a, d)
+sig aggBy : [] ((List (a, List b), (List b) -> d) -> List (a, d))
 fun aggBy(q, agg) {
   concatMapKey(fun (k) {
     [(k, agg(lookupG(k, q)))]
     }, q)
 }
 
-typename State (d,a) = (d) {}~> (a,d);
+typename State (d,a) = [] ((d) -> (a,d));
 
-sig $ : ((a) -b-> c, a) -b-> c
+sig $ : [] (((a) -> c, a) -> c)
 op f $ x { f(x) }
 
 # state monad
-sig runState : (State (d,a), d) {}~> (a,d)
+sig runState : [] ((State (d,a), d) -> (a,d))
 fun runState(s, i) { s(i) }
 
 infixl 1 >>=;
-sig >>= : (State (d,a), (a) {}~> State(d,b)) -> State (d,b)
+sig >>= : [] ((State (d,a), [] ((a) -> State(d,b))) -> State (d,b))
 op x >>= f {
    (fun (s1) { var (v,s2) = x (s1); runState (f (v), s2) })
 }
 
-sig return : (a) -> State (b,a)
+sig return : [] ((a::Abs) -> State (b,a))
 fun return(a) { fun (s) { (a,s) } }
 
-sig fmap : ((a) {}~> b, State (c,a)) -> State (c,b)
-fun fmap(f, x) { x >>= return `compose` f }
+sig fmap : [] (([] ((a) -> b::Abs), State (c,a)) -> State (c,b))
+fun fmap(f, x) { x >>= (fun (v) { return(f(v)) }) }
 
-sig sequence : (List State(a,b)) ~> State(a,List b)
+sig sequence : [] ((List State(a,b::Abs)) -> State(a,List b))
 fun sequence(xs) {
   switch (xs) {
     case [] -> return([])
@@ -649,10 +649,10 @@ fun sequence(xs) {
   }
 }
 
-sig pureE : (a) -> Maybe (a)
+sig pureE : [] ((a) -> Maybe (a))
 fun pureE (x) { Just (x) }
 
-sig applyE : (Maybe ((a) -e-> b), Maybe (a)) -e-> Maybe (b)
+sig applyE : [] ((Maybe ((a) -> b), Maybe (a)) -> Maybe (b))
 fun applyE (f, x) {
   switch ((f, x)) {
     case (Just (f), Just (x)) -> Just (f(x))
@@ -663,7 +663,7 @@ fun applyE (f, x) {
 typename Either (a,b) = (|Left:a | Right : b|);
 
 ####
-sig lf : ((a) -e-> b) -> (a) -e-@ b
+sig lf : [] (((a) -> b) -> (a) -@ b)
 fun lf(f) {
   linfun (x) {
     f(x)
@@ -671,13 +671,12 @@ fun lf(f) {
 }
 
 ### Handler stuff
-typename Comp(a, e::Eff) = () ~e~> a;
 typename Zero = (| |);
 
 # Composition operators
 # Data flows from right to left (or inside-out)
 infixr 9 -<-;
-sig -<- : ((a) -e-> b, (c) -e-> a) -> (c) -e-> b
+sig -<- : [] (((a) -> b, (c) -> a) -> (c) -> b)
 op f -<- g {
   fun(x) { f(g(x)) }
 }
@@ -688,26 +687,9 @@ op f ->- g {
   g -<- f
 }
 
-# Effect row generalisation
-sig gen0 : (Comp(a, { })) -> Comp(a, { |e})
-fun gen0(f) {
-  (f : (Comp(a, { |e})) <- (Comp(a, { })))
-}
-
-sig gen1 : ((a) {}~> b) -> ((a) { |%}~> b)
-fun gen1(f) {
-  (f : ((a) { |%}~> b) <- ((a) {}~> b))
-}
-
-sig gen2 : ((a,b) {}~> c) -> ((a,b) { |%}~> c)
-fun gen2(f) {
-  (f : ((a,b) { |%}~> c) <- ((a,b) {}~> c))
-}
-
-
 ## Utility functions
 # Returns Just the index of x in xs if x is an element in xs, otherwise Nothing.
-sig elemIndex : (a, List a) ~> Maybe(Int)
+sig elemIndex : [] ((a, List a) -> Maybe(Int))
 fun elemIndex(x, xs) {
   var n = fold_left(fun(acc, y) {
     switch (acc) {
@@ -721,7 +703,7 @@ fun elemIndex(x, xs) {
 
 ####
 
-sig partition : ((a) ~b~> Bool, List a) ~b~> (List a, List a)
+sig partition : [] (((a) -> Bool, List a) -> (List a, List a))
 fun partition(pred, xs) {
   fun go(ayes, noes, xs) {
     switch(xs) {
@@ -737,14 +719,14 @@ fun partition(pred, xs) {
   go([], [], xs)
 }
 
-sig groupByFlat : ((a) -b-> c, List a) -b-> List (c, List a)
+sig groupByFlat : [] (((a) -> c, List a) -> List (c, List a))
 fun groupByFlat(project, ts) {
   for(t <- ts)
     [(project(t),for (u <- ts) where (project(t) == project(u)) [u])]
 }
 
 ####
-sig assertEq : (a, a) ~> ()
+sig assertEq : [wild] ((a, a) -> ())
 fun assertEq (actual, expected) {
   if (expected == actual)
       ()
@@ -759,35 +741,35 @@ fun assertEq (actual, expected) {
 }
 
 # Operations on (ASCII) characters
-sig isLower : (Char) -> Bool
+sig isLower : [] ((Char) -> Bool)
 fun isLower(ch) {
   var c = ord(ch);
   (97 <= c && c <= 122) # ord('a') = 97, ord('z') = 122
 }
 
-sig isUpper : (Char) -> Bool
+sig isUpper : [] ((Char) -> Bool)
 fun isUpper(ch) {
   var c = ord(ch);
   (65 <= c && c <= 90) # ord('A') = 65, ord('Z') = 90
 }
 
-sig isAlpha : (Char) -> Bool
+sig isAlpha : [] ((Char) -> Bool)
 fun isAlpha(ch) {
   isLower(ch) || isUpper(ch)
 }
 
-sig isDigit : (Char) -> Bool
+sig isDigit : [] ((Char) -> Bool)
 fun isDigit(ch) {
   var c = ord(ch);
   (48 <= c && c <= 57)
 }
 
-sig isAlnum : (Char) -> Bool
+sig isAlnum : [] ((Char) -> Bool)
 fun isAlnum(ch) {
  isAlpha(ch) || isDigit(ch)
 }
 
-sig isXDigit : (Char) -> Bool
+sig isXDigit : [] ((Char) -> Bool)
 fun isXDigit(ch) {
   isDigit(ch)
   || ({ var c = ord(ch);
@@ -795,14 +777,14 @@ fun isXDigit(ch) {
         || (97 <= c && c <= 102) }) # ord('f') = 102
 }
 
-sig isBlank : (Char) -> Bool
+sig isBlank : [] ((Char) -> Bool)
 fun isBlank(ch) {
   var c = ord(ch);
   c == 32 || c == 9 # ord(' ') = 32, ord('\t') = 9
 }
 
 # Implements the behaviour of Char.uppercase_ascii in OCaml.
-sig toUpper : (Char) -> Char
+sig toUpper : [] ((Char) -> Char)
 fun toUpper(ch) {
   if (isLower(ch)) {
     chr(ord(ch) - 32)
@@ -810,7 +792,7 @@ fun toUpper(ch) {
 }
 
 # Implements the behaviour of Char.lowercase_ascii in OCaml.
-sig toLower : (Char) -> Char
+sig toLower : [] ((Char) -> Char)
 fun toLower(ch) {
   if (isUpper(ch)) {
     chr(ord(ch) + 32)
@@ -821,55 +803,55 @@ fun toLower(ch) {
 
 # UTC Time Accessors
 
-sig utcYear : (DateTime) -> Int
+sig utcYear : [] ((DateTime) -> Int)
 fun utcYear(dt) { dateYear(dt, 0) }
 
-sig utcDay : (DateTime) -> Int
+sig utcDay : [] ((DateTime) -> Int)
 fun utcDay(dt) { dateDay(dt, 0) }
 
-sig utcMonth : (DateTime) -> Int
+sig utcMonth : [] ((DateTime) -> Int)
 fun utcMonth(dt) { dateMonth(dt, 0) }
 
-sig utcHours : (DateTime) -> Int
+sig utcHours : [] ((DateTime) -> Int)
 fun utcHours(dt) { dateHours(dt, 0) }
 
-sig utcMinutes : (DateTime) -> Int
+sig utcMinutes : [] ((DateTime) -> Int)
 fun utcMinutes(dt) { dateMinutes(dt) }
 
-sig utcSeconds : (DateTime) -> Int
+sig utcSeconds : [] ((DateTime) -> Int)
 fun utcSeconds(dt) { dateSeconds(dt) }
 
-sig utcMilliseconds : (DateTime) -> Int
+sig utcMilliseconds : [] ((DateTime) -> Int)
 fun utcMilliseconds(dt) { dateMilliseconds(dt) }
 
 # Local time accessors (Note that these are impure since we use utcOffset() to
 # get the currently-set UTC offset to convert from UTC to local time)
 
-sig localYear : (DateTime) ~> Int
+sig localYear : [wild] ((DateTime) -> Int)
 fun localYear(dt) { dateYear(dt, utcOffset()) }
 
-sig localDay : (DateTime) ~> Int
+sig localDay : [wild] ((DateTime) -> Int)
 fun localDay(dt) { dateDay(dt, utcOffset()) }
 
-sig localMonth : (DateTime) ~> Int
+sig localMonth : [wild] ((DateTime) -> Int)
 fun localMonth(dt) { dateMonth(dt, utcOffset()) }
 
-sig localHours : (DateTime) ~> Int
+sig localHours : [wild] ((DateTime) -> Int)
 fun localHours(dt) { dateHours(dt, utcOffset()) }
 
-sig localMinutes : (DateTime) ~> Int
+sig localMinutes : [] ((DateTime) -> Int)
 fun localMinutes(dt) { dateMinutes(dt) }
 
-sig localSeconds : (DateTime) ~> Int
+sig localSeconds : [] ((DateTime) -> Int)
 fun localSeconds(dt) { dateSeconds(dt) }
 
-sig localMilliseconds : (DateTime) -> Int
+sig localMilliseconds : [] ((DateTime) -> Int)
 fun localMilliseconds(dt) { dateMilliseconds(dt) }
 
 # Default serialisation of DTs at the moment is in local time,
 # so `showLocal` is just a specialisation of the default `show`
 # function.
-sig showLocal : (DateTime) ~> String
+sig showLocal : [wild] ((DateTime) -> String)
 fun showLocal(dt) {
     show(dt)
 }

@@ -1,10 +1,11 @@
-effectname A = { E: ( () -A-> () ) => () } ;
+effect A { E : ([A] (() -> Int)) => Int; }
 
-sig f : () -A-> ()
-fun f () {}
+sig f : [A] (() -> Int)
+fun f() { 42 }
 
-sig g : () -A-> ()
-fun g () { do E(f) }
+sig g : [A] (() -> Int)
+fun g() { do E(f) }
 
-sig h : () -A-> ()
-fun h () { do E(g) }
+handle(g()) {
+  case <E(run) => k> -> k(handle(run()) { case <E(_) => next> -> next(0) })
+}

@@ -58,27 +58,27 @@ stdout : @fun : .*A:Bool.*B:Bool.* -> Bool
 
 Recursive variant types [1]
 fun (x) { switch (x) { case A(a) -> a case y -> x } }
-stdout : @fun : \(mu a\.\(\|A:a\|b\|\)\) \-> mu a\.\(\|A:a\|b\|\)
+stdout : fun : ((|A:mu a.(|A:a|b|)|b|)) -> mu a.(|A:a|b|)
 
 Recursive variant types [2]
 fun increment(x) { switch (x) { case Zero -> Succ (Zero) case Succ (n) -> Succ ((increment(n))) }} increment
-stdout : @fun : \(mu a\.\(\|Succ:a\|Zero\|\)\) \~> \(\|Zero\|\(mu c\.Succ:\(\|Zero\|c\|\)\|_::Any\)\|\)
+stdout : fun : [] (((|Succ:mu a.(|Succ:a|Zero|)|Zero|)) -> (|Succ:(|Zero|(mu b.Succ:(|Zero|b|)|c::Any)|)|Zero|c::Any|))
 
 Recursive variant types [3]
 fun rev(x, r) { switch (x) { case Empty -> r case Cons(a, b) -> rev(b, Cons(a, r)) }} rev
-stdout : @fun : \(mu a\.\(\|Cons:\(b::Any, a\)\|Empty\|\), mu c\.\(\|Cons:\(b::Any, c\)\|d::Any\|\)\) \~> \(\|Cons:\(b::Any, mu f\.\(\|Cons:\(b::Any, f\)\|d::Any\|\)\)\|d::Any\|\)
+stdout : fun : [] (((|Cons:(a::Any, mu b.(|Cons:(a::Any, b)|Empty|))|Empty|), mu c.(|Cons:(a::Any, c)|d::Any|)) -> mu c.(|Cons:(a::Any, c)|d::Any|))
 
 Recursive variant types [4]
 fun increment(x) { switch (x) { case Zero -> Succ (Zero) case Succ (n) -> Succ (increment(n))}} fun (x) {switch (increment(x)) { case Foo -> 0 case Zero -> 1 case Succ (n) -> 2 }}
-stdout : @fun : \(mu a\.\(\|Succ:a\|Zero\|\)\) \~> Int
+stdout : fun : ((|Succ:mu a.(|Succ:a|Zero|)|Zero|)) -> Int
 
 Recursive variant types [5]
 fun increment(x) { switch (x) { case Zero -> Succ (Zero) case Succ (n) -> Succ (increment(n))}} increment(increment(Zero))
-stdout : @Succ\(Succ\(Zero\)\) : \(\|Zero\|\(mu a\.Succ:\(\|Zero\|a\|\)\|_::Any\)\|\)
+stdout : Succ(Succ(Zero)) : (|Succ:(|Zero|(mu a.Succ:(|Zero|a|)|b::Any)|)|Zero|b::Any|)
 
 Rows preserved across functions
 fun f(x) { switch (x) { case Foo -> Bar case s -> s } } f
-stdout : @fun : \(\(\|Bar\|Foo\|a::Any\|\)\) \-> \(\|Bar\|Foo\|a::Any\|\)
+stdout : fun : [] (((|Bar|Foo|a::Any|)) -> (|Bar|Foo|a::Any|))
 
 Nullary variants with cases
 switch (None) { case None -> None case Some (x) -> Some (x) }
@@ -90,7 +90,7 @@ stdout : @\[C *\(A\), C *\(B\)\] : .*
 
 Type annotations
 fun increment(x) {(Succ (x)):((|Succ:(mu a . (|Zero | Succ:a|))|))} increment
-stdout : @fun : \(mu a\.\(\|Succ:a\|Zero\|\)\) \-> \(\|Succ:mu c\.\(\|Succ:c\|Zero\|\)\|\)
+stdout : fun : [] (((|Succ:mu a.(|Succ:a|Zero|)|Zero|)) -> (|Succ:mu a.(|Succ:a|Zero|)|))
 
 Closure at top-level (issue #422) [1]
 (switch(Foo(id)) { case Foo(id) -> fun(x) { id(x) } })(2)

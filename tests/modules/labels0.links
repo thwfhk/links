@@ -4,7 +4,7 @@ module A {
 
 typename Foo = (| Bar: Int |);
 
-sig f : (A.Foo) ~> String
+sig f : (A.Foo) -> String
 fun f(x) {
   switch(x) {
     case Bar(y) -> y

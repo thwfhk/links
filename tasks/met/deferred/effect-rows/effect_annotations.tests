@@ -1,0 +1,11 @@
+Named effect presences can be shared across rows
+sig h : (() {Ask:() => Int,Other{p}|e}~> Int) {Ask{q},Other{p}|e}~> Int fun h(f) { handle(f()) { case <Ask => k> -> k(42) } } h
+stdout : fun : (() {Ask:() => Int,Other{a}|b}~> Int) {Ask{_},Other{a}|b}~> Int
+
+Flexible effect tail and presence variables
+fun(f : (() {Ask{%p},Tell{%}|%}-> Int)) { f() }
+stdout : fun : (() {Ask{a},Tell{b}|c}-> Int) {Ask{a},Tell{b}|c}-> Int
+
+The printer keeps an anonymous tail's effect kind
+fun() {} : () {|_::Eff}-> ()
+stdout : fun : () -_::Eff-> ()

@@ -176,7 +176,7 @@ let create_module_info_map program =
           @ get_binding_names bs
       | _ :: bs -> get_binding_names bs in (* Other binding types are uninteresting for this pass *)
 
-    (* Getting type names -- we're interested in typename/effectname decls *)
+    (* Collecting names declared by typename. *)
     let rec get_type_names = function
       | [] -> []
       | b :: bs ->

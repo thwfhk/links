@@ -49,10 +49,8 @@ open SugarConstructors.DummyPositions
   This function generates the code to extract the results.
   It roughly corresponds to [[qs]].
 *)
-let results :  Types.row ->
-  (Sugartypes.phrase list * Name.t list * Types.datatype list) -> Sugartypes.phrase =
-  fun eff (es, xs, ts) ->
-    (* let results_type = Types.make_tuple_type ts in *)
+let results (es, xs, ts) =
+    let empty = Types.make_empty_closed_row () in
     let rec results =
       function
         | ([], [], []) -> list ~ty:Types.unit_type [tuple []]
@@ -74,14 +72,14 @@ let results :  Types.row ->
                   | [p] -> [p]
                   | _ -> [tuple_pat qsb] in
               let a = Types.make_tuple_type [TypeUtils.pack_types ts] in
-              fun_lit ~args:[a, eff] dl_unl [ps] (tuple (q::qs)) in
+              fun_lit ~args:[a, empty] dl_unl [ps] (tuple (q::qs)) in
             let outer : Sugartypes.phrase =
               let a = Types.make_tuple_type (t :: ts) in
-                fun_lit ~args:[Types.make_tuple_type [t], eff]
+                fun_lit ~args:[Types.make_tuple_type [t], empty]
                         dl_unl [[qb]]
-                        (fn_appl "map" [(Type, qst); (Row, eff); (Type, a)] [inner; r]) in
+                        (fn_appl "map" [(Type, qst); (Type, a)] [inner; r]) in
             let a = Types.make_tuple_type (t :: ts) in
-            fn_appl "concatMap" [(Type, qt); (Row, eff); (Type, a)] [outer; e]
+            fn_appl "concatMap" [(Type, qt); (Type, a)] [outer; e]
         | _, _, _ -> assert false
     in
       results (es, xs, ts)
@@ -105,7 +103,8 @@ object (o : 'self_type)
           (fun (o, (es, ps, xs, ts)) (p, e) ->
              let (o, e, t) = o#phrase e in
              let (o, p) = o#pattern p in
-             let element_type = TypeUtils.element_type t in
+             let modality, _ = FrescoContext.prefix t in
+             let element_type = FrescoContext.carry modality (TypeUtils.element_type t) in
              let var = Utility.gensym ~prefix:"_for_" () in
              let xb = binder ~ty:element_type var in
              o, (e::es, with_dummy_pos (Pattern.As (xb, p))::ps,
@@ -119,7 +118,7 @@ object (o : 'self_type)
     ('self_type * Sugartypes.phrasenode * Types.datatype) =
     function
     | Iteration (generators, body, filter, sort) ->
-        let eff = o#lookup_effects in
+        let empty = Types.make_empty_closed_row () in
         let envs = o#backup_envs in
         let o, (es, ps, xs, ts) = o#qualifiers generators in
         let o, body, body_type = o#phrase body in
@@ -140,12 +139,12 @@ object (o : 'self_type)
 
         let arg_type = TypeUtils.pack_types ts in
 
-        let f : phrase = fun_lit ~args:[Types.make_tuple_type [arg_type], eff]
+        let f : phrase = fun_lit ~args:[Types.make_tuple_type [arg_type], empty]
                                  dl_unl [arg] body in
 
         let open PrimaryKind in
 
-        let results = results eff (es, xs, ts) in
+        let results = results (es, xs, ts) in
         let results =
           match sort, sort_type with
             | None, None -> results
@@ -153,14 +152,14 @@ object (o : 'self_type)
                let sort_by, sort_row =
                  "sortByBase", TypeUtils.extract_row sort_type in
                let g : phrase =
-                 fun_lit ~args:[Types.make_tuple_type [arg_type], eff]
+                 fun_lit ~args:[Types.make_tuple_type [arg_type], empty]
                    dl_unl [arg] sort in
-               fn_appl sort_by [(Type, arg_type); (Row, eff); (Row, sort_row)]
+               fn_appl sort_by [(Type, arg_type); (Row, sort_row)]
                  [g; results]
             | _, _ -> assert false in
 
         let e : phrasenode =
-          fn_appl_node "concatMap" [(Type, arg_type); (Row, eff); (Type, elem_type)]
+          fn_appl_node "concatMap" [(Type, arg_type); (Type, elem_type)]
                        [f; results] in
         let o = o#restore_envs envs in
         (o, e, body_type)

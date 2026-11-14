@@ -10,7 +10,7 @@ fun fold_left(p, u, l) {
 
 fun second(p)  { p.2 }
 
-sig elemIndex : (a, List a) ~> Maybe(Int)
+sig elemIndex : (a, List a) -> Maybe(Int)
 fun elemIndex(x, xs) {
   var n = fold_left(fun(acc, y) {
     switch (acc) {

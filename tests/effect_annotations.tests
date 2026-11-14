@@ -1,72 +1,72 @@
-Bare arrows have distinct open effect rows
+A curried function shares its ambient context
 sig f : () -> () -> () fun f()() {} f
-stdout : fun : forall a::Row,b::Row.() -a-> () -b-> ()
+stdout : fun : [] (() -> () -> ())
 args : --set=show_quantifiers=true
 
-Bare wild arrows have distinct open effect rows
-sig f : () ~> () ~> () fun f()() {} f
-stdout : fun : forall a::Row,b::Row.() ~a~> () ~b~> ()
-args : --set=show_quantifiers=true
+An ambient callback shares the context of its caller
+sig f : (() -> Int) -> Int fun f(g) { g() } f(fun() { 42 })
+stdout : 42 : Int
 
-A function cannot use an unrelated open effect row
-sig f : (() -> ()) -> () fun f(g) { g() } f
-stderr : @.*Type error: The function.*currently allowed effects.*
+A call with native permission
+sig say : [wild] ((String) -> ()) fun say(s) { print(s) } say("hello")
+stdout : @hello\s*\(\) : \(\)
+
+A pure function cannot use native permission
+sig say : [] ((String) -> ()) fun say(s) { print(s) } say("hello")
+stderr : @.*Type error: The modalities require different effect contexts.*
 exit : 1
 
-A handler shares an explicit effect tail with its input computation
-sig f : (() {E:()|e}~> ()) -> () {E{_}|e}~> () fun f(g) { fun() { handle(g()) { case <E => res> -> res(()) }}} f
-stdout : fun : (() {E:() => ()|a}~> ()) -> () {E{_}|a}~> ()
+A relative callback supplies its handled effect
+effect Reader { Ask : () => Int; } sig f : forall a::Abs. (<Reader> (() -> a)) -> a fun f(g) { handle(g()) { case <Ask => k> -> k(41) } } f(fun() { do Ask + 1 })
+stdout : 42 : Int
 
-Anonymous effect tails are independent in a handler signature
-sig f : (() {E:()|_}~> ()) -> () { |_}~> () fun f(g) { fun() { handle(g()) { case <E => res> -> res(()) }}} f
-stderr : @.*Type error: The non-recursive function definition has return type.*
+An ambient callback cannot run in a handler's extended context
+effect Reader { Ask : () => Int; } sig f : (() -> Int) -> Int fun f(g) { handle(g()) { case <Ask => k> -> k(41) } }
+stderr : @.*Type error: The modalities require different effect contexts.*
 exit : 1
 
-An operation omitted from a row is unavailable
-sig apply : (() {Ask:Int|e}-> Int) -e-> Int fun apply(f) { f() } apply
-stderr : @.*Type error: The function.*currently allowed effects.*
+A fixed operation requirement needs the interface in scope
+effect Reader { Ask : () => Int; } sig apply : ([Reader] (() -> Int)) -> Int fun apply(f) { f() }
+stderr : @.*Type error: The modalities require different effect contexts.*
 exit : 1
 
-Named effect presences can be shared across rows
-sig h : (() {Ask:() => Int,Other{p}|e}~> Int) {Ask{q},Other{p}|e}~> Int fun h(f) { handle(f()) { case <Ask => k> -> k(42) } } h
-stdout : fun : (() {Ask:() => Int,Other{a}|b}~> Int) {Ask{_},Other{a}|b}~> Int
-
-Flexible effect tail and presence variables
-fun(f : (() {Ask{%p},Tell{%}|%}-> Int)) { f() }
-stdout : fun : (() {Ask{a},Tell{b}|c}-> Int) {Ask{a},Tell{b}|c}-> Int
-
-The printer keeps an anonymous tail's effect kind
-fun() {} : () {|_::Eff}-> ()
-stdout : fun : () -_::Eff-> ()
+A callback may use the surrounding context after adding an interface
+effect Reader { Ask : () => Int; } effect Extra { Other : () => Int; } sig h : (<Reader> (() -> Int)) -> Int fun h(f) { handle(f()) { case <Ask => k> -> k(40) } } handle(h(fun() { do Ask + do Other })) { case <Other => k> -> k(2) }
+stdout : 42 : Int
 
 Braced record presence and absence
 fun(r : (x{:Int}, y{-}, z{p}|e)) { r.x }
 stdout : fun : ((x:Int,y-,z{_}|_)) -> Int
 
-Braced effect presence and absence
-fun() { do Ask } : () {Ask{:Int},Tell{-}|e}-> Int
-stdout : fun : () {Ask:() => Int,Tell-|_}-> Int
+Absolute interface context
+effect Reader { Ask : () => Int; } fun() { do Ask } : [Reader] (() -> Int)
+stdout : fun : [Reader] (() -> Int)
 
-An absent operation cannot be invoked
-fun() { do Tell } : () {Ask{:Int},Tell{-}|e}-> Int
-stderr : @.*Type error: The inferred type of the expression.*but it is annotated with type.*
+An operation without an active instance cannot be invoked
+effect Reader { Ask : () => Int; } effect Writer { Tell : () => Int; } fun() { do Tell } : [Reader] (() -> Int)
+stderr : @.*Operation Tell requires effect interface Writer.*
 exit : 1
 
-Polymorphic nullary operation shorthand
-sig f : () {Ask:forall a. a}-> Int fun f(){ do Ask + 0 } f
-stdout : fun : () {Ask:forall a.() => a}-> Int
+Polymorphic nullary operation
+effect Reader { Ask : forall a::Abs. () => a; } sig f : [Reader] (() -> Int) fun f(){ do Ask + 0 } f
+stdout : fun : [Reader] (() -> Int)
 
-Linear arrows can have open or closed wild rows
-(linfun(x) { print(x); x } : (String) ~@ String, linfun(x) { print(x); x } : (String) {}~@ String)
-stdout : (fun, fun) : ((String) ~@ String, (String) {}~@ String)
+Linear arrows can use native permission
+linfun(x) { print(x); x } : [wild] ((String) -@ String)
+stdout : fun : [wild] ((String) -@ String)
 
-Closed empty effects do not admit wild
-fun() { print("hello") } : () {}-> ()
-stderr : @.*Type error: The inferred type of the expression.*but it is annotated with type.*
+An empty context does not admit wild
+fun() { print("hello") } : [] (() -> ())
+stderr : @.*Type error: The modalities require different effect contexts.*
 exit : 1
 
-Dot syntax in effect rows is rejected
-fun() {} : () {Ask:Int|.}-> ()
+Old wild arrows are rejected
+fun() {} : () ~> ()
+stderr : @.*Parse error:.*
+exit : 1
+
+Old effect arrows are rejected
+fun() {} : () {Ask:Int}-> ()
 stderr : @.*Parse error:.*
 exit : 1
 
@@ -81,3 +81,104 @@ Removed effect sugar policy setting is unknown
 args : --set=effect_sugar_policy=open_default
 stdout : () : ()
 stderr : @.*Unknown setting 'effect_sugar_policy'.*
+
+A pure callback can run under an absolute requirement
+sig pureCall : ([] (() -> Int)) -> Int fun pureCall(action) { action() } pureCall(fun() { 42 })
+stdout : 42 : Int
+
+A pure callback cannot use an enclosing handler's operations
+effect Reader { Ask : () => Int; } sig pureCall : ([] (() -> Int)) -> Int fun pureCall(action) { action() } handle(pureCall(fun() { do Ask })) { case <Ask => k> -> k(42) }
+stderr : @.*Operation Ask requires effect interface Reader.*
+exit : 1
+
+A returned ambient function keeps its handled dependency
+effect Reader { Ask : () => Int; } var delayed = handle(fun() { do Ask }) { case <Ask => k> -> k(42) }; handle(delayed()) { case <Ask => k> -> k(42) }
+stdout : 42 : Int
+
+A returned ambient function requires the handled interface
+effect Reader { Ask : () => Int; } var delayed = handle(fun() { do Ask }) { case <Ask => k> -> k(42) }; delayed()
+stderr : @.*Type error: The modalities require different effect contexts.*
+exit : 1
+
+Transporting a callback through a handler cancels a mask
+effect Tick { Tick : () => (); } sig hold : (() -> Int) -> () -> Int fun hold(f) { handle({ do Tick; (f : <Tick |>(() -> Int)) }) { case <Tick => k> -> k(()) } } hold(fun() { 42 })()
+stdout : 42 : Int
+
+A callback cannot be invoked with a masked interface
+effect Tick { Tick : () => (); } sig hold : (() -> Int) -> Int fun hold(f) { handle({ do Tick; f() }) { case <Tick => k> -> k(()) } } hold(fun() { 42 })
+stderr : @.*Type error: The modalities require different effect contexts.*
+exit : 1
+
+A relative resumption needs a new handler
+effect Next { Next : () => Int; } shallowhandle(do Next + do Next) { case <Next => k> -> k(20) }
+stderr : @.*Type error: The modalities require different effect contexts.*
+exit : 1
+
+An operation cannot be checked under a newly supplied absolute annotation
+effect Reader { Ask : () => Int; } var bad = (do Ask : [Reader] Int); bad
+stderr : @.*Operation Ask requires effect interface Reader.*
+exit : 1
+
+A handler must cover each operation of its interface
+effect State(a::Abs) { Get : () => a; Put : (a) => (); } handle(handle({ do Put(true); do Get }) { case <Get => k> -> k(false) })(state <- 0) { case <Get => k> -> k(state, state) case <Put(n) => k> -> k((), n) }
+stderr : @.*Incomplete handler for State.*Put.*
+exit : 1
+
+A handler can cover two complete interfaces
+effect Reader { Ask : () => Int; } effect Choice { Choose : () => Bool; } handle(if (do Choose) do Ask else 0) { case <Choose => k> -> k(true) case <Ask => k> -> k(42) }
+stdout : 42 : Int
+
+An effectful global function needs a signature
+effect Reader { Ask : () => Int; } fun ask() { do Ask }
+stderr : @.*Operation Ask requires effect interface Reader.*
+exit : 1
+
+An inferred callback shares the enclosing handler's context
+effect Reader { Ask : () => Int; } fun apply(f, x) { f(x) } handle(apply(fun(x) { x + do Ask }, 1)) { case <Ask => k> -> k(41) }
+stdout : 42 : Int
+
+An annotated function still needs its interface when called
+effect Reader { Ask : () => Int; } sig ask : [Reader] (() -> Int) fun ask() { do Ask } ask()
+stderr : @.*Type error: The modalities require different effect contexts.*
+exit : 1
+
+An absolute result cannot be an ambient function
+effect Reader { Ask : () => Int; } sig withAsk : forall a::Abs. (<Reader> (() -> a)) -> a fun withAsk(action) { handle(action()) { case <Ask => k> -> k(42) } } withAsk(fun() { fun() { do Ask } })
+stderr : @.*Type argument .* must satisfy Abs.*
+exit : 1
+
+An absolute result cannot hold an ambient function in a record
+effect Reader { Ask : () => Int; } sig withAsk : forall a::Abs. (<Reader> (() -> a)) -> a fun withAsk(action) { handle(action()) { case <Ask => k> -> k(42) } } withAsk(fun() { (run=fun() { do Ask }) })
+stderr : @.*Type argument .* must satisfy Abs.*
+exit : 1
+
+An absolute function returned by a handler can run under a new handler
+effect Reader { Ask : () => Int; } sig withAsk : forall a::Abs. (<Reader> (() -> a)) -> a fun withAsk(action) { handle(action()) { case <Ask => k> -> k(42) } } var f = withAsk(fun() { (fun() { do Ask } : [Reader] (() -> Int)) }); handle(f()) { case <Ask => k> -> k(42) }
+stdout : 42 : Int
+
+A conditional between values can introduce a modality
+var f = (if (true) fun(x) { x } else fun(x) { x }) : [] ((Int) -> Int); f(42)
+stdout : 42 : Int
+
+An absolute operation payload cannot use an enclosing handler's operation
+effect Reader { Ask : () => Int; } effect Runner { Run : ([] ((Int) -> Int)) => Int; } handle(handle(do Run(fun(x) { x + do Ask })) { case <Run(f) => k> -> k(f(40)) }) { case <Ask => k> -> k(2) }
+stderr : @.*Operation Ask requires effect interface Reader.*
+exit : 1
+
+A higher-rank callback needs an annotation
+fun ident(x) { x } fun both(f) { (f(42), f(true)) } both(~ident)
+stderr : @.*Expected Int, got Bool.*
+exit : 1
+
+A higher-rank callback can use its argument at independently chosen types
+sig ident : forall a. [] ((a) -> a) fun ident(x) { x } fun both(f : (forall a. [] ((a) -> a))) { (f(42), f(true)) } both(~ident)
+stdout : (42, true) : (Int, Bool)
+
+An absolute list function retains the list's element type
+sig keepInts : [] ((List Int) -> List Int) fun keepInts(xs) { xs } keepInts([20, 22])
+stdout : [20, 22] : List Int
+
+A variant payload must match the declared type
+typename MaybeInt = (| Nothing | Just:Int |); Just(true) : MaybeInt
+stderr : @.*Expected Int, got Bool.*
+exit : 1

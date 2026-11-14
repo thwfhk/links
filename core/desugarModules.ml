@@ -635,6 +635,9 @@ let desugar_sentence : Sugartypes.sentence -> Sugartypes.sentence
   let result = visitor#sentence sentence in
   scope := visitor#get_scope; renamer := visitor#get_renamer; result
 
+let desugar_datatype datatype =
+  (desugar !renamer !scope)#datatype datatype
+
 module Untyped = struct
   open Transform.Untyped
 

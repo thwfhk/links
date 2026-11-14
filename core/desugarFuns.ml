@@ -54,10 +54,19 @@ open SugarConstructors.DummyPositions
 (* unwrap a curried function definition as
    a collection of nested functions
 *)
+let rec function_quantifiers t =
+  match FrescoTypes.head t with
+  | Types.Modal (_, body) -> function_quantifiers body
+  | Types.ForAll (qs, body) -> qs @ function_quantifiers body
+  | _ -> []
+
+let function_value name t =
+  if function_quantifiers t = [] then Var name
+  else FreezeVar name
+
 let unwrap_def (bndr, linearity, (tyvars, lam), location) =
   let f = Binder.to_name bndr in
   let ft = Binder.to_type bndr in
-  let rt = TypeUtils.return_type ft in
   let lam =
     let rec make_lam t funlit =
       match funlit with
@@ -65,9 +74,20 @@ let unwrap_def (bndr, linearity, (tyvars, lam), location) =
         | NormalFunlit (ps::pss, body) ->
           let g = gensym ~prefix:"_fun_" () in
           let rt = TypeUtils.return_type t in
-            NormalFunlit ([ps], block ([fun_binding' ~linearity ~location (binder ~ty:t g) (make_lam rt (NormalFunlit (pss, body)))], freeze_var g))
+          let qs = function_quantifiers rt in
+          let tyvars = List.map SugarQuantifier.mk_resolved qs in
+          let def =
+            { fun_binder = binder ~ty:rt g;
+              fun_linearity = linearity;
+              fun_definition = (tyvars, make_lam rt (NormalFunlit (pss, body)));
+              fun_location = location;
+              fun_signature = None;
+              fun_frozen = true;
+              fun_unsafe_signature = false } in
+          let body = block ([with_dummy_pos (Fun def)], with_dummy_pos (function_value g rt)) in
+          NormalFunlit ([ps], with_dummy_pos (Checked (body, rt)))
         | _ -> assert false
-    in make_lam rt lam
+    in make_lam ft lam
   in (binder ~ty:ft f, linearity, (tyvars, lam), location)
 
 (*
@@ -87,22 +107,18 @@ class desugar_funs env =
 object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
-  method private desugarFunLit argss lin lam location =
-    let inner_mb     = snd (last argss) in
-    let (o, lam, rt) = o#funlit inner_mb lam in
-    let ft = List.fold_right (fun (args, mb) rt ->
-                 let open Types in
-                 if DeclaredLinearity.is_linear lin
-                 then Lolli    (args, mb, rt)
-                 else Function (args, mb, rt))
-               argss rt in
+  method private desugarFunLit argss lin lam location checked_type =
+    let (o, lam, rt) = o#funlit lam in
+    let ft = match checked_type with
+      | Some ft -> ft
+      | None -> List.fold_right (fun (args, _) rt -> Types.AmbientFunction (lin, args, rt)) argss rt in
 
     let f = gensym ~prefix:"_fun_" () in
     let (bndr, lin, (_, def), loc) =
       unwrap_def (binder ~ty:ft f, lin, ([], lam), location) in
     let (tvs, tyargs), gen_ft =
-      Generalise.generalise_without_mutation (o#get_var_env ()) (Binder.to_type bndr) in
-    let s_tvs = List.map SugarQuantifier.mk_resolved tvs in
+      Generalise.generalise_without_mutation ~unwrap:false (o#get_var_env ()) (Binder.to_type bndr) in
+    let s_tvs = List.map SugarQuantifier.mk_resolved (tvs @ function_quantifiers ft) in
     let bndr = Binder.set_type bndr gen_ft in
     let o = o#bind_binder bndr in
     let fun_definition =
@@ -117,34 +133,51 @@ object (o : 'self_type)
        union-find sets) and supply the *original* type variables as
        arguments *)
     let fun_definition = Renamer.rename_function_definition fun_definition in
-    let e = block_node ([with_dummy_pos
-                           (Fun fun_definition)],
-                         with_dummy_pos (tappl (FreezeVar f, tyargs)))
-    in (o, e, ft)
+    let value = match tyargs with
+      | [] -> function_value f ft
+      | _ -> tappl (FreezeVar f, tyargs) in
+    let e = block_node ([with_dummy_pos (Fun fun_definition)], with_dummy_pos value)
+    in (o, Checked (with_dummy_pos e, ft), ft)
 
   method! phrasenode : Sugartypes.phrasenode -> ('self_type * Sugartypes.phrasenode * Types.datatype) = function
+    | Checked ({ WithPos.node = FunLit (Some argss, lin, lam, location); _ }, ft) ->
+        o#desugarFunLit argss lin lam location (Some ft)
+    | ModalIntro (body, ft) as intro ->
+        let rec literal phrase = match WithPos.node phrase with
+          | Checked (body, _) | ModalIntro (body, _) -> literal body
+          | FunLit (Some argss, lin, lam, location) -> Some (argss, lin, lam, location)
+          | _ -> None in
+        begin match literal body with
+        | Some (argss, lin, lam, location) -> o#desugarFunLit argss lin lam location (Some ft)
+        | None -> super#phrasenode intro
+        end
     | FunLit (Some argss, lin, lam, location) ->
-       o#desugarFunLit argss lin lam location
+        o#desugarFunLit argss lin lam location None
     | Section (Section.Project name) | FreezeSection (Section.Project name) ->
         let open Types in
         let ab, a = Types.fresh_type_quantifier (lin_unl, res_any) in
         let rhob, row = fresh_row_quantifier (lin_unl, res_any) in
         let (fields, rho) = TypeUtils.extract_row_parts row in
-        let effb, row = fresh_row_quantifier default_effect_subkind in
 
         let r = Record (Row (StringMap.add name (Present a) fields, rho)) in
 
         let f = gensym ~prefix:"_fun_" () in
         let x = gensym ~prefix:"_fun_" () in
-        let ft : datatype = ForAll ( [ab; rhob;  effb]
-                                   , Function (Types.make_tuple_type [r], row, a)) in
+        let ft : datatype = ForAll ([ab; rhob], AmbientFunction (dl_unl, Types.make_tuple_type [r], a)) in
 
         let pss = [[variable_pat ~ty:r x]] in
         let body = with_dummy_pos (Projection (var x, name)) in
-        let tyvars = List.map SugarQuantifier.mk_resolved [ab; rhob; effb] in
+        let tyvars = List.map SugarQuantifier.mk_resolved [ab; rhob] in
         let e : phrasenode =
           block_node
-            ([fun_binding' ~tyvars:tyvars (binder ~ty:ft f) (NormalFunlit (pss, body))],
+            ([with_dummy_pos (Fun
+                { fun_binder = binder ~ty:ft f;
+                  fun_linearity = dl_unl;
+                  fun_definition = (tyvars, NormalFunlit (pss, body));
+                  fun_location = loc_unknown;
+                  fun_signature = None;
+                  fun_frozen = true;
+                  fun_unsafe_signature = false })],
              freeze_var f)
         in (o, e, ft)
     | e -> super#phrasenode e

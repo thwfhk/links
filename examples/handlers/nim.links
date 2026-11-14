@@ -14,11 +14,11 @@
 
 # Some auxiliary handler composition operators.
 # Data flows from right to left (or inside-out)
-sig -<- : ((a) -e-> b, (c) -e-> a) -> (c) -e-> b
+sig -<- : ((a) -> b, (c) -> a) -> (c) -> b
 op g -<- f {fun (x) {g(f(x))}}
 
 # Combine a sequence of handlers with a computation m
-sig -< : ((a) -e-> b, a) -e-> b
+sig -< : ((a) -> b, a) -> b
 op f -< m  {f(m)}
 
 # Alternative pipeline operator; data flows from left-to-right
@@ -32,6 +32,11 @@ op m >> f {f(m)}
 # Datatype modelling the players
 typename Player = (|Alice|Bob|);
 
+effect Moves { Move : (Player, Int) => Int; }
+effect Cheating { Cheat : (Player, Int) => Zero; }
+effect Chance { Rand : () => Float; }
+effect State(s::Abs) { Get : () => s; Put : (s) => (); }
+
 # String of player
 sig showPlayer : (Player) -> String
 fun showPlayer(player) {
@@ -44,19 +49,19 @@ fun showPlayer(player) {
 # Abstract operation "Move"
 # Models a player picking a number of sticks
 # The operation takes the current game configuration as input
-sig move : (Player,Int) {Move:(Player,Int) => Int|_}~> Int
+sig move : [Moves] ((Player, Int) -> Int)
 fun move(player,n) {do Move(player,n)}
 
 mutual {
   # We model the game as two mutual recursive functions
-  sig aliceTurn : (Int) {Move:(Player,Int) => Int|_}~> Player
+  sig aliceTurn : [Moves] ((Int) -> Player)
   fun aliceTurn(n) {
     if (n == 0) {Bob} # Bob wins
     else {bobTurn( n - move(Alice,n) )}
   }
 
   # Similarly, we define bobTurn
-  sig bobTurn : (Int) {Move:(Player,Int) => Int|_}~> Player
+  sig bobTurn : [Moves] ((Int) -> Player)
   fun bobTurn(n) {
     if (n == 0) {Alice} # Alice wins
     else {aliceTurn( n - move(Bob,n) )}
@@ -65,7 +70,7 @@ mutual {
 
 # A game is parameterised by the number of starting sticks,
 # moreover it enforces the rule that Alice always starts
-sig game : (Int) -> Comp(Player,{Move:(Player,Int) => Int|_})
+sig game : (Int) -> [Moves] (() -> Player)
 fun game(n)() {aliceTurn(n)}
 
 #
@@ -75,11 +80,11 @@ fun game(n)() {aliceTurn(n)}
 # strategy to a given player
 
 # A first strategy: Always pick one stick
-sig ns : (Int, (Int) ~e~> a) ~e~> a
+sig ns : (Int, (Int) -> a) -> a
 fun ns(n,k) { k(1) }
 
 # The naive-strategy-handler assigns the naive-strategy to both players
-sig naive : (Comp(a, {Move:(Player,Int) => Int})) {Move{_}}~> a
+sig naive : forall a::Abs. (<Moves> (() -> a)) -> a
 fun naive(m) {
   handle(m()) {
    case <Move(_,n) => k> -> ns(n,k)
@@ -100,13 +105,13 @@ fun max2(x,y) {
 
 
 # The perfect strategy is to pick "max{n (mod 4), 1}" sticks
-sig ps : (Int, (Int) ~e~> a) ~e~> a
+sig ps : (Int, (Int) -> a) -> a
 fun ps(n,k) {
     k(max2(n `mod` 4, 1))
 }
 
 # The perfect handler assigns the perfect strategy to both players
-sig perfect : (Comp(a,{Move:(Player,Int) => Int})) {Move{_}}~> a
+sig perfect : forall a::Abs. (<Moves> (() -> a)) -> a
 fun perfect(m) {
   handle(m()) {
     case <Move(_,n) => k> -> ps(n,k)
@@ -119,17 +124,14 @@ fun perfect(m) {
 
 # Auxiliary function.
 # Given the number of sticks n it returns a list of valid moves.
-sig validMoves : (Int) ~> List Int
+sig validMoves : (Int) -> List Int
 fun validMoves(n) {
     filter(fun(m) { m <= n }, [1..3])
 }
 
 # The brute force strategy enumerates all future plays
 # if any particular play leads to a win, then play that strategy
-#sig bfs : (a,Int,(Int) {Move:(Player,Int) => Int|e}~> a)
-#                       {Move:(Player,Int) => Int|e}~> a
-sig bfs : (a, Int, (Int) ~e~> a)
-                         ~e~> a
+sig bfs : (a, Int, (Int) -> a) -> a
 fun bfs(player,n,k) {
   # Map the continuation over all possible moves
   # this effectively determines all potential winners
@@ -145,7 +147,7 @@ fun bfs(player,n,k) {
 # The perfect vs brute force handler assigns
 # Alice the perfect strategy and Bob the brute force strategy
 
-sig pvb : (Comp(Player,{Move:(Player,Int) => Int})) {}~> Player
+sig pvb : (<Moves> (() -> Player)) -> Player
 fun pvb(m) {
   handle(m()) {
     case <Move(Alice,n) => k> -> ps(n,k)
@@ -169,7 +171,7 @@ typename GameTree =
    |);
 
 # Reify a move as part of the move tree
-sig reifyMove : (Player, Int, (Int) ~e~> GameTree) ~e~> GameTree
+sig reifyMove : (Player, Int, (Int) -> GameTree) -> GameTree
 fun reifyMove(player, n, k) {
   # Mapping the continuation over the possible moves
   # enumerates all the subgames from current game configuration
@@ -181,7 +183,7 @@ fun reifyMove(player, n, k) {
 
 # Complete game tree generator
 # The Return-case lifts the result of the computation, m, into a leaf in the game tree
-sig gametree : (Comp(Player, {Move:(Player, Int) => Int})) {}~> GameTree
+sig gametree : (<Moves> (() -> Player)) -> GameTree
 fun gametree(m) {
   handle(m()) {
     case x          -> Winner(x)
@@ -204,8 +206,7 @@ fun gametree(m) {
 #
 # Generate a game tree in which Bob plays a particular strategy
 #
-sig bobStrat : (Comp(Player  ,{Move:(Player, Int) => Int|e})) ->
-                Comp(GameTree,{Move:(Player, Int) => Int|e})
+sig bobStrat : [Moves] ((<Moves> (() -> Player)) -> () -> GameTree)
 fun bobStrat(m)() {
   handle(m()) {
     case x          -> Winner(x)
@@ -221,7 +222,7 @@ fun bobStrat(m)() {
 # Note, the handler composition order matters here, because perfect is defined for Alice,
 # we wish only to play the perfect strategy for Bob, therefore perfect must be on top of
 # the handler stack.
-# links> perfect(bobStrat(game(3)))
+# links> perfect(fun() { bobStrat(game(3))() })
 #  Take((Alice, [(1, Take((Bob, [(2, Winner(Bob))]))),
 #                (2, Take((Bob, [(1, Winner(Bob))]))),
 #                (3, Winner(Alice))]))
@@ -238,23 +239,21 @@ fun bobStrat(m)() {
 
 # Abstract operation cheat
 # Invoked when a player cheats.
-sig cheat : (Player,Int) {Cheat:(Player,Int) => Zero|_}~> a
+sig cheat : [Cheating] ((Player, Int) -> a)
 fun cheat(player, n) {switch(do Cheat(player,n)) { } }
 
 # Cheater's strategy is to take all sticks and thereby win in one move
-sig cheater : (Int, (Int) ~e~> a) ~e~> a
+sig cheater : (Int, (Int) -> a) -> a
 fun cheater(n,k) {k(n)}
 
-sig cheater2 : (Int, (Int) ~e~> a) ~e~> a
+sig cheater2 : (Int, (Int) -> a) -> a
 fun cheater2(n,k) {
   if (n > 3) { k(0) }
   else { k(n) }
 }
 
 # checkMove checks whether a given player p has cheated
-sig checkMove : (Player,Int,
-                (Int) {Move:(Player,Int) => Int,Cheat:(Player,Int) => Zero|e}~> a) # k signature
-                      {Move:(Player,Int) => Int,Cheat:(Player,Int) => Zero|e}~> a  # Effects + return type
+sig checkMove : [Moves, Cheating] ((Player, Int, (Int) -> a) -> a)
 fun checkMove(p,n,k) {
   var take = move(p,n);
   if (not(elem(take,validMoves(n)))) {
@@ -265,8 +264,7 @@ fun checkMove(p,n,k) {
 }
 
 # The check handler detects cheating
-sig check : (Comp(a,{Move:(Player,Int) => Int, Cheat:(Player,Int) => Zero|e})) ->
-             Comp(a,{Move:(Player,Int) => Int, Cheat:(Player,Int) => Zero|e})
+sig check : forall a::Abs. [Moves, Cheating] ((<Moves> (() -> a)) -> () -> a)
 fun check(m)() {
   handle(m()) {
     case <Move(player, n) => k> -> checkMove(player, n, k)
@@ -275,14 +273,11 @@ fun check(m)() {
 
 
 # Convenient function to launch a checked game
-sig checkedGame : (Int) ->
-                  Comp (Player, {Move :(Player, Int) => Int,
-                                 Cheat:(Player, Int) => Zero|e})
-fun checkedGame(n) { check(game(n)) }
+sig checkedGame : (Int) -> [Moves, Cheating] (() -> Player)
+fun checkedGame(n)() { check(game(n))() }
 
 # aliceCheats assigns Alice the cheater's strategy
-sig aliceCheats : (Comp(a, {Move:(Player,Int) => Int|e})) ->
-                   Comp(a, {Move:(Player,Int) => Int|e})
+sig aliceCheats : forall a::Abs. [Moves] ((<Moves> (() -> a)) -> () -> a)
 fun aliceCheats(m)() {
   handle(m()) {
     case <Move(Alice,n) => k> -> cheater(n,k)
@@ -290,8 +285,7 @@ fun aliceCheats(m)() {
   }
 }
 
-sig aliceCheats2 : (Comp(a, {Move:(Player,Int) => Int|e})) ->
-                    Comp(a, {Move:(Player,Int) => Int|e})
+sig aliceCheats2 : forall a::Abs. [Moves] ((<Moves> (() -> a)) -> () -> a)
 fun aliceCheats2(m)() {
   handle(m()) {
     case <Move(Alice,n) => k> -> cheater2(n,k)
@@ -299,13 +293,12 @@ fun aliceCheats2(m)() {
   }
 }
 
-# links> perfect(aliceCheats(game(36)))
+# links> perfect(fun() { aliceCheats(game(36))() })
 #  Alice
 
 # Interpreting cheating
 # Abandon the game and report the cheater
-sig cheatReport : (Comp(a, {Cheat:(Player,Int) => Zero|e})) ->
-                   Comp(a, {Cheat{_}|e})
+sig cheatReport : forall a::Abs. (<Cheating> (() -> a)) -> () -> a
 fun cheatReport(m)() {
   handle(m()) {
     case <Cheat(p,n)> -> error("Cheater " ^^ showPlayer(p) ^^ " took " ^^ intToString(n) ^^ " sticks!")
@@ -313,8 +306,7 @@ fun cheatReport(m)() {
 }
 
 # Alternatively, upon cheating the opponent is given the victory
-sig cheatLose : (Comp(Player, {Cheat:(Player,Int) => Zero|e})) ->
-                 Comp(Player, {Cheat{_}|e})
+sig cheatLose : (<Cheating> (() -> Player)) -> () -> Player
 fun cheatLose(m)() {
   handle(m()) {
     case <Cheat(Alice,_)> -> Bob
@@ -326,18 +318,18 @@ fun cheatLose(m)() {
 #
 # (If n < 4 then Alice wins, otherwise the game is abandoned because
 # Alices cheats.)
-sig cpReport : (Int) {Move{_}}~> Player
+sig cpReport : (Int) -> Player
 fun cpReport(n) {
-    perfect(cheatReport(aliceCheats(checkedGame(n))))
+    perfect(fun() { cheatReport(fun() { aliceCheats(checkedGame(n))() })() })
 }
 
 # Alice cheats against Bob's perfect strategy
 #
 # (If n < 4 then Alice wins, otherwise Bob wins because Alice
 # cheats.)
-sig cpLose : (Int) {Move{_}}~> Player
+sig cpLose : (Int) -> Player
 fun cpLose(n) {
-  perfect(cheatLose(aliceCheats(checkedGame(n))))
+  perfect(fun() { cheatLose(fun() { aliceCheats(checkedGame(n))() })() })
 }
 
 #
@@ -347,10 +339,10 @@ fun cpLose(n) {
 # Using open handlers we can give an interpretation of randomness
 # thus we can encode mixed strategies.
 
-sig rand : () {Rand:a|_}~> a
+sig rand : [Chance] (() -> Float)
 fun rand() {do Rand}
 
-sig ms : (Int, (Int) {Rand:Float |e}~> a) {Rand:Float |e}~> a
+sig ms : [Chance] ((Int, (Int) -> a) -> a)
 fun ms(n,k) {
   var r = floatToInt(rand() *. 1000.0);
   var take = (r `mod` 3) + 1; # Make sure take is in {1,2,3}
@@ -359,8 +351,7 @@ fun ms(n,k) {
 }
 
 # mixed strategy handler assigns a random strategy to both players
-sig mixed : (Comp(a, {Move:(Player,Int) => Int,Rand:Float|e})) ->
-             Comp(a, {Move{_},Rand:Float|e}                   )
+sig mixed : forall a::Abs. [Chance] ((<Moves> (() -> a)) -> () -> a)
 fun mixed(m)() {
   handle(m()) {
     case <Move(p,n) => k> -> ms(n,k)
@@ -368,8 +359,7 @@ fun mixed(m)() {
 }
 
 # randomFloat handler uses Links' builtin random number generator
-sig randomFloat : (Comp(a, {Rand:Float|e})) ->
-                   Comp(a, {Rand{_}|e}   )
+sig randomFloat : forall a::Abs. [wild] ((<Chance> (() -> a)) -> () -> a)
 fun randomFloat(m)() {
   handle(m()) {
     case <Rand => k>   -> k(random())
@@ -377,8 +367,7 @@ fun randomFloat(m)() {
 }
 
 # notReallyRandom is entirely deterministic; it always returns 3.0
-sig notReallyRandom : (Comp(a, {Rand:Float|e})) ->
-                       Comp(a, {Rand{_}   |e})
+sig notReallyRandom : forall a::Abs. (<Chance> (() -> a)) -> () -> a
 fun notReallyRandom(m)() {
   handle(m()) {
     case <Rand => k>   -> k(3.0)
@@ -387,13 +376,7 @@ fun notReallyRandom(m)() {
 
 
 # Strategy handler factory
-# sig strategy : ( (Int, (Int) {Move{p} |e}~> a) {Move{p} |e}~> a
-#                , (Int, (Int) {Move{p} |e}~> a) {Move{p} |e}~> a) ->
-#                (Comp(a, {Move:(Player,Int) => Int |e})) ->
-#                 Comp(a, {Move{p}                    |e})
-sig strategy : ( (Int, (Int) -> a) {Move{p}|e}~> a
-               , (Int, (Int) -> a) {Move{p}|e}~> a )
-            -> (Comp(a, {Move:(Player, Int) => Int|e})) {Move{p}|e}~> a
+sig strategy : forall a::Abs. ((Int, (Int) -> a) -> a, (Int, (Int) -> a) -> a) -> (<Moves> (() -> a)) -> a
 fun strategy(s1, s2)(m) {
   handle(m ()) {
     case <Move(Alice,n) => k> -> s1(n,k)
@@ -419,17 +402,15 @@ var initialState = [(Alice,0),(Bob,0)] : GameState;
 # We need two state operations:
 #  1) Retrieval of state (get)
 #  2) Modification of state (put)
-sig get : (Comp(s, {Get:s|_}))
+sig get : forall s::Abs. [State(s)] (() -> s)
 fun get() {do Get}
 
-sig put : (s) {Put:(s) => ()|_}~> ()
+sig put : forall s::Abs. [State(s)] ((s) -> ())
 fun put(s) {do Put(s)}
 
 # The state handler is parameterised by a state s
 # which is threaded through the handler during evaluation
-sig state : (Comp(a, {Get:s,Put:(s) => ()|e})) ->
-            (s) ->                                  # Initial state
-             Comp(a, {Get{_},Put{_}        |e})
+sig state : forall s::Abs,a::Abs. (<State(s)> (() -> a)) -> (s) -> () -> a
 fun state(m)(s)() {
   var run = handle(m()) {
      case <Get => k>    -> fun(s) { k(s)(s) }
@@ -441,11 +422,10 @@ fun state(m)(s)() {
 
 # Next, we define a simple handler which records
 # the winner of a single game
-sig scorerecorder : (Comp(Player, {Get:GameState,Put:(GameState) => ()|e})) ->
-                     Comp(()    , {Get:GameState,Put:(GameState) => ()|e})
+sig scorerecorder : [State(GameState)] ((() -> Player) -> () -> ())
 fun scorerecorder(m)() {
   # Increment the given player's number of wins by one
-  sig updateScore : (Player, GameState) ~> GameState
+  sig updateScore : (Player, GameState) -> GameState
   fun updateScore(p,s) {
     map(fun(e) {
       if (p == first(e)) {
@@ -463,23 +443,22 @@ fun scorerecorder(m)() {
 
 
 # The board printer handler prints the scoreboard
-sig boardPrinter : (Comp(a ,{Get:GameState|e})) ->
-                    Comp((),{Get:GameState|e})
+sig boardPrinter : [wild, State(GameState)] ((() -> a) -> () -> ())
 fun boardPrinter(m)() {
   # Ranks Alice and Bob
-  sig sort : (List (2:Int|p)) ~> List (2:Int|p)
+  sig sort : (List (2:Int|p)) -> List (2:Int|p)
   fun sort(s) {
     if (second(s !! 1) > second(s !! 0)) {
       (s !! 1) :: (s !! 0) :: []
     } else {s}
   }
   # Creates whitespace
-  sig makeWhitespace : (Int) ~> String
+  sig makeWhitespace : (Int) -> String
   fun makeWhitespace(n) {
     implode(replicate(n, ' '))
   }
   # Pretty prints the scoreboard.
-  sig printBoard : (GameState) ~> ()
+  sig printBoard : (GameState) -> ()
   fun printBoard(s) {
     var xs = map(fun(p) {
         var player = showPlayer(first(p));
@@ -507,24 +486,21 @@ fun boardPrinter(m)() {
 
 # Finally, we define repeatGame which repeats
 # a given game r times
-sig repeatGame : (Int, Comp( a ,{Move:(Player,Int) => Int|e})) ->
-                       Comp(List a,{Move:(Player,Int) => Int|e})
+sig repeatGame : (Int, () -> a) -> () -> List a
 fun repeatGame(r, m)() {
     for (_ <- [1..r]) {
         [m()]
     }
 }
 
-sig repeatGame2 : (Int, Comp(a , { |e})) ->
-                        Comp((), { |e})
+sig repeatGame2 : (Int, () -> a) -> () -> ()
 fun repeatGame2(r, m)() {
     fold_left(fun(_,_) {
       var _ = m(); ()
     }, (), [1..r])
 }
 
-sig repeatGame3 : (Int) -> (Comp(a, { |e})) ->
-                            Comp((),{ |e})
+sig repeatGame3 : (Int) -> (() -> a) -> () -> ()
 fun repeatGame3(r)(m)() {
     fold_left(fun(_,_) {
       var _ = m(); ()

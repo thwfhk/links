@@ -11,10 +11,10 @@ tests/roundtrip/record_update.links
 filemode : true
 stdout : (q = [3, 1, 2]) : Q
 
-Recursive effect
-fun w(g) { handle(g()) { case () -> () case <F(h) => res> -> w(h) }} w
-stdout : fun : (() { |(mu a.F:(() { |a}-> ()) => _::Any,wild:()|c)}-> ()) {F{_}|c}~> ()
+Recursive interface in an absolute modality
+effect Rec { Then : ([Rec] (() -> ())) => (); } sig work : [Rec] (() -> ()) fun work() { do Then(work) } work
+stdout : fun : [Rec] (() -> ())
 
-Row with no fields, but with nested wild row in its row variable
+A pure failure can use the empty context
 fun f() { error("") } f
-stdout : fun : () ~> _
+stdout : fun : [] (() -> _)

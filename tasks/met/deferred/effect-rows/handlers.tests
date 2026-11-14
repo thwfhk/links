@@ -1,0 +1,7 @@
+Generalise (1)
+gen0(fun(m)() { handle(m()) { case <Foo => k> -> 42 case x -> x } }(fun(){42}))
+stdout : fun : Comp (Int,{ |_})
+
+Generalise (2)
+gen0(fun(m)() { handle(m()) { case <Foo => (k : ((()) {Foo- |_}~> Int))> -> 42 case x -> x } }(fun(){42}))
+stdout : fun : Comp (Int,{ |_})

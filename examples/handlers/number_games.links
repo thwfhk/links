@@ -1,11 +1,13 @@
 # Classic guess a number game
-typename Comp(e::Eff,a) = () ~e~> a;
 typename Answer = (|Low|Correct|High|);
 
-sig readInt : () {Read:Int|_}~> Int
+effect Input { Read : () => Int; }
+effect Guessing { Guess : (Int) => Answer; }
+
+sig readInt : [Input, wild] (() -> Int)
 fun readInt() {var n = do Read; print(" " ^^ intToString(n)); n}
 
-sig guess : () {Read:Int,Guess:(Int) => Answer|_}~> ()
+sig guess : [Input, Guessing, wild] (() -> ())
 fun guess() {
   print("Take a guess>");
   var number = readInt();
@@ -23,7 +25,7 @@ fun isNil(xs) {
   }
 }
 
-sig input : (List Int, Comp({Read:Int |e}, a)) {Read{_} |e}~> ()
+sig input : (List Int, <Input> (() -> a)) -> ()
 fun input(guesses, m) {
   handle(m())(guesses <- guesses) {
     case x -> ()
@@ -35,7 +37,7 @@ fun input(guesses, m) {
   }
 }
 
-sig mySecret : (Int, Comp({Guess:(Int) => Answer|e}, a)) {Guess{_} |e}~> a
+sig mySecret : forall a::Abs. (Int, <Guessing> (() -> a)) -> a
 fun mySecret(secret, m) {
   handle(m()) {
     case x -> x
@@ -46,7 +48,7 @@ fun mySecret(secret, m) {
   }
 }
 
-sig logger : (Comp({Guess:(Int) => Answer|e}, a)) {Guess:(Int) => Answer|e}~> List (Int,Answer)
+sig logger : [Guessing] ((<Guessing> (() -> a)) -> List (Int, Answer))
 fun logger(m) {
   handle(m())(log <- []) {
     case _ -> log
@@ -56,10 +58,12 @@ fun logger(m) {
   }
 }
 
+sig example : [wild] (() -> ())
 fun example() {
   mySecret(42, fun() { input([64,32,48,40,44,42], guess) })
 }
 
+sig example2 : [wild] (() -> List (Int, Answer))
 fun example2() {
   mySecret(42, fun() {logger(fun() { input([64,32,48,40,44,42], guess) }) })
 }

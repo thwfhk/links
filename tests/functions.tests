@@ -51,9 +51,9 @@ fun (x) {x:a} : a
 stderr : @.*
 exit : 1
 
-Infers effect variables
+Infers a same-context callback
 fun (f, x: Int) { f(x) + 0 }
-stdout : @fun : \(\(Int\) -a-> Int, Int\) -a-> Int
+stdout : @fun : \(\(Int\) -> Int, Int\) -> Int
 
 Typename [1]
 typename Foo = Int; fun f(x:Foo) {x} f(1)
@@ -64,7 +64,7 @@ typename Bar(a,b,c) = (a,b,c); fun f(x:Bar(a,b,c)) {x} f((false, 1, "two"))
 stdout : (false, 1, "two") : Bar (Bool,Int,String)
 
 Type alias with an operation parameter
-typename F(a,b,e::Eff) = (a) {Read:() => b|e}~> a; sig f : F(Int,Int,{}) fun f(x) {do Read + x} sig g : F(Int,String,{}) fun g(x) {stringToInt(do Read) + x} (handle(f(1)) {case <Read => k> -> k(41)}, handle(g(2)) {case <Read => k> -> k("40")})
+effect Reader(a::Abs) { Read : () => a; } typename F(a,b::Abs) = [Reader(b)] (a -> a); sig f : F(Int,Int) fun f(x) {do Read + x} sig g : F(Int,String) fun g(x) {stringToInt(do Read) + x} (handle(f(1)) {case <Read => k> -> k(41)}, handle(g(2)) {case <Read => k> -> k("40")})
 stdout : (42, 42) : (Int, Int)
 
 Nested closures
@@ -98,10 +98,10 @@ Closure conversion: Test function with free type variables, but no free term var
 filemode : true
 stdout : 42 : Int
 
-Quantifiers should not escape their scopes (#687)
+Quantifiers should not escape its scopes (#687)
 ./tests/functions/escaped-quantifier.links
 filemode : true
-stderr : @.*escape their scope.*
+stderr : @.*escape its scope.*
 exit : 1
 
 Linearity (1)
@@ -110,31 +110,31 @@ stdout : fun : (a::Any, b::Any) -> (a::Any, b::Any)
 
 Linearity (2)
 fun (x) {fun (y) {(x, y)}}
-stdout : fun : (a) -> (c::Any) -> (a, c::Any)
+stdout : fun : (a) -> (b::Any) -> (a, b::Any)
 
 Linearity (3) (#795)
 fun (x)(y) {(x, y)}
-stdout : fun : (a) -> (c::Any) -> (a, c::Any)
+stdout : fun : (a) -> (b::Any) -> (a, b::Any)
 
 Linearity (4)
 linfun (x){ linfun (y) {(x, y)}}
-stdout : fun : (a::Any) -@ (c::Any) -@ (a::Any, c::Any)
+stdout : fun : (a::Any) -@ (b::Any) -@ (a::Any, b::Any)
 
 Linearity (5)
 linfun (x)(y) {(x, y)}
-stdout : fun : (a::Any) -@ (c::Any) -@ (a::Any, c::Any)
+stdout : fun : (a::Any) -@ (b::Any) -@ (a::Any, b::Any)
 
 Linearity (6) (#797)
 fun f(x)(y) {(x, y)} f
-stdout : fun : (a) -> (c::Any) -> (a, c::Any)
+stdout : fun : [] ((a) -> (b::Any) -> (a, b::Any))
 
 Linearity (7) (#797)
 fun f(x)(y) {f(x)(y)} f
-stdout : fun : (_) -> (_::Any) ~> _::Any
+stdout : fun : [] ((_) -> (_::Any) -> _::Any)
 
 Linearity (8) (#797)
 linfun f(x)(y) {(x, y)} f
-stdout : fun : (a::Any) -@ (c::Any) -@ (a::Any, c::Any)
+stdout : fun : [] ((a::Any) -@ (b::Any) -@ (a::Any, b::Any))
 
 Linearity (9) - linear recursive functions should be disallowed
 linfun f(x) {f(x)} f
@@ -146,12 +146,12 @@ fun count(n) { if (n == 0) 0 else 1 + count(n - 1) } count(10000)
 stdout : 10000 : Int
 
 Linear function annotation
-sig h : ((a::Any) -e-@ a::Any, a::Any) -e-> a::Any fun h(f, x) {f(x)}
+sig h : ((a::Any) -@ a::Any, a::Any) -> a::Any fun h(f, x) {f(x)}
 stdout : () : ()
 exit : 0
 
 Non-linear use of linear function
-sig h : ((a::Any) -e-@ a::Any, a::Any) -e-> a::Any fun h(f, x) {f(f(x))}
+sig h : ((a::Any) -@ a::Any, a::Any) -> a::Any fun h(f, x) {f(f(x))}
 stderr : @..*
 exit : 1
 
@@ -183,10 +183,10 @@ var f = linfun(x) { x + 1 }; if (true) {f(41)} else {f(0)}
 stdout : 42 : Int
 
 Linear closure can capture a linear function
-fun faithfulApply(f:((a::Any) { |%}-@ ())) { linfun (s) { f(s) } } faithfulApply
-stdout : fun : ((a::Any) -b-@ ()) -> (a::Any) -b-@ ()
+fun faithfulApply(f:((a::Any) -@ ())) { linfun (s) { f(s) } } faithfulApply
+stdout : fun : [] (((a::Any) -@ ()) -> (a::Any) -@ ())
 
 Unrestricted closure cannot capture a linear function
-var f = linfun() { 42 }; fun call() { f() } call()
-stderr : @.*Type error: Variable f of linear type .* was used in a non-linear function definition.*
+var f = (linfun() { 42 } : [] (() -@ Int)); fun call() { f() } call()
+stderr : @.*Type error: Variable f has a linear type.*
 exit : 1

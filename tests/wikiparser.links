@@ -24,12 +24,13 @@ typename Document = BlockType (Int);
 
 var emptyString = "";
 
+sig mydebug : [wild] (String -> ())
 fun mydebug(s) {
     debug(s)
 }
 
 mutual {
-  sig eatWhitespace : (String) ~> (ParseResult, String)
+  sig eatWhitespace : (String) -> (ParseResult, String)
   fun eatWhitespace(n) {
       fun whitespaceTag(s) {
           switch(s) {
@@ -58,7 +59,7 @@ mutual {
 
   }
 
-  sig makeSentenceBlock : (String) ~> (ParseResult, String)
+  sig makeSentenceBlock : (String) -> (ParseResult, String)
   fun makeSentenceBlock(text) {
       var word = (text =~ /^([^{"\x0d\x0a!"}\\<\\_\\^\\=~\\[\\#\\*-])+/l); #includes trailing punctuation like commas etc.
       switch (word) {
@@ -71,7 +72,7 @@ mutual {
   }
 
 
-  sig makeWordBlock : (String) ~> (ParseResult, String)
+  sig makeWordBlock : (String) -> (ParseResult, String)
   fun makeWordBlock(text) {
       fun mwb(text, wbs : List ParseTree) {
         var word = (text =~ /^([^\ {"\x0d\x0a"}\\<\\_\\^\\~\\[\\#\\*-])+(\ |\\b)/l); #includes trailing punctuation like commas etc.
@@ -107,7 +108,7 @@ mutual {
     }
   }
 
-  sig makeFormattedBlock : (String) ~> (ParseResult, String)
+  sig makeFormattedBlock : (String) -> (ParseResult, String)
   fun makeFormattedBlock(text) {
      fun matchNth(f :List String, p) {
           switch(p) {
@@ -154,7 +155,7 @@ mutual {
 
   }
 
-  sig makeHref : (String) ~> (ParseResult, String)
+  sig makeHref : (String) -> (ParseResult, String)
   fun makeHref(text) {
           #[Link text]  (http://foobar.com)  ... or <http://foobar.com/>
       var h =(text =~ /^{"["}(.*){"]"}\ *{"("}([^\ ]*){")"}|{"<"}([^\ <>]*){">"}/l);
@@ -173,7 +174,7 @@ mutual {
       }
   }
 
-  sig makeImageLink : (String) ~> (ParseResult, String)
+  sig makeImageLink : (String) -> (ParseResult, String)
   fun makeImageLink(text) {
       #![Alt Text](http://foobar.com/image.gif)
       var h =(text =~ /^{"!["}(.*){"]"}\ *{"("}([^\ ]*){")"}/l);
@@ -187,7 +188,7 @@ mutual {
 
   }
 
-  sig makeList : (String) ~> (ParseResult, String)
+  sig makeList : (String) -> (ParseResult, String)
   fun makeList(text) {
      fun allListLines(t, lines) {
 
@@ -224,7 +225,7 @@ mutual {
      allListLines(text, [])
   }
 
-  sig makeBlockQuote : (String) ~> (ParseResult, String)
+  sig makeBlockQuote : (String) -> (ParseResult, String)
   fun makeBlockQuote(text) {
      fun allQuoteLines(text, lines) {
           var bql = (text =~ /^({"\x0a"}\ *>(.*)){"\x0a"}/l);
@@ -247,7 +248,7 @@ mutual {
   }
 
 
-  sig textToBlock : (String) ~> (ParseResult, String)
+  sig textToBlock : (String) -> (ParseResult, String)
   fun textToBlock(text) {
        fun tryAllParsers(parsers, text) {
           switch(parsers) {
@@ -263,7 +264,7 @@ mutual {
 
 
        fun t2b(text:String, bs : List ParseTree) {
-           var parsers = ([makeBlockQuote, makeList, makeSentenceBlock, eatWhitespace, makeFormattedBlock, makeHref, makeImageLink]: List ((String) ~> (ParseResult, String)));
+           var parsers = ([makeBlockQuote, makeList, makeSentenceBlock, eatWhitespace, makeFormattedBlock, makeHref, makeImageLink]: List ((String) -> (ParseResult, String)));
 
 
            if(text == emptyString) {
@@ -302,7 +303,7 @@ mutual {
   }
 }
 
-sig parseWikibody : (String) ~> ParseTree
+sig parseWikibody : (String) -> ParseTree
 fun parseWikibody(t) {
     var b = textToBlock(t);
     switch(b) {
@@ -612,6 +613,7 @@ fun getList() {
 }
 
 
+sig runTests : [wild] ((Bool, List (String, () -> (testresult:Bool | r))) -> Bool)
 fun runTests(continue, t) {
     fun rt(allsuccess, t) {
         switch(t) {

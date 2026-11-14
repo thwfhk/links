@@ -53,7 +53,7 @@ stdout : (x = 42, y = true) : (x:Int,y:Bool)
 
 Braced absent field excludes a record that has the field
 sig addX : ((x{-} | r)) -> (x{:Int} | r) fun addX(r) { (x=42 | r) } addX((x=1, y=true))
-stderr : @.*Type error: The function.*addX.*while the arguments passed to it have types.*
+stderr : @.*Type error: Expected \(x-,y:Bool\), got \(x:Int,y:Bool\).*
 exit : 1
 
 With syntax (same type)
@@ -103,7 +103,7 @@ exit : 1
 
 Possibly absent label in a closed row
 fun (x : (a{%b}|%c)) {x : ()}
-stdout : fun : (()) -> ()
+stdout : fun : ((a-)) -> ()
 
 Record field punning (1)
 var hello = "hellooo"; (=hello)

@@ -1,5 +1,10 @@
+effect Choice { Choose : () => Bool; }
+effect State(s::Abs) { Get : () => s; Put : (s) => (); }
+
+sig incr : [State(Int)] ((Int) -> ())
 fun incr(x) {var y = do Get; do Put(x+y)}
 
+sig choice : [Choice, State(Int)] (() -> Int)
 fun choice() {
   var x = if (do Choose()) { incr(1); do Get }
           else { incr(1); do Get };
@@ -8,6 +13,7 @@ fun choice() {
   x + y
 }
 
+sig enumerate : forall a::Abs. (<Choice> (() -> a)) -> () -> List a
 fun enumerate(m)() {
   handle(m()) {
     case x -> [x]
@@ -16,6 +22,7 @@ fun enumerate(m)() {
 }
 
 
+sig evalState : forall s::Abs,a::Abs. (s) -> (<State(s)> (() -> a)) -> () -> a
 fun evalState(st)(m)() {
   (handle(m()) {
     case x              -> fun(_)  { x }
@@ -24,4 +31,5 @@ fun evalState(st)(m)() {
   })(st)
 }
 
-evalState(0)(enumerate(choice))() ++ enumerate(evalState(0)(choice))()
+evalState(0)(fun() { enumerate(choice)() })() ++
+  enumerate(fun() { evalState(0)(choice)() })()

@@ -1,0 +1,9 @@
+Effect aliases require their row arguments
+effectname E(e::Eff) = {Ask:Int|e}; sig f : () -E-> Int fun f() { do Ask }
+stderr : @.*Arity mismatch: Type E expects 1 type arguments, but 0 arguments were provided.*
+exit : 1
+
+An effect alias cannot use an anonymous tail
+effectname E = {Ask:Int|_};
+stderr : @.*Unbound anonymous type variable.*
+exit : 1

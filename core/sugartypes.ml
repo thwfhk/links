@@ -189,8 +189,6 @@ module Datatype = struct
   type t =
     | TypeVar         of SugarTypeVar.t
     | QualifiedTypeApplication of Name.t list * type_arg list
-    | Function        of with_pos list * row * with_pos
-    | Lolli           of with_pos list * row * with_pos
     | AmbientArrow    of DeclaredLinearity.t * with_pos list * with_pos
     | Mu              of SugarTypeVar.t * with_pos
     | Forall          of SugarQuantifier.t list * with_pos
@@ -198,7 +196,6 @@ module Datatype = struct
     | Tuple           of with_pos list
     | Record          of row
     | Variant         of row
-    | Effect          of row
     | Operation       of with_pos list * with_pos
     | Modal           of modality * with_pos
     | List            of with_pos
@@ -210,7 +207,6 @@ module Datatype = struct
     | Relative of interface_ref list * (interface_ref * with_pos list) list
   and row = (string * fieldspec) list * row_var
   and row_var =
-    | EffectApplication of string * type_arg list
     | Closed
     | Open of SugarTypeVar.t
     | Recursive of SugarTypeVar.t * row
@@ -227,9 +223,6 @@ end
 
 (* Store the denotation along with the notation once it's computed *)
 type datatype' = Datatype.with_pos * Types.datatype option
-    [@@deriving show]
-
-type row' = Datatype.row * Types.row option
     [@@deriving show]
 
 type type_arg' = Datatype.type_arg * Types.type_arg option
@@ -336,6 +329,8 @@ and phrasenode =
   | Projection       of phrase * Name.t
   | With             of phrase * (Name.t * phrase) list
   | TypeAnnotation   of phrase * datatype'
+  | Checked          of phrase * Types.datatype
+  | ModalIntro       of phrase * Types.datatype
   | Upcast           of phrase * datatype' * datatype'
   | Instantiate      of phrase
   | Generalise       of phrase
@@ -366,7 +361,6 @@ and aliasnode = Name.t * SugarQuantifier.t list * aliasbody
 and alias = aliasnode WithPos.t
 and aliasbody =
   | Typename of datatype'
-  | Effectname of row'
 and effect_interface = {
     interface_name : Name.t;
     interface_id : ModalEffects.Interface.t option;
@@ -494,6 +488,7 @@ struct
     | Instantiate p
     | Generalise p
     | TypeAnnotation (p, _) -> phrase p
+    | Checked (p, _) | ModalIntro (p, _) -> phrase p
 
     | ListLit (ps, _)
     | TupleLit ps -> union_map phrase ps

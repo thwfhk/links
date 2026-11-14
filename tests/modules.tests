@@ -90,7 +90,12 @@ Mutually-recursive types
 ./tests/modules/mutualtys.links
 filemode : true
 args : --path=tests/modules
-stdout : () : ()
+stdout : Next([Stop]) : T.A
+
+Mutually-recursive aliases require a constructor
+module T { mutual { typename A = B; typename B = A; } } ()
+exit : 1
+stderr : @.*A recursive type needs a data or function constructor.*
 
 Type signatures in inner modules
 ./tests/modules/typesigInner.links

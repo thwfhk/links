@@ -21,7 +21,7 @@ module type EVALUATOR = sig
 
   val apply : Value.continuation -> Value.env -> v * v list -> result
   val apply_cont : Value.continuation -> Value.env -> v -> result
-  val run_program : Value.env -> Ir.program -> (Value.env * v)
+  val run_program : ?on_variable:(Ir.var -> unit) -> Value.env -> Ir.program -> (Value.env * v)
 end
 
 module Exceptions = struct
@@ -65,7 +65,10 @@ struct
   (* TODO: explicitly distinguish functions and variables in the
      IR so we don't have to do this check every time we look up a
      variable *)
+  let variable_observer = ref ignore
+
   let lookup_var var env =
+    !variable_observer var;
     if Lib.is_primitive_var var then Lib.primitive_stub_by_code var
     else
       match lookup_fun_def var with
@@ -243,7 +246,7 @@ struct
        value env f >>= fun f ->
        apply cont env (f, [`Continuation cont])
     (* Handlers *)
-    | Handle { ih_comp = m; ih_cases = clauses; ih_return = return; ih_depth = depth } ->
+    | Handle { ih_comp = m; ih_cases = clauses; ih_return = return; ih_depth = depth; _ } ->
        (* Slight hack *)
        begin
          match depth with
@@ -276,16 +279,18 @@ struct
   let eval : Value.env -> program -> result =
     fun env -> computation env K.empty
 
-  let run_program : Value.env -> Ir.program -> (Value.env * Value.t) =
-    fun env program ->
-      try (
+  let run_program ?(on_variable = ignore) env program =
+    let previous = !variable_observer in
+    variable_observer := on_variable;
+    Fun.protect ~finally:(fun () -> variable_observer := previous) (fun () ->
+      try
         steps_until_pause := steps_between_pauses;
         Lwt_main.run (eval env program)
-      ) with
+      with
         | NotFound s ->
             raise (internal_error ("NotFound " ^ s ^
               " while interpreting."))
-        | Not_found  -> raise (internal_error ("Not_found while interpreting."))
+        | Not_found  -> raise (internal_error ("Not_found while interpreting.")))
 end
 
 module rec Eval : EVALUATOR = Evaluator (Value.Continuation.Evaluation (Eval))

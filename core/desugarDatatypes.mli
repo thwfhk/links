@@ -1,4 +1,4 @@
-val read : aliases:Types.tycon_environment -> string -> Types.datatype
+val read : ?interfaces:EffectInterfaces.t -> aliases:Types.tycon_environment -> string -> Types.datatype
 
 val sentence :
   Types.typing_environment ->
@@ -15,5 +15,3 @@ val program :
 val all_datatypes_desugared : SugarTraversals.predicate
 
 include Transform.Untyped.S
-
-module Modal : Transform.Untyped.S

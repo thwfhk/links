@@ -1,7 +1,8 @@
 # A port of the simple counting benchmark from Kammar et al. (2013)
 
-sig evalState : (Comp(a, {Get:() => s ,Put:(s) => ()|e})) -> # Stateful computation
-                (s) {Get{_},Put{_} |e}~> a
+effect State(s::Abs) { Get : () => s; Put : (s) => (); }
+
+sig evalState : forall s::Abs,a::Abs. (<State(s)> (() -> a)) -> (s) -> a
 fun evalState(m)(st) {
   var run =
     handle(m()) {
@@ -12,7 +13,7 @@ fun evalState(m)(st) {
   run(st)
 }
 
-sig count : Comp(Int, {Get:() => Int,Put:(Int) => ()|e})
+sig count : [State(Int)] (() -> Int)
 fun count() {
   var n = do Get();
   if (n == 0) n

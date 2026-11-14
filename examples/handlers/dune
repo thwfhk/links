@@ -14,7 +14,6 @@
   (exceptions.links as examples/handlers/exceptions.links)
   (fringe.links as examples/handlers/fringe.links)
   (identity.links as examples/handlers/identity.links)
-  (lambda.links as examples/handlers/lambda.links)
   (light_switch.links as examples/handlers/light_switch.links)
   (monadic_reflection.links as examples/handlers/monadic_reflection.links)
   (nim.links as examples/handlers/nim.links)

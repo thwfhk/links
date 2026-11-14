@@ -90,6 +90,12 @@ let rec global_signature typ =
   | Modal (ModalEffects.Absolute _, _) -> typ
   | _ -> Types.modal pure typ
 
+let rec prefix_quantifiers typ =
+  match head typ with
+  | ForAll (qs, body) -> qs @ prefix_quantifiers body
+  | Modal (_, body) -> prefix_quantifiers body
+  | _ -> []
+
 let function_hint arguments result = arrow dl_unl arguments result
 
 let tuple_parts pos count typ =
@@ -152,6 +158,13 @@ let operation_parts pos count scheme =
   | _ -> error pos "Expected an operation signature"
 
 let operation_hint arguments result = Types.Operation (make_tuple_type arguments, result)
+
+let operation_label (phrase : phrase) =
+  match phrase.node with
+  | Operation name -> Some (phrase, name, [])
+  | TAppl ({ node = Operation name; _ } as label, args) ->
+      Some (label, name, args)
+  | _ -> None
 
 let interface_arguments (operation : EffectInterfaces.operation) expected =
   let args, _ = FrescoTypes.instantiate ~expected (operation_scheme operation) in
@@ -287,7 +300,7 @@ module Partial = struct
         then Option.value ~default:hole (Env.find_opt name env)
         else find name
     | Freeze body -> infer_here ~frozen:true body
-    | TypeAnnotation (_, (_, Some typ)) | Upcast (_, (_, Some typ), _) -> typ
+    | Checked (_, typ) | ModalIntro (_, typ) | TypeAnnotation (_, (_, Some typ)) | Upcast (_, (_, Some typ), _) -> typ
     | FnAppl (fn, args) ->
         let arguments = List.map infer_here args in
         let fn = infer_here ~frozen:true ~expected:(function_hint arguments expected) fn in
@@ -351,17 +364,25 @@ module Partial = struct
     | Instantiate body -> instance (infer_here ~frozen:true body)
     | Generalise body ->
         let typ = infer_here body in
-        if TypeSugar.is_generalisable body then
+        let contains_no_holes = fst (object
+          inherit Types.type_predicate as super
+          method! type_satisfies vars = function
+            | Not_typed -> false
+            | typ -> super#type_satisfies vars typ
+        end)#predicates in
+        if TypeSugar.is_generalisable body && contains_no_holes typ then
           let excluded = Env.fold (fun _ typ vars -> TypeVarSet.union (free_type_vars typ) vars) env TypeVarSet.empty in
           snd (FrescoTypes.generalise ~mutate:false ~excluded typ)
         else hole
-    | DoOperation ({node = Operation name; _}, arguments, _) ->
+    | DoOperation (label, arguments, _) when Option.is_some (operation_label label) ->
+        let _, name, explicit = Option.get (operation_label label) in
         let operation = lookup_operation phrase.pos interfaces name in
         let scheme = match Option.bind ambient (ModalEffects.newest operation.EffectInterfaces.interface) with
           | None -> operation_scheme operation
           | Some arguments -> member_scheme operation arguments in
-        let _, signature = instantiate_operation scheme
-            (List.map infer_here arguments) expected in
+        let signature = match explicit with
+          | [] -> snd (instantiate_operation scheme (List.map infer_here arguments) expected)
+          | args -> FrescoTypes.apply scheme (List.map (fun (_, arg) -> Option.get arg) args) in
         begin match head signature with
         | Operation (_, result) -> result
         | _ -> hole
@@ -632,11 +653,8 @@ let builtin_binary pos op =
   | BinaryOp.FloatMinus -> monomorphic [float_type; float_type] float_type
   | BinaryOp.Cons -> homogeneous_list false
   | BinaryOp.Name "++" -> homogeneous_list true
-  | BinaryOp.Name ("==" | "<>") ->
+  | BinaryOp.Name ("==" | "<>" | "<" | "<=" | ">" | ">=") ->
       let q, a = fresh_type_quantifier (lin_unl, res_any) in
-      Some (Types.for_all ([q], arrow dl_unl [a; a] bool_type))
-  | BinaryOp.Name ("<" | "<=" | ">" | ">=") ->
-      let q, a = fresh_type_quantifier (lin_unl, res_base) in
       Some (Types.for_all ([q], arrow dl_unl [a; a] bool_type))
   | BinaryOp.RegexMatch flags ->
       let result =
@@ -715,6 +733,13 @@ let bind_type state name typ = { state with terms = Context.bind state.terms nam
 let with_rigids state qs =
   { state with rigids = TypeVarSet.add_quantifiers qs state.rigids }
 
+let introduce_quantifiers state qs f =
+  (* Rechecking can open a local scheme whose quantifier also occurs in
+     an inferred enclosing scheme. Only check for escapes of new rigids. *)
+  let fresh = List.filter (fun q ->
+    not (TypeVarSet.mem (Quantifier.to_var q) state.rigids)) qs in
+  in_rigid_scope state.terms [] fresh f
+
 let frozen_match pos mode typ =
   match mode with
   | Check expected -> consistent pos typ expected; expected
@@ -762,7 +787,7 @@ let rec infer state mode phrase =
   let pos = phrase.pos in
   at pos (fun () ->
     match mode, head (hint mode), phrase.node with
-    | Check expected, _, (Freeze _ | FreezeVar _ | FreezeSection _) ->
+    | Check expected, _, (Checked _ | ModalIntro _ | Freeze _ | FreezeVar _ | FreezeSection _) ->
         infer_node state (Check expected) phrase
     | Check expected, (ForAll _ | Modal _), FunLit _ ->
         introduce state expected phrase
@@ -782,12 +807,12 @@ let rec infer state mode phrase =
 and introduce state expected phrase =
   match head expected with
   | ForAll (qs, body) ->
-      in_rigid_scope state.terms [] qs (fun () ->
+      introduce_quantifiers state qs (fun () ->
         let body = infer (with_rigids state qs) (Check body) phrase in
         wrap_usage phrase.pos (TAbstr (sugar_quantifiers qs, term body)) expected (usage body))
   | Modal (modality, body) ->
       let body = infer (under state modality) (Check body) phrase in
-      term body, expected, usage body
+      wrap_usage phrase.pos (ModalIntro (term body, expected)) expected (usage body)
   | _ -> infer_node state (Check expected) phrase
 
 and infer_node state mode phrase =
@@ -810,6 +835,12 @@ and infer_node state mode phrase =
       let body = infer_here Infer body in
       finish_frozen (term body).node (typ body) (usage body)
   | Constant c -> finish phrase.node (Primitive (Constant.type_of c)) Usage.empty
+  | Checked (body, expected) ->
+      let body = infer_node state (Check expected) body in
+      finish (Checked (term body, expected)) expected (usage body)
+  | ModalIntro (body, expected) ->
+      let body = introduce state expected body in
+      finish (term body).node expected (usage body)
   | TypeAnnotation (body, ((source, _) as anno)) ->
       let expected = resolved source.pos (snd anno) in
       let body = infer_here (Check expected) body in
@@ -817,7 +848,8 @@ and infer_node state mode phrase =
   | FunLit (_, lin, NormalFunlit (groups, body), location) ->
       let groups, body, typ, usage, arg_types = lambda state pos lin mode groups body in
       let arg_types = List.map (fun args -> args, make_empty_closed_row ()) arg_types in
-      wrap_usage pos (FunLit (Some arg_types, lin, NormalFunlit (groups, body), location)) typ usage
+      let body = make ~pos (FunLit (Some arg_types, lin, NormalFunlit (groups, body), location)) in
+      wrap_usage pos (Checked (body, typ)) typ usage
   | FnAppl (fn, arguments) ->
       let hints = Partial.arguments state.interfaces state.terms arguments in
       let fn = infer_here (Apply (hints, mode)) fn in
@@ -835,7 +867,8 @@ and infer_node state mode phrase =
   | Block (bindings, body) ->
       let state, bindings, uses = infer_bindings ~global:false state bindings in
       let body = infer state mode body in
-      wrap_usage pos (Block (bindings, term body)) (typ body) (uses ~export:false (usage body))
+      let remaining, _ = uses ~export:false (usage body) in
+      wrap_usage pos (Block (bindings, term body)) (typ body) remaining
   | TupleLit [value] ->
       let value = infer_here mode value in
       wrap_usage pos (TupleLit [term value]) (typ value) (usage value)
@@ -863,10 +896,16 @@ and infer_node state mode phrase =
       finish (RangeLit (term low, term high)) (make_list_type int_type)
         (Usage.combine (usage low) (usage high))
   | ConstructorLit (label, value, _) ->
-      let expected = match expected_bare with Variant row -> record_field row label | _ -> None in
-      let value = Option.map (infer_optional expected) value in
+      let expected = match expected_bare with
+        | Variant row -> Option.map (fun payload -> expected_bare, payload) (record_field row label)
+        | _ -> None in
+      let value = Option.map (infer_optional (Option.map snd expected)) value in
       let payload = Option.fold ~none:unit_type ~some:typ value in
-      let result = Variant (make_singleton_open_row (label, Present payload) (lin_any, res_any)) in
+      let result = match expected with
+        | Some (result, domain) ->
+            consistent pos payload domain;
+            result
+        | None -> Variant (make_singleton_open_row (label, Present payload) (lin_any, res_any)) in
       finish (ConstructorLit (label, Option.map term value, Some result)) result
         (Option.fold ~none:Usage.empty ~some:usage value)
   | RecordLit (fields, rest) ->
@@ -1021,10 +1060,10 @@ and infer_node state mode phrase =
       wrap_usage pos (Switch (term value, cases, Some output)) output
         (Usage.combine (usage value) uses)
   | Iteration (generators, body, where, orderby) ->
-      let outer = state.terms in
-      let state, generators, scopes =
-        List.fold_left (fun (state, generators, scopes) (pat, generator) ->
-          let generator = infer state Infer generator in
+      let outer = state in
+      let state, generators, scopes, generator_uses =
+        List.fold_left (fun (state, generators, scopes, generator_uses) (pat, generator) ->
+          let generator = infer outer Infer generator in
           let modality, list = Context.prefix (typ generator) in
           let item = match list_item (head list) with
             | Some item -> item
@@ -1033,25 +1072,33 @@ and infer_node state mode phrase =
                 consistent pos list (make_list_type item);
                 item in
           let pat, env = FrescoPatterns.check (Context.carry modality item) pat in
-          bind_all state env, (pat, term generator) :: generators, (env, usage generator) :: scopes)
-          (state, [], []) generators in
-      let body = infer state (match list_item expected_bare with None -> Infer | Some t -> Check t) body in
-      FrescoPatterns.require_unlimited pos (typ body);
+          bind_all state env, (pat, term generator) :: generators, env :: scopes,
+          Usage.combine generator_uses (usage generator))
+          (state, [], [], Usage.empty) generators in
+      let output = match list_item expected_bare with
+        | None -> make_list_type (fresh ~subkind:(lin_unl, res_any) ())
+        | Some _ -> expected_bare in
+      let body = infer state (Check output) body in
       let where = Option.map (infer state (Check bool_type)) where in
-      let orderby = Option.map (infer state Infer) orderby in
+      let orderby = Option.map (fun order ->
+        infer state (Check (Record (make_empty_open_row (lin_unl, res_base)))) order) orderby in
       let option_usage = Option.fold ~none:Usage.empty ~some:usage in
       let uses = Usage.combine_many [usage body; option_usage where; option_usage orderby] in
-      let uses = List.fold_left (fun uses (env, generator_uses) ->
-        Usage.combine generator_uses (use_binders pos env uses)) uses scopes in
+      let uses = List.fold_left (fun uses env ->
+        use_binders pos env uses) uses scopes in
       Usage.iter (fun name _ ->
-        require_unrestricted pos name (lookup pos outer name)) uses;
+        require_unrestricted pos name (lookup pos outer.terms name)) uses;
+      let uses = Usage.combine generator_uses uses in
       finish (Iteration (List.rev generators, term body, Option.map term where, Option.map term orderby))
-        (make_list_type (typ body)) uses
+        (typ body) uses
   | Regex regex ->
       let regex, uses = infer_regex state regex in
       finish (Regex regex) (Instantiate.alias "Regex" [] state.aliases) uses
-  | DoOperation (({ node = Operation label; _ } as op), arguments, _) ->
+  | DoOperation (op, arguments, _) ->
       let open EffectInterfaces in
+      let op, label, explicit = match operation_label op with
+        | Some label -> label
+        | None -> error pos "Expected an operation label in a do expression" in
       let operation = lookup_operation op.pos state.interfaces label in
       let name = ModalEffects.Operation.name operation.id in
       let interface_arguments =
@@ -1060,14 +1107,19 @@ and infer_node state mode phrase =
         | None -> error pos (Printf.sprintf "Operation %s requires effect interface %s in the current context"
                               name (ModalEffects.Interface.name operation.interface)) in
       let scheme = member_scheme operation interface_arguments in
-      let hints = Partial.arguments state.interfaces state.terms arguments in
-      let type_args, instance = instantiate_operation scheme hints (hint mode) in
+      let type_args, instance = match explicit with
+        | [] ->
+            let hints = Partial.arguments state.interfaces state.terms arguments in
+            instantiate_operation scheme hints (hint mode)
+        | args ->
+            let args = List.map (fun (_, arg) -> Option.get arg) args in
+            args, FrescoTypes.apply scheme args in
       let domains, result = operation_parts pos (List.length arguments) instance in
       let arguments = List.map2 (fun domain arg -> infer_here (Check domain) arg) domains arguments in
       let op = set_type_args op type_args in
-      finish (DoOperation (op, List.map term arguments, Some result)) result
+      finish (DoOperation (op, List.map term arguments, Some instance)) result
         (Usage.combine_many (List.map usage arguments))
-  | DoOperation _ | Operation _ -> error pos "Expected an operation label in a do expression"
+  | Operation _ -> error pos "Expected an operation label in a do expression"
   | Handle handler ->
       begin match mode, expected_bare with
       | Check _, Meta point when (match Unionfind.find point with Var (_, _, `Flexible) -> true | _ -> false) ->
@@ -1121,7 +1173,9 @@ and infer_handler state pos mode { sh_expr; sh_effect_cases; sh_value_cases; sh_
       | Some previous -> Some (List.map2 FrescoTypes.merge_known previous arguments)) instances in
   let instances = List.fold_left (fun instances (op, (_, _, args, resumption, annotations, body)) ->
     let result = match snd (Context.prefix (FrescoPatterns.hint resumption)) with
-      | AmbientFunction (_, domain, _) -> Option.value ~default:Not_typed (record_field domain "1")
+      | AmbientFunction (_, domain, _) ->
+          Option.value ~default:Not_typed
+            (Option.bind (row_type domain) (fun row -> record_field row "1"))
       | _ -> Not_typed in
     let result = FrescoTypes.merge_known result (annotated_resume_argument resumption body) in
     let hints = List.map snd annotations @ [operation_hint (List.map FrescoPatterns.hint args) result] in
@@ -1136,7 +1190,13 @@ and infer_handler state pos mode { sh_expr; sh_effect_cases; sh_value_cases; sh_
   let schemes = List.fold_left (fun schemes (op, (_, label, _, _, _, _)) ->
     if StringMap.mem label schemes then schemes else
       let scheme = member_scheme op (Interfaces.find op.interface instances) in
-      StringMap.add label (Instantiate.freshen_quantifiers scheme) schemes
+      let scheme = match Option.bind sh_descr.shd_modal
+          (fun checked -> List.assoc_opt label checked.shm_operations) with
+        | None -> Instantiate.freshen_quantifiers scheme
+        | Some checked ->
+            consistent pos scheme checked;
+            checked in
+      StringMap.add label scheme schemes
   ) StringMap.empty clauses in
   let parameter_bindings = Option.fold ~none:[] ~some:(fun p -> p.shp_bindings) sh_descr.shd_params in
   FrescoPatterns.check_duplicates pos (List.map fst parameter_bindings);
@@ -1264,7 +1324,7 @@ and lambda state pos lin mode groups body =
               groups_check (under state modality) (Check inner) groups in
             groups, body, expected, usage, args
         | ForAll (qs, inner) ->
-            in_rigid_scope state.terms [] qs (fun () ->
+            introduce_quantifiers state qs (fun () ->
               let groups, body, _, usage, args =
                 groups_check (with_rigids state qs) (Check inner) groups in
               groups, body, expected, usage, args)
@@ -1353,16 +1413,19 @@ and infer_bindings ~global state bindings =
   let state, bindings, scopes =
     List.fold_left (fun (state, bindings, scopes) binding ->
       let state, binding, env, usage = infer_binding ~global state binding in
-      state, binding :: bindings, (binding.pos, env, usage) :: scopes)
+      state, binding :: bindings, (binding.pos, env, usage, state.terms) :: scopes)
       (state, [], []) bindings in
   let usage ~export body =
-    List.fold_left (fun uses (pos, env, usage) ->
+    List.fold_left (fun (uses, consumed) (pos, env, usage, owner) ->
+      let consumed = if global then Env.fold (fun name _ consumed ->
+        if Usage.uses_of name uses = 1 then (name, owner) :: consumed else consumed)
+        env consumed else consumed in
       let uses = if export then begin
           Env.iter (fun name typ ->
             if Usage.uses_of name uses > 1 then require_unrestricted pos name typ) env;
           Usage.restrict uses (Env.domain env)
         end else use_binders pos env uses in
-      Usage.combine usage uses) body scopes in
+      Usage.combine usage uses, consumed) (body, []) scopes in
   state, List.rev bindings, usage
 
 and infer_binding ~global state binding =
@@ -1403,15 +1466,18 @@ and infer_binding ~global state binding =
         let _, fnlit = def.fun_definition in
         let groups, body = Sugartypes.get_normal_funlit fnlit in
         let name = Binder.to_name def.fun_binder in
-        let annotated = Option.map (fun typ ->
-          let typ = signature state.terms state.rigids typ in
-          if global then global_signature typ else typ) (annotation def.fun_signature) in
+        let elaborated = def.fun_frozen && Binder.to_type def.fun_binder <> Not_typed in
+        let annotated =
+          if elaborated then Some (Binder.to_type def.fun_binder)
+          else Option.map (fun typ ->
+            let typ = signature state.terms state.rigids typ in
+            if global then global_signature typ else typ) (annotation def.fun_signature) in
         let state_for_body = if global && annotated = None then under state pure else state in
         let fn = make ~pos (FunLit (None, def.fun_linearity, NormalFunlit (groups, body), def.fun_location)) in
         let fn = infer state_for_body (Option.fold ~none:Infer ~some:(fun typ -> Check typ) annotated) fn in
         let typ = if global && annotated = None then Types.modal pure (typ fn) else typ fn in
         let (qs, _), typ =
-          if def.fun_frozen && annotated = None then ([], []), typ
+          if elaborated || (def.fun_frozen && annotated = None) then ([], []), typ
           else generalise state.terms state.rigids typ in
         let qs, fnlit = checked_function (sugar_quantifiers qs) (term fn) in
         let def = { def with
@@ -1435,13 +1501,18 @@ and infer_binding ~global state binding =
               bind_type state (Binder.to_name def.node.rec_binder) typ
             else state) state bodies in
         let checked = List.map (fun (def, annotated, typ, fn) ->
+          let inner = typ in
           let (qs, args), typ =
             if def.node.rec_frozen && not annotated then ([], []), typ
             else generalise ~mutate:false generalisation_state.terms state.rigids typ in
           let qs, fnlit = checked_function (sugar_quantifiers qs) (term fn) in
+          let inner_quantifiers =
+            List.mapi (fun i q -> Quantifier.to_var q, i) (prefix_quantifiers inner) in
+          let extras = List.map (fun q ->
+            List.assoc_opt (Quantifier.to_var q) inner_quantifiers) (prefix_quantifiers typ) in
           let node = { def.node with
             rec_binder = Binder.set_type def.node.rec_binder typ;
-            rec_definition = ((qs, None), fnlit);
+            rec_definition = ((qs, Some (inner, extras)), fnlit);
             rec_frozen = true } in
           with_node def node, typ, args, usage fn) bodies in
         List.iter (fun (_, _, args, _) -> List.iter Generalise.rigidify_type_arg args) checked;
@@ -1458,7 +1529,6 @@ and infer_binding ~global state binding =
           match alias.node with
           | name, qs, Typename (_, Some typ) ->
               Env.bind name (`Alias (pk_type, quantifiers qs, typ)) env
-          | _, _, Effectname _ -> error alias.pos "Effect row aliases are unavailable with modal types"
           | _ -> error alias.pos "Type alias has not been resolved") state.aliases aliases in
         finish { state with aliases } binding.node Env.empty Usage.empty
     | EffectInterface _ | Infix _ -> finish state binding.node Env.empty Usage.empty
@@ -1468,11 +1538,12 @@ and prepare_recursive ~global state def =
   let node = def.node in
   if DeclaredLinearity.is_linear node.rec_linearity then
     error def.pos ("Recursive function " ^ Binder.to_name node.rec_binder ^ " cannot be linear");
-  let typ = match annotation node.rec_signature with
-    | Some typ ->
+  let typ = match fst node.rec_definition, annotation node.rec_signature with
+    | (_, Some (inner, _)), _ -> true, inner
+    | _, Some typ ->
         let typ = signature state.terms state.rigids typ in
         true, (if global then global_signature typ else typ)
-    | None ->
+    | _, None ->
         let _, fnlit = node.rec_definition in
         let groups, _ = Sugartypes.get_normal_funlit fnlit in
         let typ =
@@ -1486,6 +1557,7 @@ and prepare_recursive ~global state def =
 
 and checked_function quantifiers phrase =
   match phrase.node with
+  | Checked (body, _) | ModalIntro (body, _) -> checked_function quantifiers body
   | TAbstr (qs, body) -> checked_function (quantifiers @ qs) body
   | FunLit (_, _, fnlit, _) -> quantifiers, fnlit
   | _ -> error phrase.pos "A function definition must have a function type"
@@ -1516,7 +1588,7 @@ let program ~interfaces ~aliases terms ((bindings, body) as program) =
     let state, bindings, uses = infer_bindings ~global:true initial bindings in
     let body = Option.map (infer state Infer) body in
     let pos = match body with Some (body, _, _) -> body.pos | None -> Position.dummy in
-    let typ, remaining = match body with
+    let typ, (remaining, consumed) = match body with
       | None -> unit_type, uses ~export:true Usage.empty
       | Some (body, typ, usage) ->
           let remaining = uses ~export:false usage in
@@ -1526,4 +1598,8 @@ let program ~interfaces ~aliases terms ((bindings, body) as program) =
     Usage.iter (fun name count ->
       if count > 1 then require_unrestricted pos name (lookup pos terms name)) remaining;
     at pos (fun () -> Context.solve terms);
-    (bindings, Option.map term body), typ, state.terms, state.aliases)
+    let consumed = ref (List.fold_left (fun terms (name, from) ->
+      Context.consume ~from terms name) state.terms consumed) in
+    Usage.iter (fun name count ->
+      if count = 1 then consumed := Context.consume ~from:terms !consumed name) remaining;
+    (bindings, Option.map term body), typ, !consumed, state.aliases)

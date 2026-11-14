@@ -13,6 +13,9 @@ val bind : t -> string -> Types.datatype -> t
 val bind_all : t -> Types.environment -> t
 val environment : t -> Types.environment
 
+(** Mark a linear binding used by a sentence, if it was not rebound. *)
+val consume : from:t -> t -> string -> t
+
 (** Types visible to a rigid variable escape check, including pending conversions. *)
 val protected_types : t -> Types.datatype list
 

@@ -19,14 +19,12 @@ let type_section env =
   | Minus -> TyEnv.find "-" env
   | FloatMinus -> TyEnv.find "-."env
   | Project label ->
-      let ab, a = Types.fresh_type_quantifier (lin_any, res_any) in
-      let rhob, row  = fresh_row_quantifier (lin_any, res_any) in
+      let ab, a = Types.fresh_type_quantifier (lin_unl, res_any) in
+      let rhob, row  = fresh_row_quantifier (lin_unl, res_any) in
       let (fields, rho) = TypeUtils.extract_row_parts row in
-      let eb, e = Types.fresh_row_quantifier default_effect_subkind in
 
       let r = Record (Row (StringMap.add label (Present a) fields, rho)) in
-        ForAll ([ab; rhob; eb],
-                Function (Types.make_tuple_type [r], e, a))
+      ForAll ([ab; rhob], AmbientFunction (dl_unl, Types.make_tuple_type [r], a))
   | Name var -> TyEnv.find var env
 
 let type_unary_op env tycon_env =
@@ -54,33 +52,7 @@ let type_binary_op env tycon_env =
   | Or           -> datatype "(Bool,Bool) -> Bool"
   | Cons         -> TyEnv.find "Cons" env
   | Name "++"    -> TyEnv.find "Concat" env
-  | Name ">"
-  | Name ">="
-  | Name "=="
-  | Name "<"
-  | Name "<="
-  | Name "<>" ->
-      let ab, a = Types.fresh_type_quantifier (lin_any, res_any) in
-      let eb, e = Types.fresh_row_quantifier (lin_any, res_any) in
-        ForAll ([ab; eb],
-                Function (Types.make_tuple_type [a; a], e,
-                          Primitive Primitive.Bool ))
   | Name n       -> TyEnv.find n env
-
-let fun_effects t pss =
-  let rec get_eff =
-    function
-      | Function (_, effects, _), [_]
-      | Lolli    (_, effects, _), [_] -> effects
-      | Function (_, _, t), _::pss
-      | Lolli    (_, _, t), _::pss -> get_eff (TypeUtils.concrete_type t, pss)
-      | _ -> assert false in
-  let t =
-    match TypeUtils.concrete_type t with
-      | ForAll (_, body) -> TypeUtils.concrete_type body
-      | t -> t
-  in
-    get_eff (t, pss)
 
 let option :
     'self_type ->
@@ -138,14 +110,13 @@ class transform (env : Types.typing_environment) =
   object (o : 'self_type)
     val var_env = env.Types.var_env
     val tycon_env = env.Types.tycon_env
-    val effect_row = fst (Types.unwrap_row env.Types.effect_row)
 
     method get_var_env : unit -> Types.environment = fun () -> var_env
     method get_tycon_env : unit -> Types.tycon_environment = fun () -> tycon_env
 
-    method backup_envs = var_env, tycon_env, effect_row
-    method restore_envs (var_env, tycon_env, effect_row) =
-      {< var_env = var_env; tycon_env = tycon_env; effect_row = effect_row >}
+    method backup_envs = var_env, tycon_env
+    method restore_envs (var_env, tycon_env) =
+      {< var_env = var_env; tycon_env = tycon_env >}
 
     method with_var_env var_env =
       {< var_env = var_env >}
@@ -158,11 +129,6 @@ class transform (env : Types.typing_environment) =
 
     method lookup_type : Name.t -> Types.datatype = fun var ->
       TyEnv.find var var_env
-
-    method lookup_effects : Types.row = effect_row
-
-    method with_effects : Types.row -> 'self_type = fun effects ->
-      {< effect_row = fst (Types.unwrap_row effects) >}
 
     method sugar_datatype : Datatype.with_pos -> ('self_type * Datatype.with_pos) =
       fun s -> (o, s)
@@ -237,14 +203,12 @@ class transform (env : Types.typing_environment) =
       | Sugartypes.Var var -> (o, Sugartypes.Var var, o#lookup_type var)
       | FreezeVar var -> (o, FreezeVar var, o#lookup_type var)
       | FunLit (Some argss, lin, lam, location) ->
-          let inner_e = snd (last argss) in
-          let (o, lam, rt) = o#funlit inner_e lam in
+          let (o, lam, rt) = o#funlit lam in
           let (o, t) =
             List.fold_right
-              (fun (args, effects) (o, rt) ->
+              (fun (args, _) (o, rt) ->
                  let (o, args) = o#datatype args in
-                 let (o, row) = o#row effects in
-                   (o, Function (args, row, rt)))
+                 (o, AmbientFunction (lin, args, rt)))
               argss
               (o, rt)
           in
@@ -289,7 +253,7 @@ class transform (env : Types.typing_environment) =
             check_type_application
               (InfixAppl ((tyargs, op), e1, e2), t)
               (fun () ->
-                 let t = TypeUtils.return_type (Instantiate.apply_type t tyargs) in
+                 let t = TypeUtils.return_type (FrescoTypes.apply t tyargs) in
                  let (o, e1, _) = o#phrase e1 in
                  let (o, e2, _) = o#phrase e2 in
                    (o, InfixAppl ((tyargs, op), e1, e2), t))
@@ -301,7 +265,7 @@ class transform (env : Types.typing_environment) =
             check_type_application
               (UnaryAppl ((tyargs, op), e), t)
               (fun () ->
-                 let t = TypeUtils.return_type (Instantiate.apply_type t tyargs) in
+                 let t = TypeUtils.return_type (FrescoTypes.apply t tyargs) in
                  let (o, e, _) = o#phrase e in
                    (o, UnaryAppl ((tyargs, op), e), t))
       | FnAppl (f, args) ->
@@ -321,7 +285,7 @@ class transform (env : Types.typing_environment) =
             check_type_application
               (TAppl (e, tyargs), t)
               (fun () ->
-                 let t = Instantiate.apply_type t (List.map (snd ->- val_of) tyargs) in
+                 let t = FrescoTypes.apply t (List.map (snd ->- val_of) tyargs) in
                    (o, TAppl (e, tyargs), t))
       | TupleLit [e] ->
           (* QUESTION:
@@ -352,7 +316,7 @@ class transform (env : Types.typing_environment) =
               | None -> Types.make_record_type field_types
               | Some t ->
                   begin
-                    match TypeUtils.concrete_type t with
+                    match TypeUtils.without_modality t with
                       | Record row ->
                           Record (Types.extend_row field_types row)
                       | t ->
@@ -371,7 +335,7 @@ class transform (env : Types.typing_environment) =
               (fun o (name, e) -> let o, e, t = o#phrase e in (o, (name, e), t))
               fields
           in
-          let t = match Types.concrete_type t with
+          let t = match TypeUtils.without_modality t with
             | Record row ->
                let  (fs, rv) =
                  Types.flatten_row row |> TypeUtils.extract_row_parts
@@ -386,6 +350,14 @@ class transform (env : Types.typing_environment) =
           let (o, ann_type) = o#datatype' ann_type in
           let t = val_of (snd ann_type) in
           (o, TypeAnnotation (e, ann_type), t)
+      | Checked (e, t) ->
+          let o, e, _ = o#phrase e in
+          let o, t = o#datatype t in
+          o, Checked (e, t), t
+      | ModalIntro (e, t) ->
+          let o, e, _ = o#phrase e in
+          let o, t = o#datatype t in
+          o, ModalIntro (e, t), t
       | Upcast (e, to_type, from_type) ->
           let (o, e, _) = o#phrase e in
           let (o, to_type) = o#datatype' to_type in
@@ -396,9 +368,11 @@ class transform (env : Types.typing_environment) =
           let (o, e, _) = option o (fun o -> o#phrase) e in
           let (o, t) = o#datatype t in
           (o, ConstructorLit (name, e, Some t), t)
-      | DoOperation (name, ps, Some t) ->
+      | DoOperation (name, ps, Some signature) ->
          let (o, ps, _) = list o (fun o -> o#phrase) ps in
-         (o, DoOperation (name, ps, Some t), t)
+         let o, signature = o#datatype signature in
+         let t = TypeUtils.return_type signature in
+         (o, DoOperation (name, ps, Some signature), t)
       | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
          let (input_row, input_t, output_row, output_t) = sh_descr.shd_types in
          let (o, expr, _) = o#phrase sh_expr in
@@ -508,20 +482,18 @@ class transform (env : Types.typing_environment) =
         let (o, p) = o#pattern p in
         (o, (p, e))
 
-    method funlit : Types.row -> funlit -> ('self_type * funlit * Types.datatype) =
-      fun inner_eff f ->
+    method funlit : funlit -> ('self_type * funlit * Types.datatype) =
+      fun f ->
         match f with
           | NormalFunlit (pss, e) ->
             let envs = o#backup_envs in
             let (o, pss) = listu o (fun o -> listu o (fun o -> o#pattern)) pss in
-            let o = o#with_effects inner_eff in
             let (o, e, t) = o#phrase e in
             let o = o#restore_envs envs in
             (o, NormalFunlit (pss, e), t)
           | SwitchFunlit (pss, body) ->
             let envs = o#backup_envs in
             let (o, pss) = listu o (fun o -> listu o (fun o -> o#pattern)) pss in
-            let o = o#with_effects inner_eff in
             let (o, body) =
               listu o (fun o (p, c) ->
                 let (o, p) = o#pattern p in
@@ -549,16 +521,14 @@ class transform (env : Types.typing_environment) =
       let rec list o =
         function
           | [] -> (o, [])
-          | {node={ rec_definition = ((tyvars, Some (inner, extras)), lam); _ } as fn; pos} :: defs ->
+          | {node={ rec_definition = ((tyvars, inner), lam); _ } as fn; pos} :: defs ->
               let (o, tyvars) = o#quantifiers tyvars in
-              let (o, inner) = o#datatype inner in
-              let lam_in = Sugartypes.get_normal_funlit lam in
-              let inner_effects = fun_effects inner (fst lam_in) in
-              let (o, lam, _) = o#funlit inner_effects lam in
+              let (o, inner) = optionu o (fun o (inner, extras) ->
+                let o, inner = o#datatype inner in o, (inner, extras)) inner in
+              let (o, lam, _) = o#funlit lam in
               let o = o#restore_quantifiers outer_tyvars in
               let (o, defs) = list o defs in
-              (o, make ~pos { fn with rec_definition = ((tyvars, Some (inner, extras)), lam) } :: defs)
-          | _ :: _ -> assert false
+              (o, make ~pos { fn with rec_definition = ((tyvars, inner), lam) } :: defs)
       in
         list o
 
@@ -578,10 +548,10 @@ class transform (env : Types.typing_environment) =
       let rec list o =
         function
           | [] -> o
-          | {node={ rec_binder = f; rec_definition = ((_tyvars, Some (inner, _extras)), _lam); _ }; _} :: defs ->
-              let (o, _) = o#binder (Binder.set_type f inner) in
+          | {node={ rec_binder = f; rec_definition = ((_tyvars, inner), _lam); _ }; _} :: defs ->
+              let f = match inner with None -> f | Some (inner, _) -> Binder.set_type f inner in
+              let (o, _) = o#binder f in
               list o defs
-          | _ :: _ -> assert false
       in
         list o
 
@@ -600,9 +570,7 @@ class transform (env : Types.typing_environment) =
            when Binder.has_type fun_binder ->
          let outer_tyvars = o#backup_quantifiers in
          let (o, tyvars) = o#quantifiers tyvars in
-         let lam_in = Sugartypes.get_normal_funlit lam in
-         let inner_effects = fun_effects (Binder.to_type fun_binder) (fst lam_in) in
-         let (o, lam, _) = o#funlit inner_effects lam in
+         let (o, lam, _) = o#funlit lam in
          let o = o#restore_quantifiers outer_tyvars in
          let (o, fun_binder) = o#binder fun_binder in
          let (o, fun_signature) = optionu o (fun o -> o#datatype') fun_signature in
@@ -626,10 +594,6 @@ class transform (env : Types.typing_environment) =
                    let o = o#bind_tycon name
                      (`Alias (pk_type, List.map (SugarQuantifier.get_resolved_exn) vars, dt)) in
                    (o, WithPos.make ~pos (name, vars, Typename (x, dt')))
-                | Effectname (x, (Some r as r')) ->
-                   let o = o#bind_tycon name
-                     (`Alias (pk_row, List.map (SugarQuantifier.get_resolved_exn) vars, r)) in
-                   (o, WithPos.make ~pos (name, vars, Effectname (x, r')))
                 | _ -> raise (internal_error "Unannotated type alias")
             ) ts in
           (o, Aliases ts)

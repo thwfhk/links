@@ -36,7 +36,6 @@ let keywords = [
  "case"     , CASE;
  "do"       , DOOP;
  "effect"   , EFFECT;
- "effectname", EFFECTNAME;
  "else"     , ELSE;
  "escape"   , ESCAPE;
  "false"    , FALSE;
@@ -106,9 +105,7 @@ rule lex ctxt nl = parse
   | "<>"                                { NEQ }
   | "|>"                                { BARGT }
   | "->"                                { RARROW }
-  | "~>"                                { SQUIGRARROW }
   | "-@"                                { LOLLI }
-  | "~@"                                { SQUIGLOLLI }
   | "=>"                                { FATRARROW }
   | "-."                                { MINUSDOT }
   | '-'                                 { MINUS }

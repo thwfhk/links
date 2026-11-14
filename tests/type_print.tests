@@ -2,42 +2,26 @@
 args: --set=types_pretty_printer_engine=old
 ---
 
-Shared effect in a higher-order function
-fun (f, x: Int) { f(x) + 0 } : ((Int) -e-> Int, Int) -e-> Int
-stdout : fun : ((Int) -a-> Int, Int) -a-> Int
+Shared context in a higher-order function
+fun (f, x: Int) { f(x) + 0 } : ((Int) -> Int, Int) -> Int
+stdout : fun : ((Int) -> Int, Int) -> Int
 
-Independent effect in a curried arrow
-fun (f)(x: Int) { f(x) + 0 } : ((Int) -e-> Int) -f-> (Int) -e-> Int
-stdout : fun : ((Int) -a-> Int) -> (Int) -a-> Int
+Shared callback and final application context
+fun (f)(x: Int) { f(x) + 0 } : ((Int) -> Int) -> (Int) -> Int
+stdout : fun : ((Int) -> Int) -> (Int) -> Int
 
-Shared effect across a tuple
-(map, id) : (((a) -e-> b, List a) -e-> List b, (c) -e-> c)
-stdout : (fun, fun) : (((a) -b-> c, List a) -b-> List c, (d) -b-> d)
+Shared context across a tuple
+(map, id) : (((a) -> b, List a) -> List b, (c) -> c)
+stdout : (fun, fun) : (((a) -> b, List a) -> List b, (c) -> c)
 
-Anonymous effect tails after operation fields
-fun(_) {} : (() {F:()|_}-> ()) {F:()|_} -> ()
-stdout : fun : (() {F:() => ()|_}-> ()) {F:() => ()|_}-> ()
+Type alias for an ambient thunk
+typename Thunk(a) = () -> a; fun() {} : Thunk(())
+stdout : fun : Thunk (())
 
-Single-use effect tails
-fun(_) { } : (() -e-> ()) -f-> ()
-stdout : fun : (() -> ()) -> ()
+Curried function returning an absolute thunk alias
+typename Thunk(a) = [] (() -> a); fun()() {} : () -> Thunk(())
+stdout : fun : () -> Thunk (())
 
-Shared effect tail in curried arrows
-fun()() { } : () -a-> () -a-> ()
-stdout : fun : () -a-> () -a-> ()
-
-Distinct effect tails across a tuple
-(fun(){}, fun(){}) : (() -a-> (), () -b-> ())
-stdout : (fun, fun) : (() -> (), () -> ())
-
-Type alias with an anonymous effect tail
-fun() {} : Comp((), { | e })
-stdout : fun : Comp ((),{ |_ })
-
-Curried function returning a computation type alias
-fun()() {} : () -e-> Comp((), { | f })
-stdout : fun : () -> Comp ((),{ |_ })
-
-Type aliases with a shared effect tail
-fun(x) {x} : (Comp(a, { | e })) -f-> Comp(a, { | e })
-stdout : fun : (Comp (a,{ |b })) -> Comp (a,{ |b })
+Shared thunk alias across argument and result
+typename Thunk(a) = () -> a; fun(x) { x } : (Thunk(a)) -> Thunk(a)
+stdout : fun : (Thunk (a)) -> Thunk (a)

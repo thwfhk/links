@@ -2,8 +2,7 @@ open Utility
 open CommonTypes
 open Sugartypes
 
-(* Named type variables are resolved before this pass. Elaborate operation
-   signatures and resolve the anonymous row tails left by that pass. *)
+(* Resolve anonymous data row tails after the named type variables. *)
 let internal_error message =
   Errors.internal_error ~filename:"desugarEffects.ml" ~message
 
@@ -17,30 +16,12 @@ let alias_kinds (tycon_env : Types.tycon_environment) =
       | `Mutual _ -> raise (internal_error "Found `Mutual in global tycon env"))
     tycon_env
 
-let rec elaborate_operation (dt : Datatype.with_pos) =
-  let open Datatype in
-  let open SourceCode.WithPos in
-  match dt.node with
-  | Operation _ -> dt
-  | Forall (qs, body) -> with_node dt (Forall (qs, elaborate_operation body))
-  | _ -> with_node dt (Datatype.Operation ([], dt))
-
-let has_modal_type =
-  let visitor = object
-    inherit SugarTraversals.fold as super
-    method! datatypenode = function
-      | Datatype.Modal _ -> raise Exit
-      | t -> super#datatypenode t
-  end in
-  fun dt -> try ignore (visitor#datatype dt); false with Exit -> true
-
-class main_traversal ~modal initial_alias_kinds =
+class main_traversal initial_alias_kinds =
   object (o)
     inherit SugarTraversals.fold_map as super
 
     val alias_kinds : Kind.t list SEnv.t = initial_alias_kinds
     val allow_implicit_vars = true
-    val modal_types = modal
 
     method! phrasenode = function
       | Block _ as block ->
@@ -49,43 +30,16 @@ class main_traversal ~modal initial_alias_kinds =
       | phrase -> super#phrasenode phrase
 
     method! datatype dt =
-      (* Keep the meaning of bare arrows consistent within a modal type. *)
-      let inner = if modal_types || not (has_modal_type dt) then o else {<modal_types = true>} in
       Errors.rethrow_errors_if_better_position
-        (SourceCode.WithPos.pos dt) inner#visit_datatype dt
+        (SourceCode.WithPos.pos dt) super#datatype dt
 
-    method! datatypenode =
-      let open Datatype in
-      let arrow args effects result =
-        let o, args = o#list (fun o -> o#datatype) args in
-        let o, effects = o#effect_row effects in
-        let o, result = o#datatype result in
-        (o, args, effects, result)
-      in
-      function
-      | AmbientArrow (linearity, args, result) ->
-          if modal_types then super#datatypenode (AmbientArrow (linearity, args, result))
-          else
-            let anonymous = SugarTypeVar.mk_unresolved "$effect" ~is_eff:true None `Rigid in
-            let o, args, effects, result = arrow args ([], Datatype.Open anonymous) result in
-            o, (match linearity with
-                | DeclaredLinearity.Unl -> Function (args, effects, result)
-                | DeclaredLinearity.Lin -> Lolli (args, effects, result))
-      | Function (args, effects, result) ->
-          let o, args, effects, result = arrow args effects result in
-          (o, Function (args, effects, result))
-      | Lolli (args, effects, result) ->
-          let o, args, effects, result = arrow args effects result in
-          (o, Lolli (args, effects, result))
-      | Effect row ->
-          let o, row = o#effect_row row in
-          (o, Effect row)
-      | TypeApplication (name, args) ->
-          (o, TypeApplication (name, o#alias_args name args))
-      | Forall (qs, body) ->
+    method! datatypenode = function
+      | Datatype.TypeApplication (name, args) ->
+          (o, Datatype.TypeApplication (name, o#alias_args name args))
+      | Datatype.Forall (qs, body) ->
           let inner = {<allow_implicit_vars = false>} in
           let _, body = inner#datatype body in
-          (o, Forall (qs, body))
+          (o, Datatype.Forall (qs, body))
       | dt -> super#datatypenode dt
 
     method alias_args name args =
@@ -101,8 +55,6 @@ class main_traversal ~modal initial_alias_kinds =
       List.mapi
         (fun i (kind, arg) ->
           match kind, arg with
-          | (PrimaryKind.Row, (_, Restriction.Effect)), Datatype.Row row ->
-              Datatype.Row (snd (o#effect_row row))
           | (PrimaryKind.Row, _), Datatype.Row _
           | _, (Datatype.Type _ | Datatype.Presence _) ->
               snd (o#type_arg arg)
@@ -141,26 +93,9 @@ class main_traversal ~modal initial_alias_kinds =
           (o, Open (SugarTypeVar.mk_resolved_row point))
       | tail -> super#row_var tail
 
-    method effect_row (fields, tail) =
-      let fields =
-        List.map
-          (function
-            | label, Datatype.Present dt when not (TypeUtils.is_builtin_effect label) ->
-                (label, Datatype.Present (elaborate_operation dt))
-            | field -> field)
-          fields
-      in
-      o#row (fields, tail)
-
-    method! aliasbody = function
-      | Effectname (row, typ) ->
-          let o, row = o#effect_row row in
-          (o, Effectname (row, typ))
-      | body -> super#aliasbody body
-
     method! bindingnode = function
       | EffectInterface _ as declaration ->
-          let inner = {<allow_implicit_vars = false; modal_types = true>} in
+          let inner = {<allow_implicit_vars = false>} in
           let _, declaration = inner#visit_bindingnode declaration in
           o, declaration
       | Val (_, _, _, signature) as binding ->
@@ -195,7 +130,6 @@ class main_traversal ~modal initial_alias_kinds =
           DesugarTypeVariables.sig_allows_implicitly_bound_vars signature>}
 
     method visit_bindingnode = super#bindingnode
-    method visit_datatype = super#datatype
     method visit_function_definition = super#function_definition
     method visit_recursive_functionnode = super#recursive_functionnode
 
@@ -210,12 +144,12 @@ class main_traversal ~modal initial_alias_kinds =
       (o, definition)
   end
 
-let program ~modal tycon_env p =
-  let traversal = new main_traversal ~modal (alias_kinds tycon_env) in
+let program tycon_env p =
+  let traversal = new main_traversal (alias_kinds tycon_env) in
   snd (traversal#program p)
 
-let sentence ~modal tycon_env =
-  let traversal = new main_traversal ~modal (alias_kinds tycon_env) in
+let sentence tycon_env =
+  let traversal = new main_traversal (alias_kinds tycon_env) in
   function
   | Definitions bindings ->
       Definitions (snd (traversal#list (fun o b -> o#binding b) bindings))
@@ -223,7 +157,7 @@ let sentence ~modal tycon_env =
   | Directive d -> Directive d
 
 let standalone_signature tycon_env t =
-  let traversal = new main_traversal ~modal:false (alias_kinds tycon_env) in
+  let traversal = new main_traversal (alias_kinds tycon_env) in
   snd (traversal#datatype t)
 
 module Untyped = struct
@@ -231,24 +165,13 @@ module Untyped = struct
 
   let name = "effects"
 
-  let program_with_mode ~modal state program' =
+  let program state program' =
     let tyenv = Context.typing_environment (context state) in
-    let program' = program ~modal tyenv.Types.tycon_env program' in
+    let program' = program tyenv.Types.tycon_env program' in
     return state program'
 
-  let sentence_with_mode ~modal state sentence' =
+  let sentence state sentence' =
     let tyenv = Context.typing_environment (context state) in
-    let sentence'' = sentence ~modal tyenv.Types.tycon_env sentence' in
+    let sentence'' = sentence tyenv.Types.tycon_env sentence' in
     return state sentence''
-
-  let program = program_with_mode ~modal:false
-  let sentence = sentence_with_mode ~modal:false
-end
-
-module Modal = struct
-  module Untyped = struct
-    let name = Untyped.name
-    let program = Untyped.program_with_mode ~modal:true
-    let sentence = Untyped.sentence_with_mode ~modal:true
-  end
 end

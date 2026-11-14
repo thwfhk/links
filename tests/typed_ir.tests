@@ -4,19 +4,19 @@ config: tests/typed_ir.config
 
 Anonymous constant function (#693)
 fun (x) {1}
-stdout : fun : forall a,b::Row.(a) -b-> Int
+stdout : fun : forall a.(a) -> Int
 
 Anonymous identity function (#693)
 fun (x) {x}
-stdout : fun : forall a::Any,b::Row.(a::Any) -b-> a::Any
+stdout : fun : forall a::Any.(a::Any) -> a::Any
 
 Anonymous composition function (#693)
 fun (f,g) {fun (x){f (g(x))}}
-stdout : fun : forall a::Any,b::Row,c::Any,d::Any,e::Row.((a::Any) -b-> c::Any, (d::Any) -b-> a::Any) -e-> (d::Any) -b-> c::Any
+stdout : fun : forall a::Any,b::Any,c::Any.((a::Any) -> b::Any, (c::Any) -> a::Any) -> (c::Any) -> b::Any
 
 Anonymous application function (#693)
 fun (f) {fun (x){f (x)}}
-stdout : fun : forall a::Any,b::Row,c::Any,d::Row.((a::Any) -b-> c::Any) -d-> (a::Any) -b-> c::Any
+stdout : fun : forall a::Any,b::Any.((a::Any) -> b::Any) -> (a::Any) -> b::Any
 
 ConcatMap (#368)
 tests/typed_ir/T368.links
@@ -36,7 +36,7 @@ stdout : () : ()
 Bound quantifiers in a list of records (#694)
 tests/typed_ir/T694.links
 filemode : true
-stdout : fun : forall a::Row,b::Row(Any,Base).() -a-> List (|b::(Any,Base))
+stdout : fun : forall a::Row(Unl,Base).() -> List (|a::Base)
 
 Curry (#574)
 tests/typed_ir/T574.links
@@ -75,7 +75,7 @@ sig isInt : (String) -> Bool fun isInt (x) { x =~ /-?[0-9]+$/ }
 stdout : () : ()
 
 function pattern matching has right effects (#691)
-sig f : (List a) {}-> a fun f ([x]) { x }
+sig f : (List a) -> a fun f ([x]) { x }
 stdout : () : ()
 
 Freshen type variables when turning a lambda into a named function (#871)
@@ -89,11 +89,11 @@ stderr : @.*Type error:.*
 exit : 1
 
 Apply an unrestricted callback with shared effects
-sig apply : forall a,b,e::Row. ((a) ~e~> b, a) ~e~> b fun apply(f, x) { f(x) } apply(fun(x) { x + 1 }, 41)
+sig apply : forall a,b. ((a) -> b, a) -> b fun apply(f, x) { f(x) } apply(fun(x) { x + 1 }, 41)
 stdout : 42 : Int
 
 Apply a linear callback with shared effects
-sig applyLinear : forall a,b,e::Row. ((a) ~e~@ b, a) ~e~> b fun applyLinear(f, x) { f(x) } applyLinear(linfun(x) { x + 1 }, 41)
+sig applyLinear : forall a,b. ((a) -@ b, a) -> b fun applyLinear(f, x) { f(x) } applyLinear(linfun(x) { x + 1 }, 41)
 stdout : 42 : Int
 
 lf (#876)
@@ -107,3 +107,19 @@ tests/typed_ir/T877.links
 filemode : true
 exit : 0
 stdout : () : ()
+
+Type application through an absolute modality
+sig f : [] (forall a. a -> a) fun f(x) { x } (f(42), (~f)[Bool](true))
+stdout : (42, true) : (Int, Bool)
+
+An alternative can contain a modal field
+effect Yielding { Yield : (Int) => (); } sig done : Int -> (|Done:Int|More:(Int, <Yielding> ((()) -> Int))|) fun done(x) { Done(x) } switch (done(42)) { case Done(x) -> x case More(_) -> 0 }
+stdout : 42 : Int
+
+Strict IR checking terminates for a recursive variant with a list payload
+typename Tree = (|Leaf:Int|Branch:List Tree|); Branch([]) : Tree
+stdout : Branch([]) : Tree
+
+Strict IR preserves rigid operation parameters in a nested closure
+effect Choice { Pick : forall a::Abs. (a) => a; } handle((do Pick(1), do Pick(true))) { case <Pick(x) => k> -> { fun resume() { k(x) } resume() } }
+stdout : (1, true) : (Int, Bool)

@@ -29,44 +29,48 @@ roundtrip() {
 }
 
 status=0
-roundtrip "Wild in a computation type alias argument" \
-    'typename Thunk(a,e::Eff) = () -e-> a;' \
-    'fun() { print("hello"); do Ask } : Thunk(Int,{wild:(),Ask:Int})' || status=1
+roundtrip "Absolute interface and native permission in an alias" \
+    'effect Reader { Ask : () => Int; } typename Thunk = [wild, Reader] (() -> Int);' \
+    'fun() { print("hello"); do Ask } : Thunk' || status=1
 
-roundtrip "Quantified effect tail and effect presence" \
-    'sig f : forall e::Eff,p::Presence(Unl,Eff). (() {Ask{p}|e}-> ()) {Ask{p}|e}-> () fun f(g) {g()}' \
+roundtrip "Mixed modal and quantified prefixes" \
+    'sig f : [] (forall a::Abs. a -> a) fun f(x) {x}' \
     '~f' --set=show_quantifiers=true || status=1
 
 roundtrip "Quantified presence in an alias argument" \
-    'typename Shape(p::Presence(Any,Any)) = (x{p},anchor:Int); sig f : forall p::Presence(Any,Any),e::Eff. (Shape({p})) -e-> Shape({p}) fun f(r) {r}' \
+    'typename Shape(p::Presence(Any,Any)) = (x{p},anchor:Int); sig f : forall p::Presence(Any,Any). (Shape({p})) -> Shape({p}) fun f(r) {r}' \
     '~f' --set=show_quantifiers=true || status=1
 
 roundtrip "Quantified value type that admits linear values" \
-    'sig f : forall a::Any,e::Eff. (a::Any) -e-> a::Any fun f(x) {x}' \
+    'sig f : forall a::Any. (a::Any) -> a::Any fun f(x) {x}' \
     '~f' --set=show_quantifiers=true || status=1
 
-roundtrip "Recursive effect row" \
-    'fun w(g) { handle(g()) { case () -> () case <F(h) => res> -> w(h) }}' \
-    'w' || status=1
+roundtrip "Recursive variant containing an ambient function" \
+    'typename Expr = mu x. (|Stop | Step:() -> x|); sig f : Expr -> Expr fun f(x) { x }' \
+    '~f' --set=show_quantifiers=true || status=1
+
+roundtrip "Relative mask followed by an extension" \
+    'effect Reader(a::Abs) { Ask : () => a; } sig f : (<Reader | Reader(Int)> (() -> Int)) -> (<Reader | Reader(Int)> (() -> Int)) fun f(x) { x }' \
+    '~f' --set=show_quantifiers=true || status=1
 
 roundtrip "Nested lists and function elements" \
-    'sig f : forall e::Eff. (List (List ((Int) -e-> Int))) -e-> List (List ((Int) -e-> Int)) fun f(xs) { xs }' \
+    'sig f : (List (List ([] (Int -> Int)))) -> List (List ([] (Int -> Int))) fun f(xs) { xs }' \
     '~f' --set=show_quantifiers=true || status=1
 
 roundtrip "Variants and open record rows" \
-    'sig f : forall e::Eff,r::Row,s::Row. (List (|None|Some:(x:Int|r)|s|)) -e-> List (|None|Some:(x:Int|r)|s|) fun f(xs) { xs }' \
+    'sig f : forall r::Row,s::Row. (List (|None|Some:(x:Int|r)|s|)) -> List (|None|Some:(x:Int|r)|s|) fun f(xs) { xs }' \
     '~f' --set=show_quantifiers=true || status=1
 
 roundtrip "Empty variants" '' \
     'fun(x : (| |)) { switch (x) { } }' || status=1
 
 roundtrip "Open-only variants with the old printer" \
-    'sig f : forall r::Row,e::Eff. ((|r|)) -e-> (|r|) fun f(x) { x }' \
+    'sig f : forall r::Row. ((|r|)) -> (|r|) fun f(x) { x }' \
     '~f' --set=types_pretty_printer_engine=old --set=show_quantifiers=true || status=1
 
 for engine in roundtrip old; do
     roundtrip "Absent variant fields with the $engine printer" \
-        'sig f : forall r::Row,e::Eff. ((|None{-}|Some:Int|r|)) -e-> (|None{-}|Some:Int|r|) fun f(x) { x }' \
+        'sig f : forall r::Row. ((|None{-}|Some:Int|r|)) -> (|None{-}|Some:Int|r|) fun f(x) { x }' \
         '~f' --set=types_pretty_printer_engine="$engine" --set=show_quantifiers=true || status=1
 done
 

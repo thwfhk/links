@@ -1,4 +1,4 @@
-sig g : forall a,f::Row,g::Row. (List a) -f-> (List a) -g-> a
+sig g : forall a. (List a) -> (List a) -> a
 fun g(x)(y) {
   switch((x, y)) {
     case (x :: _, _) -> x

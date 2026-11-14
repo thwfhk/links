@@ -1,9 +1,9 @@
-effectname A(e::Eff) = { E: () => () | e } ;
-# effectname B = A({ | A({}) }) ;
+effect Reader(a::Abs) { Ask : () => a; }
 
-sig f : () -A({})-> ()
-fun f () {
-    do E()
+handle(
+  handle(if (do Ask) 1 else 0) {
+    case <Ask => k> -> k(do Ask == 42)
+  }
+) {
+  case <Ask => k> -> k(42)
 }
-
-f

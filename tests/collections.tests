@@ -167,3 +167,12 @@ stdout : [1] : List Int
 For comprehensions with multiple generators
 for (x <- [1,2], y <- [true, false], z <- ["foo", "bar"]) [(x,y,z)]
 stdout : [(1, true, "foo"), (1, true, "bar"), (1, false, "foo"), (1, false, "bar"), (2, true, "foo"), (2, true, "bar"), (2, false, "foo"), (2, false, "bar")] : List (Int, Bool, String)
+
+Generator sources use the scope outside the comprehension
+var x = 42; for (x <- [1], y <- [x]) [x + y]
+stdout : [43] : List Int
+
+A generator cannot see a previous generator's binder
+for (x <- [1], y <- [x]) [x + y]
+stderr : @.*Unknown variable x.*
+exit : 1

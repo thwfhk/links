@@ -88,7 +88,6 @@ let renaming_type_visitor instantiation_map =
 
 
 let renamer qs_from qs_to =
-  let open Types in
   object(o : 'self_type)
     inherit SugarTraversals.fold_map as super
 
@@ -199,14 +198,6 @@ let renamer qs_from qs_to =
       let o              = o#set_maps old_maps in
       o, (param_pats', tyvars, typ', ty', signature', phrase')
 
-     method forall = function
-       | ForAll (qs_from', t) ->
-          assert (List.length qs_from' = List.length qs_to);
-          let _, t' = o#typ t in
-          ForAll (qs_to, t')
-       | t -> snd (o#typ t)
-
-
      (* We do not rename inside the syntactic representation of types *)
      method! type_variable x = o, x
 
@@ -225,7 +216,7 @@ let rename_function_definition : function_definition -> function_definition =
   let qs_to, _      = Instantiate.build_fresh_quantifiers qs_from in
   let tyvars_to     = List.map SugarQuantifier.mk_resolved qs_to in
   let o             = renamer qs_from qs_to in
-  let typ'          = o#forall (Binder.to_type fun_binder) in
+  let _, typ'       = o#typ (Binder.to_type fun_binder) in
   let _, pats'      = List.split (List.map (o#pattern_list o) pats) in
   let _, body'      = o#phrase body in
   let _, signature' = o#option (fun o -> o#datatype') fun_signature in
@@ -252,9 +243,9 @@ let rename_recursive_functionnode :
   let qs_to, _      = Instantiate.build_fresh_quantifiers qs_from in
   let tyvars_to     = List.map SugarQuantifier.mk_resolved qs_to in
   let o             = renamer qs_from qs_to in
-  let typ'          = o#forall (Binder.to_type rec_binder) in
+  let _, typ'       = o#typ (Binder.to_type rec_binder) in
   let _, pats'      = List.split (List.map (o#pattern_list o) pats) in
-  let _, ty'        = o#option (fun o (ty, x) -> o, (o#forall ty, x)) ty in
+  let _, ty'        = o#option (fun o (ty, x) -> let o, ty = o#typ ty in o, (ty, x)) ty in
   let _, body'      = o#phrase body in
   let _, signature' = o#option (fun o -> o#datatype') rec_signature in
   { rec_binder =  Binder.set_type rec_binder typ'

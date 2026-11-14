@@ -121,10 +121,8 @@ object (o : 'self_type)
           (o#with_extra_env extra_env, e, t)
     | e -> super#phrasenode e
 
-  method! funlit =
-    (* HACK: manage the lexical scope of extras *)
-    fun inner_mb lam ->
-    let (o, lam, t) = super#funlit inner_mb lam in
+  method! funlit lam =
+    let (o, lam, t) = super#funlit lam in
     (o#with_extra_env extra_env, lam, t)
 
   method! bindingnode = function
@@ -138,7 +136,7 @@ object (o : 'self_type)
             (fun o {node={ rec_binder = bndr; rec_definition = ((tyvars, dt_opt), _); _ }; _ } ->
                match dt_opt with
                  | Some (_, extras) -> o#bind (Binder.to_name bndr) tyvars extras
-                 | None -> assert false
+                 | None -> o
             )
             o defs in
 
@@ -148,13 +146,13 @@ object (o : 'self_type)
             function
               | [] -> (o, [])
               | {node={ rec_binder = bndr;
-                   rec_definition = ((tyvars, Some (_inner, extras)), lam);
+                   rec_definition = ((tyvars, inner), lam);
                    _ } as fn; pos} :: defs ->
                  let outer = Binder.to_type bndr in
                  let (o, defs) = list o defs in
-                 let extras = List.map (fun _ -> None) extras in
+                 let extras = Option.fold ~none:[] ~some:(fun (_, extras) ->
+                   List.map (fun _ -> None) extras) inner in
                  (o, make ~pos { fn with rec_definition = ((tyvars, Some (outer, extras)), lam) } :: defs)
-              | _ -> assert false
           in
             list o defs in
 
@@ -168,9 +166,7 @@ object (o : 'self_type)
                let o = o#with_visiting (StringSet.add (Binder.to_name rec_binder) visiting_funs) in
                let (o, tyvars) = o#quantifiers tyvars in
                let (o, inner) = o#datatype inner in
-               let lam_in = Sugartypes.get_normal_funlit lam in
-               let inner_effects = TransformSugar.fun_effects inner (fst lam_in) in
-               let (o, lam, _) = o#funlit inner_effects lam in
+               let (o, lam, _) = o#funlit lam in
                let o = o#restore_quantifiers outer_tyvars in
                let o = o#with_visiting visiting_funs in
 

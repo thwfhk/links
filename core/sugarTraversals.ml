@@ -109,10 +109,6 @@ class map =
     method row_var : Datatype.row_var -> Datatype.row_var =
       let open Datatype in
       function
-      | EffectApplication (_x, _x_i1) ->
-          let _x = o#name _x in
-          let _x_i1 = o#list (fun o -> o#type_arg) _x_i1
-          in EffectApplication (_x, _x_i1)
       | Closed -> Closed
       | Open _x ->
           let _x = o#type_variable _x in Open _x
@@ -171,12 +167,6 @@ class map =
     method datatype' : datatype' -> datatype' =
       fun (x, y) ->
         let x = o#datatype x in
-        let y = o#option (fun o -> o#typ) y in
-        (x,y)
-
-    method row' : row' -> row' =
-      fun (x, y) ->
-        let x = o#row x in
         let y = o#option (fun o -> o#typ) y in
         (x,y)
 
@@ -264,6 +254,8 @@ class map =
       | TypeAnnotation ((_x, _x_i1)) ->
           let _x = o#phrase _x in
           let _x_i1 = o#datatype' _x_i1 in TypeAnnotation ((_x, _x_i1))
+      | Checked (p, t) -> Checked (o#phrase p, o#typ t)
+      | ModalIntro (p, t) -> ModalIntro (o#phrase p, o#typ t)
       | Upcast ((_x, _x_i1, _x_i2)) ->
           let _x = o#phrase _x in
           let _x_i1 = o#datatype' _x_i1 in
@@ -289,6 +281,14 @@ class map =
           Operation _x
       | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
          let m = o#phrase sh_expr in
+         let input_row, input_type, output_row, output_type = sh_descr.shd_types in
+         let types = o#type_row input_row, o#typ input_type,
+                     o#type_row output_row, o#typ output_type in
+         let modal = Option.map (fun modal ->
+           { shm_outer = ModalEffects.map_arguments o#typ modal.shm_outer;
+             shm_extension = ModalEffects.map_arguments o#typ modal.shm_extension;
+             shm_operations = List.map (fun (label, typ) -> label, o#typ typ) modal.shm_operations })
+             sh_descr.shd_modal in
          let params =
             o#option (fun o -> o#handle_params) sh_descr.shd_params
          in
@@ -308,7 +308,9 @@ class map =
          )
              sh_value_cases
      in
-         Handle { sh_expr = m; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = { sh_descr with shd_params = params } }
+         let sh_descr = { sh_descr with shd_params = params; shd_types = types;
+           shd_raw_row = o#type_row sh_descr.shd_raw_row; shd_modal = modal } in
+         Handle { sh_expr = m; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr }
       | Switch ((_x, _x_i1, _x_i2)) ->
           let _x = o#phrase _x in
           let _x_i1 =
@@ -425,14 +427,6 @@ class map =
           let ns = o#list (fun o -> o#name) ns in
           let args = o#list (fun o -> o#type_arg) args in
           QualifiedTypeApplication (ns, args)
-      | Function (_x, _x_i1, _x_i2) ->
-          let _x = o#list (fun o -> o#datatype) _x in
-          let _x_i1 = o#row _x_i1 in
-          let _x_i2 = o#datatype _x_i2 in Function (_x, _x_i1, _x_i2)
-      | Lolli (_x, _x_i1, _x_i2) ->
-          let _x = o#list (fun o -> o#datatype) _x in
-          let _x_i1 = o#row _x_i1 in
-          let _x_i2 = o#datatype _x_i2 in Lolli (_x, _x_i1, _x_i2)
       | Mu (_x, _x_i1) ->
           let _x = o#type_variable _x in
           let _x_i1 = o#datatype _x_i1 in Mu (_x, _x_i1)
@@ -443,7 +437,6 @@ class map =
           let _x = o#list (fun o -> o#datatype) _x in Tuple _x
       | Record _x -> let _x = o#row _x in Record _x
       | Variant _x -> let _x = o#row _x in Variant _x
-      | Effect r -> let r = o#row r in Effect r
       | Operation (_x, _x_i1) ->
         let _x = o#list (fun o -> o#datatype) _x in
         let _x_i1 = o#datatype _x_i1 in Operation (_x, _x_i1)
@@ -551,7 +544,6 @@ class map =
     method aliasbody : aliasbody -> aliasbody =
       function
         | Typename _x -> Typename (o#datatype' _x)
-        | Effectname _x -> Effectname (o#row' _x)
 
     method alias : alias -> alias =
       fun p ->
@@ -707,9 +699,6 @@ class fold =
 
     method row_var : Datatype.row_var -> 'self_type =
       let open Datatype in function
-      | EffectApplication (_x, _x_i1) ->
-          let o = o#name _x in
-          let o = o#list (fun o -> o#type_arg) _x_i1 in o
       | Closed -> o
       | Open _x ->
           let o = o#type_variable _x in o
@@ -762,12 +751,6 @@ class fold =
     method datatype' : datatype' -> 'self_type =
       fun (x, y) ->
         let o = o#datatype x in
-        let o = o#unknown y in
-          o
-
-    method row' : row' -> 'self_type =
-      fun (x, y) ->
-        let o = o#row x in
         let o = o#unknown y in
           o
 
@@ -834,6 +817,7 @@ class fold =
           in o
       | TypeAnnotation ((_x, _x_i1)) ->
           let o = o#phrase _x in let o = o#datatype' _x_i1 in o
+      | Checked (p, t) | ModalIntro (p, t) -> (o#phrase p)#unknown t
       | Instantiate _x -> o#phrase _x
       | Generalise _x -> o#phrase _x
       | Upcast ((_x, _x_i1, _x_i2)) ->
@@ -974,12 +958,6 @@ class fold =
           let o = o#list (fun o -> o#name) ns in
           let o = o#list (fun o -> o#type_arg) args in
           o
-      | Function (_x, _x_i1, _x_i2) ->
-          let o = o#list (fun o -> o#datatype) _x in
-          let o = o#row _x_i1 in let o = o#datatype _x_i2 in o
-      | Lolli (_x, _x_i1, _x_i2) ->
-          let o = o#list (fun o -> o#datatype) _x in
-          let o = o#row _x_i1 in let o = o#datatype _x_i2 in o
       | Mu (_x, _x_i1) ->
           let o = o#type_variable _x in
           let o = o#datatype _x_i1 in o
@@ -989,7 +967,6 @@ class fold =
       | Tuple _x -> let o = o#list (fun o -> o#datatype) _x in o
       | Record _x -> let o = o#row _x in o
       | Variant _x -> let o = o#row _x in o
-      | Effect r -> let o = o#row r in o
       | Operation (_x, _x_i1) ->
         let o = o#list (fun o -> o#datatype) _x in
         o#datatype _x_i1
@@ -1097,7 +1074,6 @@ class fold =
     method aliasbody : aliasbody -> 'self_type =
       function
         | Typename _x -> o#datatype' _x
-        | Effectname _x -> o#row' _x
 
     method alias : alias -> 'self_type =
       WithPos.traverse
@@ -1251,10 +1227,6 @@ class fold_map =
 
     method row_var : Datatype.row_var -> ('self_type * Datatype.row_var) =
       let open Datatype in function
-      | EffectApplication (_x, _x_i1) ->
-          let (o, _x) = o#string _x in
-          let (o, _x_i1) = o#list (fun o -> o#type_arg) _x_i1
-          in (o, EffectApplication (_x, _x_i1))
       | Closed -> (o, Closed)
       | Open _x ->
           let (o, _x) = o#type_variable _x in (o, (Open _x))
@@ -1411,6 +1383,14 @@ class fold_map =
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) = o#datatype' _x_i1
           in (o, (TypeAnnotation ((_x, _x_i1))))
+      | Checked (p, t) ->
+          let o, p = o#phrase p in
+          let o, t = o#typ t in
+          o, Checked (p, t)
+      | ModalIntro (p, t) ->
+          let o, p = o#phrase p in
+          let o, t = o#typ t in
+          o, ModalIntro (p, t)
       | Upcast ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) = o#datatype' _x_i1 in
@@ -1437,6 +1417,18 @@ class fold_map =
           (o, Operation _x)
       | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
           let (o, m) = o#phrase sh_expr in
+          let input_row, input_type, output_row, output_type = sh_descr.shd_types in
+          let o, input_row = o#type_row input_row in
+          let o, input_type = o#typ input_type in
+          let o, output_row = o#type_row output_row in
+          let o, output_type = o#typ output_type in
+          let o, raw_row = o#type_row sh_descr.shd_raw_row in
+          let o, modal = o#option (fun o modal ->
+            let o, shm_outer = ModalEffects.fold_map_arguments (fun o -> o#typ) o modal.shm_outer in
+            let o, shm_extension = ModalEffects.fold_map_arguments (fun o -> o#typ) o modal.shm_extension in
+            let o, shm_operations = o#list (fun o (label, typ) ->
+              let o, typ = o#typ typ in o, (label, typ)) modal.shm_operations in
+            o, { shm_outer; shm_extension; shm_operations }) sh_descr.shd_modal in
           let (o, params) =
             o#option (fun o -> o#handle_params) sh_descr.shd_params
           in
@@ -1456,7 +1448,9 @@ class fold_map =
           )
               sh_value_cases
       in
-          (o, (Handle { sh_expr = m; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr = { sh_descr with shd_params = params } }))
+          let sh_descr = { sh_descr with shd_params = params; shd_raw_row = raw_row;
+            shd_types = (input_row, input_type, output_row, output_type); shd_modal = modal } in
+          (o, (Handle { sh_expr = m; sh_effect_cases = eff_cases; sh_value_cases = val_cases; sh_descr }))
       | Switch ((_x, _x_i1, _x_i2)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) =
@@ -1576,12 +1570,6 @@ class fold_map =
         let (o, _x_i1) = o#option (fun o -> o#typ) _x_i1
         in (o, (_x, _x_i1))
 
-    method row' : row' -> ('self_type * row') =
-      fun (_x, _x_i1) ->
-        let (o, _x) = o#row _x in
-        let (o, _x_i1) = o#option (fun o -> o#typ) _x_i1
-        in (o, (_x, _x_i1))
-
     method datatypenode : Datatype.t -> ('self_type * Datatype.t) =
       let open Datatype in
       function
@@ -1591,16 +1579,6 @@ class fold_map =
           let (o, ns) = o#list (fun o -> o#name) ns in
           let (o, args) = o#list (fun o -> o#type_arg) args in
           (o, QualifiedTypeApplication (ns, args))
-      | Function (_x, _x_i1, _x_i2) ->
-          let (o, _x) = o#list (fun o -> o#datatype) _x in
-          let (o, _x_i1) = o#row _x_i1 in
-          let (o, _x_i2) = o#datatype _x_i2
-          in (o, (Function (_x, _x_i1, _x_i2)))
-      | Lolli (_x, _x_i1, _x_i2) ->
-          let (o, _x) = o#list (fun o -> o#datatype) _x in
-          let (o, _x_i1) = o#row _x_i1 in
-          let (o, _x_i2) = o#datatype _x_i2
-          in (o, (Lolli (_x, _x_i1, _x_i2)))
       | Mu (_x, _x_i1) ->
           let (o, _x) = o#type_variable _x in
           let (o, _x_i1) = o#datatype _x_i1 in (o, (Mu (_x, _x_i1)))
@@ -1613,7 +1591,6 @@ class fold_map =
           in (o, (Tuple _x))
       | Record _x -> let (o, _x) = o#row _x in (o, (Record _x))
       | Variant _x -> let (o, _x) = o#row _x in (o, (Variant _x))
-      | Effect r -> let (o, r) = o#row r in (o, Effect r)
       | Operation (_x, _x_i1) ->
         let (o, _x) = o#list (fun o -> o#datatype) _x in
         let (o, _x_i1) = o#datatype _x_i1 in
@@ -1755,7 +1732,6 @@ class fold_map =
     method aliasbody : aliasbody -> ('self_type * aliasbody) =
       function
         | Typename   _x   -> let o, _x = o#datatype'   _x in (o, Typename     _x)
-        | Effectname _x   -> let o, _x = o#row'        _x in (o, Effectname   _x)
 
     method function_definition : function_definition -> 'self * function_definition
       = fun { fun_binder;

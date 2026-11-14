@@ -2,18 +2,18 @@
 config: tests/presence_type_arg.config
 ---
 
-No implicit wild present with type unit [1]
-fun() { () } : () {wild}-> ()
+The absolute native permission takes no type arguments
+fun() { () } : [wild(())] (() -> ())
 stderr : @..*
 exit : 1
 
-No implicit wild present with type unit [2]
-fun() { () } : () {wild |e}-> ()
+The native permission cannot occur in a relative extension
+fun() { () } : <wild> (() -> ())
 stderr : @..*
 exit : 1
 
-No implicit wild present with type unit [3]
-fun() { () } : () {Foo:(),wild,Bar:()}-> ()
+The native permission cannot occur in a mask
+fun() { () } : <wild |> (() -> ())
 stderr : @..*
 exit : 1
 

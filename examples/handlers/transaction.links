@@ -1,16 +1,16 @@
 # Transaction example
-# links> runState(1, transBool(transaction(comp)));
+# Run example() to see three interleaved bank transfers.
 
 # Queue API
 typename Queue(a) = (List a, List a);
-var emptyQueue = ([], []);
+
 
 sig enqueue : (a, Queue(a)) -> Queue(a)
 fun enqueue(x, (rear, front)) {
   (x :: rear, front)
 }
 
-sig dequeue : (Queue(a)) ~> (Maybe(a), Queue(a))
+sig dequeue : (Queue(a)) -> (Maybe(a), Queue(a))
 fun dequeue(q) {
   switch (q) {
     case ([], []) -> (Nothing, q)
@@ -19,42 +19,58 @@ fun dequeue(q) {
   }
 }
 
-# Concurrency API
-typename Co(e::Eff) = () {Fork:(Co({ |e})) => (), Yield:() |e}~> ();
+typename Account = (String, Int);
+typename Bank = List Account;
 
-sig yield : () { Yield:() |e}~> ()
+effect State(s::Abs) { Get : () => s; Put : (s) => (); }
+effect Abort { Abort : () => Zero; }
+
+effect Cooperative {
+  Fork : ([wild, State(Bank), Cooperative] (() -> ())) => ();
+  Yield : () => ();
+}
+
+typename Co = [wild, State(Bank), Cooperative] (() -> ());
+typename RunQueue = mu q . (Queue((q) -> ()));
+
+sig yield : [Cooperative] (() -> ())
 fun yield() { do Yield }
 
-sig fork : (Co({ |e})) {Fork: (Co({ |e})) => () |_}~> ()
+sig fork : [Cooperative] ((Co) -> ())
 fun fork(f) { do Fork(f) }
 
-sig schedule : (Co({ |e})) {Fork{_}, Yield{_} |e}~> ()
+sig schedule : [wild, State(Bank)] ((Co) -> ())
 fun schedule(main) {
+  sig runNext : (RunQueue) -> ()
   fun runNext(q) {
     switch (dequeue(q)) {
-      case (Nothing, q) -> ()
-      case (Just(resume), q) -> resume((), q)
+      case (Nothing, _) -> ()
+      case (Just(resume), q) -> resume(q)
     }
   }
 
+  sig withThreads : (Co, RunQueue) -> ()
   fun withThreads(f, q) {
-    handle(f())(runQ <- q) {
-      case () -> runNext(runQ)
+    (handle(f()) {
+      case () -> fun (q) { runNext(q) }
       case <Yield => resume> ->
-         runNext(enqueue(resume, runQ))
+        fun (q) { runNext(enqueue(fun (q) { resume(())(q) }, q)) }
       case <Fork(f) => resume> ->
-         withThreads(f, enqueue(resume, runQ))
-    }
+        fun (q) { withThreads(f, enqueue(fun (q) { resume(())(q) }, q)) }
+    })(q)
   }
 
-  withThreads(main, emptyQueue)
+  withThreads(main, ([], []))
 }
 
 # State API
+sig get : forall s::Abs. [State(s)] (() -> s)
 fun get() { do Get }
+
+sig put : forall s::Abs. [State(s)] ((s) -> ())
 fun put(st) { do Put(st) }
 
-sig runState : (Comp(a, {Get:s, Put: (s) => () |e}), s) {Get{_}, Put{_} |e}~> (a, s)
+sig runState : forall s::Abs,a::Abs. (<State(s)> (() -> a), s) -> (a, s)
 fun runState(m, st) {
   handle(m())(st <- st) {
     case x      -> (x, st)
@@ -64,15 +80,18 @@ fun runState(m, st) {
 }
 
 # Transaction handler
-sig abort : () {Abort: Zero |_}-> a
+sig abort : [Abort] (() -> a)
 fun abort() {
   switch (do Abort) { }
 }
 
+sig beginTransaction :
+  [State(Bank)] ((<State(Bank), Abort> (() -> ())) -> (Bank, String))
 fun beginTransaction(m) {
-  handle(m())([alice, bob] as st <- get()) {
+  handle(m())([alice, bob] as st <- (get() : Bank)) {
     case () -> put(st); (st, "Done")
     case <Abort> -> (get(), "Aborted")
+    case <Get => resume> -> resume(get(), st)
     case <Put([acc]) => resume> ->
        if (acc.1 == "Alice")
           resume((), [acc, bob])
@@ -81,14 +100,11 @@ fun beginTransaction(m) {
   }
 }
 
-# Bank model
-typename Account = (String, Int);
-typename Bank = List Account;
-
+sig accounts : Bank
 var accounts = [("Alice", 100), ("Bob", 25)];
 
 # Transfer
-sig transfer : (Bool, Int, String, String) {Abort:Zero, Yield:(), Get:Bank, Put: (Bank) => () |_}~> ()
+sig transfer : [Abort, Cooperative, State(Bank)] ((Bool, Int, String, String) -> ())
 fun transfer(delay, amount, src, dest) {
   fun upd(account) {
     var accounts = filter(fun(a) { a.1 <> account.1 }, get());
@@ -113,7 +129,9 @@ fun transfer(delay, amount, src, dest) {
   deduct(amount, src)
 }
 
+sig example : [wild] (() -> ((), Bank))
 fun example() {
+  sig main : Co
   fun main() {
      fork(fun() {
        var (_, result) = beginTransaction(fun() {

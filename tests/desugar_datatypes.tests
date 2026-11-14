@@ -1,5 +1,5 @@
 Type variables are correctly scoped [1]
-typename A = forall a::Eff. forall a::Type. () ~a~> ();
+typename A = forall a::Row. forall a::Type. (|a|);
 exit : 1
 stderr : @.*Mismatch in kind for type variable `a'.*
 
@@ -10,7 +10,7 @@ exit : 1
 stderr : @.*Mismatch in kind for type variable `a'.*
 
 Subkind declaration mismatches are reported
-() : (( | a :: Any)) { | a :: Eff }~> ()
+() : ((|a::Any), (|a::Base))
 exit : 1
 stderr : @.*Mismatch in kind for type variable `a'\..*
 
@@ -25,12 +25,12 @@ exit : 1
 stderr : @.*Mismatch in kind for type variable `a'\..*
 
 Kind declaration mismatches are reported
-() : forall a::Row. (a) ~a~> ()
+() : forall a::Row. (a) -> ()
 exit : 1
 stderr : @.*Mismatch in kind for type variable `a'\..*
 
 Kind usage mismatches are reported
-() : (a) ~a~> ()
+() : (a, (|a))
 exit : 1
 stderr : @.*Mismatch in kind for type variable `a'\..*
 
@@ -44,23 +44,23 @@ Quantifiers within nested definitions are allowed [2]
 filemode : true
 stdout : () : ()
 
-Qualified type variables default to `type' [typename]
-typename Arrow (a) = () -a-> ();
+Qualified type variables default to Type in aliases
+typename Record(a) = (|a);
 exit : 1
 stderr : @.*Mismatch in kind for type variable `a'.*
 
-Qualified type variables default to `type' [forall]
-sig f : forall a. () -a-> () fun f() {}
+Qualified type variables default to Type in signatures
+sig f : forall a. ((|a)) -> () fun f(_) {}
 exit : 1
 stderr : @.*Mismatch in kind for type variable `a'.*
 
-Qualified type variables can infer their kind if enabled [typename]
-typename Arrow (a) = () -a-> ();
+Qualified row variables can infer their kind in aliases
+typename Record(a) = (|a);
 stdout : () : ()
 args : --set=infer_kinds=true
 
-Qualified type variables can infer their kind if enabled [forall]
-sig f : forall a. () -a-> () fun f() {}
+Qualified row variables can infer their kind in signatures
+sig f : forall a. ((|a)) -> () fun f(_) {}
 stdout : () : ()
 args : --set=infer_kinds=true
 
@@ -70,7 +70,7 @@ exit : 1
 stderr : @.*Unbound type variable `a'.*
 
 Implicit type variables are detected
-typename A = () -> ();
+typename A = (_) -> ();
 exit : 1
 stderr : @.*Unbound anonymous type variable.*
 
@@ -90,49 +90,38 @@ foralls cannot repeat variables
 exit : 1
 stderr : @.*Multiple definitions of type variable `a'.\.*
 
-Type aliases take explicit effect arguments
-typename Thunk(a,e::Eff) = () ~e~> a; fun() {} : Thunk((), {|e})
-stdout : fun : Thunk ((),{ |_})
+Type aliases take explicit row arguments
+typename Fields(r::Row) = (|r); (x=42) : Fields({x:Int})
+stdout : (x = 42) : Fields ({x:Int})
 
-Mutual type aliases take explicit effect arguments
-mutual { typename Either(a,e::Eff) = (|A:() ~e~> a|B:Indirect(a,{|e})|); typename Indirect(a,e::Eff) = Either(a,{|e}); } A(fun() {}) : Either((), { | e})
-stdout : A(fun) : Either ((),{ |_})
+Mutual type aliases take explicit row arguments
+mutual { typename Tree(r::Row) = (|Leaf:(|r)|Branch:Forest({|r})|); typename Forest(r::Row) = List Tree({|r}); } Branch([Leaf((x=42))]) : Tree({x:Int})
+stdout : Branch([Leaf(x = 42)]) : Tree ({x:Int})
 
-The last effect argument of a type alias is required
-sig f : Comp(Int) fun f() { 42 }
+The last alias argument is required
+typename Thunk(a,r::Row) = [] (() -> (value:a|r)); sig f : Thunk(Int) fun f() { (value=42) }
 exit : 1
-stderr : @.*Arity mismatch: Type Comp expects 2 type arguments, but 1 arguments were provided.*
+stderr : @.*Arity mismatch: Type Thunk expects 2 type arguments, but 1 arguments were provided.*
 
-An effect argument must be a row
-fun() { 42 } : Comp(Int, String)
+A row argument must have kind Row
+typename Thunk(a,r::Row) = [] (() -> (value:a|r)); fun() { (value=42) } : Thunk(Int, String)
 exit : 1
-stderr : @.*Kind mismatch: Type argument .* for type constructor Comp has kind Type, but an argument of kind Row was expected.*
+stderr : @.*Kind mismatch: Type argument .* for type constructor Thunk has kind Type, but an argument of kind Row was expected.*
 
 A row argument cannot replace a type argument
-fun() { 42 } : Comp({}, {|e})
+typename Thunk(a,r::Row) = [] (() -> (value:a|r)); fun() { (value=42) } : Thunk({}, {})
 exit : 1
-stderr : @.*Kind mismatch: Type argument .* for type constructor Comp has kind Row, but an argument of kind Type was expected.*
+stderr : @.*Kind mismatch: Type argument .* for type constructor Thunk has kind Row, but an argument of kind Type was expected.*
 
-An alias of a computation type cannot take an extra effect argument
-typename X = Comp((), {Var:() => ()}); fun() { } : X({ |_})
+An alias of a computation type cannot take an extra argument
+typename X = [] (() -> ()); fun() { } : X(Int)
 exit : 1
 stderr : @.*Arity mismatch: Type X expects 0 type arguments, but 1 arguments were provided.*
 
-A quantified signature cannot use a fresh implicit effect row
-sig f : forall a. (a) -> a fun f(x) { x }
-exit : 1
-stderr : @.*Unbound anonymous type variable.*
+A bare arrow adds no implicit quantifier
+sig f : forall a. (a) -> a fun f(x) { x } f(42)
+stdout : 42 : Int
 
 Type alias row arguments use their declared kinds
-typename Reader(r::Row,e::Eff) = ((|r)) -e-> Int; fun(r) { r.x + do Ask } : Reader({x:Int}, {Ask:Int})
-stdout : fun : Reader ({x:Int},{Ask:() => Int})
-
-Effect aliases require their row arguments
-effectname E(e::Eff) = {Ask:Int|e}; sig f : () -E-> Int fun f() { do Ask }
-stderr : @.*Arity mismatch: Type E expects 1 type arguments, but 0 arguments were provided.*
-exit : 1
-
-An effect alias cannot use an anonymous tail
-effectname E = {Ask:Int|_};
-stderr : @.*Unbound anonymous type variable.*
-exit : 1
+effect Reader { Ask : () => Int; } typename AskFrom(r::Row) = [Reader] (((|r)) -> Int); fun(r) { r.x + do Ask } : AskFrom({x:Int})
+stdout : fun : AskFrom ({x:Int})
