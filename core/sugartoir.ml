@@ -590,7 +590,7 @@ struct
           | Var x -> cofv (lookup_var x)
           | FreezeVar x -> cofv (lookup_var x)
           | RangeLit (low, high) ->
-              I.apply (instantiate_mb "intRange", [ev low; ev high])
+              cofv (I.apply_pure (instantiate_mb "$$intRange", [ev low; ev high]))
           | ListLit ([], Some t) ->
               cofv (instantiate "Nil" [(Type, t)])
           | ListLit (e::es, Some t) ->
@@ -767,7 +767,7 @@ struct
           | Switch _
           | QualifiedVar _
           | DoOperation _
-          | Instantiate _ | Generalise _ ->
+          | Freeze _ | Instantiate _ | Generalise _ ->
               Debug.print ("oops: " ^ show_phrasenode e);
               assert false
 

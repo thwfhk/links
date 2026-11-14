@@ -80,42 +80,39 @@ module Untyped = struct
   type transformer = (module Untyped.S)
 
   (* Collection of transformers. *)
-  let transformers : transformer array
-    = [| (module ResolvePositions)
+  let transformers ~modal : transformer array =
+      let effects : transformer = if modal then
+        (module DesugarEffects.Modal) else (module DesugarEffects) in
+      let datatypes : transformer = if modal then
+        (module DesugarDatatypes.Modal) else (module DesugarDatatypes) in
+      [| (module ResolvePositions)
        ; (module DesugarSwitchFuns)
        ; (module DesugarModules)
        ; (module Shunting)
        ; (module LiftRecursive)
        ; (module DesugarTypeVariables)
-       ; (module DesugarEffects)
-       ; (module DesugarDatatypes)
+       ; effects
+       ; datatypes
       |]
 
-  let run : Context.t -> ((module Untyped.S) -> Context.t -> 'a -> 'a Transform.Untyped.result) -> 'a -> 'a result
-    = fun context' select program ->
+  let run ~modal context' select program =
     let module TU = Transform.Untyped in
     let apply : 'a TU.result -> transformer -> 'a TU.result
       = fun (TU.Result { program; state }) (module T) ->
         Debug.if_set Basicsettings.show_stages (fun () -> T.Untyped.name ^"...");
-        select (module T) state program
+        select (module T : Untyped.S) state program
     in
     let (TU.Result { state; program }) =
-      Array.fold_left apply TU.(return context' program) transformers
+      Array.fold_left apply TU.(return context' program) (transformers ~modal)
     in
     { context = state; program;
       datatype = Types.Not_typed (* Slight abuse! *) }
 
-  let run_sentence : Context.t ->
-                     Sugartypes.sentence ->
-                     Sugartypes.sentence result
-    = fun context sentence ->
-    run context (fun (module T) -> T.Untyped.sentence) sentence
+  let run_sentence ?(modal = false) context sentence =
+    run ~modal context (fun (module T : Untyped.S) -> T.Untyped.sentence) sentence
 
-  let run_program : Context.t ->
-                    Sugartypes.program ->
-                    Sugartypes.program result
-    = fun context program ->
-    run context (fun (module T) -> T.Untyped.program) program
+  let run_program ?(modal = false) context program =
+    run ~modal context (fun (module T : Untyped.S) -> T.Untyped.program) program
 end
 
 (* The [Typeability_preserving] module runs transformation passes
@@ -305,3 +302,35 @@ let interactive =
   transform Sugartypes.show_sentence Untyped.run_sentence
     (fun interfaces sentence -> ignore ((legacy_types interfaces)#sentence sentence))
     Typeability_preserving.run_sentence TypeSugar.Check.sentence
+
+module Modal = struct
+  let check context terms program =
+    let typing_environment = Context.typing_environment context in
+    let program, datatype, terms, tycon_env =
+      Fresco.program ~interfaces:context.Context.effect_interfaces
+        ~aliases:typing_environment.Types.tycon_env terms program in
+    let typing_environment = { typing_environment with
+      Types.var_env = FrescoContext.environment terms;
+      tycon_env } in
+    { program; datatype; context = { context with Context.typing_environment } }, terms
+
+  let program context terms program =
+    DesugarModules.with_scope_rollback (fun () ->
+      let { program; context; _ } = Untyped.run_program ~modal:true context program in
+      check context terms program)
+
+  let interactive context terms sentence =
+    DesugarModules.with_scope_rollback (fun () ->
+      let { program = sentence; context; _ } = Untyped.run_sentence ~modal:true context sentence in
+      let program = match sentence with
+        | Sugartypes.Definitions bs -> bs, None
+        | Sugartypes.Expression expr -> [], Some expr
+        | Sugartypes.Directive _ -> [], None in
+      let { program; datatype; context }, terms = check context terms program in
+      let program = match sentence, program with
+        | Sugartypes.Definitions _, (bindings, None) -> Sugartypes.Definitions bindings
+        | Sugartypes.Expression _, ([], Some expr) -> Sugartypes.Expression expr
+        | Sugartypes.Directive _, _ -> sentence
+        | _ -> assert false in
+      { program; datatype; context }, terms)
+end

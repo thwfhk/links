@@ -72,13 +72,13 @@ struct
     | TupleLit ps -> List.for_all is_pure ps
     | RangeLit (e1, e2) -> is_pure e1 && is_pure e2
     | TAbstr (_, p)
+    | Freeze p
     | TAppl (p, _)
     | Projection (p, _)
     | TypeAnnotation (p, _)
     | Upcast (p, _, _)
     | Instantiate p
-    | Generalise p
-    | Escape (_, p) -> is_pure p
+    | Generalise p -> is_pure p
     | ConstructorLit (_, p, _) -> opt_generalisable p
     | RecordLit (fields, p) ->
        List.for_all (snd ->- is_pure) fields && opt_generalisable p
@@ -95,6 +95,7 @@ struct
     | UnaryAppl _
     | InfixAppl _
     | FnAppl _
+    | Escape _
     | Handle _
     | Switch _
     | DoOperation _
@@ -151,6 +152,8 @@ struct
 
   let is_generalisable = is_pure
 end
+
+let is_generalisable = Utils.is_generalisable
 
 (*
 
@@ -216,7 +219,6 @@ sig
   val list_lit : griper
 
   val range_bound : griper
-  val range_wild : griper
 
   val unary_apply : griper
   val infix_apply : griper
@@ -569,15 +571,6 @@ end
 
     let range_bound ~pos ~t1:_l ~t2:(_, _t) ~error:_ =
       die pos "Range bounds must be integers."
-
-    let range_wild ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
-      build_tyvar_names [lt; rt];
-      let ppr_rt = show_type rt in
-      let ppr_lt = show_type lt in
-      die pos ("Ranges are wild"                       ^ nli () ^
-                code ppr_rt                            ^ nl  () ^
-               "but the currently allowed effects are" ^ nli () ^
-                code ppr_lt)
 
     let unary_apply ~pos ~t1:(lexpr, lt) ~t2:(_,rt) ~error:_ =
       let arg_hd = List.hd (TypeUtils.arg_types rt) in
@@ -1931,6 +1924,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
              NotFound _ ->
              Gripers.die pos ("Unknown variable " ^ v ^ ".")
            end
+        | Freeze {node = Var v; _} ->
+           let e, t, u = type_check context (WithPos.make ~pos (FreezeVar v)) in
+           e.node, t, u
+        | Freeze e ->
+           let e, t, u = tc e in
+           e.node, t, u
         | Section s -> type_section pos context s
         | FreezeSection s -> type_frozen_section context s
         (* literals *)
@@ -2141,15 +2140,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
               InfixAppl ((tyargs, op), erase l, erase r), rettyp, Usage.combine_many [usages l; usages r; op_usages]
         | RangeLit (l, r) ->
             let l, r = tc l, tc r in
-            let outer_effects =
-              Types.(open_row default_effect_subkind closed_wild_row)
-            in
             let () = unify ~handle:Gripers.range_bound  (pos_and_typ l,
                                                          no_pos Types.int_type)
             and () = unify ~handle:Gripers.range_bound  (pos_and_typ r,
                                                          no_pos Types.int_type)
-            and () = unify ~handle:Gripers.range_wild   (no_pos (T.Record context.effect_row),
-                                                         no_pos (T.Record outer_effects))
             in RangeLit (erase l, erase r),
                Types.make_list_type Types.int_type,
                Usage.combine (usages l) (usages r)

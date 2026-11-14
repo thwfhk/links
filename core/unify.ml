@@ -240,13 +240,42 @@ let left_quantifier var (lenv, _) =
 let right_quantifier var (_, rs) =
   IntSet.mem var rs
 
+type mode = Legacy | Fresco | Equality
+
 type unify_env =
   { tenv: unify_type_env
   ; renv: unify_row_env
   ; qenv: quantifier_env
+  ; mode: mode
   }
 
-let check_subkind var (lin, res) typ =
+let monotype_predicate ~check_rigid_kinds =
+  (object
+    inherit type_predicate as super
+    method! var_satisfies = function
+      | (_, (_, (_, restriction)), `Rigid) when check_rigid_kinds ->
+          Restriction.is_mono restriction || Restriction.is_base restriction
+      | _ -> true
+    method! type_satisfies vars = function
+      | ForAll _ | Modal _ | Not_typed -> false
+      | t -> super#type_satisfies vars t
+  end)#predicates |> fst
+
+let is_monotype = monotype_predicate ~check_rigid_kinds:false
+let can_be_mono = monotype_predicate ~check_rigid_kinds:true
+
+let check_assignment rec_env t =
+  match rec_env.mode with
+  | Legacy -> ()
+  | Equality -> raise (Failure (`Msg "Types are not equal"))
+  | Fresco ->
+      if not (is_monotype t) then
+        raise (Failure (`Msg "A type annotation is required for polymorphic or modal structure"));
+      let left, right = rec_env.qenv in
+      if TypeVarSet.exists (fun id -> IntMap.mem id left || IntSet.mem id right) (free_type_vars t) then
+        raise (Failure (`Msg "A quantified type variable would escape its scope"))
+
+let check_subkind mode var (lin, res) typ =
   if Linearity.is_nonlinear lin then
     if Types.Unl.can_type_be typ then
       Types.Unl.make_type typ
@@ -258,12 +287,28 @@ let check_subkind var (lin, res) typ =
   | None -> ()
   | Some const ->
      let module M = (val const) in
-     if M.can_type_be typ then
+     if M.can_type_be typ && (mode = Legacy || not (Restriction.is_mono res) || can_be_mono typ) then
        M.make_type typ
      else
        let message = Printf.sprintf "Cannot unify the %s type variable %d with the non-%s type %s."
                        (Restriction.to_string res) var (Restriction.to_string res) (string_of_datatype typ)
        in raise (Failure (`Msg message))
+
+(* Keep the recursive type nodes for the unifier's cycle checks, while
+   exposing aliases and solved variables between adjacent modalities. *)
+let rec known_head = function
+  | Alias (_, _, t) | ForAll ([], t) -> known_head t
+  | Meta point as t ->
+      begin match Unionfind.find point with
+      | body when is_type_body body -> known_head body
+      | _ -> t
+      end
+  | Modal (modality, body) ->
+      begin match known_head body with
+      | Modal (inner, body) -> Types.modal (ModalEffects.compose modality inner) body
+      | _ -> Modal (modality, body)
+      end
+  | t -> t
 
 let rec unify' : unify_env -> (datatype * datatype) -> unit =
   let counter = ref 0 in
@@ -364,8 +409,9 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
 
   fun (t1, t2) ->
 
-  let t1 = ignore_empty_quantifiers t1 in
-  let t2 = ignore_empty_quantifiers t2 in
+  let head = if rec_env.mode = Legacy then ignore_empty_quantifiers else known_head in
+  let t1 = head t1 in
+  let t2 = head t2 in
 
   let ut = unify' rec_env in
   let ur = unify_rows' rec_env in
@@ -375,6 +421,9 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
   begin
     match (t1, t2) with
     (* Unspecified kind *)
+    | Not_typed, Not_typed when rec_env.mode = Equality -> ()
+    | (Not_typed, _ | _, Not_typed) when rec_env.mode <> Legacy ->
+       raise (Failure (`Msg "Missing type information"))
     | Not_typed, _ | _, Not_typed ->
        raise (Errors.internal_error ~filename:"unify.ml" ~message:"`Not_typed' passed to `unify'")
     | (Var _ | Recursive _), _ | _, (Var _ | Recursive _) ->
@@ -399,10 +448,11 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
            | Var (l, _, `Rigid), Var (r, _, `Rigid) ->
               if l <> r then
                 raise (Failure (`Msg ("Rigid type variables "^ string_of_int l ^" and "^ string_of_int r ^" do not match")))
-              else
+              else if rec_env.mode <> Equality then
                 (* presumably this should always be a no-op *)
                 Unionfind.union lpoint rpoint
            | Var (lvar, (lprimary_kind, (llin,lrest)), `Flexible), Var (rvar, (rprimary_kind, (rlin,rrest)), `Flexible) ->
+              check_assignment rec_env t2;
               assert (lprimary_kind = PrimaryKind.Type && rprimary_kind = PrimaryKind.Type);
               begin
                 let lin =
@@ -422,6 +472,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                 Unionfind.change lpoint (Var (lvar, (lprimary_kind, (lin, rest)), `Flexible))
               end
            | Var (var, ((primary_kind, (lin, rest)) as kind), `Flexible), _ ->
+              check_assignment rec_env t2;
               assert (primary_kind = PrimaryKind.Type);
               let tidy =
                 if var_is_free_in_type var t2 then
@@ -438,10 +489,11 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
               (* FIXME: does this really still need to happen if we've just introduced a recursive type? *)
               if tidy then
                 begin
-                  check_subkind var (lin, rest) t2;
+                  check_subkind rec_env.mode var (lin, rest) t2;
                   Unionfind.union lpoint rpoint
                 end
            | _, Var (var, ((_primary_kind, (lin, rest)) as kind), `Flexible) ->
+              check_assignment rec_env t1;
               let tidy =
                 if var_is_free_in_type var t1 then
                   begin
@@ -457,7 +509,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
               (* FIXME: does this really still need to happen if we've just introduced a recursive type? *)
               if tidy then
                 begin
-                  check_subkind var (lin, rest) t1;
+                  check_subkind rec_env.mode var (lin, rest) t1;
                   Unionfind.union rpoint lpoint
                 end
            | Var (l, _, `Rigid), _ ->
@@ -485,7 +537,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                 else
                   unify_rec2 (MuBound (lvar, t)) (MuBound (rvar, t'))
               end;
-              Unionfind.union lpoint rpoint
+              if rec_env.mode <> Equality then Unionfind.union lpoint rpoint
            | Recursive (var, _lkind, t'), t ->
               Debug.if_set (show_recursion) (fun () -> "rec left (" ^ (string_of_int var) ^ ")");
               begin
@@ -500,7 +552,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                  this order to ensure that we keep the recursive type rather
                  than its unwinding *)
               (* union keeps the data associated with its second argument *)
-              Unionfind.union rpoint lpoint
+              if rec_env.mode <> Equality then Unionfind.union rpoint lpoint
            | t, Recursive (var, _rkind, t') ->
               Debug.if_set (show_recursion) (fun () -> "rec right (" ^ (string_of_int var) ^ ")");
               begin
@@ -511,7 +563,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                 else
                   unify_rec (MuBound (var, t')) t
               end;
-              Unionfind.union lpoint rpoint
+              if rec_env.mode <> Equality then Unionfind.union lpoint rpoint
            | t, t' ->
               ut (t, t')
          (* Apparently this isn't sound as it can lead to unguarded recursion:
@@ -529,6 +581,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                                       " with the type "^ string_of_datatype t)))
             end
          | Var (var, ((primary_kind, (lin, rest)) as kind), `Flexible) ->
+            check_assignment rec_env t;
             assert (primary_kind = PrimaryKind.Type);
             if var_is_free_in_type var t then
               begin
@@ -538,14 +591,15 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                 if Restriction.is_base rest then
                   raise (Failure (`Msg ("Cannot infer a recursive type for the type variable "^ string_of_int var ^
                                           " with the body "^ string_of_datatype t)));
-                if Restriction.requires_abs rest then check_subkind var (lin, rest) t;
+                if rec_env.mode <> Legacy || Restriction.requires_abs rest then
+                  check_subkind rec_env.mode var (lin, rest) t;
                 let point' = Unionfind.fresh t in
                 rec_intro kind point' (var, t);
                 Unionfind.union point point'
               end
             else
               (Debug.if_set (show_recursion) (fun () -> "non-rec intro (" ^ string_of_int var ^ ")");
-               check_subkind var (lin, rest) t;
+               check_subkind rec_env.mode var (lin, rest) t;
                Unionfind.change point t)
          | Recursive (var, (primary_kind, _subkind), t') ->
             assert (primary_kind = PrimaryKind.Type);
@@ -621,6 +675,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
          else if ln > rn then
            (* We have more left hand quantifiers than right - try to drop off
               another forall from the right. *)
+           let rbody = if rec_env.mode = Legacy then rbody else known_head rbody in
            match TypeUtils.split_quantified_type rbody with
            | ([], _) -> raise (Failure (`Msg ("quantifier length mismatch")))
            | (qs, t) ->
@@ -629,6 +684,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
          else
            (* We have more right hand quantifiers than right - try to drop off
               another forall from the left. *)
+           let lbody = if rec_env.mode = Legacy then lbody else known_head lbody in
            match TypeUtils.split_quantified_type lbody with
            | ([], _) -> raise (Failure (`Msg ("quantifier length mismatch")))
            | (qs, t) ->
@@ -674,12 +730,30 @@ and unify_presence' : unify_env -> (field_spec * field_spec -> unit) =
      raise (Failure (`Msg ("Present absent clash")))
   (*`PresentAbsentClash (label, lrow, rrow) *)
   | Meta lpoint, Meta rpoint ->
+     if rec_env.mode <> Legacy && Unionfind.equivalent lpoint rpoint then () else
      begin
        match Unionfind.find lpoint, Unionfind.find rpoint with
        | l', _ when is_field_spec_body l' -> unify_presence' rec_env (l', r)
        | _, r' when is_field_spec_body r' -> unify_presence' rec_env (l, r')
        | Var (lvar, _, `Rigid), Var (rvar, _, `Rigid) when compatible_quantifiers (lvar, rvar) rec_env.qenv ->
           ()
+       | Var (lvar, (pk, (llin, lrest)), `Flexible), Var (_, (_, (rlin, rrest)), `Flexible)
+         when rec_env.mode <> Legacy ->
+          check_assignment rec_env r;
+          begin match Restriction.min lrest rrest with
+          | None -> raise (Failure (`Msg "Incompatible presence restrictions"))
+          | Some restriction ->
+             Unionfind.union lpoint rpoint;
+             Unionfind.change rpoint (Var (lvar, (pk, (Linearity.min llin rlin, restriction)), `Flexible))
+          end
+       | Var (id, (_, subkind), `Flexible), Var (_, _, `Rigid) when rec_env.mode <> Legacy ->
+          check_assignment rec_env r;
+          check_subkind rec_env.mode id subkind r;
+          Unionfind.union lpoint rpoint
+       | Var (_, _, `Rigid), Var (id, (_, subkind), `Flexible) when rec_env.mode <> Legacy ->
+          check_assignment rec_env l;
+          check_subkind rec_env.mode id subkind l;
+          Unionfind.union rpoint lpoint
        | Var (lvar, (pk, (llin, lrest)), `Flexible), Var (_, (_, (rlin, rrest)), `Flexible)
          when Restriction.requires_abs lrest || Restriction.requires_abs rrest ->
           begin match Restriction.min lrest rrest with
@@ -703,7 +777,7 @@ and unify_presence' : unify_env -> (field_spec * field_spec -> unit) =
             raise (Failure (`Msg ("Rigid presence variables "^
                                     string_of_int l ^" and "^
                                       string_of_int r ^" do not match")))
-          else
+          else if rec_env.mode <> Equality then
             Unionfind.union lpoint rpoint
        | Var (_, _, `Flexible), _ ->
           Unionfind.union lpoint rpoint
@@ -720,6 +794,7 @@ and unify_presence' : unify_env -> (field_spec * field_spec -> unit) =
                                   string_of_int l ^" with the presence flag "^
                                     string_of_presence f)))
        | Var (_, (_primary_kind, subkind), `Flexible) ->
+          check_assignment rec_env f;
           begin
             match f with
             | Absent ->
@@ -858,6 +933,7 @@ and unify_rows' : unify_env -> ((row' * row') -> unit) =
       match Unionfind.find point with
       | Closed -> ()
       | Var (_, _, `Flexible) ->
+         check_assignment rec_env Absent;
          Unionfind.change point Closed
       | Var (_, _, `Rigid) ->
          raise (Failure (`Msg ("Closed row var cannot be unified with rigid row var\n")))
@@ -869,7 +945,9 @@ and unify_rows' : unify_env -> ((row' * row') -> unit) =
       match Unionfind.find point' with
       | Closed ->
          raise (Failure (`Msg ("Rigid row var cannot be unified with empty closed row\n")))
-      | Var (_, (_, (_, rest')), `Flexible) ->
+      | Var (id, (_, ((_, rest') as subkind)), `Flexible) ->
+         check_assignment rec_env (Meta point);
+         if rec_env.mode = Fresco then check_subkind rec_env.mode id subkind (Meta point);
          if Restriction.is_any rest && Restriction.is_base rest' then
            raise (Failure (`Msg ("Rigid non-base row var cannot be unified with empty base row\n")));
          if Restriction.requires_abs rest' && not (Restriction.requires_abs rest) then
@@ -898,13 +976,15 @@ and unify_rows' : unify_env -> ((row' * row') -> unit) =
            raise (Failure (`Msg ("Rigid row variable cannot be unified with non-empty row\n"
                                  ^string_of_row (Row extension_row))))
       | Var (var, ((_, (lin, rest)) as kind), `Flexible) ->
+         check_assignment rec_env (Row extension_row);
          if not (StringMap.is_empty extension_field_env) &&
               TypeVarSet.mem var (free_row_type_vars (Row extension_row)) then
            begin
              if Restriction.is_base rest then
                raise (Failure (`Msg ("Cannot infer a recursive type for the base row variable "^ string_of_int var ^
                                        " with the body "^ string_of_row (Row extension_row))));
-             if Restriction.requires_abs rest then check_subkind var (lin, rest) (Row extension_row);
+             if rec_env.mode <> Legacy || Restriction.requires_abs rest then
+               check_subkind rec_env.mode var (lin, rest) (Row extension_row);
              rec_row_intro point (var, kind, Row extension_row)
            end
          else
@@ -920,7 +1000,9 @@ and unify_rows' : unify_env -> ((row' * row') -> unit) =
                | None -> ()
                | Some const ->
                   let module M = (val const) in
-                  if M.can_row_be (Row extension_row) then
+                  if M.can_row_be (Row extension_row)
+                     && (rec_env.mode = Legacy || not (Restriction.is_mono rest)
+                         || can_be_mono (Row extension_row)) then
                       M.make_row (Row extension_row)
                   else
                     let message = Printf.sprintf "Cannot unify the %s row variable %d with the non-%s row %s."
@@ -1141,7 +1223,23 @@ and unify_rows' : unify_env -> ((row' * row') -> unit) =
 
   check_unguarded_recursion lrow rrow;
 
-  if is_rigid_row (Row lrow) then
+  if rec_env.mode = Equality then
+    let left_fields, left_tail = TypeUtils.extract_row_parts (flatten_row (Row lrow)) in
+    let right_fields, right_tail = TypeUtils.extract_row_parts (flatten_row (Row rrow)) in
+    let same_tail =
+      Unionfind.equivalent left_tail right_tail ||
+      match Unionfind.find left_tail, Unionfind.find right_tail with
+      | Closed, Closed -> true
+      | Var (l, _, `Rigid), Var (r, _, `Rigid) ->
+          l = r || compatible_quantifiers (l, r) rec_env.qenv
+      | _ -> false
+    in
+    if same_tail then
+      unify_field_envs ~closed:(is_closed_row (Row lrow)) ~rigid:true rec_env (left_fields, right_fields)
+    else if is_rigid_row (Row lrow) && is_rigid_row (Row rrow) then
+      unify_both_rigid (lrow, rrow)
+    else raise (Failure (`Msg "Rows are not equal"))
+  else if is_rigid_row (Row lrow) then
     if is_rigid_row (Row rrow) then
       unify_both_rigid (lrow, rrow)
     else
@@ -1164,11 +1262,12 @@ and unify_type_args' : unify_env -> (type_arg * type_arg) -> unit =
   | _, _ ->
      raise (Failure (`Msg ("Couldn't match "^ string_of_type_arg (lpk, lt) ^" against "^ string_of_type_arg (rpk, rt))))
 
-let unify (t1, t2) =
+let unify mode (t1, t2) =
   unify'
     { tenv = RecIdMap.empty
     ; renv = IntMap.empty
     ; qenv = (IntMap.empty, IntSet.empty)
+    ; mode
     } (t1, t2)
 
 (* Debug.if_set (show_unification) (fun () -> "Unified types: " ^ string_of_datatype t1) *)
@@ -1177,8 +1276,16 @@ and unify_rows (row1, row2) =
     { tenv = RecIdMap.empty
     ; renv = IntMap.empty
     ; qenv = (IntMap.empty, IntSet.empty)
+    ; mode = Legacy
     } (row1, row2)
 
 (* external interface *)
-let datatypes = unify
+let datatypes = unify Legacy
 let rows = unify_rows
+let consistent = unify Fresco
+
+let equal types =
+  Unionfind.probe (fun () ->
+    match unify Equality types with
+    | () -> true
+    | exception Failure _ -> false)

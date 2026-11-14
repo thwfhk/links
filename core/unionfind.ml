@@ -59,6 +59,55 @@ let fresh desc = {
   link = Info { weight = 1; descriptor = desc }
 }
 
+let undo_log = ref None
+
+let set_link point link =
+  (match !undo_log with
+   | None -> ()
+   | Some log ->
+       let previous = point.link in
+       log := (fun () -> point.link <- previous) :: !log);
+  point.link <- link
+
+let set_descriptor info descriptor =
+  (match !undo_log with
+   | None -> ()
+   | Some log ->
+       let previous = info.descriptor in
+       log := (fun () -> info.descriptor <- previous) :: !log);
+  info.descriptor <- descriptor
+
+let set_weight info weight =
+  (match !undo_log with
+   | None -> ()
+   | Some log ->
+       let previous = info.weight in
+       log := (fun () -> info.weight <- previous) :: !log);
+  info.weight <- weight
+
+let with_undo_log ~commit f =
+  let parent = !undo_log in
+  let log = ref [] in
+  undo_log := Some log;
+  let rollback () =
+    undo_log := parent;
+    List.iter (fun undo -> undo ()) !log
+  in
+  match f () with
+  | result ->
+      if commit then begin
+        undo_log := parent;
+        Option.iter (fun parent -> parent := !log @ !parent) parent
+      end else rollback ();
+      result
+  | exception exn ->
+      let backtrace = Printexc.get_raw_backtrace () in
+      rollback ();
+      Printexc.raise_with_backtrace exn backtrace
+
+let transaction f = with_undo_log ~commit:true f
+let probe f = with_undo_log ~commit:false f
+
 (** repr point returns the representative element of point's equivalence
    class. It is found by starting at point and following the links. For
    efficiency, the function performs path compression at the same time. *)
@@ -66,7 +115,7 @@ let rec repr point =
   match point.link with
     | Link point' ->
     let point'' = repr point' in
-      if point'' != point' then
+      if point'' != point' && Option.is_none !undo_log then
 
             (* [point''] is [point']'s representative element. Because we
                just invoked [repr point'], [point'.link] must be [Link
@@ -98,7 +147,7 @@ let rec change point v =
   match point.link with
     | Info info
     | Link { link = Info info } ->
-    info.descriptor <- v
+    set_descriptor info v
 (* [SL]
   changed the return type to unit to negate the need for
   lots of 'ignores'
@@ -137,13 +186,13 @@ let union point1 point2 =
         let weight1 = info1.weight
         and weight2 = info2.weight in
           if weight1 >= weight2 then begin
-        point2.link <- Link point1;
-        info1.weight <- weight1 + weight2;
-        info1.descriptor <- info2.descriptor
+        set_link point2 (Link point1);
+        set_weight info1 (weight1 + weight2);
+        set_descriptor info1 info2.descriptor
           end
           else begin
-        point1.link <- Link point2;
-        info2.weight <- weight1 + weight2
+        set_link point1 (Link point2);
+        set_weight info2 (weight1 + weight2)
           end
     | _, _ ->
         assert false (* [repr] guarantees that [link] matches [Info _]. *)

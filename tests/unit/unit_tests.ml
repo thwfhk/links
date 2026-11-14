@@ -16,6 +16,8 @@ let suites =
          ]);
          Modal_effects_tests.suite;
          Modal_scope_tests.suite;
+         Fresco_patterns_tests.suite;
+         Fresco_tests.suite;
        ]
 
 let () = run_test_tt_main suites

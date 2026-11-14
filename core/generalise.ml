@@ -12,7 +12,7 @@ let show_recursion = Basicsettings.Types.show_recursion
 
 let internal_error message = Errors.internal_error ~filename:"generalise" ~message
 
-type gen_kind = Rigid | All
+type gen_kind = Flexible | Rigid | All
 
 (** [get_type_args kind bound_vars t] gets the free type variables of
     the datatype [t] as type args. The [kind] parameter specifies
@@ -40,9 +40,9 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
             begin
               match Unionfind.find point with
               | Var (var, _, _) when TypeVarSet.mem var bound_vars -> []
-              | Var (_, k, `Flexible) when kind=All -> [Kind.primary_kind k, Meta point]
-              | Var (_, _, `Flexible) -> []
-              | Var (_, k, `Rigid) -> [Kind.primary_kind k, Meta point]
+              | Var (_, _, `Flexible) when kind = Rigid -> []
+              | Var (_, _, `Rigid) when kind = Flexible -> []
+              | Var (_, k, _) -> [Kind.primary_kind k, Meta point]
               | Recursive (var, _kind, body) ->
                  Debug.if_set (show_recursion) (fun () -> "rec (get_type_args): " ^(string_of_int var));
                  if TypeVarSet.mem var bound_vars then
@@ -238,6 +238,13 @@ let generalise_without_mutation ?unwrap = generalise ~rigidify_vars:false ?unwra
 
 (** generalise both rigid and flexible type variables *)
 let generalise ?unwrap = generalise ~rigidify_vars:true ?unwrap All
+
+let generalise_fresco ?(mutate = true) ?(include_rigid = false) ~excluded t =
+  let kind = if include_rigid then All else Flexible in
+  let type_args = get_type_args kind excluded t in
+  let quantifiers = Types.quantifiers_of_type_args type_args in
+  if mutate then List.iter rigidify_type_arg type_args;
+  ((quantifiers, type_args), Types.for_all (quantifiers, t))
 
 let get_quantifiers_rigid (env : environment) (t : datatype) : Quantifier.t list =
   get_type_args Rigid (env_type_vars env) t |> Types.quantifiers_of_type_args

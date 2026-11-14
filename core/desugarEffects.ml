@@ -34,13 +34,13 @@ let has_modal_type =
   end in
   fun dt -> try ignore (visitor#datatype dt); false with Exit -> true
 
-class main_traversal initial_alias_kinds =
+class main_traversal ~modal initial_alias_kinds =
   object (o)
     inherit SugarTraversals.fold_map as super
 
     val alias_kinds : Kind.t list SEnv.t = initial_alias_kinds
     val allow_implicit_vars = true
-    val modal_types = false
+    val modal_types = modal
 
     method! phrasenode = function
       | Block _ as block ->
@@ -210,12 +210,12 @@ class main_traversal initial_alias_kinds =
       (o, definition)
   end
 
-let program tycon_env p =
-  let traversal = new main_traversal (alias_kinds tycon_env) in
+let program ~modal tycon_env p =
+  let traversal = new main_traversal ~modal (alias_kinds tycon_env) in
   snd (traversal#program p)
 
-let sentence tycon_env =
-  let traversal = new main_traversal (alias_kinds tycon_env) in
+let sentence ~modal tycon_env =
+  let traversal = new main_traversal ~modal (alias_kinds tycon_env) in
   function
   | Definitions bindings ->
       Definitions (snd (traversal#list (fun o b -> o#binding b) bindings))
@@ -223,7 +223,7 @@ let sentence tycon_env =
   | Directive d -> Directive d
 
 let standalone_signature tycon_env t =
-  let traversal = new main_traversal (alias_kinds tycon_env) in
+  let traversal = new main_traversal ~modal:false (alias_kinds tycon_env) in
   snd (traversal#datatype t)
 
 module Untyped = struct
@@ -231,15 +231,24 @@ module Untyped = struct
 
   let name = "effects"
 
-  let program state program' =
-    let open Types in
+  let program_with_mode ~modal state program' =
     let tyenv = Context.typing_environment (context state) in
-    let program' = program tyenv.tycon_env program' in
+    let program' = program ~modal tyenv.Types.tycon_env program' in
     return state program'
 
-  let sentence state sentence' =
-    let open Types in
+  let sentence_with_mode ~modal state sentence' =
     let tyenv = Context.typing_environment (context state) in
-    let sentence'' = sentence tyenv.tycon_env sentence' in
+    let sentence'' = sentence ~modal tyenv.Types.tycon_env sentence' in
     return state sentence''
+
+  let program = program_with_mode ~modal:false
+  let sentence = sentence_with_mode ~modal:false
+end
+
+module Modal = struct
+  module Untyped = struct
+    let name = Untyped.name
+    let program = Untyped.program_with_mode ~modal:true
+    let sentence = Untyped.sentence_with_mode ~modal:true
+  end
 end

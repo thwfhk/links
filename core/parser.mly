@@ -523,6 +523,7 @@ atomic_expression:
 | qualified_name                                               { with_pos $loc (QualifiedVar $1) }
 | VARIABLE                                                     { with_pos $loc (Var          $1) }
 | TILDE VARIABLE                                               { with_pos $loc (FreezeVar    $2) }
+| TILDE LPAREN exp RPAREN                                      { with_pos $loc (Freeze $3) }
 | constant                                                     { with_pos $loc (Constant     $1) }
 | parenthesized_thing                                          { $1 }
 primary_expression:

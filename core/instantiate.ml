@@ -32,7 +32,8 @@ type instantiation_maps = Types.type_arg IntMap.t
      - is instantiation for first-class polymorphism correct?
 *)
 
-let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) * (field_spec -> field_spec) =
+let instantiates ?(refresh_quantifiers = false) :
+    instantiation_maps -> (datatype -> datatype) * (row -> row) * (field_spec -> field_spec) =
 
   (* used for ordinary types and field_specs. Rows have their own special logic to perform flattening *)
   let rec inst_typ : instantiation_maps -> inst_env -> datatype -> datatype = fun inst_map rec_env datatype ->
@@ -80,14 +81,14 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
         | Effect row -> Effect (instr row)
         | Operation (f, t) -> Operation (inst f, inst t)
         | ForAll (qs, t) ->
-           let remove_shadowed_quantifier tmap q =
-             let var = Quantifier.to_var q in
-             IntMap.remove var tmap
-           in
-           let updated_inst_map =
-             List.fold_left remove_shadowed_quantifier inst_map qs
-           in
-            ForAll (qs, inst_typ updated_inst_map rec_env t)
+            let update map ((id, kind) as q) =
+              if refresh_quantifiers then
+                let fresh, argument = Types.fresh_quantifier kind in
+                IntMap.add id argument map, fresh
+              else IntMap.remove id map, q
+            in
+            let map, qs = List.fold_left_map update inst_map qs in
+            ForAll (qs, inst_typ map rec_env t)
         | Alias (k, (name, qs, ts), d) ->
             Alias (k, (name, qs, List.map instta ts), inst d)
         | Application (n, elem_type) ->
@@ -414,12 +415,13 @@ let replace_quantifiers t qs' =
           ForAll (qs', apply_type t tyargs)
     | t -> t
 
-let recursive_application name qs tyargs body =
+let recursive_application ?(preserve_forall = false) name qs tyargs body =
   let inst_map = populate_instantiation_map ~name qs tyargs in
-  let (_, body) = typ (instantiate_datatype inst_map body) in
-  body
+  let instantiate, _, _ = instantiates ~refresh_quantifiers:preserve_forall inst_map in
+  let body = instantiate body in
+  if preserve_forall then body else snd (typ body)
 
-let alias name tyargs env : Types.typ =
+let alias ?(preserve_forall = false) name tyargs env : Types.typ =
   (* This is just type application.
 
      (\Lambda x1 ... xn . t) (t1 ... tn) ~> t[ti/xi]
@@ -438,8 +440,9 @@ let alias name tyargs env : Types.typ =
           name (List.length tyargs) (List.length vars)))
     | Some (`Alias (k, vars, body)) ->
         let inst_map = populate_instantiation_map ~name vars tyargs in
-        (* instantiate the type variables bound by the alias
-           definition with the type arguments *and* instantiate any
-           top-level quantifiers *)
-        let (_, body) = typ (instantiate_datatype inst_map body) in
+        (* Substitute the alias parameters. Fresco keeps explicit quantifiers
+           and gives their binders fresh IDs on each use. *)
+        let instantiate, _, _ = instantiates ~refresh_quantifiers:preserve_forall inst_map in
+        let body = instantiate body in
+        let body = if preserve_forall then body else snd (typ body) in
           Alias (k, (name, List.map snd vars, tyargs), body)

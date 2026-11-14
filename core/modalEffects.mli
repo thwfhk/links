@@ -61,6 +61,15 @@ val equivalent : equal:('a -> 'a -> bool) -> 'a modality -> 'a modality -> bool
 val transforms :
   equal:('a -> 'a -> bool) -> ambient:'a context -> 'a modality -> 'a modality -> bool
 
+(** Type argument equalities required by a transformation. [None] means
+    that the transformation cannot hold for any type arguments. *)
+val transformation_arguments :
+  ambient:'a context -> 'a modality -> 'a modality -> ('a * 'a) list option
+
+(** Remove matching mask and extension occurrences at this ambient context. *)
+val contract_modality :
+  equal:('a -> 'a -> bool) -> ambient:'a context -> 'a modality -> 'a modality
+
 (** [right_residual ~lock ~requirement ambient] returns a requirement
     for a value after crossing [lock] from its binding context [ambient]. *)
 val right_residual :

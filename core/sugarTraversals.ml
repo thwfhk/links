@@ -185,6 +185,7 @@ class map =
       | Constant _x -> let _x = o#constant _x in Constant _x
       | Var _x -> let _x = o#name _x in Var _x
       | FreezeVar _x -> let _x = o#name _x in FreezeVar _x
+      | Freeze p -> Freeze (o#phrase p)
       | QualifiedVar _xs ->
           let _xs = o#list (fun o -> o#name) _xs in QualifiedVar _xs
       | FunLit (_x, _x1, _x_i1, _x_i2) ->
@@ -775,6 +776,7 @@ class fold =
       | Constant _x -> let o = o#constant _x in o
       | Var _x -> let o = o#name _x in o
       | FreezeVar _x -> let o = o#name _x in o
+      | Freeze p -> o#phrase p
       | QualifiedVar _xs ->
           let o = o#list (fun o -> o#name) _xs in o
       | FunLit (_x, _x1, _x_i1, _x_i2) -> let o = o#funlit _x_i1 in let _x_i2 = o#location _x_i2 in o
@@ -1321,6 +1323,7 @@ class fold_map =
       | Constant _x -> let (o, _x) = o#constant _x in (o, (Constant _x))
       | Var _x -> let (o, _x) = o#name _x in (o, (Var _x))
       | FreezeVar _x -> let (o, _x) = o#name _x in (o, (FreezeVar _x))
+      | Freeze p -> let o, p = o#phrase p in o, Freeze p
       | QualifiedVar _xs ->
           let (o, _xs) = o#list (fun o n -> o#name n) _xs in
           (o, (QualifiedVar _xs))

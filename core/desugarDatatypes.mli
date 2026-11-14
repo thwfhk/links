@@ -15,3 +15,5 @@ val program :
 val all_datatypes_desugared : SugarTraversals.predicate
 
 include Transform.Untyped.S
+
+module Modal : Transform.Untyped.S

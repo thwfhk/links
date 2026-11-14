@@ -305,6 +305,7 @@ and phrasenode =
   | Constant         of Constant.t
   | Var              of Name.t
   | FreezeVar        of Name.t
+  | Freeze           of phrase
   | QualifiedVar     of Name.t list
   | FunLit           of ((Types.datatype * Types.row) list) option *
                           DeclaredLinearity.t * funlit * Location.t
@@ -480,6 +481,7 @@ struct
     | FreezeSection (Section.Minus|Section.FloatMinus|Section.Project _) -> empty
 
     | TAbstr (_, p)
+    | Freeze p
     | TAppl (p, _)
     | Projection (p, _)
     | Upcast (p, _, _)

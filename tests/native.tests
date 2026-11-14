@@ -352,3 +352,13 @@ Control-flow linearity setting is unknown
 args : --set=track_control_flow_linearity=true
 stdout : () : ()
 stderr : @.*Unknown setting 'track_control_flow_linearity'.*
+
+Range syntax uses the standard helper when intRange is shadowed
+fun test() { fun intRange(m,n) { [m+n] } ([1..3], intRange(1,3)) } test()
+args : --set=typecheck_ir=true
+stdout : ([1, 2, 3], [4]) : (List Int, List Int)
+
+Range syntax is pure
+(fun() { [1..3] } : () {}-> List Int)
+args : --set=typecheck_ir=true
+stdout : fun : () {}-> List Int

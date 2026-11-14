@@ -80,8 +80,28 @@ module Desugar = struct
         raise (Type_error (pos, message))
     | _ -> ()
 
-  let rec datatype interfaces (alias_env : Types.tycon_environment) t' =
-    let datatype t' = datatype interfaces alias_env t' in
+  let check_kind pos kind argument =
+    match FrescoTypes.require_kind kind argument with
+    | () -> ()
+    | exception Unify.Failure (`Msg message) -> raise (Type_error (pos, message))
+    | exception Unify.Failure _ -> raise (Type_error (pos, "Type argument has the wrong kind."))
+
+  type mode = Legacy | Check_kinds of (unit -> unit) list ref option
+
+  let check_argument mode pos kind argument =
+    match mode with
+    | Legacy -> ()
+    | Check_kinds None -> check_kind pos kind argument
+    | Check_kinds (Some checks) ->
+        checks := (fun () -> check_kind pos kind argument) :: !checks
+
+  let check_prefix pos typ =
+    match FrescoTypes.check_prefix typ with
+    | () -> ()
+    | exception Unify.Failure (`Msg message) -> raise (Type_error (pos, message))
+
+  let rec datatype ~modal interfaces (alias_env : Types.tycon_environment) t' =
+    let datatype t' = datatype ~modal interfaces alias_env t' in
     match t' with
     | { node = t; pos } ->
       let open Datatype in
@@ -93,11 +113,11 @@ module Desugar = struct
         | QualifiedTypeApplication _ -> assert false (* will have been erased *)
         | Function (f, e, t) as _fn ->
             Types.Function ( Types.make_tuple_type (List.map datatype f)
-                           , row interfaces alias_env e t'
+                           , row ~modal interfaces alias_env e t'
                            , datatype t )
         | Lolli (f, e, t) ->
             Types.Lolli ( Types.make_tuple_type (List.map datatype f)
-                        , row interfaces alias_env e t'
+                        , row ~modal interfaces alias_env e t'
                         , datatype t )
         | AmbientArrow (linearity, args, result) ->
             Types.AmbientFunction (linearity, Types.make_tuple_type (List.map datatype args), datatype result)
@@ -114,10 +134,13 @@ module Desugar = struct
                 raise (TypeApplicationArityMismatch {pos; name; expected; provided});
               let arguments = List.map datatype args in
               List.iteri (fun index (q, argument) ->
-                let linearity, restriction = Quantifier.to_subkind q in
-                if linearity = lin_unl && not (Types.Unl.type_satisfies argument) then
-                  raise (Type_error (pos, Printf.sprintf "Argument %d of %s must be unrestricted." (index + 1) name));
-                check_restriction pos name index restriction argument)
+                match modal with
+                | Check_kinds _ -> check_argument modal pos (Quantifier.to_kind q) (pk_type, argument)
+                | Legacy ->
+                  let linearity, restriction = Quantifier.to_subkind q in
+                  if linearity = lin_unl && not (Types.Unl.type_satisfies argument) then
+                    raise (Type_error (pos, Printf.sprintf "Argument %d of %s must be unrestricted." (index + 1) name));
+                  check_restriction pos name index restriction argument)
                 (List.combine signature.EffectInterfaces.parameters arguments);
               id, arguments in
             let extension entries = ModalEffects.extension (List.map entry entries) in
@@ -133,6 +156,11 @@ module Desugar = struct
 
             (* Turn mtv into a proper recursive type *)
             Unionfind.change mtv (Types.Recursive (var, sk, t));
+            (match modal with
+            | Legacy -> ()
+            | Check_kinds None -> check_prefix pos (Meta mtv)
+            | Check_kinds (Some checks) ->
+                checks := (fun () -> check_prefix pos (Meta mtv)) :: !checks);
             Meta mtv
         | Forall (qs, t) ->
             let qs: Quantifier.t list = desugar_quantifiers qs in
@@ -145,12 +173,15 @@ module Desugar = struct
             let present (s, x) = (s, Types.Present x)
             in
               Types.Record (fold_right2 (curry (Types.row_with -<- present)) labels (map datatype ks) unit)
-        | Record r -> Types.Record (row interfaces alias_env r t')
-        | Variant r -> Types.Variant (row interfaces alias_env r t')
-        | Effect r -> Types.Effect (row interfaces alias_env r t')
+        | Record r -> Types.Record (row ~modal interfaces alias_env r t')
+        | Variant r -> Types.Variant (row ~modal interfaces alias_env r t')
+        | Effect r -> Types.Effect (row ~modal interfaces alias_env r t')
         | Operation (args, result) ->
             Types.Operation (Types.make_tuple_type (List.map datatype args), datatype result)
-        | List k -> Types.Application (Types.list, [(PrimaryKind.Type, datatype k)])
+        | List k ->
+            let item = datatype k in
+            check_argument modal pos (pk_type, (lin_unl, res_any)) (pk_type, item);
+            Types.make_list_type item
         | TypeApplication (tycon, ts) ->
             (* Matches kinds of the quantifiers against the type arguments.
              * Returns Types.type_args based on the given frontend type arguments. *)
@@ -175,10 +206,13 @@ module Desugar = struct
                 |> List.mapi
                      (fun i (q,t) ->
                        let  t = match_kinds i (q, t) in
-                       let primary, argument = type_arg interfaces alias_env t t' in
-                       let _, (_, restriction) = proj q in
-                       if restriction = res_abs || restriction = res_mono_abs then
-                         check_restriction pos tycon i restriction argument;
+                       let primary, argument = type_arg ~modal interfaces alias_env t t' in
+                       (match modal with
+                       | Check_kinds _ -> check_argument modal pos (proj q) (primary, argument)
+                       | Legacy ->
+                         let _, (_, restriction) = proj q in
+                         if restriction = res_abs || restriction = res_mono_abs then
+                           check_restriction pos tycon i restriction argument);
                        primary, argument)
               in
 
@@ -193,7 +227,7 @@ module Desugar = struct
               | Some (`Alias (k, qs, _dt)) ->
                   if k = pk_type then
                     let ts = match_quantifiers snd qs in
-                    Instantiate.alias tycon ts alias_env
+                    Instantiate.alias ~preserve_forall:(modal <> Legacy) tycon ts alias_env
                   else
                     raise (type_application_global_kind_mismatch pos tycon
                         "Type" (PrimaryKind.to_string k))
@@ -206,7 +240,7 @@ module Desugar = struct
                   let r_args = match_quantifiers snd qs in
                   let r_unwind args =
                     let _, body = StringMap.find tycon !tygroup_ref.type_map in
-                    Instantiate.recursive_application tycon qs args body
+                    Instantiate.recursive_application ~preserve_forall:(modal <> Legacy) tycon qs args body
                   in
                   let r_unique_name = tycon ^ string_of_int !tygroup_ref.id in
                   let r_linear () = StringMap.lookup tycon !tygroup_ref.linearity_map in
@@ -218,10 +252,10 @@ module Desugar = struct
                     }
             end
         | Primitive k -> Types.Primitive k
-  and fieldspec interfaces alias_env fs _ =
+  and fieldspec ~modal interfaces alias_env fs _ =
     match fs with
     | Datatype.Absent -> Types.Absent
-    | Datatype.Present t -> Types.Present (datatype interfaces alias_env t)
+    | Datatype.Present t -> Types.Present (datatype ~modal interfaces alias_env t)
     (* | Var stv when is_anon stv ->
      *    let (_name, sk, freedom) = SugarTypeVar.get_unresolved_exn stv in
      *    `Var (make_anon_point var_env pos sk freedom) *)
@@ -230,7 +264,7 @@ module Desugar = struct
        (* Debug.print ("presence var: " ^ Types.string_of_presence (Types.Meta resolved_pv)); *)
        Types.Meta resolved_pv
 
-  and row interfaces alias_env (fields, rv) (node : 'a WithPos.t) =
+  and row ~modal interfaces alias_env (fields, rv) (node : 'a WithPos.t) =
     let seed =
       let open Datatype in
       match rv with
@@ -256,7 +290,9 @@ module Desugar = struct
                 |> List.mapi
                      (fun i (q,t) ->
                        let  t = match_kinds i (q, t) in
-                       type_arg interfaces alias_env t node)
+                       let argument = type_arg ~modal interfaces alias_env t node in
+                       check_argument modal node.pos (proj q) argument;
+                       argument)
               in
               let qn = List.length qs and tn = List.length ts in
               if qn = tn then
@@ -269,7 +305,7 @@ module Desugar = struct
               | Some (`Alias (k, qs, _r)) ->
                   if k = pk_row then
                     let ts = match_quantifiers snd qs in
-                    begin match Instantiate.alias name ts alias_env with
+                    begin match Instantiate.alias ~preserve_forall:(modal <> Legacy) name ts alias_env with
                       | Alias(PrimaryKind.Row, _, body) -> body
                       | _ -> raise (internal_error "Instantiation failed")
                     end
@@ -285,7 +321,7 @@ module Desugar = struct
                   let r_args = match_quantifiers snd qs in
                   let r_unwind args =
                     let _, body = StringMap.find name !tygroup_ref.type_map in
-                    Instantiate.recursive_application name qs args body
+                    Instantiate.recursive_application ~preserve_forall:(modal <> Legacy) name qs args body
                   in
                   let r_unique_name = name ^ string_of_int !tygroup_ref.id in
                   let r_linear () = StringMap.lookup name !tygroup_ref.linearity_map in
@@ -304,53 +340,54 @@ module Desugar = struct
            let mrv = SugarTypeVar.get_resolved_row_exn stv in
 
            let var, sk = unpack_var_id (Unionfind.find mrv) in
-           let r = row interfaces alias_env r node in
+           let r = row ~modal interfaces alias_env r node in
 
            (* Turn mrv into a proper recursive row *)
            Unionfind.change mrv (Types.Recursive (var, sk, r));
            Types.Row (StringMap.empty, mrv)
 
     in
-    let fields = List.map (fun (k, p) -> (k, fieldspec interfaces alias_env p node)) fields in
+    let fields = List.map (fun (k, p) -> (k, fieldspec ~modal interfaces alias_env p node)) fields in
     fold_right Types.row_with fields seed
 
 
-  and type_arg interfaces alias_env ta node =
+  and type_arg ~modal interfaces alias_env ta node =
     let open Datatype in
     let open PrimaryKind in
     match ta with
-    | Type t     -> Type, datatype interfaces alias_env t
-    | Row r      -> Row, row interfaces alias_env r node
-    | Presence f -> Presence, fieldspec interfaces alias_env f node
+    | Type t     -> Type, datatype ~modal interfaces alias_env t
+    | Row r      -> Row, row ~modal interfaces alias_env r node
+    | Presence f -> Presence, fieldspec ~modal interfaces alias_env f node
 
-  let datatype' interfaces alias_env ((dt, _) : datatype') =
-    (dt, Some (datatype interfaces alias_env dt))
+  let datatype' ~modal interfaces alias_env ((dt, _) : datatype') =
+    (dt, Some (datatype ~modal interfaces alias_env dt))
 
-  let row' interfaces alias_env ((r, _) :row') =
-    (r, Some (row interfaces alias_env r (WithPos.make (Datatype.Effect r)))) (* should we keep the pos ? have a real node ? *)
+  let row' ~modal interfaces alias_env ((r, _) :row') =
+    (r, Some (row ~modal interfaces alias_env r (WithPos.make (Datatype.Effect r)))) (* should we keep the pos ? have a real node ? *)
 
-  let aliasbody interfaces alias_env = function
-    | Typename dt' -> Typename (datatype' interfaces alias_env dt')
-    | Effectname r' -> Effectname (row' interfaces alias_env r')
+  let aliasbody ~modal interfaces alias_env = function
+    | Typename dt' -> Typename (datatype' ~modal interfaces alias_env dt')
+    | Effectname r' -> Effectname (row' ~modal interfaces alias_env r')
 
-  let type_arg' interfaces alias_env ((ta, _) : type_arg') : type_arg' =
+  let type_arg' ~modal interfaces alias_env ((ta, _) : type_arg') : type_arg' =
     let unlocated = WithPos.make Datatype.Unit in
-    (ta, Some (type_arg interfaces alias_env ta unlocated))
+    (ta, Some (type_arg ~modal interfaces alias_env ta unlocated))
 end
 
 (** Convert a syntactic type into a semantic type, using `map' to resolve free type variables *)
-let desugar initial_interfaces initial_alias_env =
+let desugar ~modal initial_interfaces initial_alias_env =
+let modal = if modal then Desugar.Check_kinds None else Desugar.Legacy in
 object (self)
   inherit SugarTraversals.fold_map as super
 
   val alias_env = initial_alias_env
   val interfaces = initial_interfaces
 
-  method! datatype' node = (self, Desugar.datatype' interfaces alias_env node)
+  method! datatype' node = (self, Desugar.datatype' ~modal interfaces alias_env node)
 
-  method! row' node = (self, Desugar.row' interfaces alias_env node)
+  method! row' node = (self, Desugar.row' ~modal interfaces alias_env node)
 
-  method! type_arg' node = (self, Desugar.type_arg' interfaces alias_env node)
+  method! type_arg' node = (self, Desugar.type_arg' ~modal interfaces alias_env node)
 
   method! phrasenode = function
     | Block (bs, p) ->
@@ -380,7 +417,7 @@ object (self)
         let signature = EffectInterfaces.{ parameters; operations = Operations.empty } in
         let interfaces = EffectInterfaces.add id signature interfaces in
         let check_member member =
-          let t = Desugar.datatype interfaces alias_env member.member_signature in
+          let t = Desugar.datatype ~modal interfaces alias_env member.member_signature in
           let pos = WithPos.pos member.member_signature in
           let rec check = function
             | Types.ForAll (_, body) -> check body
@@ -397,6 +434,10 @@ object (self)
         let interfaces = EffectInterfaces.add id EffectInterfaces.{ signature with operations } interfaces in
         {<interfaces>}, EffectInterface { declaration with interface_members }
     | Aliases ts ->
+        let checks = ref [] in
+        let modal = match modal with
+          | Desugar.Legacy -> Desugar.Legacy
+          | Desugar.Check_kinds _ -> Desugar.Check_kinds (Some checks) in
         (* Maps syntactic types in the recursive group to semantic types. *)
         (* This must be empty to start off with, because there's a cycle
          * in calculating the semantic types: we need the alias environment
@@ -428,7 +469,7 @@ object (self)
           List.map (fun {node=(name, args, b); pos} ->
             (* Desugar the datatype *)
             (* Check if the datatype has actually been desugared *)
-            let b' = match Desugar.aliasbody interfaces mutual_env b with
+            let b' = match Desugar.aliasbody ~modal interfaces mutual_env b with
                 | Typename     (_, Some _) as b' -> b'
                 | Effectname   (_, Some _) as b' -> b'
                 | _ -> raise (internal_error "Datatype not desugared")
@@ -492,6 +533,14 @@ object (self)
             alias_env
         ) alias_env desugared_mutuals in
 
+        (match modal with
+        | Desugar.Legacy -> ()
+        | Desugar.Check_kinds _ ->
+            List.iter (fun {node = _, _, body; pos} ->
+              match body with
+              | Typename (_, Some typ) -> Desugar.check_prefix pos typ
+              | _ -> ()) desugared_mutuals);
+        List.iter (fun check -> check ()) (List.rev !checks);
         ({< alias_env = alias_env >}, Aliases desugared_mutuals)
 
     | b -> super#bindingnode b
@@ -515,51 +564,54 @@ object (self)
   method interfaces = interfaces
 end
 
-let phrase interfaces alias_env p =
-  (desugar interfaces alias_env)#phrase p
+let phrase ~modal interfaces alias_env p =
+  (desugar ~modal interfaces alias_env)#phrase p
 
-let binding interfaces alias_env ({ node; pos } as b : binding) =
+let binding ~modal interfaces alias_env ({ node; pos } as b : binding) =
   match node with
   | Funs bnds ->
       let bnds =
         List.map
           (fun bnd ->
-            (desugar interfaces alias_env)#recursive_function bnd
+            (desugar ~modal interfaces alias_env)#recursive_function bnd
             |> snd )
           bnds
       in
       (interfaces, alias_env, WithPos.make ~pos (Funs bnds))
   | _ ->
-      let o, b = (desugar interfaces alias_env)#binding b in
+      let o, b = (desugar ~modal interfaces alias_env)#binding b in
       (o#interfaces, o#aliases, b)
 
-let toplevel_bindings interfaces alias_env bs =
+let toplevel_bindings ~modal interfaces alias_env bs =
   let interfaces, alias_env, bnds =
     List.fold_left
       (fun (interfaces, alias_env, bnds) bnd ->
-         let interfaces, aliases, bnd = binding interfaces alias_env bnd in
+         let interfaces, aliases, bnd = binding ~modal interfaces alias_env bnd in
            (interfaces, aliases, bnd::bnds))
     (interfaces, alias_env, [])
       bs
   in (interfaces, alias_env, List.rev bnds)
 
-let program typing_env interfaces (bindings, p : Sugartypes.program) =
+let program_with_mode ~modal typing_env interfaces (bindings, p : Sugartypes.program) =
   let interfaces, alias_env, bindings =
-    toplevel_bindings interfaces typing_env.tycon_env bindings in
-  interfaces, (bindings, opt_map ((phrase interfaces alias_env) ->- snd) p)
+    toplevel_bindings ~modal interfaces typing_env.tycon_env bindings in
+  interfaces, (bindings, opt_map ((phrase ~modal interfaces alias_env) ->- snd) p)
 
-let sentence typing_env interfaces = function
+let sentence_with_mode ~modal typing_env interfaces = function
   | Definitions bs ->
-      let interfaces, _, bs = toplevel_bindings interfaces typing_env.tycon_env bs in
+      let interfaces, _, bs = toplevel_bindings ~modal interfaces typing_env.tycon_env bs in
       interfaces, Definitions bs
-  | Expression p -> interfaces, Expression (snd (phrase interfaces typing_env.tycon_env p))
+  | Expression p -> interfaces, Expression (snd (phrase ~modal interfaces typing_env.tycon_env p))
   | Directive d -> interfaces, Directive d
+
+let program = program_with_mode ~modal:false
+let sentence = sentence_with_mode ~modal:false
 
 let read ~aliases s =
   let dt, _ = parse_string ~in_context:(LinksLexer.fresh_context ()) datatype s in
   let dt = DesugarTypeVariables.standalone_signature dt in
   let dt = DesugarEffects.standalone_signature aliases dt in
-  let _, ty = Generalise.generalise Env.String.empty (Desugar.datatype EffectInterfaces.empty aliases dt) in
+  let _, ty = Generalise.generalise Env.String.empty (Desugar.datatype ~modal:Desugar.Legacy EffectInterfaces.empty aliases dt) in
   ty
 
 module Untyped = struct
@@ -567,13 +619,23 @@ module Untyped = struct
 
   let name = "datatypes"
 
-  let program state program' =
+  let program_with_mode ~modal state program' =
     let state = context state in
-    let effect_interfaces, program = program (Context.typing_environment state) state.Context.effect_interfaces program' in
+    let effect_interfaces, program = program_with_mode ~modal (Context.typing_environment state) state.Context.effect_interfaces program' in
     return Context.{ state with effect_interfaces } program
 
-  let sentence state sentence' =
+  let sentence_with_mode ~modal state sentence' =
     let state = context state in
-    let effect_interfaces, sentence = sentence (Context.typing_environment state) state.Context.effect_interfaces sentence' in
+    let effect_interfaces, sentence = sentence_with_mode ~modal (Context.typing_environment state) state.Context.effect_interfaces sentence' in
     return Context.{ state with effect_interfaces } sentence
+  let program = program_with_mode ~modal:false
+  let sentence = sentence_with_mode ~modal:false
+end
+
+module Modal = struct
+  module Untyped = struct
+    let name = Untyped.name
+    let program = Untyped.program_with_mode ~modal:true
+    let sentence = Untyped.sentence_with_mode ~modal:true
+  end
 end

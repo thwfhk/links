@@ -184,6 +184,18 @@ let project_datetime (f: CalendarShow.t -> int) : primitive * Types.datatype * p
   PURE)
 
 
+let int_range =
+  (p2 (fun first last ->
+     let first = Value.unbox_int first in
+     let last = Value.unbox_int last in
+     let rec collect n items =
+       let items = Value.box_int n :: items in
+       if n = first then items else collect (n - 1) items
+     in
+     Value.box_list (if first > last then [] else collect last [])),
+   datatype "(Int, Int) -> List Int",
+   PURE)
+
 let env : (string * (primitive * Types.datatype * pure)) list = [
   "+", int_op (+) PURE;
   "-", int_op (-) PURE;
@@ -323,6 +335,9 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
          Value.box_list (Value.unbox_list xs @ Value.unbox_list ys)),
    datatype "(List a, List a) -> List a",
    PURE);
+
+  "intRange", int_range;
+  "$$intRange", int_range;
 
   "hd",
   (p1 (fun lst ->

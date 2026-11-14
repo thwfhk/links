@@ -160,15 +160,70 @@ let contract ~equal ambient mask added =
       mask, added
   ) mask (mask, added)
 
-let transforms ~equal ~ambient source target =
+let contract_modality ~equal ~ambient = function
+  | Absolute _ as modality -> modality
+  | Relative (mask, added) ->
+      let mask, added = contract ~equal ambient mask added in
+      Relative (mask, added)
+
+let rec pair_arguments pairs source target =
   match source, target with
-  | Absolute fixed, _ -> subeffect ~equal fixed (apply target ambient)
+  | [], [] -> Some pairs
+  | l :: ls, r :: rs -> pair_arguments ((l, r) :: pairs) ls rs
+  | _ -> None
+
+let rec pair_prefix pairs source target =
+  match source, target with
+  | [], _ -> Some pairs
+  | _, [] -> None
+  | l :: ls, r :: rs ->
+      Option.bind (pair_arguments pairs l r) (fun pairs -> pair_prefix pairs ls rs)
+
+let transformation_arguments ~ambient source target =
+  match source, target with
+  | Absolute fixed, _ ->
+      let target = apply target ambient in
+      if fixed.wild && not target.wild then None
+      else
+        Interface_map.fold (fun interface entries pairs ->
+          Option.bind pairs (fun pairs ->
+            pair_prefix pairs entries (instances_of interface target.instances))
+        ) fixed.instances (Some [])
+  | Relative _, Absolute _ -> None
   | Relative (source_mask, source_added), Relative (target_mask, target_added) ->
-      let source_mask, source_added = contract ~equal ambient source_mask source_added in
-      let target_mask, target_added = contract ~equal ambient target_mask target_added in
-      Interface_map.equal Int.equal source_mask target_mask
-      && equal_extension ~equal source_added target_added
-  | Relative _, Absolute _ -> false
+      let interfaces =
+        let keys map = Interface_map.map (fun _ -> ()) map in
+        List.fold_left (Interface_map.union (fun _ () () -> Some ()))
+          Interface_map.empty
+          [keys source_mask; keys target_mask; keys source_added; keys target_added]
+      in
+      Interface_map.fold (fun interface () pairs ->
+        Option.bind pairs (fun pairs ->
+          let source_count = count_of interface source_mask in
+          let target_count = count_of interface target_mask in
+          let source_entries = instances_of interface source_added in
+          let target_entries = instances_of interface target_added in
+          (* Expand the smaller mask to the larger one, adding back just the
+             ambient instances removed by the extra mask occurrences. *)
+          let align count entries count' entries' =
+            let added = count' - count in
+            if List.length entries + added <> List.length entries' then None
+            else
+              let restored =
+                List.take added (List.drop count (instances_of interface ambient.instances))
+              in
+              if List.length restored <> added then None
+              else pair_prefix pairs (entries @ restored) entries'
+          in
+          if source_count <= target_count then
+            align source_count source_entries target_count target_entries
+          else align target_count target_entries source_count source_entries)
+      ) interfaces (Some [])
+
+let transforms ~equal ~ambient source target =
+  match transformation_arguments ~ambient source target with
+  | None -> false
+  | Some pairs -> List.for_all (fun (l, r) -> equal l r) pairs
 
 let extract mask instances =
   Interface_map.fold (fun interface count extracted ->

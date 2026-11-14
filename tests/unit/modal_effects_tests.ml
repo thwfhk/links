@@ -182,6 +182,98 @@ let absolute_constraints _ =
     Unify.datatypes (Types.Record (Types.make_singleton_closed_row ("run", any_presence)),
                      Types.Record arrow_row))
 
+let context_residual _ =
+  let open CommonTypes in
+  let arrow = Types.AmbientFunction (DeclaredLinearity.Unl, Types.unit_type, Types.int_type) in
+  let ambient = effects [reader, [Types.bool_type]; reader, [Types.int_type]] in
+  let outside = FrescoContext.create ~ambient Env.String.empty in
+  let quantify, parameter = Types.fresh_type_quantifier (lin_any, res_abs) in
+  let requirement = relative [] [reader, [parameter]; state, [Types.int_type]] in
+  let outside =
+    FrescoContext.bind outside "f" (Types.for_all ([quantify], Types.modal requirement arrow))
+  in
+  let inside = FrescoContext.with_lock outside (relative [] [reader, [Types.int_type]]) in
+  let expected = relative [] [state, [Types.int_type]] in
+  let instantiated = FrescoContext.access inside "f" ~prepare:(fun typ ->
+    Instantiate.apply_type typ [pk_type, Types.int_type])
+  in
+  let residual, _ = FrescoContext.prefix instantiated in
+  assert_bool "explicit instantiation lets the lock supply Reader(Int)"
+    (ModalEffects.equivalent ~equal:FrescoTypes.equal residual expected);
+  match FrescoContext.access inside "f" ~prepare:Fun.id with
+  | Types.ForAll ([still_bound], body) ->
+      assert_bool "a frozen access retains the binder" (Quantifier.eq quantify still_bound);
+      let residual, _ = FrescoContext.prefix body in
+      assert_bool "the rigid argument still has a Reader requirement"
+        (not (ModalEffects.transforms ~equal:FrescoTypes.equal
+          ~ambient:(FrescoContext.ambient inside) residual expected))
+  | _ -> assert_failure "Expected the original quantifier around the residual"
+
+let mixed_context_residual _ =
+  let open CommonTypes in
+  let mask = relative [reader] [] in
+  let quantify, parameter = Types.fresh_type_quantifier (lin_any, res_abs) in
+  let arrow = Types.AmbientFunction (DeclaredLinearity.Unl, Types.unit_type, parameter) in
+  let extension = relative [] [state, [Types.int_type]] in
+  let datatype = Types.modal extension (Types.for_all ([quantify], Types.modal mask arrow)) in
+  let outside = FrescoContext.bind (FrescoContext.create Env.String.empty) "f" datatype in
+  let inside = FrescoContext.with_lock outside mask in
+  let datatype = FrescoContext.access inside "f" ~prepare:Fun.id in
+  begin match datatype with
+  | Types.ForAll ([still_bound], body) ->
+      assert_bool "transport retains the mixed prefix's quantifier" (Quantifier.eq quantify still_bound);
+      let residual, _ = FrescoContext.prefix body in
+      assert_bool "the lock supplies the mask below the quantifier"
+        (ModalEffects.equivalent ~equal:FrescoTypes.equal residual extension)
+  | _ -> assert_failure "Expected the residual under the original quantifier"
+  end;
+  let empty = effects [] in
+  let outside =
+    FrescoContext.bind (FrescoContext.create ~ambient:empty Env.String.empty) "f" arrow
+  in
+  let inside = FrescoContext.with_lock outside (Absolute empty) in
+  assert_raises (FrescoContext.Error "Cannot access f across the change in effect context")
+    (fun () -> ignore (FrescoContext.access inside "f" ~prepare:Fun.id))
+
+let delayed_conversion _ =
+  let open CommonTypes in
+  let arrow = Types.AmbientFunction (DeclaredLinearity.Unl, Types.unit_type, Types.int_type) in
+  let context = FrescoContext.create Env.String.empty in
+  let argument = Types.fresh_type_variable (lin_any, res_mono) in
+  let body = Types.fresh_type_variable (lin_any, res_mono) in
+  let source = relative [] [reader, [argument]] in
+  let target = relative [] [reader, [Types.int_type]] in
+  FrescoContext.convert context ~source ~target ~body;
+  assert_bool "conversion leaves Abs open" (not (Types.Abs.type_satisfies body));
+  assert_bool "conversion leaves the argument open"
+    (not (FrescoTypes.equal argument Types.int_type));
+  assert_raises (FrescoContext.Error "A modality conversion needs a type or parameter annotation")
+    (fun () -> FrescoContext.solve context);
+  FrescoTypes.consistent body arrow;
+  FrescoContext.solve context;
+  assert_bool "a known ambient body requires the arguments to agree"
+    (FrescoTypes.equal argument Types.int_type);
+  let argument = Types.fresh_type_variable (lin_any, res_mono) in
+  let body = Types.fresh_type_variable (lin_any, res_mono) in
+  let source = relative [] [reader, [argument]] in
+  assert_raises Exit (fun () ->
+    FrescoContext.transaction context (fun () ->
+      FrescoContext.convert context ~source ~target ~body;
+      raise Exit));
+  FrescoContext.solve context
+
+let shared_argument_generalisation _ =
+  let open CommonTypes in
+  let argument = FrescoTypes.fresh ~subkind:(lin_unl, res_abs) () in
+  let context = FrescoContext.create ~ambient:(effects [reader, [argument]]) Env.String.empty in
+  let arrow = Types.AmbientFunction (DeclaredLinearity.Unl, Types.unit_type, argument) in
+  let (quantifiers, _), _ = FrescoTypes.generalise ~excluded:(FrescoContext.excluded context) arrow in
+  assert_equal [] quantifiers;
+  let (quantifiers, _), _ = FrescoTypes.generalise ~excluded:Types.TypeVarSet.empty arrow in
+  match quantifiers with
+  | [_, (PrimaryKind.Type, (_, Restriction.Abs))] -> ()
+  | _ -> assert_failure "An independent interface argument retains its absolute restriction"
+
 let parsed_type source =
   let program, positions = Parse.parse_string Parse.program source in
   let program = (ResolvePositions.resolve_positions positions)#program program in
@@ -233,5 +325,9 @@ let suite =
     "types" >:: types;
     "unifying interface arguments" >:: unify_types;
     "absolute constraints" >:: absolute_constraints;
+    "instantiating before lock transport" >:: context_residual;
+    "transporting a mixed prefix" >:: mixed_context_residual;
+    "delaying an ambiguous modality conversion" >:: delayed_conversion;
+    "shared interface arguments stay monomorphic" >:: shared_argument_generalisation;
     "modal types print and reparse" >:: modal_roundtrip;
   ]
