@@ -293,6 +293,27 @@ A computation can return a value with an existing universal binder
 sig chooseId : () -> (forall a. a -> a) fun chooseId() { fun(x) { x } } var f = (chooseId() : forall a. a -> a); (f(42), f(true))
 stdout : (42, true) : (Int, Bool)
 
+A signed recursive function can return a polymorphic lambda
+sig f : Int -> (forall a. a -> a) fun f(n) { if (n == 0) fun(x) { x } else f(n - 1) } var g = f(1); (g(42), g(true))
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : (42, true) : (Int, Bool)
+
+An unsigned recursive function still instantiates its result once per call
+fun f(n) { if (n == 0) fun(x) { x } else f(n - 1) } var g = f(1); (g(42), g(true))
+stderr : @.*Expected Int, got Bool.*
+exit : 1
+
+A conditional cannot give a bare call a fresh universal binder
+sig number : () -> Int fun number() { 42 } ((if (true) 1 else number()) : forall a. Int)
+args : --set=show_quantifiers=true
+stderr : @.*Expected forall a.Int, got Int.*
+exit : 1
+
+A conditional cannot give a bare call a fresh modality
+sig number : () -> Int fun number() { 42 } ((if (true) 1 else number()) : [] Int)
+stderr : @.*Modal introduction requires a value.*
+exit : 1
+
 A block with a failing pattern cannot acquire a fresh universal binder
 var v = (B : (| A | B |)); ({ var A = v; fun(x) { x } } : forall a. a -> a)
 stderr : @.*Type error:.*

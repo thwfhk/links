@@ -1421,8 +1421,8 @@ and infer_node ?(allow_intro = true) state mode phrase =
         (Usage.combine (usage fn) (Usage.combine_many (List.map usage arguments)))
   | Conditional (test, yes, no) ->
       let test = infer_here (Check bool_type) test in
-      let yes = infer ~allow_intro:false state mode yes in
-      let no = infer ~allow_intro:false state mode no in
+      let yes = infer ~allow_intro state mode yes in
+      let no = infer ~allow_intro state mode no in
       let typ = same_branches pos mode [yes; no] in
       wrap_usage pos (Conditional (term test, term yes, term no)) typ
         (Usage.combine (usage test) (Usage.align [usage yes; usage no]))
