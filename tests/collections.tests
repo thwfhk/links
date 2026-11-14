@@ -193,6 +193,11 @@ for (x <- [1], y <- [x]) [x + y]
 stderr : @.*Unknown variable x.*
 exit : 1
 
+A negative generator pattern binds a narrowed alias
+for ((-Tag as rest) <- [(Other : (|Tag|Other|))], n <- [2,1]) orderby (n) [(rest,n)]
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : [(Other, 1), (Other, 2)] : List ((|Other|), Int)
+
 A first generator can use an outer linear value once
 { var f = linfun() { 42 }; for (i <- [f()], j <- [1,2]) [(i,j)] }
 args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true

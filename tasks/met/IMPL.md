@@ -575,6 +575,9 @@ branch. If an earlier test gave the exact tag, reconstruct the variant
 from its payload at the alias's type. A later clause can test the
 original variant with its own set of tags. The scrutinee is evaluated
 once before the tests.
+Comprehension lowering uses the source patterns directly in the body
+and sorting callbacks. The separate callbacks that build the list of
+generator combinations bind full values in their own patterns.
 
 ### Deferred optimisation issues
 

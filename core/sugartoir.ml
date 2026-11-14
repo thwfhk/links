@@ -650,8 +650,9 @@ struct
   let (++) (nenv, tenv, _) (nenv', tenv', eff') = (NEnv.extend nenv nenv', TEnv.extend tenv tenv', eff')
 
   let rec returns_function name phrase =
+    let open Sugartypes in
     match WithPos.node phrase with
-    | Sugartypes.Var v | FreezeVar v -> v = name
+    | Var v | FreezeVar v -> v = name
     | Checked (value, _) | ModalIntro (value, _) | TAppl (value, _) | TypeAnnotation (value, _) ->
         returns_function name value
     | _ -> false
