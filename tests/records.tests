@@ -63,11 +63,11 @@ Row types preserved across functions
 stdout : 4 : Int
 
 Braced row fields allow extension of a record without the field
-sig addX : ((x{-} | r)) -> (x{:Int} | r) fun addX(r) { (x=42 | r) } addX((y=true))
+sig addX : forall r::Row. ((x{-} | r)) -> (x{:Int} | r) fun addX(r) { (x=42 | r) } addX((y=true))
 stdout : (x = 42, y = true) : (x:Int,y:Bool)
 
 Braced absent field excludes a record that has the field
-sig addX : ((x{-} | r)) -> (x{:Int} | r) fun addX(r) { (x=42 | r) } addX((x=1, y=true))
+sig addX : forall r::Row. ((x{-} | r)) -> (x{:Int} | r) fun addX(r) { (x=42 | r) } addX((x=1, y=true))
 stderr : @.*Type error: Expected \(x-,y:Bool\), got \(x:Int,y:Bool\).*
 exit : 1
 

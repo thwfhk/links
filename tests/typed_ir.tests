@@ -75,7 +75,7 @@ sig isInt : (String) -> Bool fun isInt (x) { x =~ /-?[0-9]+$/ }
 stdout : () : ()
 
 function pattern matching has right effects (#691)
-sig f : (List a) -> a fun f ([x]) { x }
+sig f : forall a. (List a) -> a fun f ([x]) { x }
 stdout : () : ()
 
 Freshen type variables when turning a lambda into a named function (#871)

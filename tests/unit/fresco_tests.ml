@@ -70,7 +70,7 @@ let list_look _ =
     typename Poly = forall a. []((a) -> a);
     sig ident : Poly
     fun ident(x) { x }
-    sig single : (a) -> List a
+    sig single : forall a. (a) -> List a
     fun single(x) { [x] }
     sig both : (List Poly) -> (Int, Bool)
     fun both(fs) { switch (fs) { case f::_ -> (f(42), f(true)) case [] -> (0, false) } }
@@ -80,7 +80,7 @@ let list_look _ =
     typename Poly = forall a. []((a) -> a);
     sig ident : Poly
     fun ident(x) { x }
-    sig map1 : (((a) -> b), List a) -> List b
+    sig map1 : forall a, b. (((a) -> b), List a) -> List b
     fun map1(f, xs) { switch (xs) { case x::_ -> [f(x)] case [] -> [] } }
     var ids = ([~ident] : List Poly);
     map1(fun(f) { (f(true), f(42)) }, ids)
@@ -156,8 +156,8 @@ let mixed_prefixes _ =
     (id(42), id(true))
   |};
   result "(List Int, List Bool)" {|
-    sig wrap : (a) -> List a
-    fun wrap(x) { var y = ([] : List a); x :: y }
+    sig wrap : forall a. [] (a -> List a)
+    var wrap = /\ [a]. { fun(x : a) { var y = ([] : List a); x :: y } };
     (wrap(42), wrap(true))
   |};
   rejected {|
@@ -242,7 +242,7 @@ let recursive_bindings _ =
     f(2)
   |};
   result "Int" {|
-    sig count : (a) -> Int
+    sig count : forall a. (a) -> Int
     fun count(x) { if (false) count((x,x)) else 42 }
     count(true)
   |};

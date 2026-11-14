@@ -4,15 +4,17 @@ fun poly(x) {
   ()
 }
 
-sig outer : (b) -> Int
-fun outer (x) {
-  fun inner() {
-    #force usage of type variable of outer function
-    var dummy = poly : (b) -> ();
-    42
+sig outer : forall b. [] (b -> Int)
+var outer = /\ [b]. {
+  fun (x : b) {
+    fun inner() {
+      #force usage of type variable of outer function
+      var dummy = poly : (b) -> ();
+      42
+    }
+    inner()
   }
-  inner()
-}
+};
 
 
 outer(7)

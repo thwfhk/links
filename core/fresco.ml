@@ -83,9 +83,6 @@ let implicit_quantifiers context rigids typ =
   Generalise.get_quantifiers_rigid (Context.environment context) typ
   |> List.filter (fun q -> not (TypeVarSet.mem (Quantifier.to_var q) excluded))
 
-let signature context rigids typ =
-  Types.for_all (implicit_quantifiers context rigids typ, typ)
-
 let rec global_signature typ =
   match head typ with
   | ForAll (qs, body) -> Types.for_all (qs, global_signature body)
@@ -1441,7 +1438,7 @@ and infer_binding ~global state binding =
           let pattern, env = FrescoPatterns.check (typ body) pattern in
           body, pattern, env in
         let body', pattern, env = match annotation anno with
-          | Some typ -> check (Check (signature state.terms state.rigids typ))
+          | Some typ -> check (Check typ)
           | None when has_pattern_annotation pattern ->
               begin match Context.transaction state.terms (fun () -> check Infer) with
               | result -> result
@@ -1472,7 +1469,6 @@ and infer_binding ~global state binding =
         let annotated =
           if elaborated then Some (Binder.to_type def.fun_binder)
           else Option.map (fun typ ->
-            let typ = signature state.terms state.rigids typ in
             if global then global_signature typ else typ) (annotation def.fun_signature) in
         let state_for_body = if global && annotated = None then under state pure else state in
         let fn = make ~pos (FunLit (None, def.fun_linearity, NormalFunlit (groups, body), def.fun_location)) in
@@ -1543,7 +1539,6 @@ and prepare_recursive ~global state def =
   let typ = match fst node.rec_definition, annotation node.rec_signature with
     | (_, Some (inner, _)), _ -> true, inner
     | _, Some typ ->
-        let typ = signature state.terms state.rigids typ in
         true, (if global then global_signature typ else typ)
     | _, None ->
         let _, fnlit = node.rec_definition in

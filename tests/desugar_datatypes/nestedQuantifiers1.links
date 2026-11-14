@@ -1,4 +1,4 @@
-sig nested_quantified : (a) -> ()
+sig nested_quantified : forall a. (a) -> ()
 fun nested_quantified (x) {
   sig f : forall a. (a) -> ()
   fun f (x) { }

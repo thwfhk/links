@@ -8,19 +8,19 @@ fun assertion(e, s) {
 
 # Some silly operations
 prefix 9 @@;
-sig @@ : (a) -> List a
+sig @@ : forall a. (a) -> List a
 op @@ x { [x] }
 
 prefix 3 @@@@;
-sig @@@@ : (List a) -> List (List a)
+sig @@@@ : forall a. (List a) -> List (List a)
 op @@@@ xs { [xs] }
 
 infix 2 ++++;
-sig ++++ : (List (List a), List (List a)) -> List (List a)
+sig ++++ : forall a. (List (List a), List (List a)) -> List (List a)
 op xss ++++ yss { xss ++ yss }
 
 postfix 1 <<>>;
-sig <<>> : (a) -> (a, ())
+sig <<>> : forall a. (a) -> (a, ())
 op x <<>> { (x, ()) }
 
 fun test1() { @@ 0 }

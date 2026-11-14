@@ -146,12 +146,12 @@ fun count(n) { if (n == 0) 0 else 1 + count(n - 1) } count(10000)
 stdout : 10000 : Int
 
 Linear function annotation
-sig h : ((a::Any) -@ a::Any, a::Any) -> a::Any fun h(f, x) {f(x)}
+sig h : forall a::Any. ((a::Any) -@ a::Any, a::Any) -> a::Any fun h(f, x) {f(x)}
 stdout : () : ()
 exit : 0
 
 Non-linear use of linear function
-sig h : ((a::Any) -@ a::Any, a::Any) -> a::Any fun h(f, x) {f(f(x))}
+sig h : forall a::Any. ((a::Any) -@ a::Any, a::Any) -> a::Any fun h(f, x) {f(f(x))}
 stderr : @..*
 exit : 1
 

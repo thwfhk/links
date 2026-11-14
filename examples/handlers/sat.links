@@ -40,11 +40,11 @@ effect Choice { Choose : () => Bool; }
 effect Failure { Fail : () => Zero; }
 
 # run
-sig run : (() -> a) -> a
+sig run : forall a. (() -> a) -> a
 fun run(m) {m()}
 
 # failure
-sig fail : [Failure] (() -> a)
+sig fail : forall a. [Failure] (() -> a)
 fun fail() {switch(do Fail) { }}
 
 sig maybe : forall a::Abs. (<Failure> (() -> a)) -> () -> Maybe(a)
@@ -74,7 +74,7 @@ sig choose : [Choice] (() -> Bool)
 fun choose() { do Choose }
 
 infixl 3 <|>;
-sig <|> : [Choice] ((() -> a, () -> a) -> a)
+sig <|> : forall a. [Choice] ((() -> a, () -> a) -> a)
 op lhs <|> rhs {
   if (choose()) lhs()
   else rhs()
@@ -281,18 +281,18 @@ fun peek() { do Peek }
 sig succeed : forall a::Abs. (a) -> Parser(a)
 fun succeed(x)() { x }
 
-sig many : (Parser(a)) -> Parser(List a)
+sig many : forall a. (Parser(a)) -> Parser(List a)
 fun many(p)() {
   if (choose()) p() :: many(p)()
   else []
 }
 
-sig many1 : (Parser(a)) -> Parser(List a)
+sig many1 : forall a. (Parser(a)) -> Parser(List a)
 fun many1(p)() {
   p() :: many(p)()
 }
 
-sig while : (Parser(a)) -> Parser(())
+sig while : forall a. (Parser(a)) -> Parser(())
 fun while(p)() {
   if (choose()) { ignore(p()); while(p)() }
   else ()
@@ -332,7 +332,7 @@ fun isWhitespace(c) {
 sig whitespace : Parser(())
 fun whitespace() { while(satisfies(isWhitespace))() }
 
-sig parens : (Parser(a)) -> Parser(a)
+sig parens : forall a. (Parser(a)) -> Parser(a)
 fun parens(p)() {
   ignore(char('(')());
   ignore(whitespace());

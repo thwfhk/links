@@ -15,7 +15,7 @@ fun await() { do Await }
 sig yield : forall s::Abs. [Yield(s)] ((s) -> ())
 fun yield(s) { do Yield(s) }
 
-sig forever : (() -> a) -> b
+sig forever : forall a, b. (() -> a) -> b
 fun forever(f) { ignore(f()); forever(f) }
 
 sig blackhole : forall s::Abs,a. [Await(s)] (() -> a)
@@ -34,7 +34,7 @@ fun take1(n)() {
  take0(n)
 }
 
-sig produceFrom : (Int) -> [Yield(Int)] (() -> a)
+sig produceFrom : forall a. (Int) -> [Yield(Int)] (() -> a)
 fun produceFrom(n)() {
   fun produceFrom0(n) {
      yield(n);
@@ -209,7 +209,7 @@ module Shallow {
       }
     }
 
-    sig drive : (() -> Output(s,a), Request(s,a)) -> a
+    sig drive : forall s, a. (() -> Output(s,a), Request(s,a)) -> a
     fun drive(prod, cons) {
       switch (cons) {
         case Finished(x) -> x

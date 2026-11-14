@@ -38,7 +38,7 @@ exit : 1
 stderr : @.*The arguments and result of F must have absolute types.*
 
 Recursive type variable in codomain
-sig f : (() -> mu b . (|Op:() -> b|)) -> c fun f(m) { switch(m()) { case Op(g) -> f(g) } } f
+sig f : forall c. (() -> mu b . (|Op:() -> b|)) -> c fun f(m) { switch(m()) { case Op(g) -> f(g) } } f
 stdout : fun : [] ((() -> mu a.(|Op:() -> a|)) -> _)
 
 Mono restriction

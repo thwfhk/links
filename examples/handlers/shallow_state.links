@@ -4,7 +4,7 @@ effect State(a::Abs) { Get : () => a; Put : (a) => (); }
 effect Log(a::Abs) { Log : (a) => (); }
 
 # Turn a continuation into a computation in the same context.
-sig compify : ((a) -> b) -> (a) -> () -> b
+sig compify : forall a, b. ((a) -> b) -> (a) -> () -> b
 fun compify(k)(x)() { k(x) }
 
 # The run handler forces evaluation of a computation

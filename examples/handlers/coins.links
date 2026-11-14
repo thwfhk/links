@@ -7,10 +7,10 @@ effect Rand { Rand : (()) => Float; }
 sig choice : [Choice] (() -> Bool)
 fun choice() {do Choice(())}
 
-sig choose : [Choice] ((a, a) -> a)
+sig choose : forall a. [Choice] ((a, a) -> a)
 fun choose(x,y) {if (choice()) {x} else {y}}
 
-sig fail : [Failure] (() -> a)
+sig fail : forall a. [Failure] (() -> a)
 fun fail() {switch (do Failure(())) { }}
 
 sig allResults : forall a::Abs. (<Choice, Failure> (() -> a)) -> List a

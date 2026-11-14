@@ -14,7 +14,7 @@ fun fork() {do Fork}
 sig yield : [Co] (() -> One)
 fun yield() {do Yield}
 
-sig stop : [Co] (() -> a)
+sig stop : forall a. [Co] (() -> a)
 fun stop() {switch (do Stop) { }}
 
 # in fact `Yield` is redundant: we could use

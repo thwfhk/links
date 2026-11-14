@@ -68,7 +68,7 @@ effect Reader(a::Abs) { Read : () => a; } sig foo : forall a::Abs. [Reader(a)] (
 stdout : (42, true) : (Int, Bool)
 
 Overly general signatures
-sig id : (a) -> b fun id(x) {x}
+sig id : forall a, b. (a) -> b fun id(x) {x}
 stderr : @..*
 exit : 1
 
@@ -135,9 +135,9 @@ sig f : forall r::Row. (a) -> (|One | r|) fun f(x) {x} f
 stderr : @..*
 exit : 1
 
-Inner quantifier with free variable
-sig f : (a) -> (a, a) fun f(x) {sig g : forall b.(a, b) -> (a, b) fun g(x, y) {(x, y)} g(x, x)} f
-stdout : fun : [] ((a) -> (a, a))
+Inner quantifier can refer to a lexically bound type variable
+sig f : forall a. [] (a -> (a, a)) var f = /\ [a]. { fun(x : a) { sig g : forall b. (a, b) -> (a, b) fun g(x, y) { (x, y) } g(x, x) } }; f(42)
+stdout : (42, 42) : (Int, Int)
 
 Composing two relative callbacks
 effect Alpha { A : () => (); } effect Beta { B : () => (); } sig alpha : (<Alpha> (() -> Int)) -> Int fun alpha(m) { handle(m()) { case <A => k> -> k(()) } } sig beta : (<Beta> (() -> Int)) -> Int fun beta(m) { handle(m()) { case <B => k> -> k(()) } } alpha(fun() { do A; beta(fun() { do B; 42 }) })
@@ -170,10 +170,10 @@ fun f(x) {x : a} f
 exit : 0
 stdout : fun : [] ((a) -> a)
 
-Signatures (fun): free variable on parameeter with unquantified sig (3)
+Signatures (fun): unbound type variable in a signature (3)
 sig f : (a) -> a fun f(x : a) {x} f
-exit : 0
-stdout : fun : [] ((a) -> a)
+exit : 1
+stderr : @.*Unbound type variable `a'.*
 
 Signatures (fun): free variable on parameter with quantified sig (4)
 sig f : forall a. (a) -> a fun f(x : a) {x} f
@@ -216,8 +216,7 @@ stdout : fun : forall a.(a) -> a
 args : --set=show_quantifiers=true
 
 Type abstraction: correct, use type variable in body
-# Note that we need the signature to enforce a function without effects
-/\ [a]. { sig f : (%b) -> %b fun f (x) {x : a} ~f }
+/\ [a]. { fun f(x : a) {x : a} ~f }
 exit : 0
 stdout : fun : forall a.(a) -> a
 args : --set=show_quantifiers=true
@@ -234,13 +233,12 @@ exit : 1
 stderr : @.*Type error:.*Type abstraction needs a type annotation.*
 
 Type abstraction: correct, shadowing (1)
-sig f : (a) -> (forall b.()) fun f(_) {  /\ [a]. {  sig g : (a) -> a fun g(x){x} ()   } } f
+/\ [a::Row]. { sig f : forall a. (a) -> (forall b. ()) fun f(_) { /\ [a]. { sig g : (a) -> a fun g(x) { x } () } } fun(x : (|a)) { f(x); 42 } }
 exit : 0
-stdout : fun : forall a.[] ((a) -> forall b.())
+stdout : fun : forall a::Row.((|a)) -> Int
 args : --set=show_quantifiers=true
 
 Type abstraction: correct, shadowing (2)
-# Like previous version, but this time with an explicit forall on the outer variable a!
 sig f : forall a. (a) -> (forall b.()) fun f(_) {  /\ [a]. {  sig g : (a) -> a fun g(x){x} ()   } } f
 exit : 0
 stdout : fun : forall a.[] ((a) -> forall b.())

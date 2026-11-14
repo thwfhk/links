@@ -613,7 +613,7 @@ fun getList() {
 }
 
 
-sig runTests : [wild] ((Bool, List (String, () -> (testresult:Bool | r))) -> Bool)
+sig runTests : forall r::Row. [wild] ((Bool, List (String, () -> (testresult:Bool | r))) -> Bool)
 fun runTests(continue, t) {
     fun rt(allsuccess, t) {
         switch(t) {

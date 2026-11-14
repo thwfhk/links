@@ -11,7 +11,7 @@ fun yield(x) { do Yield(x) }
 sig await : forall a::Abs. [Await(a)] (() -> a)
 fun await() { do Await }
 
-sig abort : [Abort] (() -> a)
+sig abort : forall a. [Abort] (() -> a)
 fun abort() {
   switch (do Abort) { }
 }
@@ -29,7 +29,7 @@ fun insideUnitCircle(p) {
 }
 
 # Streams of random points
-sig randomPoints : [Yield(Point), wild] (() -> a)
+sig randomPoints : forall a. [Yield(Point), wild] (() -> a)
 fun randomPoints() {
   var p = makePoint(random(), random());
   yield(p);
@@ -49,7 +49,7 @@ fun take(n, m) {
 
 # Compute pi
 
-sig computePi : (Int) -> [Yield(Float), wild] (() -> a)
+sig computePi : forall a. (Int) -> [Yield(Float), wild] (() -> a)
 fun computePi(n)() {
   fun loop(total, count) {
      # Synchronously take `n' random points

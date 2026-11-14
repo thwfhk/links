@@ -1,7 +1,7 @@
 mutual {
-  sig f : ((hear{a}, anchor:Int)) -> Int
+  sig f : forall a::Presence. ((hear{a}, anchor:Int)) -> Int
   fun f(r) { r.anchor }
 
-  sig g : ((| a)) -> Bool
+  sig g : forall a::Row. ((| a)) -> Bool
   fun g(_) { true }
 }

@@ -3,7 +3,7 @@ fun assert(ok, msg) {
   if (not(ok)) debug("assertion failed: " ^^ msg) else ()
 }
 
-sig ignore : [] ((a) -> ())
+sig ignore : forall a. [] ((a) -> ())
 fun ignore (_) { () }
 
 sig println : [wild] ((String) -> ())
@@ -13,7 +13,7 @@ fun println(msg) {
 
 # Don't use a for comprehension to define concatMap, as
 # for comprehensions are desugared into concatMap!
-sig concatMap : [] (((a) -> List c, List a) -> List c)
+sig concatMap : forall a, c. [] (((a) -> List c, List a) -> List c)
 fun concatMap(f, l) {
   switch (l) {
     case [] -> []
@@ -21,7 +21,7 @@ fun concatMap(f, l) {
   }
 }
 
-sig map : [] (((a) -> c, List a) -> List c)
+sig map : forall a, c. [] (((a) -> c, List a) -> List c)
 fun map(f, l) {
   switch (l) {
     case []     -> []
@@ -41,7 +41,7 @@ fun iter(f, xs) {
 }
 
 # TBD: rename this 'sortOn' to follow Haskell usage?
-sig sortBy : [] (((a) -> c, List a) -> List a)
+sig sortBy : forall a, c. [] (((a) -> c, List a) -> List a)
 fun sortBy (f, l) {
   switch (l) {
     case [] -> []
@@ -53,7 +53,7 @@ fun sortBy (f, l) {
   }
 }
 
-sig sortByBase : [] (((a) -> (| _::Base), List a) -> List a)
+sig sortByBase : forall a, r::Row(Base). [] (((a) -> (| r), List a) -> List a)
 fun sortByBase(f, l) {
   switch (l) {
     case [] -> []
@@ -156,7 +156,7 @@ fun unzip(l) {
   }
 }
 
-sig zip : [] ((List a, List b) -> List (a, b))
+sig zip : forall a, b. [] ((List a, List b) -> List (a, b))
 fun zip(l, r) {
   switch ((l, r)) {
     case ([], []) -> []
@@ -176,7 +176,7 @@ fun flip(f) {
   fun(x,y) { f(y,x) }
 }
 
-sig curry : [] (((a, b) -> c) -> (a) -> (b) -> c)
+sig curry : forall a, b, c. [] (((a, b) -> c) -> (a) -> (b) -> c)
 fun curry(f) {
   fun (x)(y) { f(x,y) }
 }
@@ -216,7 +216,7 @@ fun mapi(f, xs) {
   mi(0, xs)
 }
 
-sig substAt : [] ((List a, Int, a) -> List a)
+sig substAt : forall a. [] ((List a, Int, a) -> List a)
 fun substAt(xs, i, y) {
   switch (xs) {
     case [] -> []
@@ -257,7 +257,7 @@ fun join(glue,list) {
 # elemBy :: ((a) -> (a) -> Bool) -> (a) -> ([a]) -> Bool
 # notElemBy :: ((a) -> (a) -> Bool) -> (a) -> ([a]) -> Bool
 # span :: ((a) -> Bool) -> ([a]) -> ([a],[a])
-sig span : [] (((a) -> Bool, List a) -> (List a, List a))
+sig span : forall a. [] (((a) -> Bool, List a) -> (List a, List a))
 fun span(p, xs) {
   fun go(acc, xs, p) {
     switch(xs) {
@@ -274,12 +274,12 @@ fun span(p, xs) {
 }
 # splitAt :: Int -> ([a]) -> ([a],[a])
 
-sig takeWhile : [] (((a) -> Bool, List a) -> List a)
+sig takeWhile : forall a. [] (((a) -> Bool, List a) -> List a)
 fun takeWhile(pred, list) {
   first(span(pred, list))
 }
 
-sig dropWhile : [] (((a) -> Bool, List a) -> List a)
+sig dropWhile : forall a. [] (((a) -> Bool, List a) -> List a)
 fun dropWhile(pred, list) {
   second(span(pred, list))
 }
@@ -306,7 +306,7 @@ fun abs(i) {
   if (i < 0) -i else i
 }
 
-sig init : [] ((List a) -> List a)
+sig init : forall a. [] ((List a) -> List a)
 fun init(list) {
   switch (list) {
     case [y] -> []
@@ -316,7 +316,7 @@ fun init(list) {
 
 fun curtail(list) { init(list) }
 
-sig last : [] ((List a) -> a)
+sig last : forall a. [] ((List a) -> a)
 fun last(list) {
   switch (list) {
     case [x] -> x
@@ -371,7 +371,7 @@ fun unwords(ws) {
 # Option types
 typename Maybe (a) = (|Nothing | Just:a|);
 
-sig isJust : [] ((Maybe (a)) -> Bool)
+sig isJust : forall a. [] ((Maybe (a)) -> Bool)
 fun isJust(x) {
   switch (x) {
     case Just (x) -> true
@@ -379,7 +379,7 @@ fun isJust(x) {
   }
 }
 
-sig search : [] (((a) -> Bool, List a) -> Maybe (a))
+sig search : forall a. [] (((a) -> Bool, List a) -> Maybe (a))
 fun search(p,l) {
   switch (l) {
     case [] -> Nothing
@@ -388,7 +388,7 @@ fun search(p,l) {
   }
 }
 
-sig find : [] (((a) -> Bool, List a) -> a)
+sig find : forall a. [] (((a) -> Bool, List a) -> a)
 fun find(p,l) {
   switch (l) {
     case [] -> error("Not_found")
@@ -397,7 +397,7 @@ fun find(p,l) {
   }
 }
 
-sig fromJust : [] ((Maybe (a)) -> a)
+sig fromJust : forall a. [] ((Maybe (a)) -> a)
 fun fromJust(x) {
   switch (x) {
     case Just (x) -> x
@@ -405,7 +405,7 @@ fun fromJust(x) {
   }
 }
 
-sig fromMaybe : [] ((Maybe (a), a) -> a)
+sig fromMaybe : forall a. [] ((Maybe (a), a) -> a)
 fun fromMaybe(x, y) {
   switch (x) {
     case Just (x) -> x
@@ -416,7 +416,7 @@ fun fromMaybe(x, y) {
 
 # FIXME: for some reason placing this further up the file where it should be
 # leads to an error
-sig empty : [] ((List a) -> Bool)
+sig empty : forall a. [] ((List a) -> Bool)
 fun empty(l) {
   switch (l) {
     case [] -> true
@@ -500,7 +500,7 @@ fun minF_list(ns) {
 
 # association lists
 # TBD: memassoc is an old LISP word. Perhaps a more modern name would fit better?
-sig memassoc : [] ((a,List (a,b)) -> Bool)
+sig memassoc : forall a, b. [] ((a,List (a,b)) -> Bool)
 fun memassoc(x,l) {
   switch (l) {
     case []    -> false
@@ -508,7 +508,7 @@ fun memassoc(x,l) {
   }
 }
 
-sig lookup : [] ((a,List (a,b)) -> Maybe (b))
+sig lookup : forall a, b. [] ((a,List (a,b)) -> Maybe (b))
 fun lookup(x,l) {
   switch (l) {
     case [] -> Nothing
@@ -517,7 +517,7 @@ fun lookup(x,l) {
   }
 }
 
-sig assoc : [] ((String,List (String,b)) -> b)
+sig assoc : forall b. [] ((String,List (String,b)) -> b)
 fun assoc(x,l) {
   switch (l) {
     case []    -> error("Not found " ^^ x)
@@ -526,7 +526,7 @@ fun assoc(x,l) {
   }
 }
 
-sig assocDefault : [] ((String,List (String,b),b) -> b)
+sig assocDefault : forall b. [] ((String,List (String,b),b) -> b)
 fun assocDefault(x,l,d) {
   switch (l) {
     case []    -> d
@@ -535,7 +535,7 @@ fun assocDefault(x,l,d) {
   }
 }
 
-sig removeAssoc : [] ((a,List (a,b)) -> List (a,b))
+sig removeAssoc : forall a, b. [] ((a,List (a,b)) -> List (a,b))
 fun removeAssoc(x,l) {
   switch (l) {
     case [] -> []
@@ -544,7 +544,7 @@ fun removeAssoc(x,l) {
   }
 }
 
-sig assocAll : [] ((String,List (String,b)) -> List b)
+sig assocAll : forall b. [] ((String,List (String,b)) -> List b)
 fun assocAll(x,l) {
   switch (l) {
     case []    -> []
@@ -561,48 +561,51 @@ fun isInt (x) { x =~ /-?[0-9]+$/ }
 sig isFloat : [] ((String) -> Bool)
 fun isFloat (x) { x =~ /-?[0-9]+(\.[0-9]+)?$/ }
 
-fun dedup(l) {
-  sig elem : (a,List a) -> Bool
-  fun elem(x, l) {
-    switch (l) {
-      case [] -> false
-      case hd::tl -> x == hd || x `elem` tl
+sig dedup : forall a. [] (List a -> List a)
+var dedup = /\ [a]. {
+  fun(l : List a) {
+    sig elem : (a,List a) -> Bool
+    fun elem(x, l) {
+      switch (l) {
+        case [] -> false
+        case hd::tl -> x == hd || x `elem` tl
+      }
     }
-  }
-  sig aux : (List a,List a) -> List a
-  fun aux(vl, rl) {
-    switch (rl) {
-      case [] -> []
-      case r::rl0 ->
-        if (r `elem` vl)
-          aux(vl, rl0)
-        else
-          r::aux(r::vl, rl0)
+    sig aux : (List a,List a) -> List a
+    fun aux(vl, rl) {
+      switch (rl) {
+        case [] -> []
+        case r::rl0 ->
+          if (r `elem` vl)
+            aux(vl, rl0)
+          else
+            r::aux(r::vl, rl0)
+      }
     }
+    aux([]:List a, l)
   }
-  aux([]:List a, l)
-}
+};
 
-sig concatMapKey : [] (((a) -> List c, List (a,List d)) -> List c)
+sig concatMapKey : forall a, c, d. [] (((a) -> List c, List (a,List d)) -> List c)
 fun concatMapKey(f, l) {
   for (x <- l) f(x.1)
 }
 
 # XXX: I believe the arguments are in the wrong order, but see sortBy
-sig groupBy : [] (((a) -> c, List a) -> List (c, List a))
+sig groupBy : forall a, c. [] (((a) -> c, List a) -> List (c, List a))
 fun groupBy(f, l) {
   var is = dedup(map(f, l));
   for (i <- is) [(i, filter(fun (x) { f(x) == i }, l))]
 }
 
-sig groupByMap : [] (((a) -> c, List (d,List a)) -> List ((c,d), List a))
+sig groupByMap : forall a, c, d. [] (((a) -> c, List (d,List a)) -> List ((c,d), List a))
 fun groupByMap(f, xs) {
   for (x <- xs) 
     for (k <- dedup(map(f,x.2))) 
       [((k,x.1), filter(fun (v) { f(v) == k }, x.2))]
 }
 
-sig lookupG : [] ((a,List (a,List b)) -> List b)
+sig lookupG : forall a, b. [] ((a,List (a,List b)) -> List b)
 fun lookupG(x,l) {
   switch (l) {
     case [] -> []
@@ -611,7 +614,7 @@ fun lookupG(x,l) {
   }
 }
 
-sig aggBy : [] ((List (a, List b), (List b) -> d) -> List (a, d))
+sig aggBy : forall a, b, d. [] ((List (a, List b), (List b) -> d) -> List (a, d))
 fun aggBy(q, agg) {
   concatMapKey(fun (k) {
     [(k, agg(lookupG(k, q)))]
@@ -620,26 +623,26 @@ fun aggBy(q, agg) {
 
 typename State (d,a) = [] ((d) -> (a,d));
 
-sig $ : [] (((a) -> c, a) -> c)
+sig $ : forall a, c. [] (((a) -> c, a) -> c)
 op f $ x { f(x) }
 
 # state monad
-sig runState : [] ((State (d,a), d) -> (a,d))
+sig runState : forall d, a. [] ((State (d,a), d) -> (a,d))
 fun runState(s, i) { s(i) }
 
 infixl 1 >>=;
-sig >>= : [] ((State (d,a), [] ((a) -> State(d,b))) -> State (d,b))
+sig >>= : forall d, a, b. [] ((State (d,a), [] ((a) -> State(d,b))) -> State (d,b))
 op x >>= f {
    (fun (s1) { var (v,s2) = x (s1); runState (f (v), s2) })
 }
 
-sig return : [] ((a::Abs) -> State (b,a))
+sig return : forall a::Abs, b. [] ((a::Abs) -> State (b,a))
 fun return(a) { fun (s) { (a,s) } }
 
-sig fmap : [] (([] ((a) -> b::Abs), State (c,a)) -> State (c,b))
+sig fmap : forall a, b::Abs, c. [] (([] ((a) -> b::Abs), State (c,a)) -> State (c,b))
 fun fmap(f, x) { x >>= (fun (v) { return(f(v)) }) }
 
-sig sequence : [] ((List State(a,b::Abs)) -> State(a,List b))
+sig sequence : forall a, b::Abs. [] ((List State(a,b::Abs)) -> State(a,List b))
 fun sequence(xs) {
   switch (xs) {
     case [] -> return([])
@@ -649,10 +652,10 @@ fun sequence(xs) {
   }
 }
 
-sig pureE : [] ((a) -> Maybe (a))
+sig pureE : forall a. [] ((a) -> Maybe (a))
 fun pureE (x) { Just (x) }
 
-sig applyE : [] ((Maybe ((a) -> b), Maybe (a)) -> Maybe (b))
+sig applyE : forall a, b. [] ((Maybe ((a) -> b), Maybe (a)) -> Maybe (b))
 fun applyE (f, x) {
   switch ((f, x)) {
     case (Just (f), Just (x)) -> Just (f(x))
@@ -663,7 +666,7 @@ fun applyE (f, x) {
 typename Either (a,b) = (|Left:a | Right : b|);
 
 ####
-sig lf : [] (((a) -> b) -> (a) -@ b)
+sig lf : forall a, b. [] (((a) -> b) -> (a) -@ b)
 fun lf(f) {
   linfun (x) {
     f(x)
@@ -676,7 +679,7 @@ typename Zero = (| |);
 # Composition operators
 # Data flows from right to left (or inside-out)
 infixr 9 -<-;
-sig -<- : [] (((a) -> b, (c) -> a) -> (c) -> b)
+sig -<- : forall a, b, c. [] (((a) -> b, (c) -> a) -> (c) -> b)
 op f -<- g {
   fun(x) { f(g(x)) }
 }
@@ -689,7 +692,7 @@ op f ->- g {
 
 ## Utility functions
 # Returns Just the index of x in xs if x is an element in xs, otherwise Nothing.
-sig elemIndex : [] ((a, List a) -> Maybe(Int))
+sig elemIndex : forall a. [] ((a, List a) -> Maybe(Int))
 fun elemIndex(x, xs) {
   var n = fold_left(fun(acc, y) {
     switch (acc) {
@@ -703,7 +706,7 @@ fun elemIndex(x, xs) {
 
 ####
 
-sig partition : [] (((a) -> Bool, List a) -> (List a, List a))
+sig partition : forall a. [] (((a) -> Bool, List a) -> (List a, List a))
 fun partition(pred, xs) {
   fun go(ayes, noes, xs) {
     switch(xs) {
@@ -719,14 +722,14 @@ fun partition(pred, xs) {
   go([], [], xs)
 }
 
-sig groupByFlat : [] (((a) -> c, List a) -> List (c, List a))
+sig groupByFlat : forall a, c. [] (((a) -> c, List a) -> List (c, List a))
 fun groupByFlat(project, ts) {
   for(t <- ts)
     [(project(t),for (u <- ts) where (project(t) == project(u)) [u])]
 }
 
 ####
-sig assertEq : [wild] ((a, a) -> ())
+sig assertEq : forall a. [wild] ((a, a) -> ())
 fun assertEq (actual, expected) {
   if (expected == actual)
       ()

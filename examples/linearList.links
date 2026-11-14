@@ -1,7 +1,7 @@
 typename LinList(a::Any) = (| LinNil | LinCons: (a, LinList(a)) |);
 
 # Map over a list of linear values.
-sig linMap : ((a::Any) -> a::Any, LinList(a::Any)) -> LinList(a::Any)
+sig linMap : forall a::Any. ((a::Any) -> a::Any, LinList(a::Any)) -> LinList(a::Any)
 fun linMap(f, xs) {
   switch(xs) {
     case LinNil -> LinNil

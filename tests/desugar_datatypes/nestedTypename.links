@@ -1,4 +1,4 @@
-sig nested_type : (a) -> ()
+sig nested_type : forall a. (a) -> ()
 fun nested_type(x) {
   typename A = a;
 

@@ -83,7 +83,7 @@ sig choose : forall a::Abs. [Choice(a)] ((List a) -> a)
 fun choose(xs) { do Choose(xs) }
 
 # Failure.
-sig fail : [Failure] (() -> a)
+sig fail : forall a. [Failure] (() -> a)
 fun fail() { switch (do Fail) { } }
 
 # Selects one or two to cross the bridge.

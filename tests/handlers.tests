@@ -341,7 +341,7 @@ effect Operation { Op : (Float) => Float; } { fun(a : Float, b : String, c : Int
 stdout : fun : (Float, String, Int) -> (<Operation> (() -> ())) -> () -> String
 
 Instantiate.ArityMismatch #132 (RESOLVED)
-effect Foo { Foo : () => Int; } sig f : (<Foo> (() -> b)) -> b fun f(m) { error("N/A") } sig g : (<Foo> (() -> b)) -> b fun g(m) { var x = f(m); x }
+effect Foo { Foo : () => Int; } sig f : forall b. (<Foo> (() -> b)) -> b fun f(m) { error("N/A") } sig g : forall b. (<Foo> (() -> b)) -> b fun g(m) { var x = f(m); x }
 stdout : () : ()
 
 Operation polymorphism (1)

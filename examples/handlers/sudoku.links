@@ -9,7 +9,7 @@ fun emptySudoku() {
   (name="empty", grid=map(fun(_) { map(fun(_) { Nothing }, range) }, range), status=Unknown)
 }
 
-sig dup : (List a) -> List a
+sig dup : forall a. (List a) -> List a
 fun dup(xs) {
   fun aux(xs, visited, dups) {
     switch (xs) {
@@ -50,7 +50,7 @@ var testSudoku = (name="b", grid=map(fun(xs) {
                            , status=Unknown);
 
 
-sig >>= : (Maybe(a), (a) -> Maybe(b)) -> Maybe(b)
+sig >>= : forall a, b. (Maybe(a), (a) -> Maybe(b)) -> Maybe(b)
 op m >>= f {
   switch (m) {
     case Nothing -> Nothing
@@ -58,7 +58,7 @@ op m >>= f {
   }
 }
 
-sig return : (a) -> Maybe(a)
+sig return : forall a. (a) -> Maybe(a)
 fun return(x) {Just(x)}
 
 sig checkSudoku : (Sudoku) -> Status

@@ -22,7 +22,7 @@ fun playerToString(player) {
     }
 }
 
-sig maybeToString : ((a) -> String) -> (Maybe(a)) -> String
+sig maybeToString : forall a. ((a) -> String) -> (Maybe(a)) -> String
 fun maybeToString(xToString)(ma){
     switch(ma){
         case Nothing -> "_"
@@ -38,7 +38,7 @@ fun stringCat(xs){
     }
 }
 
-sig intersperse : (a, List a) -> List a
+sig intersperse : forall a. (a, List a) -> List a
 fun intersperse(y, xs){
     switch(xs){
         case [] -> []
@@ -47,7 +47,7 @@ fun intersperse(y, xs){
     }
 }
 
-sig listToString : (List a, ((a) -> String)) ->  String
+sig listToString : forall a. (List a, ((a) -> String)) ->  String
 fun listToString(list, xToString){
    "[" ^^ stringCat(intersperse(", ", map(xToString, list))) ^^ "]"
 }

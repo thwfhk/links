@@ -97,7 +97,7 @@ fun f'() { 42 } f'()
 stdout : 42 : Int
 
 Function names may contain primes (2)
-sig f'''y : (a') -> a' fun f'''y(x) { x } f'''y(128)
+sig f'''y : forall a'. (a') -> a' fun f'''y(x) { x } f'''y(128)
 stdout : 128 : Int
 
 Function names may contain primes (3)

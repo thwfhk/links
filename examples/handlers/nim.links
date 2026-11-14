@@ -14,11 +14,11 @@
 
 # Some auxiliary handler composition operators.
 # Data flows from right to left (or inside-out)
-sig -<- : ((a) -> b, (c) -> a) -> (c) -> b
+sig -<- : forall a, b, c. ((a) -> b, (c) -> a) -> (c) -> b
 op g -<- f {fun (x) {g(f(x))}}
 
 # Combine a sequence of handlers with a computation m
-sig -< : ((a) -> b, a) -> b
+sig -< : forall a, b. ((a) -> b, a) -> b
 op f -< m  {f(m)}
 
 # Alternative pipeline operator; data flows from left-to-right
@@ -80,7 +80,7 @@ fun game(n)() {aliceTurn(n)}
 # strategy to a given player
 
 # A first strategy: Always pick one stick
-sig ns : (Int, (Int) -> a) -> a
+sig ns : forall a. (Int, (Int) -> a) -> a
 fun ns(n,k) { k(1) }
 
 # The naive-strategy-handler assigns the naive-strategy to both players
@@ -97,7 +97,7 @@ fun naive(m) {
 
 # Auxiliary function
 # Given two comparable inputs, it returns the greatest of those two.
-sig max2 : (a,a) -> a
+sig max2 : forall a. (a,a) -> a
 fun max2(x,y) {
   if (x > y) {x}
   else {y}
@@ -105,7 +105,7 @@ fun max2(x,y) {
 
 
 # The perfect strategy is to pick "max{n (mod 4), 1}" sticks
-sig ps : (Int, (Int) -> a) -> a
+sig ps : forall a. (Int, (Int) -> a) -> a
 fun ps(n,k) {
     k(max2(n `mod` 4, 1))
 }
@@ -131,7 +131,7 @@ fun validMoves(n) {
 
 # The brute force strategy enumerates all future plays
 # if any particular play leads to a win, then play that strategy
-sig bfs : (a, Int, (Int) -> a) -> a
+sig bfs : forall a. (a, Int, (Int) -> a) -> a
 fun bfs(player,n,k) {
   # Map the continuation over all possible moves
   # this effectively determines all potential winners
@@ -239,21 +239,21 @@ fun bobStrat(m)() {
 
 # Abstract operation cheat
 # Invoked when a player cheats.
-sig cheat : [Cheating] ((Player, Int) -> a)
+sig cheat : forall a. [Cheating] ((Player, Int) -> a)
 fun cheat(player, n) {switch(do Cheat(player,n)) { } }
 
 # Cheater's strategy is to take all sticks and thereby win in one move
-sig cheater : (Int, (Int) -> a) -> a
+sig cheater : forall a. (Int, (Int) -> a) -> a
 fun cheater(n,k) {k(n)}
 
-sig cheater2 : (Int, (Int) -> a) -> a
+sig cheater2 : forall a. (Int, (Int) -> a) -> a
 fun cheater2(n,k) {
   if (n > 3) { k(0) }
   else { k(n) }
 }
 
 # checkMove checks whether a given player p has cheated
-sig checkMove : [Moves, Cheating] ((Player, Int, (Int) -> a) -> a)
+sig checkMove : forall a. [Moves, Cheating] ((Player, Int, (Int) -> a) -> a)
 fun checkMove(p,n,k) {
   var take = move(p,n);
   if (not(elem(take,validMoves(n)))) {
@@ -342,7 +342,7 @@ fun cpLose(n) {
 sig rand : [Chance] (() -> Float)
 fun rand() {do Rand}
 
-sig ms : [Chance] ((Int, (Int) -> a) -> a)
+sig ms : forall a. [Chance] ((Int, (Int) -> a) -> a)
 fun ms(n,k) {
   var r = floatToInt(rand() *. 1000.0);
   var take = (r `mod` 3) + 1; # Make sure take is in {1,2,3}
@@ -443,10 +443,10 @@ fun scorerecorder(m)() {
 
 
 # The board printer handler prints the scoreboard
-sig boardPrinter : [wild, State(GameState)] ((() -> a) -> () -> ())
+sig boardPrinter : forall a. [wild, State(GameState)] ((() -> a) -> () -> ())
 fun boardPrinter(m)() {
   # Ranks Alice and Bob
-  sig sort : (List (2:Int|p)) -> List (2:Int|p)
+  sig sort : forall p::Row. (List (2:Int|p)) -> List (2:Int|p)
   fun sort(s) {
     if (second(s !! 1) > second(s !! 0)) {
       (s !! 1) :: (s !! 0) :: []
@@ -486,21 +486,21 @@ fun boardPrinter(m)() {
 
 # Finally, we define repeatGame which repeats
 # a given game r times
-sig repeatGame : (Int, () -> a) -> () -> List a
+sig repeatGame : forall a. (Int, () -> a) -> () -> List a
 fun repeatGame(r, m)() {
     for (_ <- [1..r]) {
         [m()]
     }
 }
 
-sig repeatGame2 : (Int, () -> a) -> () -> ()
+sig repeatGame2 : forall a. (Int, () -> a) -> () -> ()
 fun repeatGame2(r, m)() {
     fold_left(fun(_,_) {
       var _ = m(); ()
     }, (), [1..r])
 }
 
-sig repeatGame3 : (Int) -> (() -> a) -> () -> ()
+sig repeatGame3 : forall a. (Int) -> (() -> a) -> () -> ()
 fun repeatGame3(r)(m)() {
     fold_left(fun(_,_) {
       var _ = m(); ()

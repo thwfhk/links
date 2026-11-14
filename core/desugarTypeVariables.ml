@@ -118,9 +118,8 @@ let get_entry_var_info (entry : tyvar_map_entry ) :  (int * Kind.t  * Freedom.t)
 
 
 
-(* Given the signature on a var/function binder, returns whether or not
-   we allow implictly bound type variables both in the signature itself
-   and in the body of the binding *)
+(* Keep the implicit variable rules for binding bodies and the internal
+   type reader. Source signatures are checked separately. *)
 let sig_allows_implicitly_bound_vars :  datatype' option -> bool  =
   let open Datatype in
   function
@@ -234,6 +233,7 @@ object (o : 'self)
 
   (** Allow implicitly bound type/row/presence variables in the current context? *)
   val allow_implictly_bound_vars = allow_implicits
+  val require_explicit_binders = false
 
   (* part of legacy compatibility, remove later *)
   val at_toplevel = true
@@ -320,7 +320,7 @@ object (o : 'self)
       end
     else
       begin
-        (if (not allow_implictly_bound_vars)  && freedom = `Rigid then
+        (if require_explicit_binders || (not allow_implictly_bound_vars && freedom = `Rigid) then
            let name_opt = if anon then None else Some name in
            raise (free_type_variable ?var:name_opt pos));
 
@@ -412,9 +412,8 @@ object (o : 'self)
   method! row_var =
     let open Datatype in function
     | Closed -> o, Closed
-    | Open srv as orig when is_anonymous srv ->
-       (* This transformation pass does not check whether anonymous row variables
-          appear in contexts where implictly scoped variables are allowed.  *)
+    | Open srv as orig when not require_explicit_binders && is_anonymous srv ->
+       (* DesugarEffects checks anonymous rows in other types. *)
        o, orig
     | Open srv ->
        let (name, (is_eff, sk), freedom) = SugarTypeVar.get_unresolved_exn srv in
@@ -459,6 +458,11 @@ object (o : 'self)
        o, SourceCode.WithPos.with_node p (TAbstr (new_tyvars, new_phrase))
     | _ -> super#phrase p
 
+  method source_signature signature =
+    let inner = {< require_explicit_binders = true >} in
+    let inner, signature = inner#option (fun o -> o#datatype') signature in
+    o#set_vars inner#get_vars, signature
+
   method! function_definition : function_definition -> 'self * function_definition
       = fun { fun_binder;
               fun_linearity;
@@ -473,7 +477,7 @@ object (o : 'self)
     (* To simulate the legacy scoping behavior, we traverse the signature before the body *)
     let o, fun_binder = o#binder fun_binder in
     let o, tyvar = o#list (fun o -> o#quantifier) tyvar in
-    let o, fun_signature = o#option (fun o -> o#datatype') fun_signature in
+    let o, fun_signature = o#source_signature fun_signature in
     let o, lit = o#funlit lit in
     let o, fun_location = o#location fun_location in
 
@@ -502,7 +506,7 @@ object (o : 'self)
       let o, rec_binder = o#binder rec_binder in
       let o, tyvar = o#list (fun o -> o#quantifier) tyvar in
       let o, ty = o#option (fun o (t, x)-> let o, t = o#typ t in o, (t, x)) ty in
-      let o, rec_signature = o#option (fun o -> o#datatype') rec_signature in
+      let o, rec_signature = o#source_signature rec_signature in
       let o, lit = o#funlit lit in
       let o, rec_location = o#location rec_location in
 
@@ -517,19 +521,10 @@ object (o : 'self)
 
 
   method! aliasnode (name, unresolved_qs, body) =
-
-    (* Reject unbound named variables here. DesugarEffects checks
-       anonymous row tails. *)
-
-    let o = o#set_allow_implictly_bound_vars false in
     (* Aliases must never use type variables from an outer scope *)
-    let o = o#reset_vars in
-
-    let o, resolved_qs, body = o#quantified ~rigidify:true unresolved_qs (fun o' -> o'#aliasbody body) in
-
-    let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
-    let o = o#set_vars tyvar_map in
-
+    let inner = {< require_explicit_binders = true >} in
+    let inner = inner#reset_vars in
+    let _, resolved_qs, body = inner#quantified ~rigidify:true unresolved_qs (fun inner -> inner#aliasbody body) in
     o, (name, resolved_qs, body)
 
 
@@ -574,15 +569,17 @@ object (o : 'self)
            fs
        in
        (o, (Funs fs))
-    | Val (_pat, (_qs, _body), _loc, signature) ->
-       (* For Val bindings, signature determines whether implicitly
-          bound vars are allowed *)
+    | Val (pat, (qs, body), loc, signature) ->
        let implicits_allowed = sig_allows_implicitly_bound_vars signature in
        let o = o#set_allow_implictly_bound_vars implicits_allowed in
        let o = o#set_toplevelness false in
-
-       let (o, b) = apply o#super_bindingnode b in
-
+       let visit (pat, body, loc, signature) =
+         let o, signature = o#source_signature signature in
+         let o, pat = o#pattern pat in
+         let o, body = o#phrase body in
+         let o, loc = o#location loc in
+         o, Val (pat, (qs, body), loc, signature) in
+       let o, b = apply visit (pat, body, loc, signature) in
        let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
        (o, b)
 

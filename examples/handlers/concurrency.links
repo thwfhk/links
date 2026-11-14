@@ -35,10 +35,10 @@ fun test() {
 typename Queue(a) = (List a, List a);
 typename RunQueue = mu q . (Queue((q) -> ()));
 
-sig enqueueProcess : (a, Queue(a)) -> Queue(a)
+sig enqueueProcess : forall a. (a, Queue(a)) -> Queue(a)
 fun enqueueProcess(x, (front, back)) { (front, x :: back) }
 
-sig dequeueProcess : (Queue(a)) -> (Maybe(a), Queue(a))
+sig dequeueProcess : forall a. (Queue(a)) -> (Maybe(a), Queue(a))
 fun dequeueProcess(q) {
   switch (q) {
     case ([], []) -> (Nothing, q)

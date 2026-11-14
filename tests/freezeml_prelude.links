@@ -9,7 +9,7 @@ fun single(x) { [x] }
 
 typename ST(s, a) = [] (() -> a);
 
-sig runST : [] ((forall s. ST(s, a)) -> a)
+sig runST : forall a. [] ((forall s. ST(s, a)) -> a)
 fun runST(f) { f() }
 
 sig argST : forall s. ST(s, Int)

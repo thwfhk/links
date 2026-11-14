@@ -74,6 +74,11 @@ typename A = (_) -> ();
 exit : 1
 stderr : @.*Unbound anonymous type variable.*
 
+A type alias cannot introduce a hidden signature quantifier
+typename Hole = %; sig f : Hole -> Hole fun f(x) { x } (f(42), f(true))
+exit : 1
+stderr : @.*Unbound anonymous type variable.*
+
 Free type variables are detected (in nested definitions)
 ./tests/desugar_datatypes/nestedTypename.links
 filemode : true
@@ -121,6 +126,68 @@ stderr : @.*Arity mismatch: Type X expects 0 type arguments, but 1 arguments wer
 A bare arrow adds no implicit quantifier
 sig f : forall a. (a) -> a fun f(x) { x } f(42)
 stdout : 42 : Int
+
+Type alias row arguments use their declared kinds
+effect Reader { Ask : () => Int; } typename AskFrom(r::Row) = [Reader] (((|r)) -> Int); fun(r) { r.x + do Ask } : AskFrom({x:Int})
+stdout : fun : AskFrom ({x:Int})
+
+A leading modality can enclose an explicitly quantified signature
+sig f : [] (forall a. a -> a) fun f(x) { x } (f(42), f(true))
+stdout : (42, true) : (Int, Bool)
+
+A quantifier inside a modal signature only binds its own type
+sig f : [] ((forall a. a -> a) -> a) fun f(x) { x(42) }
+stderr : @.*Unbound type variable `a'.*
+exit : 1
+
+Type variables in a modality's interface arguments need a binder
+effect Reader(a::Abs) { Ask : () => a; } sig f : [Reader(a)] (() -> Int) fun f() { 42 }
+stderr : @.*Unbound type variable `a'.*
+exit : 1
+
+A value signature cannot use a variable introduced by its body
+sig f : (a) -> a var f = fun(x : a) { x }; f(42)
+stderr : @.*Unbound type variable `a'.*
+exit : 1
+
+An unsafe signature needs an explicit row binder
+unsafe sig f : [] ((x:Int|r) -> Int) fun f(x) { x.x }
+stderr : @.*Unbound type variable `r'.*
+exit : 1
+
+A signature needs an explicit presence binder
+sig f : (x:Int,y{p}) -> Int fun f(x) { x.x }
+stderr : @.*Unbound type variable `p'.*
+exit : 1
+
+Explicit row and presence binders can appear before a modality
+sig f : forall p::Presence, r::Row. [] ((field{p}, x:Int|r) -> (field{p}, x:Int|r)) fun f(x) { x } (f((x=42,y=true))).x
+stdout : 42 : Int
+
+A recursive signature cannot contain an anonymous type hole
+sig f : forall a. (a, %) -> a fun f(x,y) { if (true) x else f(x,y) }
+stderr : @.*Unbound anonymous type variable.*
+exit : 1
+
+A signature cannot contain an anonymous rigid type hole
+sig f : [] (_ -> Int) fun f(_) { 42 }
+stderr : @.*Unbound anonymous type variable.*
+exit : 1
+
+A signature cannot contain a row hole
+sig f : ((x:Int|%) -> Int) fun f(x) { x.x }
+stderr : @.*Unbound anonymous type variable.*
+exit : 1
+
+A signature cannot contain a presence hole
+sig f : [] ((x:Int,y{%}) -> Int) fun f(x) { x.x }
+stderr : @.*Unbound anonymous type variable.*
+exit : 1
+
+A signature cannot introduce a named flexible type variable
+sig f : (%a) -> %a fun f(x) { x }
+stderr : @.*Unbound type variable `%a'.*
+exit : 1
 
 Type alias row arguments use their declared kinds
 effect Reader { Ask : () => Int; } typename AskFrom(r::Row) = [Reader] (((|r)) -> Int); fun(r) { r.x + do Ask } : AskFrom({x:Int})

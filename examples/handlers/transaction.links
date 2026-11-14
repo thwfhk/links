@@ -5,12 +5,12 @@
 typename Queue(a) = (List a, List a);
 
 
-sig enqueue : (a, Queue(a)) -> Queue(a)
+sig enqueue : forall a. (a, Queue(a)) -> Queue(a)
 fun enqueue(x, (rear, front)) {
   (x :: rear, front)
 }
 
-sig dequeue : (Queue(a)) -> (Maybe(a), Queue(a))
+sig dequeue : forall a. (Queue(a)) -> (Maybe(a), Queue(a))
 fun dequeue(q) {
   switch (q) {
     case ([], []) -> (Nothing, q)
@@ -80,7 +80,7 @@ fun runState(m, st) {
 }
 
 # Transaction handler
-sig abort : [Abort] (() -> a)
+sig abort : forall a. [Abort] (() -> a)
 fun abort() {
   switch (do Abort) { }
 }

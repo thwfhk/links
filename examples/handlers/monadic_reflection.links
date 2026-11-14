@@ -10,20 +10,20 @@ effect Reflection(s::Abs) { Reflect : forall a::Abs. (State(a,s)) => a; }
 sig return : forall a::Abs,s. (a) -> State(a, s)
 fun return(v)(st) {(st, v)}
 
-sig run : (State(a, s), s) -> (s, a)
+sig run : forall a, s. (State(a, s), s) -> (s, a)
 fun run(m,st) {m(st)}
 
-sig bind : (State(a, s), [] ((a) -> State(b, s))) -> State(b, s)
+sig bind : forall a, s, b. (State(a, s), [] ((a) -> State(b, s))) -> State(b, s)
 fun bind(m,k)(st) {
   var (st1, x) = run(m, st);
   k(x)(st1)
 }
 
 infixl 1 >>=;
-sig >>= : (State(a, s), [] ((a) -> State(b, s))) -> State(b, s)
+sig >>= : forall a, s, b. (State(a, s), [] ((a) -> State(b, s))) -> State(b, s)
 op m >>= k {bind(m,k)}
 
-sig get : State(s, s)
+sig get : forall s. State(s, s)
 fun get(s) {(s,s)}
 
 sig put : forall s::Abs. (s) -> State(Unit, s)

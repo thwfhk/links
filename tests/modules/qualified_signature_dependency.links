@@ -1,2 +1,2 @@
-sig identity : (a') -> a'
+sig identity : forall a'. (a') -> a'
 fun identity(x) { x }
