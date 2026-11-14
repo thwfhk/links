@@ -23,7 +23,7 @@ and resumption types with the modal checker before changing registrations.
 
 [Milestone 3.7](PLAN.md#3-implement-modal-inference-and-polymorphism)
 covers [explicit quantifiers in source signatures](SPEC.md#types-and-annotations).
-The remaining items below are in
+The other follow-up items are in
 [milestone 5](PLAN.md#5-integrate-the-compiler-and-migrate-the-library).
 
 - 5.8 supports [linear lists](SPEC.md#list-linearity) and replaces

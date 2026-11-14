@@ -365,7 +365,7 @@ Depends on milestone 5.
 - [x] **6.3** (`fcb1e97a`) Run final build, regression, IR, source and installation
   checks on the combined revision. Record remaining deferred cases and
   their reasons. Complete this plan only when the in-scope checks pass.
-- [x] **6.4** After the follow-up changes in 2–5, update the
+- [x] **6.4** (`2135e426`) After the follow-up changes in 2–5, update the
   SmallLinks guide, including signatures, lock access, recursive
   types, linear lists, REPL recovery, comparisons and comprehension
   helpers. Cover [interface names and printing](SPEC.md#effect-interfaces),
