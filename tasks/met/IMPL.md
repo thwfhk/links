@@ -434,6 +434,14 @@ type. A matching ordinary annotation preserves forwarding. Leading
 modalities and quantifiers remain explicit, and ordinary annotations
 can still remove a modality or instantiate a quantifier.
 
+#### 4.12 Forwarding switch returns
+
+Expected types flow back to the handled input when every switch
+branch returns the input value. Clause patterns shadow names from
+the enclosing scope. A pattern binder for the whole scrutinee can
+forward the input when the scrutinee itself forwards it and the pattern
+keeps its type.
+
 ### Milestone 5 follow-up
 
 #### 5.5 Interface environments

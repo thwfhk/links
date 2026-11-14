@@ -212,10 +212,11 @@ let handler_interfaces interfaces clauses =
     Interfaces.add interface parameters handled) Interfaces.empty clauses
 
 let identity_return ?(same_type = fun _ -> false) cases =
-  let rec names env (pattern : Pattern.with_pos) = match pattern.node with
+  let rec names ?(allow_match = false) env (pattern : Pattern.with_pos) = match pattern.node with
     | Pattern.Variable binder -> Some (StringSet.add (Binder.to_name binder) env)
-    | Pattern.HasType (pattern, _) -> names env pattern
-    | Pattern.As (binder, pattern) -> names (StringSet.add (Binder.to_name binder) env) pattern
+    | Pattern.HasType (pattern, _) -> names ~allow_match env pattern
+    | Pattern.As (binder, pattern) -> names ~allow_match (StringSet.add (Binder.to_name binder) env) pattern
+    | (Pattern.Any | Pattern.Constant _) when allow_match -> Some env
     | _ -> None in
   let rec aliases env (body : phrase) = match body.node with
     | Var name -> StringSet.mem name env
@@ -223,6 +224,14 @@ let identity_return ?(same_type = fun _ -> false) cases =
     | TypeAnnotation (body, (_, Some typ)) | Checked (body, typ) ->
         same_type typ && aliases env body
     | Conditional (_, yes, no) -> aliases env yes && aliases env no
+    | Switch (value, cases, _) when cases <> [] ->
+        let forwards_value = aliases env value in
+        List.for_all (fun (pattern, body) ->
+          let env = StringSet.diff env (Sugartypes.Freevars.pattern pattern) in
+          let env =
+            if forwards_value then Option.value ~default:env (names ~allow_match:true env pattern)
+            else env in
+          aliases env body) cases
     | Block (bindings, body) ->
         let rec block env = function
           | [] -> aliases env body

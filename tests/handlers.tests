@@ -550,6 +550,33 @@ An aborting clause supplies a modal result type to an application
 effect Failure { Fail : forall a::Abs. () => a; } fun keep(f) { f } keep(handle(do Fail) { case <Fail> -> (fun() { 42 } : [](() -> Int)) case x -> var y = x; y })()
 stdout : 42 : Int
 
+A forwarding switch lets the result type guide the handled input
+effect Failure { Fail : forall a::Abs. () => a; } fun use(f : [](() -> Int)) { f() } use(handle(do Fail) { case <Fail> -> (fun() { 42 } : [](() -> Int)) case x -> switch (true) { case true -> x case false -> x } })
+stdout : 42 : Int
+
+A forwarding switch can bind the input to a new name
+effect Failure { Fail : forall a::Abs. () => a; } fun use(f : [](() -> Int)) { f() } use(handle(do Fail) { case <Fail> -> (fun() { 42 } : [](() -> Int)) case x -> switch (x) { case y as original -> original } })
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int
+
+A switch pattern alias can return the whole handled value
+(handle(true) { case n -> switch (n) { case true as x -> x case false as x -> x } }) : [] Bool
+stdout : true : [] (Bool)
+
+A forwarding switch cannot introduce a modality for an effectful input
+fun keep(x : [] Int) { x } keep(handle({ print("Input"); 42 }) { case n -> switch (n) { case value -> value } })
+stderr : @.*Type error: Modal introduction requires a value.*
+exit : 1
+
+A switch binder can shadow the value from the handled input
+fun use(f : [](() -> Int)) { f() } var callback = (fun() { 42 } : [](() -> Int)); use(handle({ print("Input"); 0 }) { case x -> switch (callback) { case x -> x } })
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : Input42 : Int
+
+A switch alias can narrow the handled variant type
+(handle((Other : (| Tag | Other |))) { case n -> switch (n) { case (-Tag as x) -> x } }) : (| Other |)
+stdout : Other : (|Other|)
+
 A flexible annotation can use an operation type variable within the clause
 effect Poly { Poly : forall a::Abs. (a) => (); } handle(do Poly(42)) { case <Poly(x)> -> (fun(y : %t) { () })(x) }
 stdout : () : ()

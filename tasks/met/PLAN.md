@@ -268,10 +268,16 @@ Depends on milestone 3.
 - [x] **4.10** (`15849dea`) Check the reviewed `wild` signatures for `show`,
   `parseDate` and `sleep`, the pure `error` signature and the existing
   `exit` signature.
-- [ ] **4.11** Give `case n -> n` and `case n -> (n : Int)` the same
+- [x] **4.11** (`314136f3`) Give `case n -> n` and `case n -> (n : Int)` the same
   typing when `n : Int`. In a handler with an effectful input of type
   `Int`, both clauses should reject an expected result of `[] Int`.
   Keep an explicit modality on the clause result, as in `n : [] Int`.
+- [ ] **4.12** Propagate expected result types through `switch` returns
+  that forward the handler input in every branch. Test a return through
+  a pattern alias and a shadowing binding that returns a different value.
+- [ ] **4.13** Report incompatible type requirements for a shared handler
+  interface argument. Preserve the annotation diagnostic when the
+  observed types leave a genuine choice or omit a possible modality.
 
 The [deferred optimisation issues](IMPL.md#deferred-optimisation-issues)
 cover eliminating unused primitive calls and inlining linear reads.
