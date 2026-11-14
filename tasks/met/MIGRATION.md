@@ -173,14 +173,14 @@ the configuration file and per-case arguments which still apply.
 ## Deferred `escape` fixtures
 
 There are 22 registered cases using the `escape` term and no such
-uses in the installed examples. Keep the original cases in the
-inventory when taking them out of the active modal tests. Add a
-diagnostic check for the unsupported syntax in milestone 2.2.
+uses in the installed examples. Milestone 2.2 moved the original cases
+to [the archive](deferred/escape/) and added diagnostic tests with and
+without handlers enabled.
 
 | Fixture | Cases and reason |
 | --- | --- |
-| `continuations.tests` | All 18: Escape expressions; Nested escapes; Invoking escapes; Continuation typing [1–5]; Escape through a higher-order function; Escape through a higher-order function rejects the wrong result type; Escape from a handler clause; Escape body [1–6]; Escape with handlers disabled. All exercise capturing or using an `escape` continuation, including the separate handler-disabled runtime. |
-| `typed_ir.tests` | Wild effect compatibility with escape from a closure (#873, 1), backed by `typed_ir/T873.links`; Wild effect compatibility #4 (#873, 2); Wild effect compatibility #5 (#873, 3); Call/cc. Each depends on `escape` to obtain a continuation. |
+| [continuations.tests](deferred/escape/continuations.tests) | All 18: Escape expressions; Nested escapes; Invoking escapes; Continuation typing [1–5]; Escape through a higher-order function; Escape through a higher-order function rejects the wrong result type; Escape from a handler clause; Escape body [1–6]; Escape with handlers disabled. All exercise capturing or using an `escape` continuation, including the separate handler-disabled runtime. |
+| [typed_ir.tests](deferred/escape/typed_ir.tests) | Wild effect compatibility with escape from a closure (#873, 1), backed by [T873.links](deferred/escape/T873.links); Wild effect compatibility #4 (#873, 2); Wild effect compatibility #5 (#873, 3); Call/cc. Each depends on `escape` to obtain a continuation. |
 
 The SmallLinks examples and active regressions contain no term-mask
 programs. A future reference test relying on executing an ambient

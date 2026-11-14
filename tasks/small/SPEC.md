@@ -469,9 +469,7 @@ This returns `(Just(42), Nothing)`. See the
 
 ## Other native features
 
-- Use `escape done in e` to bind `done` within `e`. Calling
-  `done(value)` returns `value` from the escape. For example,
-  `escape done in { 1 + done(42) }` returns `42`.
+- The compiler rejects [`escape` expressions](../met/SPEC.md#native-effects).
 - Use `s =~ /pattern/` to test a string against a regular expression.
   For example, `"42" =~ /^[0-9]+$/` returns `true`. Use
   `s =~ s/pattern/replacement/` for replacement.

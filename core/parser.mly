@@ -618,7 +618,8 @@ perhaps_orderby:
 | ORDERBY LPAREN exps RPAREN                                   { Some (orderby_tuple ~ppos:$loc($3) $3) }
 
 escape_expression:
-| ESCAPE VARIABLE IN exp                                       { with_pos $loc (Escape (binder ~ppos:$loc($2) $2, $4)) }
+| ESCAPE VARIABLE IN exp
+    { raise (ConcreteSyntaxError (pos $loc($1), "The `escape` expression is not supported.")) }
 
 exp:
 | case_expression
