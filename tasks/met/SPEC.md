@@ -1,13 +1,14 @@
 # Modal effect types for SmallLinks
 
-This is the design for modal effect types in SmallLinks. It
-replaces the effect system in the [SmallLinks language
-guide](../small/SPEC.md). The [plan](PLAN.md) records the work and
-checks. [Implementation notes](IMPL.md) will record implementation
-decisions as the work proceeds.
+This specification describes the target design for modal effect types
+in SmallLinks, including the reviewed follow-up changes. The native
+compiler already uses modal effects and Fresco. The
+[SmallLinks language guide](../small/SPEC.md) describes the current
+language. The [plan status](PLAN.md#status) records what the compiler
+implements and which checks have run. The
+[implementation notes](IMPL.md) record implementation decisions.
 
-The examples specify the modal compiler's behaviour. The decisions
-below record the review.
+The examples specify the behaviour required by this design.
 
 ## Scope
 
@@ -217,9 +218,12 @@ its result a modal type.
 The type syntax includes these forms.
 
 ```text
-T ::= ... | List atomic-type | variant-type
+T ::= ... | primary-type
     | (T, ...) -> T | (T, ...) -@ T
-    | atomic-type -> T | atomic-type -@ T | modality T
+    | unary-operand -> T | unary-operand -@ T
+primary-type ::= unary-operand | parenthesised-type
+unary-operand ::= atomic-type | List list-element | modality primary-type
+list-element ::= atomic-type | parenthesised-type
 variant-type ::= (| variant-row |)
 modality ::= [absolute-entries] | <effect-entries>
            | <mask-labels | effect-entries>
@@ -230,6 +234,9 @@ operation-signature ::= (T, ...) => T
 mask-labels ::= Interface, ...
 ```
 
+Here `atomic-type` includes type variables, type names with optional
+arguments, record types and variant types. `parenthesised-type` covers
+unit, tuples and a type in grouping parentheses.
 `variant-row` keeps the existing variant-row grammar, including the
 empty row, alternatives separated by `|`, and a final `| r` row tail.
 
@@ -265,9 +272,10 @@ Replace `[A]` in type annotations and printed types. List terms such as
 keep their existing application syntax, such as `Maybe(Int)`.
 
 For one argument, `A -> B` and `A -@ B` are shorthand for `(A) -> B`
-and `(A) -@ B`. Keep `(A, B) -> C` for multiple arguments, `() -> C`
-for no arguments, and `(()) -> C` for one unit argument. A single
-tuple argument still needs `((A, B)) -> C`.
+and `(A) -@ B`. For example, `List Int -> Int` takes one list argument.
+Keep `(A, B) -> C` for multiple arguments, `() -> C` for no arguments,
+and `(()) -> C` for one unit argument. A single tuple argument still
+needs `((A, B)) -> C`.
 
 Reserve the type name `List` for the built-in list constructor.
 `List A` and `List(A)` then name the same type, and the printer uses
@@ -339,11 +347,12 @@ and effects against that definition's type.
 ### Upcasts and record updates
 
 An upcast written `e : B <- A` checks `e` at `A` and gives it type
-`B`. The checker applies the modality conversion rules at each
-modal prefix. It checks list elements and variant payloads from
-source to target. A variant upcast can add alternatives. For
-functions, it checks arguments from target to source and results
-from source to target, with the same arrow linearity.
+`B`. Evaluation returns the original value. The checker applies the
+modality conversion rules at each modal prefix. It checks list
+elements and variant payloads from source to target. A variant upcast
+can add alternatives. For functions, both arrows must have the same
+argument count and linearity. Check corresponding arguments from
+target to source and results from source to target.
 
 A record upcast keeps the fields required by the target and can
 omit unrestricted fields. If the target marks a field explicitly
@@ -351,7 +360,7 @@ absent, the source must establish its absence. For example,
 `((x=1,y=true) : (x:Int,y{-}) <- (x:Int,y:Bool))` is rejected. An
 upcast must preserve linear use of fields, including fields in an
 open row. An open target record or an open source variant requires
-the same row tail on both sides. Evaluation returns the original value.
+the same row tail on both sides.
 
 A record update names each field at most once. For example,
 `((x=1) with x=2,x=3)` is rejected.
@@ -519,11 +528,10 @@ captured computation which uses a linear value.
 
 ### Fresco inference
 
-The switch to Fresco is settled. Current SmallLinks combines
-unification-based inference with FreezeML-style first-class
-polymorphism. Fresco uses bidirectional inference and checking to infer
-first-class polymorphism and first-class modal types. Its inference
-algorithm also unifies monotypes.
+Before the switch to Fresco, SmallLinks used unification-based
+inference with FreezeML-style first-class polymorphism. Fresco uses
+bidirectional inference and checking for first-class polymorphism and
+first-class modal types. Its inference algorithm also unifies monotypes.
 
 Reuse Links' monotype unification, data-row and presence solving,
 occurs checks and type-variable operations where they satisfy Fresco's
@@ -619,10 +627,11 @@ the `var` gives `f` an ambient function type. Writing
 same rule across modules and REPL sentences.
 
 An unannotated global `fun ask() { do Ask }` therefore fails. Give it
-`[Reader(Int)] (() -> Int)`, or check a lambda at an expected relative
-type supplied by a handler function. The compiler does not infer a
-minimal closed effect context from an unannotated body. A global
-function that handles its own operations can still infer under `[]`.
+a signature such as `[Reader(Int)] (() -> Int)`. A handler function
+can supply an expected relative type when checking a lambda argument.
+The compiler does not infer a minimal closed effect context from an
+unannotated body. A global function that handles its own operations
+can still infer under `[]`.
 
 The native top-level expression and top-level `var` initialisers use
 `{wild}`.
@@ -652,6 +661,9 @@ needed for a handler applied to an unannotated lambda. Partial type
 inference uses the operation's declared result type, with unknown
 interface arguments where necessary. Full checking selects the visible
 interface instance and checks its type arguments and availability.
+For a handler's result, partial inference uses known types from both
+return and operation clauses, whether the return clause is implicit
+or explicit. The [value restriction](#value-restriction) still applies.
 
 Infer instantiation with polymorphic or modal types when that structure
 is supplied by an annotation, a known value type or an expected type.
@@ -701,7 +713,7 @@ and `<Reader(Bool)> Int` both yield `Int`.
 | Situation | Required information |
 | --- | --- |
 | Pure global function, ordinary local function, ordinary recursion | Infer the ordinary type under the context supplied by the binding rules. |
-| Global function requiring an operation from outside its body or a native effect | A signature giving an absolute context, or another expected modal type. |
+| Named global function requiring an operation from outside its body or a native effect | A signature supplying the required context. |
 | Lambda supplied to a known handler function | Infer its ordinary type and check its body using the expected relative modality. |
 | Higher-rank or modal parameter whose structure is otherwise unknown | A parameter annotation or expected function type. |
 | Polymorphic recursion | A signature for each polymorphically recursive function. |
@@ -751,6 +763,11 @@ arguments per interface, shared by all its clauses.
 5. All clauses return `B`. An omitted return clause means the same
    checked `case x -> x` as an explicit identity clause.
 
+Deep handler clauses may capture only unrestricted values from the
+enclosing scope. The state, operation argument and return patterns
+introduce local bindings in their respective clauses. A linear local
+binding must be used once on each branch of its clause.
+
 Get each clause's operation signature from the interface declaration.
 Infer the interface's type arguments from patterns, calls, resumption
 arguments and expected types. A clause annotation must agree with the
@@ -758,6 +775,12 @@ declared operation scheme and may constrain the shared interface type
 arguments. It cannot specialise the operation's own rigid quantifiers
 or declare a new operation. Preserve both existing resumption
 binders `=> k` and `-> k` for deep and shallow clauses.
+
+A flexible type variable used in annotations only within one operation
+clause may be solved to a type that mentions a rigid type variable from
+the member's signature. The rigid type variable cannot appear in the
+handler result type, shared interface arguments or the solution for an
+annotation variable used outside the clause.
 
 A handler must provide clauses for every operation of each interface
 it installs. Several pattern clauses for one operation share its
@@ -1276,9 +1299,10 @@ The outer `State(Int)` handler cannot provide the missing operation.
 
 ### Prelude and example behaviour
 
-Use the standard `concatMap`, `map` and `sortByBase` when evaluating a
-list comprehension. Local definitions of these names still apply to
-explicit calls.
+List comprehensions use the bundled `concatMap`, `map` and `sortByBase`
+helpers regardless of which prelude is selected. Built-in `for` works
+with an empty prelude or a custom prelude that defines no list helpers.
+Explicit calls to these names follow ordinary lexical lookup.
 
 The prelude's `State(d,a)` holds a pure state computation. `runState`
 can run it in pure code. The callbacks passed to `>>=` and `fmap` are

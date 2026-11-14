@@ -1,9 +1,11 @@
 # Modal effect migration inventory
 
-This inventory starts from `21348680`, after removal of `unsafe_cast`,
-and includes the handler runtime fixtures for milestone 1.4. See [the
-migration criteria](SPEC.md#migration-and-deferred-coverage) and
-[milestones 2 and 5](PLAN.md#milestones).
+The baseline is `21348680`, after removal of `unsafe_cast`. This inventory
+also includes the handler runtime fixtures added in milestone 1.4
+(`1d94cb21`). The first modal integration was `fcb1e97a`. The table
+classifications record the migration from the baseline. See the
+[migration criteria](SPEC.md#migration-and-deferred-coverage) and the
+[plan](PLAN.md#milestones) for reviewed follow-up changes.
 
 - **Translate**: preserve the checked behaviour and update types,
   declarations or printed expectations.
@@ -14,16 +16,35 @@ migration criteria](SPEC.md#migration-and-deferred-coverage) and
   ambient context. Optional instances of a known interface need a
   separate review from unknown effect contexts.
 
-Classifications for translations describe what to check during migration.
-In particular, check the higher-order operation payloads and resumption
-types with the modal checker before changing any registration.
+The first migration required checks of higher-order operation payloads
+and resumption types with the modal checker before changing registrations.
+
+## Reviewed follow-up
+
+[Milestone 3.7](PLAN.md#3-implement-modal-inference-and-polymorphism)
+covers [explicit quantifiers in source signatures](SPEC.md#types-and-annotations).
+The remaining items below are in
+[milestone 5](PLAN.md#5-integrate-the-compiler-and-migrate-the-library).
+
+- 5.8 supports [linear lists](SPEC.md#list-linearity) and replaces
+  separate head and tail calls in patterns with a single list split.
+- 5.9 covers [REPL recovery after early `exit`](SPEC.md#repl-recovery).
+- 5.10 and 5.11 cover pure state helper result types and caller handling
+  of SAT failure.
+- 5.12 will make list comprehensions use standard helpers even when an
+  empty or custom prelude supplies none. See the
+  [prelude and example rules](SPEC.md#prelude-and-example-behaviour).
+- 5.13 covers [custom comparisons returning `Bool`](SPEC.md#comparison-operators).
 
 ## Native primitives and type aliases
 
-The table covers all 103 active entries in [core/lib.ml](../../core/lib.ml)
-and includes signatures built by OCaml helpers. Classify the native
-permission from what the primitive does. Keep the existing IR
-`PURE`/`IMPURE` flag for `ApplyPure` independent of this permission.
+The table covers the 101 primitive entries at the baseline and the two
+range entries added during migration, `intRange` and `$$intRange`.
+It includes signatures built by OCaml helpers in
+[core/lib.ml](../../core/lib.ml).
+Classify the native permission from what the primitive does.
+Keep the IR `PURE`/`IMPURE` flag for `ApplyPure` independent of this
+permission.
 
 | Entries | Classification and migration |
 | --- | --- |
@@ -31,20 +52,20 @@ permission from what the primitive does. Keep the existing IR
 | `Nil` | Translate: `List a`. |
 | `+`, `-`, `*`, `/`, `^`, `mod`, `+.`, `-.`, `*.`, `/.`, `^.`, `^^`, `==`, `<>`, `<`, `>`, `<=`, `>=`, `not`, `negate`, `negatef` | Translate: pure arithmetic, comparison and concatenation. Preserve the runtime failure of integer division and modulo by zero. |
 | `intToString`, `stringToInt`, `intToFloat`, `floatToInt`, `floatToString`, `stringToFloat` | Translate: pure conversions. Remove the fresh effect-row quantifier made by `conversion_op`; retain runtime failures for invalid input. |
-| `Cons`, `Concat`, `hd`, `tl`, `$$hd`, `$$tl`, `length`, `Sum`, `take`, `drop`, `max`, `min`, `intRange`, `$$intRange` | Translate: pure list operations. Use `List` and the new result variant syntax for `max` and `min`. Retain the failure of head and tail on empty lists and the internal names used in pattern and range lowering. |
+| `Cons`, `Concat`, `hd`, `tl`, `$$hd`, `$$tl`, `length`, `Sum`, `take`, `drop`, `max`, `min`, `intRange`, `$$intRange` | Translate: pure list operations. Use `List` and the new result variant syntax for `max` and `min`. Head and tail still fail on empty lists. The first migration retained `$$hd` and `$$tl` for list patterns and `$$intRange` for ranges. The [planned list split](#reviewed-follow-up) replaces the separate pattern calls. |
 | `least`, `greatest`, `dateToInt`, `intToDate`, `dateYear`, `dateDay`, `dateMonth`, `dateHours`, `dateMinutes`, `dateSeconds`, `dateMilliseconds`, `showUTC` | Translate: pure operations on supplied dates, timestamps and UTC offsets. Preserve the errors at infinite dates where applicable. |
 | `ord`, `chr`, `floor`, `ceiling`, `cos`, `sin`, `tan`, `log`, `log10`, `exp`, `sqrt`, `tilde`, `ltilde`, `stilde`, `charAt`, `strsub`, `strlen`, `strescape`, `strunescape`, `strContains`, `implode`, `explode`, `verify` | Translate: pure functions of supplied arguments. Migrate the list types of `ltilde`, `implode` and `explode`. |
-| `print`, `debug`, `sysexit`, `serverTime`, `serverTimeMilliseconds`, `now`, `utcOffset`, `parseDate`, `show`, `random`, `gensym`, `getArgs`, `crypt` | Translate to `[wild]`. `parseDate` uses the local time zone when the input omits an offset; `show` uses it for dates, including dates in containers. `getArgs` reads process arguments. `crypt` supplies no seed to `Bcrypt.hash`, which reads `/dev/urandom`. `now`, `random` and `gensym` use bare arrows today. |
+| `print`, `debug`, `sysexit`, `serverTime`, `serverTimeMilliseconds`, `now`, `utcOffset`, `parseDate`, `show`, `random`, `gensym`, `getArgs`, `crypt` | Translate to `[wild]`. `parseDate` uses the local time zone when the input omits an offset; `show` uses it for dates, including dates in containers. `getArgs` reads process arguments. `crypt` supplies no seed to `Bcrypt.hash`, which reads `/dev/urandom`. At the baseline, `now`, `random` and `gensym` used bare arrows. |
 | `connectSocket`, `writeToSocket`, `readFromSocket`, `closeSocket` | Translate to `[wild]`; migrate the `Nothing`/`Just` result types of `connectSocket` and `readFromSocket`. |
-| `exit` | Change expectation: `forall a::Abs,b. [wild] ((a) -> b)`. Retain its runtime continuation and independent result instantiation. Check an absolute argument and reject an ambient function argument. |
+| `exit` | Change expectation: the first migration kept early termination of the current evaluation and gave `exit` its current signature, `forall a::Abs,b. [wild] ((a) -> b)`. Its result type is instantiated independently, and its argument must be absolute. [REPL recovery after early exit](SPEC.md#repl-recovery) is a separate planned change. |
 | `error`, `sleep` | `error` is a pure, deterministic failure. `sleep` requires `[wild]` for timing and currently reports that it is unimplemented. |
 | `List`, `Socket`, `Repeat`, `Regex` | Translate: reserve the built-in `List` constructor and preserve `Socket` in [core/defaultAliases.ml](../../core/defaultAliases.ml). Migrate both variant strings in [core/linksregex.ml](../../core/linksregex.ml), including the recursive `Regex` type and its nested `Repeat` variant. |
 
 ## Preludes and standard library
 
-The [default prelude](../../prelude.links) has 84 explicit signatures
-and five type aliases. This table also names inferred definitions whose
-dependencies or types matter during migration. Default pure global
+At the baseline the [default prelude](../../prelude.links) had 84
+explicit signatures and five type aliases. The table also names inferred
+definitions whose dependencies or types matter. Default pure global
 signatures have an outer `[]`; same-context callbacks have ambient
 arrows. A supplied pure function can carry its own `[]` when needed.
 
@@ -62,8 +83,8 @@ arrows. A supplied pure function can carry its own `[]` when needed.
 | `ignore`, `id`, `first`–`tenth`, `abs`, `isInt`, `isFloat`, `isLower`, `isUpper`, `isAlpha`, `isDigit`, `isAlnum`, `isXDigit`, `isBlank`, `toUpper`, `toLower`, `utcYear`, `utcDay`, `utcMonth`, `utcHours`, `utcMinutes`, `utcSeconds`, `utcMilliseconds` | Translate: retain pure functions and any existing value or data-row polymorphism. |
 | `unsafe sig` declarations | Change expectation: use checked signatures for `concatMap`, `map`, `sortByBase`, `sum`, `sumF`, `max_list`, `maxF_list`, `min_list`, `minF_list`, `dedup`'s `elem` and `aux`, and `lookupG`. The old bypass was for recursion's implicit `wild`. |
 
-The [FreezeML prelude](../../tests/freezeml_prelude.links) has 18
-explicit signatures and one type alias. Update it with
+At the baseline the [FreezeML prelude](../../tests/freezeml_prelude.links)
+had 18 explicit signatures and one type alias. Update it with
 [`tests/freezeml.config`](../../tests/freezeml.config)'s existing test
 coverage.
 
@@ -74,8 +95,8 @@ coverage.
 | `pair`, `pair'`, `choose`, `poly`, `auto`, `auto'`, `map`, `revapp`, `app`, `first` | Translate: use ambient arrows for callbacks used where they were supplied, or an explicit pure type on a stored or frozen callback that needs it. Preserve the order of the value quantifiers in `pair` and `pair'`, the nested `forall` in `poly` and `auto`, and existing linearity bounds. `choose`, `auto'`, `map`, `revapp` and `app` have separate old arrows for application stages which run no callback; their test calls can share one context. |
 | Explicit effect instantiation and print expectations | Change expectation: remove effect arguments and retain remaining value, data-row and presence arguments and quantifier order. Preserve rejections of higher-rank use with insufficient type information. |
 
-The installed modules under [lib/stdlib](../../lib/stdlib) are
-`BinaryTree` and `Comparators). Translate `BinaryTree(a)`,
+The installed modules at the baseline under [lib/stdlib](../../lib/stdlib)
+were `BinaryTree` and `Comparators`. Translate `BinaryTree(a)`,
 `empty`, `invert`, `traverse_preorder`, `traverse_inorder`,
 `traverse_postorder`, `add`, `leftmost_child` and `remove`. Use
 `List a` for traversals and one ambient context for each comparator
@@ -106,7 +127,7 @@ to the installation list in `examples/dune` or
 | `handlers/transaction.links` | Translate Queue/Bank data and State/Abort requirements in `runState`, `beginTransaction`, `transfer`, `abort` and `example`. `beginTransaction` must explicitly forward Get and pass the current transaction state when it resumes. The concrete demo fixes `Co` and Fork's payload at State, Cooperative and `wild`. The scheduler passes its queue of ambient resumptions through handler result functions in one shared context. Defer the generic fork API wherever the payload must retain a varying outer context under a separately chosen fork/handler context. |
 | `handlers/concurrency.links` | Translate the concrete `test` and all three scheduler combinations with a fixed absolute `Co` payload for Fork and an explicit queue of ambient resumptions. The demo and random selection require `wild`. The separate `zipQueue` handler retains Enqueue and Dequeue with an absolute interface argument. Defer generic payloads that must keep an independently chosen queue/process context after the current scheduler removes its own interface. The current file declares the demo and leaves the final invocation commented out. |
 | `handlers/coop.links`, `handlers/monadic_reflection.links` | Translate `Co`, `Res`, `ResList`, `fork`, `yield`, `stop`, `test`, `coop`, `run` with cooperative resumptions in the same enclosing context. Translate `State`, `return`, `run`, `bind`, `>>=`, `get`, `put`, `reify`, `reflect`, `getR`, `putR`: use an absolute pure state function for Reflect's payload and an `Abs` operation result quantifier. Check the native permission of the printing `example` and `runExample`. |
-| `handlers/aop.links`, `handlers/aop2.links` | Translate `runState`, `evalState`, `runStringWriter`, `printer`, `get`, `put`, `tell`, `Env`, `bevalStep`, `beval`, `suspend`, `force`, `logger`, `dump` and `test0`–`test3`. For the concrete evaluator use a fixed absolute recursive Suspend payload for the known State/Writer/Suspend interfaces and native calls. Keep reissuing Suspend in the enclosing clause where the code does so. Defer the syntax of `SComp(e,a)` as an alias taking an effect argument. Verify that fixing the operation payload still permits all four advice combinations. |
+| `handlers/aop.links`, `handlers/aop2.links` | Translate `runState`, `evalState`, `runStringWriter`, `printer`, `get`, `put`, `tell`, `Env`, `bevalStep`, `beval`, `suspend`, `force`, `logger`, `dump` and `test0`–`test3`. The concrete `SComp` and the recursive thunk in the `Suspend` payload use `[State(Env), Writer, Suspension]`. `printer` and the test entry points require `[wild]`. Keep reissuing `Suspend` in the enclosing clause where the code does so. Defer generic `SComp(e,a)`, where the caller chooses the effects. Verify that fixing the operation payload still permits all four advice combinations. |
 | `handlers/exceptions.links` | Translate `input`, `sumUp`, `fail`, `parseInt`, `prompt`, `catchFail`, `printResult`, `catchResume`, `sumUpSilently`, `example1`, `example2`, `unitTest`. Input and Fail need separate interfaces; `prompt` handles Input and calls Fail in the enclosing context. Compose the resulting relative callbacks with their known types; preserve the printing and silent cases. |
 | `handlers/fringe.links` | Translate `Tree`, `yield`, `walkTree`, `Continuation`, `Status`, `step` and `sameFringe`. `walkTree` yields absolute leaves. Store deep resumptions in `Status` in the enclosing context of `step` and run both in the same context. `sameFringe_aux` has a pure comparison and shares the context of those resumptions; its old `gen2` use and `step`'s second row do not require two independent resumption contexts for this program. Keep `unitTest` and the printing `runExamples`. |
 | `handlers/lambda.links` | Defer the [lambda evaluator](deferred/independent-effects/lambda.links). `Var` must return an absolute `Expr(a)`. The wrapper for the shallow `Lam` resumption cannot capture that relative resumption across an absolute lock. The old `Expr(a)` uses one closed recursive effect row. [Modality-parameterised handlers](SPEC.md#modality-parameterised-handlers) are a proposed way to give the resumption a fixed context. The example was moved out of the install list and typecheck suite. |
@@ -114,8 +135,8 @@ to the installation list in `examples/dune` or
 | `handlers/number_games.links`, `handlers/u2_puzzle.links` | Translate `Answer`, `readInt`, `guess`, `input`, `mySecret`, `logger`; preserve Guess forwarding and native printing. Translate `U2`, `Side`, `Ordering`, `showMembers`, `choose`, `fail`, `selectParty`, `solve` and their helpers with independent Choose/Fail interfaces and absolute choice payloads. |
 | `handlers/pi.links` | Translate `yield`, `await`, `abort`, `Point`, `randomPoints`, `take`, `computePi`, `Resumption`, `Step`, `step`, `exchange`, `Consumer`, `Producer`, `copipe`, `pipe`, `catch` and the estimators. Keep Await and Yield separate, store deep resumptions in the common enclosing context, and restore the appropriate interface before calling a shallow resumption. Preserve `wild` for random points and display. |
 | `handlers/pipes.links` | Translate `await`, `yield`, `forever`, `blackhole`, `take1`, `produceFrom`, `skip1`, `printer`, `forward`, `collect`, `Producer`/`Consumer`, `Pipe`/`Copipe`, `Prod`/`Cons`, both `pipe`/`copipe` pairs under `Deep` and `Shallow`, `>+>`, `expoPipe1` and `expoPipe`. Each pair relates an Await extension and a Yield extension of the same enclosing context. Use separate complete interfaces, check higher-rank annotations where the deep encoding takes a pair of combinators, and retain both direct and encoded variants. Replace effect-presence quantifiers for known Await/Yield instances with relative requirements. Preserve the aggregate's nested pipeline output from `nested_example`. |
-| `handlers/sat.links` | Translate `Expr`, `Polarity`, `run`, `fail`, `maybe`, `leftBiased`, `choose`, `freeVariable`, `satisfiable`, `Parser`, `ExprParser`, `satisfies`, `char`, `peek`, `succeed`, `many`, `many1`, `while`, `parens`, `parse`, `parseTextExpression` and the parsing and solver helpers. `Satisfies` takes a pure absolute predicate; call it directly in place of `gen1`. Keep Fail separate so `parse` can invoke it in clauses and `maybe` can handle it. Replace `gen0` with a thunk carrying the resulting fixed or relative requirement, including `wild` on the printing path. Keep both `unitTest` assertions. |
-| `handlers/shiftreset.links` | Translate `shift`, `reset`, `comp`, `yield` and `example` using a fixed absolute payload for the supplied callback and its continuation argument, with interface parameters for the answer and operation result types as needed. Verify both the integer continuation in `comp` and the list continuation in `example`. Defer the old signature's effect presence and effect-tail syntax. The example uses a handler operation, so the `escape` deferral does not apply. |
+| `handlers/sat.links` | Translate `Expr`, `Polarity`, `run`, `fail`, `maybe`, `leftBiased`, `choose`, `freeVariable`, `satisfiable`, `Parser`, `ExprParser`, `satisfies`, `char`, `peek`, `succeed`, `many`, `many1`, `while`, `parens`, `parse`, `parseTextExpression` and the parsing and solver helpers. `Satisfies` takes a pure absolute predicate. `parse` calls the predicate directly in place of `gen1`. `parseTextExpression` calls the parser thunk directly in place of `gen0`. The printing path keeps `wild`. In the first migration, `leftBiased` and `parse` handle `Fail` locally and return `Maybe(a)`. The planned [SAT follow-up](SPEC.md#prelude-and-example-behaviour) restores caller handling of `Fail`. `parseTextExpression` will still return `Nothing` on failure. Keep both `unitTest` assertions. |
+| `handlers/shiftreset.links` | Translate `shift`, `reset`, `comp`, `yield` and `example` using a fixed absolute payload for the supplied callback and its continuation argument, with interface parameters for the answer and operation result types as needed. Verify both the integer continuation in `comp` and the list continuation in `example`. Defer the generic shift/reset API that let callers choose the effects of the callback and its continuation, along with the old effect argument, presence and tail syntax. The example uses a handler operation, so the `escape` deferral does not apply. |
 | `handlers/sudoku.links` | Translate `Status`, `Sudoku`, `emptySudoku`, `dup`, `testSudoku`, `>>=`, `return`, `checkSudoku`; retain nested lists and an ambient Maybe callback. |
 | `handlers/tests.links` | Translate `pairToString`, `listToString`, `assert`, `stateExamplesToString` and `runTests`; use a suitable absolute type for the global printer value it shares. Its nine registered assertions are `shallow_state`, `deep_state`, `deep_pipes`, `exceptions`, `fringe`, `light_switch`, `sat`, `pi` and `delim`. Preserve the imports, assertions and `--path=examples/handlers` in both `handlers.tests` (Examples) and `typecheck_examples.tests`. Any deferred assertion needs a named dependency here and a matching change to the aggregate's imports and call list. |
 
@@ -172,10 +193,10 @@ the configuration file and per-case arguments which still apply.
 
 ## Deferred `escape` fixtures
 
-There are 22 registered cases using the `escape` term and no such
-uses in the installed examples. Milestone 2.2 moved the original cases
-to [the archive](deferred/escape/) and added diagnostic tests with and
-without handlers enabled.
+At the baseline, 22 registered cases used the `escape` term and none
+of the installed examples used it. Milestone 2.2 moved the original
+cases to [the archive](deferred/escape/) and added diagnostic tests with
+and without handlers enabled.
 
 | Fixture | Cases and reason |
 | --- | --- |

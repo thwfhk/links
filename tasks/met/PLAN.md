@@ -2,10 +2,11 @@
 
 The language design and scope are in [SPEC.md](SPEC.md#scope).
 This plan records milestones, dependencies, progress and checks.
-[IMPL.md](IMPL.md) will record significant implementation decisions.
+[IMPL.md](IMPL.md) records significant implementation decisions.
 
 Work stays on `small-met`. The first implementation is complete.
-The follow-up items below are pending review before implementation.
+The follow-up decisions are recorded. See [Status](#status) for the
+remaining work.
 
 ## Tracking
 
@@ -183,7 +184,11 @@ new inference path is completed with its library dependencies.
   value. Check that annotation variables cannot escape.
 - [ ] **3.11** Preserve known quantifiers during record projection and
   extension, and preserve expected element types in list comprehensions.
+  Test extending a quantified record with a `Presence(Abs)` field
+  after explicit instantiation.
   Require a discarded record tail in an upcast to be unrestricted.
+  Require matching argument counts in function upcasts. Test an accepted
+  upcast with matching counts and a rejection with different counts.
   Run the corresponding lowering checks in 5.7.
 - [x] **3.12** (`d48a31fb`) Preserve a field with `Presence(Abs)` when extending a
   [closed modal record](SPEC.md#modal-record-extension). Cover a field
@@ -245,8 +250,9 @@ Depends on milestone 3.
   `parseDate` and `sleep`, the pure `error` signature and the existing
   `exit` signature.
 
-The `--optimise` issues from 4.10 and 4.11 are
-[deferred](IMPL.md#deferred-optimisation-issues).
+The [deferred optimisation issues](IMPL.md#deferred-optimisation-issues)
+cover eliminating unused primitive calls and inlining linear reads.
+The native signature checks in 4.10 use the default execution path.
 
 Completion check: every handler and native-effect example in SPEC.md has
 the specified type and result or error. Native dispatch and resumption
@@ -288,9 +294,12 @@ switching the active inference path.
   successive inputs with both isolation settings, and REPL imports
   and failed loads.
 - [ ] **5.7** Preserve the checked types during lowering of quantified
-  record operations and comprehensions. Run the regressions from 3.11
-  through ordinary execution, typed frontend rechecking and strict IR
-  checking. Include a list with modal elements.
+  record operations, comprehensions and upcasts. Run the regressions
+  from 3.11 through ordinary execution, typed frontend rechecking and
+  strict IR checking. Include a list with modal elements and the record
+  extension after explicit instantiation. Check that strict IR checking
+  accepts matching function arities and rejects a cast that changes
+  the argument count.
 - [ ] **5.8** Support [linear lists](SPEC.md#list-linearity). Update list
   kinds, inference, pattern lowering and primitive types together.
   Check that cons and append preserve all the elements and that list
@@ -318,9 +327,11 @@ switching the active inference path.
   `Nothing` from `parseTextExpression`.
 - [ ] **5.12** Lower list comprehensions to the
   [standard helpers](SPEC.md#prelude-and-example-behaviour). Test
-  shadowing with one and several generators and with `orderby`. Check
-  that explicit calls still use local definitions. Run the tests with
-  typed frontend rechecking and strict IR checks.
+  shadowing with one and several generators and with `orderby`.
+  Check that `for` works with empty and custom preludes that define
+  no list helpers and gives the same results as with the default
+  prelude. Explicit calls still use the definitions in scope. Run
+  the tests with typed frontend rechecking and strict IR checks.
 - [ ] **5.13** Check [custom comparisons](SPEC.md#comparison-operators)
   against their definitions in scope and require a `Bool` result.
   Lower each call to the same definition the checker used. Test an
@@ -354,14 +365,19 @@ Depends on milestone 5.
 - [ ] **6.4** After the follow-up changes in 2–5, update the
   SmallLinks guide, including signatures, lock access, recursive
   types, linear lists, REPL recovery, comparisons and comprehension
-  helpers.
+  helpers. Cover [interface names and printing](SPEC.md#effect-interfaces),
+  [handler usage](SPEC.md#shallow-and-parameterised-handlers),
+  [upcasts](SPEC.md#upcasts-and-record-updates) and
+  [modal record extension](SPEC.md#modal-record-extension).
   Review the combined changes and run the affected checks below.
   Record the new tested revision and log paths.
 
-Completion check: a clean CI build and temporary installation work, all
-in-scope regressions and unit tests pass, printed types can be reused as
-annotations, the guide matches the compiler, and deferred features have
-an explicit inventory.
+Completion check: a clean CI build and temporary installation work,
+all in-scope regressions and unit tests pass, the guide matches the
+compiler, and deferred features have an explicit inventory. Printed
+types can be reused as annotations when their interface declarations
+have names in the current scope. The printer marks other declarations
+as out of scope. See [Effect interfaces](SPEC.md#effect-interfaces).
 
 ## Checks
 
@@ -378,9 +394,8 @@ Use the default execution path for follow-up checks. Checks specific to
 3. For inference and representation changes include `polymorphism`,
    `freezeml`, `annotations`, `functions`, `mutual`, `records`, `variants`,
    `presence_type_arg`, `desugar_datatypes`, `type_print`,
-   `roundtrippable_types` and `typecheck_examples`. Migrate the behaviour
-   checks in `effectname` to interface declarations before retiring the
-   old syntax tests.
+   `roundtrippable_types` and `typecheck_examples`. Run the active
+   interface declaration checks in `effectname`.
 4. For integration include `recheck_frontend_transformations`, `typed_ir`,
    `native`, `collections`, `library` and `modules`. Cases requiring
    `escape` remain in the deferred inventory.
@@ -410,24 +425,45 @@ The first implementation is complete on `small-met`. The native compiler
 uses Fresco for files, expressions and REPL sentences. The [migration
 inventory](MIGRATION.md) records the retained and deferred cases.
 
-Milestone 3.12 is implemented and checked. The other follow-up work in
-milestones 2, 3, 5 and 6 is pending user review.
-The [implementation notes](IMPL.md#follow-up-review) give the cases and
-source locations for the review.
+Item 3.12 is complete. The reviewed follow-up decisions are in
+[SPEC.md](SPEC.md). The [implementation notes](IMPL.md#follow-up-review)
+record the cases and planned fixes. Implementation of the remaining
+items is paused pending the user's instruction to proceed.
 
-The milestone 4 review settled the handler usage and branch result
-rules. The fixes in items 4.5–4.10 are pending. Run the affected
-handler, effect annotation and native suites with typed frontend
-rechecking, followed by the combined milestone 6 checks.
+After approval, start with 2.6 and 2.7. Continue through the remaining
+items in milestones 3, 4 and 5 in order, then complete 6.4.
+For milestone 4, run the affected handler, effect annotation and
+native suites with typed frontend rechecking.
+
+### Historical check records
+
+The results below apply to their listed revisions and drafts.
+
 The milestone 4 review draft passed `git diff --check`
 against `98d39ac8`.
 
-The integration review recorded the REPL, prelude, SAT, comprehension
-and comparison choices and confirmed the example deferrals. Review
-items 3.5, 3.9 and 5.9–5.13 and the updated 6.4 before starting
-the integration follow-up.
-
 ### Follow-up review checks
+
+The combined documentation review used `25b07c25` with edits to the
+four MET documents. The review distinguished past checks from pending
+work, organised the implementation notes by plan item and added
+function upcast arity checks. The user confirmed that comprehensions
+must also work with empty or custom preludes that have no list helpers.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `python3 /private/tmp/smalllinks-met-doc-review/check_docs.py` | Passed. Checked 114 local links, fenced blocks, table columns and tabs in the MET documents and the SmallLinks guide. | `/private/tmp/smalllinks-met-doc-review/documents.log` |
+| `make rule-check` | Passed. GNU find was unavailable for the tabs rule on macOS. The document tab scan passed. | `/private/tmp/smalllinks-met-doc-review/rule-check.log` |
+| `git diff --check` | Passed. | `/private/tmp/smalllinks-met-doc-review/diff-check.log` |
+| Changed unary-arrow examples | Checked on the same compiler. | `/private/tmp/met-spec-unary-arrow.w445qi` |
+
+At `25b07c25`, `./links --set=typecheck_only=true -e` accepted an
+upcast from `Int -> Int` to `(Int, Int) -> Int`. Calling the
+upcast function with `./links -e` failed with
+`Invalid_argument("List.fold_right2")`, both by default and with
+`--set=typecheck_ir=true --set=fail_on_ir_type_error=true`.
+Items 3.11 and 5.7 track the fix. See
+`/private/tmp/smalllinks-met-function-upcast.cNAgNr`.
 
 The integration review draft at `a3e48a2d` passed `make rule-check`,
 `git diff --check` and checks of the edited document links. GNU find
@@ -442,7 +478,7 @@ The review used compiler revision `98d39ac8`. Logs are under
 
 | Command or check | Result | Log |
 | --- | --- | --- |
-| `./links --set=show_quantifiers=true -e` on 12 examples | Confirmed current behaviour. The signed recursive example returned `(42, true)`. Without the signature, the second call to `g` failed with `Expected Int, got Bool`. | `examples.log` |
+| `./links --set=show_quantifiers=true -e` on 12 examples | Confirmed behaviour at the tested revision. The signed recursive example returned `(42, true)`. Without the signature, the second call to `g` failed with `Expected Int, got Bool`. | `examples.log` |
 | Document links and code fences, and `./links -e` on the recursive example from the specification | Passed. | `documents.log` |
 | `make rule-check` | Passed. GNU find was unavailable for the tabs rule. The same file patterns passed with `rg`. | `rule-check.log`, `tabs.log` |
 | `git diff --check` | Passed. | `diff-check.log` |
@@ -487,10 +523,8 @@ At `a3e48a2d` with the working-tree test change,
 
 The combined checks used `fcb1e97a` with OCaml 5.4.0. Logs are under
 `/private/tmp/smalllinks-met-56/`. Independent reviews covered Fresco,
-typed lowering and IR, and REPL recovery. The review fixes and
-regressions are included in that revision. The compiler switch and its
-library and fixture changes share one commit so the revision builds
-and runs with the matching prelude and tests.
+typed lowering and IR, and REPL recovery. That revision included the
+review fixes, regression tests and matching prelude.
 
 | Command or check | Result | Log |
 | --- | --- | --- |
@@ -508,7 +542,7 @@ and runs with the matching prelude and tests.
 The checks used `0a9eaaa9`. Logs are under
 `/private/tmp/smalllinks-met-4/`. An independent review checked the
 handler rules against the thesis and Fresco, and checked the retained
-runtime fixtures. Source tests cover the fixes for rigid variables,
+runtime fixtures. The source tests covered the fixes for rigid variables,
 state scope, and modal result and argument inference.
 
 | Command or check | Result | Log |
@@ -527,7 +561,7 @@ The combined checks used `33b15eaa`. Logs are under
 `/private/tmp/smalllinks-met-3/`. Independent reviews covered the
 type solver, lock and modal checking, polymorphic application and
 generalisation, pattern typing and the range helper. The regression
-tests include the fixes found in review.
+tests covered the fixes found in review.
 
 | Command or check | Result | Log |
 | --- | --- | --- |
@@ -561,8 +595,8 @@ own. Their logs are under `/private/tmp/smalllinks-met-2-1.HYwjYW/`.
 ### Implementation baseline
 
 Checks used `21348680` with OCaml 5.4.0 and Dune 3.20.2. Logs are under
-`/private/tmp/smalllinks-met-1-2.WacKXl/`. The handler baseline suite includes the
-eight new cases in 1.4.
+`/private/tmp/smalllinks-met-1-2.WacKXl/`. The handler baseline suite
+included the eight new cases in 1.4.
 
 | Command or check | Result | Log |
 | --- | --- | --- |
@@ -576,9 +610,9 @@ eight new cases in 1.4.
 | `./test-harness tests/handlers.tests` with the eight new cases | 115 passed. | `/private/tmp/small-met-handler-baseline.log` |
 
 The individual suite logs use the `baseline-<suite>.log` names.
-The new handler cases cover runtime scope, forwarding, resumption,
-state evaluation order and linear bindings. The modal typing checks
-remain in [milestones 3 and 4](#3-implement-modal-inference-and-polymorphism).
+The eight handler cases covered runtime scope, forwarding, resumption,
+state evaluation order and linear bindings. Milestones 3 and 4 added
+modal typing checks after this baseline.
 
 ### Design approval and `unsafe_cast` removal
 
@@ -600,12 +634,12 @@ Logs are under `/private/tmp/smalllinks-unsafe-cast.QOdUZ6/`.
 ### Initial design checks
 
 The initial draft received separate read-only reviews against the thesis,
-Fresco sources and SmallLinks implementation. Corrections to locks,
-generalisation, kind restrictions, syntax and native effects are
-included.
+Fresco sources and SmallLinks implementation. The draft incorporated
+corrections to locks, generalisation, kind restrictions, syntax and
+native effects.
 
 Checks on 14 November 2026 used
-`e117db9da0bca9f45e9a12d2c3df808ec3880a6e` plus these documents.
+`e117db9da0bca9f45e9a12d2c3df808ec3880a6e` plus the initial draft.
 Logs and extracted snippets are under
 `/private/tmp/smalllinks-met-design.EcMuxo/`.
 
@@ -616,30 +650,27 @@ Logs and extracted snippets are under
 | `git diff --check` and `git diff --no-index --check /dev/null` for each new document | No whitespace diagnostics. | `diff-check.log`, `documents.log` |
 | Check local document links, source-reference paths, code fences and document whitespace | Passed. | `documents.log` |
 
-### Initial draft examples run with the current compiler
+### Initial draft examples run with the baseline compiler
 
 During the initial drafting, all 20 fenced Links snippets were extracted
 from SPEC.md into temporary files, with preceding definitions supplied
 where needed. These files preserve the examples before the subsequent
 syntax changes and deferral of `escape`. They were checked with
 `./links --set=typecheck_only=true` using
-the existing row-based compiler at the revision above. The accepted
+the row-based compiler at the revision above. The accepted
 snippets were then run with `./links`.
 
 | Snippets | Result and cause | Log |
 | --- | --- | --- |
 | Seven using supported syntax | Accepted and returned the documented values: `(42, true)`, `42`, `1`, `42`, `[1, 2]`, `42`, `42`. | `example-02.log`, `example-03.log`, `example-08.log`, `example-12.log`, `example-14.log` through `example-16.log` |
 | One deliberately ill-typed example | Rejected as intended: `do Ask + 1` requires an `Int` result, while the handler resumes with `true`, requiring `Bool`. | `example-09.log` |
-| Twelve using proposed modal syntax | The current parser rejected unsupported forms such as `[Ask:() => Int]` and `a::Abs`. Modal checking for these examples is pending implementation. | `example-01.log`, `example-04.log` through `example-07.log`, `example-10.log`, `example-11.log`, `example-13.log`, `example-17.log` through `example-20.log` |
+| Twelve using proposed modal syntax | The baseline parser rejected unsupported forms such as `[Ask:() => Int]` and `a::Abs`. | `example-01.log`, `example-04.log` through `example-07.log`, `example-10.log`, `example-11.log`, `example-13.log`, `example-17.log` through `example-20.log` |
 
-`examples.json` lists every command result. The parse errors came from
-passing the proposed syntax to the current compiler. Modal acceptance
-tests will be added in milestones 3–6.
+`examples.json` lists every command result. The implementation baseline,
+modal acceptance tests and combined checks are recorded in the
+earlier sections of this plan.
 
-The full implementation baseline in 1.3, modal acceptance tests and
-final combined checks remain pending.
-
-### Follow-up checks
+### Initial design follow-up checks
 
 These checks used the same source revision and existing baseline
 executable, with the revised documents. Logs are under
@@ -647,9 +678,9 @@ executable, with the revised documents. Logs are under
 
 | Command or check | Result | Log |
 | --- | --- | --- |
-| `./links` on runtime counterparts of the revised conditional, native-call, list and variant examples, using current type annotations | All four passed: `42`, printed `hello` and returned `()`, `[20, 22]`, and `42`. The proposed type syntax remains pending implementation. | `runtime-checks.json`, `conditional.log`, `native.log`, `list.log`, `variant.log` |
-| `./links --set=typecheck_only=true` on the variant payload mismatch using the current variant syntax | Rejected as expected: `Just(true)` cannot have an `Int` payload. | `variant-rejection.log` |
-| `./links -e` with a replacement `intRange` that prints before returning `[42]`, followed by `[1..3]` | Printed `shadowed[42] : [Int]`. This confirms the helper-lookup issue in [Value restriction](SPEC.md#value-restriction). | `range-shadowing.log` |
+| `./links` on runtime counterparts of the revised conditional, native-call, list and variant examples, using baseline type annotations | All four passed: `42`, printed `hello` and returned `()`, `[20, 22]`, and `42`. | `runtime-checks.json`, `conditional.log`, `native.log`, `list.log`, `variant.log` |
+| `./links --set=typecheck_only=true` on the variant payload mismatch using the baseline variant syntax | Rejected as expected: `Just(true)` cannot have an `Int` payload. | `variant-rejection.log` |
+| `./links -e` with a replacement `intRange` that prints before returning `[42]`, followed by `[1..3]` | Printed `shadowed[42] : [Int]`. This reproduced the helper-lookup issue addressed in 3.2. | `range-shadowing.log` |
 | Check document links, code fences, table columns and whitespace; `git diff --check` | Passed. | `documents.log`, `diff-check.log` |
 
 ### Effect-interface review checks
@@ -666,8 +697,8 @@ Logs are under `/private/tmp/smalllinks-met-decisions-6z_udikx/`.
 | Check that modal contexts use interface names, and inspect the changes from the previous draft | Passed. | `documents.log`, `SPEC.md.diff`, `PLAN.md.diff` |
 | `git diff --check` | Passed. | `diff-check.log` |
 
-Interface declarations, their type checks and incomplete-interface
-rejections remain implementation checks for milestones 2–4.
+Milestones 2–4 later checked interface declarations, their typing
+rules and the rejection of incomplete handlers.
 
 ### R7 syntax checks
 
@@ -677,7 +708,7 @@ the revised documents. Logs are under
 
 | Command or check | Result | Log |
 | --- | --- | --- |
-| `./links` on the annotated variant example with the current compiler's delimiters | Returned `42 : Int`. | `variant.log` |
+| `./links` on the annotated variant example with the baseline compiler's delimiters | Returned `42 : Int`. | `variant.log` |
 | `./links --set=typecheck_only=true` on its `Just(true)` variant | Rejected as expected because the declared payload is `Int`. | `variant-payload-rejection.log` |
-| Check the proposed delimiters against the existing variant-row grammar; check document links, fences, tables and whitespace | Passed. The new delimiters and reserved `List` rule await compiler implementation. | `documents.log` |
+| Check the proposed delimiters against the existing variant-row grammar; check document links, fences, tables and whitespace | Passed. Milestone 2 later implemented the new delimiters and reserved `List` rule. | `documents.log` |
 | `git diff --check` | Passed. | `diff-check.log` |
