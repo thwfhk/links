@@ -182,7 +182,7 @@ new inference path is completed with its library dependencies.
   extension, and preserve expected element types in list comprehensions.
   Require a discarded record tail in an upcast to be unrestricted.
   Run the corresponding lowering checks in 5.7.
-- [x] **3.12** Preserve a field with `Presence(Abs)` when extending a
+- [x] **3.12** (`d48a31fb`) Preserve a field with `Presence(Abs)` when extending a
   [closed modal record](SPEC.md#modal-record-extension). Cover a field
   that is absent or present, a presence without an `Abs` bound and a
   record whose type must be instantiated first. The general interaction
