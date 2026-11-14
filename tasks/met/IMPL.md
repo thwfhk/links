@@ -294,6 +294,8 @@ argument hints. If the body can be absolute, full checking uses
 later type information to settle any interface argument constraints.
 Competing modal types that would fix the same instantiation need an
 annotation when the expected type leaves the choice open.
+Polymorphic `do` calls use the same frozen argument hints when choosing
+the operation's own type arguments.
 
 Handler clause inference is tracked in [item 4.6](#46-handler-result-types).
 
@@ -318,9 +320,11 @@ checking their count. They compare arguments from target to source
 and the result from source to target.
 
 Record projection and extension keep quantifiers around inherited
-field types. Lowering instantiates the base with its own type variables
-before projecting each inherited field and binds those variables again
-on each field. It evaluates the base once before the new fields.
+field types, including binders unused by a field. Freezing the projection
+of `n` from `forall a. (n:Int, id:a -> a)` gives `forall a. Int`.
+Lowering instantiates the base with its own type variables before
+projecting each inherited field and binds those variables again on
+each field. It evaluates the base once before the new fields.
 List comprehensions check their body against the known list type.
 The regressions run with frontend rechecking and strict IR checking.
 See [item 5.7](#57-record-and-comprehension-lowering) for integration.
@@ -337,6 +341,25 @@ converts an open record as a whole.
 See the [extension rule](SPEC.md#modal-record-extension) and the
 [milestone checks](PLAN.md#milestone-312-checks). See
 [3.11](#311-record-and-comprehension-typing) for quantified records.
+
+#### 3.13 Argument types before instantiation
+
+Partial inference records where a frozen field or a fixed call result
+constrains an argument type. A frozen field guides the type at its
+position in the aggregate. If a surrounding modality changes the field's
+context, full checking determines its type there. When the callee's
+type fixes a bare result, inference rules out a fresh leading modality
+while leaving the result's component types open. A call such as
+`id(1)` can still use its expected modality to choose a type argument.
+
+#### 3.14 Expected types in conditional branches
+
+Both branches receive the expected result type and the permission to
+introduce a prefix from their enclosing check. Each branch applies the
+value restriction to its own expression. The signed recursive example
+can introduce the result quantifier on its base-case lambda. Its
+recursive call returns a function with that quantifier already in its
+type.
 
 ### Milestone 4 follow-up
 

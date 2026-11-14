@@ -204,6 +204,16 @@ new inference path is completed with its library dependencies.
   record whose type must be instantiated first. The general interaction
   with row and presence variables is
   [future work](SPEC.md#modal-types-and-data-rows).
+- [x] **3.13** (`3a631692`) Use argument types and the value restriction
+  before choosing a modal type argument. Accept `same(number(), (42 : <R> Int))`
+  at `List Int` when `number()` has a fixed `Int` result. Keep the
+  modal result when `number()` is replaced with `id(1)` and `id` can
+  be instantiated at a modal type. Check both argument orders when
+  a frozen record field determines a shared field type.
+- [x] **3.14** (`fadf5af7`) Check an eligible conditional branch at the
+  expected result type even when another branch is a computation. Turn the
+  [signed recursive example](SPEC.md#binding-rules) into a regression
+  and check that a call cannot introduce a fresh `forall`.
 
 Completion check: the inference examples in SPEC.md have the specified
 types and annotation requirements. Tests cover both accepted and
@@ -257,6 +267,10 @@ Depends on milestone 3.
 - [x] **4.10** (`15849dea`) Check the reviewed `wild` signatures for `show`,
   `parseDate` and `sleep`, the pure `error` signature and the existing
   `exit` signature.
+- [ ] **4.11** Give `case n -> n` and `case n -> (n : Int)` the same
+  typing when `n : Int`. In a handler with an effectful input of type
+  `Int`, both clauses should reject an expected result of `[] Int`.
+  Keep an explicit modality on the clause result, as in `n : [] Int`.
 
 The [deferred optimisation issues](IMPL.md#deferred-optimisation-issues)
 cover eliminating unused primitive calls and inlining linear reads.
@@ -346,6 +360,10 @@ switching the active inference path.
   accepted custom comparison, a declaration returning `String`, a
   scoped redefinition and the built-in comparisons. Run with typed
   frontend rechecking and strict IR checks.
+- [ ] **5.14** Preserve quantified field types when lowering record and
+  tuple patterns. Use the same type application and abstraction as
+  field projection. Under strict IR checking, bind a polymorphic
+  function with each pattern and use it at `Int` and `Bool`.
 
 Keep the concrete [handler demos](SPEC.md#prelude-and-example-behaviour)
 while the old APIs that let callers choose additional effects are
@@ -433,13 +451,50 @@ The first implementation is complete on `small-met`. The native compiler
 uses Fresco for files, expressions and REPL sentences. The [migration
 inventory](MIGRATION.md) records the retained and deferred cases.
 
-The in-scope MET implementation and follow-up checks are complete.
+The milestone 3 fixes from the final review are complete. Commit
+`67f8eded` extends frozen argument inference to polymorphic `do` calls.
+Items 3.13 and 3.14 cover argument inference and conditional branches.
+The coordinating chat reviews the handover before milestone 2 resumes
+at item 2.8. Item 4.11 and the remaining switch and handler diagnostics
+belong to milestone 4. Item 5.14 and the remaining REPL and comprehension
+fixes belong to milestone 5. There are no blockers for the handover.
 Items 5.5 and 5.7–5.13 share the compiler and library commit
 `7f1f3f8c` because the startup, frontend and IR changes share code and
 checks. Commit `4b63194d` keeps source preprocessing off the bundled
 comprehension helpers. The final guide and verification record cover
 the combined revision. Optimisation work remains in the
 [deferred list](IMPL.md#deferred-optimisation-issues).
+
+### Milestone 3 final review checks
+
+The polymorphic `do` fix (`67f8eded`) was checked before committing.
+Logs are in `/private/tmp/met-stage3-late.bXtyC2/`.
+`make` passed (`make.log`). `make tests` passed 1,138 tests in 42 suites
+and all four scripts, with two existing ignored tests (`all-tests.log`).
+The 105 IR unit tests passed (`unit-tests.log`). The probes confirmed
+the signed recursive example with a branch ascription, quantified
+record projection and the alias hole rejection (`spec-probes.log`).
+`make rule-check`, the `rg` tab scan, `git diff --check` and the
+document link check passed (`rule-check.log`, `tabs.log`,
+`diff-check.log`, `documents.log`).
+
+The combined checks used `fadf5af7` and OCaml 5.4.0. Logs are in
+`/private/tmp/met-stage3-final.JGgUkp/`. Independent review checked
+fixed results, frozen fields, record extensions and updates, branch
+typing and the value restriction. Review caught a partial inference
+failure in argument blocks that have an annotated local binding.
+The fix leaves that case to full checking, and a regression covers it.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make` on `3a631692` and `fadf5af7`, then `make all-ci` on `fadf5af7` | Passed. | `3.13-confirm-build.log`, `3.14-build.log`, `final-ci-build.log` |
+| `make tests` | 1,153 passed across 42 suites. Two existing cases were ignored. All four scripts passed. | `final-all-tests.log` |
+| `./test-harness` on the affected suites in [Checks](#checks) | Passed. This includes 131 handler, 76 effect annotation, 70 polymorphism, 67 FreezeML and 34 example tests. | `final-<suite>.log` |
+| `opam exec -- ./run-tests unit-tests` | All 105 passed. | `final-unit-tests.log` |
+| Handler aggregate with frontend rechecking and strict IR checks | All nine assertions passed. | `final-strict-handlers.log` |
+| `./links -e`, file execution with an import and `--set=typecheck_only=true` | Passed. | `final-entry-points.log` |
+| `opam exec -- dune install --profile=ci --prefix="$prefix" links` and `./tests/check-install.sh "$prefix/bin/linx"` | Passed. The installed interpreter ran the modal handler and the signed recursive example outside the checkout. | `final-install.log`, `final-install-test.log`, `final-installed-examples.log` |
+| `make rule-check`, `git diff --check`, document links and the `rg` tab scan | Passed. The scan replaced the tabs rule on macOS because GNU find was unavailable. | `rule-check.log`, `diff-check.log`, `documents.log`, `tabs.log` |
 
 ### Milestones 5–6 follow-up checks
 

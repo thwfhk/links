@@ -320,6 +320,8 @@ For a polymorphic row tail, write a named binder such as
 an implicit quantifier. The same rule applies whether the signature
 starts with a modality or a quantifier. Unannotated definitions still
 infer polymorphic types.
+Type aliases also reject anonymous holes. Declare a type parameter
+when an alias must stand for different types at different uses.
 
 Remove effect-bearing arrows `{...}->`, `-e->`, `~>`, `~e~>`, and their
 linear forms after migration. `->` and `-@` are the unrestricted and
@@ -576,7 +578,10 @@ A binding that can fail a pattern match is ineligible. This includes
 variant patterns when the matched type allows another alternative.
 A computation may return a value whose type is already polymorphic
 or modal. An expected type cannot introduce fresh quantifiers or
-modalities around an ineligible computation.
+modalities around an ineligible computation. A conditional can check
+each branch at the expected result type. An eligible branch can
+introduce a quantifier or modality on its own value even when another
+branch performs a computation.
 
 Apply the check after module desugaring, so module and import
 initialisers are checked as actual bindings. Adapt it to the changed
@@ -616,7 +621,9 @@ R2 keeps inference for simple top-level functions:
 4. Unannotated recursion is monomorphic within its recursive group,
    followed by eligible generalisation. Polymorphic recursion requires
    signatures. Local recursive functions keep their surrounding context;
-   global recursive functions follow the global rule.
+   global recursive functions follow the global rule. A recursive
+   function that returns a frozen polymorphic value such as `~ident`
+   also needs a signature that gives its result a `forall`.
 
 In the following example `f` only calls itself with `Int`. The
 signature puts `forall a` inside the result of the outer arrow.
@@ -694,10 +701,10 @@ freezing to `~(e)` to use Fresco on a compound expression. Parentheses
 preserve freezing, so `~x`, `~(x)` and `~((x))` agree. Freezing
 preserves the type obtained after lock checks, including its quantified
 and modal structure, and uses Fresco's consistency check without further
-implicit instantiation. In an application, a known frozen argument
-can fix a type argument before checking conversions on other arguments
-and on the result. `$(e)` retains the value restriction. Effect arguments
-are postponed.
+implicit instantiation. In a function or operation call, a known frozen
+argument can fix a type argument before checking conversions on other
+arguments and on the result. `$(e)` retains the value restriction.
+Effect arguments are postponed.
 
 Explicit type application and `e@` preserve surrounding modalities.
 Given `f : [Reader(Int)] (forall a. (a) -> a)`, `(~f)[Int]`
