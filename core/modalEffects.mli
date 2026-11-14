@@ -26,9 +26,11 @@ module Names : sig
   type t
 
   val empty : t
-  val of_bindings : (string * Interface.t) Seq.t -> t
+  val of_bindings : interfaces:(string * Interface.t) Seq.t -> aliases:(string * string) Seq.t -> t
   val with_names : t -> (unit -> 'a) -> 'a
   val name : Interface.t -> string
+  val alias : ?applied:bool -> string -> string option
+  val interface_visible : Interface.t -> bool
 
   (** Keep lexical name scopes for the duration of a frontend pass. *)
   val with_source_scopes : (unit -> 'a) -> 'a

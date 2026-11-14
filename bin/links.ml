@@ -46,7 +46,7 @@ let _ =
 let print_simple context datatype value =
   let oc = stdout in
   if Settings.get Repl.printing_types
-  then ModalEffects.Names.with_names context.Context.interface_names (fun () ->
+  then ModalEffects.Names.with_names context.Context.type_names (fun () ->
     Printf.fprintf oc "%s : %s\n%!"
       (Value.string_of_value value)
       (Types.string_of_datatype datatype))

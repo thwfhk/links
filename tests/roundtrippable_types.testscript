@@ -82,6 +82,65 @@ for engine in roundtrip old; do
     roundtrip "Mask and extension identity through an open module with the $engine printer" \
         'module Library { module Nested { effect Reader(a::Abs) { Ask : () => a; } sig previous : (<Reader | Reader(Int)> (() -> Int)) -> (<Reader | Reader(Int)> (() -> Int)) fun previous(f) { f } } } open Library; module Library { module Nested { effect Reader(a::Abs) { Ask : () => a; } } }' \
         'Nested.previous' --set=types_pretty_printer_engine="$engine" || status=1
+
+    roundtrip "Shadowed alias with a visible interface name with the $engine printer" \
+        'module Library { module Nested { effect Reader { Ask : () => Int; } } }
+         open Library;
+         typename Thunk = [Library.Nested.Reader] (() -> Int);
+         sig previous : Thunk fun previous() { do Library.Nested.Ask }
+         module Library { module Nested { effect Reader { Ask : () => Int; } } }
+         typename Thunk = Bool;' \
+        'previous' --set=types_pretty_printer_engine="$engine" || status=1
+
+    # Nested.Thunk still names the old alias, and its interface has no visible name.
+    roundtrip "Alias for a hidden interface through an open module with the $engine printer" \
+        'module Effects { effect Reader { Ask : () => Int; } }
+         module Library { module Nested {
+             typename Thunk = [Effects.Reader] (() -> Int);
+             sig previous : Thunk fun previous() { do Effects.Ask }
+         } }
+         open Library;
+         module Effects { effect Reader { Ask : () => Int; } }
+         module Library { module Nested { typename Thunk = Bool; } }' \
+        'Nested.previous' --set=types_pretty_printer_engine="$engine" || status=1
+
+    roundtrip "Shadowed alias in an alias argument with the $engine printer" \
+        'typename Box(a::Abs) = (item:a); typename Value = Int;
+         sig f : Box(Value) -> Box(Value) fun f(x) { x }
+         typename Value = Bool;' \
+        '~f' --set=types_pretty_printer_engine="$engine" || status=1
+
+    roundtrip "Hidden interface in an unused alias argument with the $engine printer" \
+        'module Effects { effect Reader { Ask : () => Int; } }
+         typename Ignore(a::Abs) = Int;
+         sig f : () -> Ignore([Effects.Reader] (() -> Int)) fun f() { 1 }
+         module Effects { effect Reader { Ask : () => Int; } }' \
+        '~f' --set=types_pretty_printer_engine="$engine" || status=1
+
+    roundtrip "Shadowed parameterised recursive alias with the $engine printer" \
+        'typename Expr(a::Abs) = (|Leaf:a|More:Expr(a)|);
+         sig f : () -> Expr(Int) fun f() { Leaf(1) }
+         typename Expr(a::Abs) = Bool;' \
+        '~f' --set=types_pretty_printer_engine="$engine" || status=1
+
+    roundtrip "Shadowed recursive alias with renamed mu arguments with the $engine printer" \
+        'typename Expr(a::Abs) = (|Leaf:a|More:Expr(mu x. (|Stop|Next:x|))|);
+         sig f : () -> Expr(mu y. (|Stop|Next:y|)) fun f() { Leaf(Stop) }
+         typename Expr(a::Abs) = Bool;' \
+        '~f' --set=types_pretty_printer_engine="$engine" || status=1
+
+    roundtrip "Shadowed recursive alias with an unused argument with the $engine printer" \
+        'typename Ignore(a::Abs) = Int;
+         typename Expr(a::Abs) = (|Leaf:a|More:Expr(Ignore(List(a)))|);
+         sig f : () -> Expr(Ignore(Bool)) fun f() { Leaf(1) }
+         typename Expr(a::Abs) = Bool;' \
+        '~f' --set=types_pretty_printer_engine="$engine" || status=1
+
+    roundtrip "Shadowed recursive alias that swaps arguments with the $engine printer" \
+        'typename Expr(a::Abs,b::Abs) = (|Leaf:a|More:Expr(b,a)|);
+         sig f : () -> Expr(Bool,Int) fun f() { Leaf(true) }
+         typename Expr(a::Abs,b::Abs) = Bool;' \
+        '~f' --set=types_pretty_printer_engine="$engine" || status=1
 done
 
 exit "$status"

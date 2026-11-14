@@ -56,7 +56,7 @@ let interface_scope _ =
   |} in
   match bindings with
   | [{ node = EffectInterface { interface_id = Some imported; _ }; _ };
-     { node = Aliases _; _ };
+     { node = Aliases [{ node = (reader_alias, _, _); _ }]; _ };
      { node = EffectInterface { interface_id = Some local; _ }; _ };
      { node = Aliases [{ node = (_, _, Typename (typ, _)); _ }]; _ }] ->
       let open Datatype in
@@ -68,7 +68,7 @@ let interface_scope _ =
             (ModalEffects.Interface.equal imported added);
           let assert_named_type typ =
             match typ.node with
-            | TypeApplication ("Reader", []) -> ()
+            | TypeApplication (name, []) -> assert_equal ~printer:Fun.id reader_alias name
             | _ -> assert_failure "Expected an application of the Reader type alias"
           in
           assert_named_type arg;

@@ -185,10 +185,12 @@ let renew : t -> t
   = fun scopes ->
   { scopes with delta = S.empty }
 
-let interface_names scope =
-  let rec bindings prefix scope =
+let type_names scope =
+  let rec bindings select prefix scope =
     Seq.append
-      (StringMap.to_seq scope.S.interfaces |> Seq.map (fun (name, id) -> prefix ^ name, id))
+      (StringMap.to_seq (select scope) |> Seq.map (fun (name, id) -> prefix ^ name, id))
       (StringMap.to_seq scope.S.modules |> Seq.flat_map (fun (name, scope) ->
-         bindings (prefix ^ name ^ ".") scope)) in
-  ModalEffects.Names.of_bindings (bindings "" scope.visible)
+         bindings select (prefix ^ name ^ ".") scope)) in
+  ModalEffects.Names.of_bindings
+    ~interfaces:(bindings (fun scope -> scope.S.interfaces) "" scope.visible)
+    ~aliases:(bindings (fun scope -> scope.S.typenames) "" scope.visible)

@@ -758,14 +758,9 @@ atomic_datatype:
 | kinded_type_var                                              { $1 }
 | data_row_datatype                                            { $1 }
 | CONSTRUCTOR                                                  { let open Datatype in
-                                                                 match $1 with
-                                                                   | "Bool"    -> Primitive Primitive.Bool
-                                                                   | "Int"     -> Primitive Primitive.Int
-                                                                   | "Char"    -> Primitive Primitive.Char
-                                                                   | "Float"   -> Primitive Primitive.Float
-                                                                   | "String"  -> Primitive Primitive.String
-                                                                   | "DateTime" -> Primitive Primitive.DateTime
-                                                                   | t         -> TypeApplication (t, [])
+                                                                 match Primitive.of_string $1 with
+                                                                 | Some prim -> Primitive prim
+                                                                 | None -> TypeApplication ($1, [])
                                                                }
 | CONSTRUCTOR LPAREN type_arg_list RPAREN                      { Datatype.TypeApplication ($1, $3) }
 | qualified_type_name                                          { Datatype.QualifiedTypeApplication ($1, []) }

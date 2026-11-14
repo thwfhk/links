@@ -209,7 +209,7 @@ module Desugar = struct
                     let _, body = StringMap.find tycon !tygroup_ref.type_map in
                     Instantiate.recursive_application ~preserve_forall:true tycon qs args body
                   in
-                  let r_unique_name = tycon ^ string_of_int !tygroup_ref.id in
+                  let r_unique_name = Printf.sprintf "%s$%d" tycon !tygroup_ref.id in
                   let r_linear () = StringMap.lookup tycon !tygroup_ref.linearity_map in
                   RecursiveApplication
                     { r_name = tycon;

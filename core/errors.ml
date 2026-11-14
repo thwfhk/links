@@ -74,6 +74,7 @@ let format_exception =
   | IRTypeError msg -> pos_prefix (Printf.sprintf "IR Type Error: %s" msg)
   | UnboundTyCon (pos, tycon) ->
       let pos, _ = Position.resolve_start_expr pos in
+      let tycon = Module_hacks.Name.prettify_alias tycon in
       pos_prefix ~pos
         (Printf.sprintf "Unbound type constructor %s\n" tycon)
   | RuntimeError s -> pos_prefix ("Runtime error: " ^ s)
@@ -101,16 +102,19 @@ let format_exception =
          filename message)
   | TypeApplicationArityMismatch { pos; name; expected; provided } ->
       let pos, expr = Position.resolve_start_expr pos in
+      let name = Module_hacks.Name.prettify_alias name in
       pos_prefix ~pos
         (Printf.sprintf ("Arity mismatch: Type %s expects %d type arguments, but %d arguments were provided. In: %s\n")
              name expected provided expr)
   | TypeApplicationKindMismatch { pos; name; tyarg_number; expected; provided } ->
       let pos, expr = Position.resolve_start_expr pos in
+      let name = Module_hacks.Name.prettify_alias name in
       pos_prefix ~pos
         (Printf.sprintf "Kind mismatch: Type argument %d for type constructor %s has kind %s, but an argument of kind %s was expected. \nIn:\n%s\n"
              tyarg_number name provided expected expr)
   | TypeApplicationGlobalKindMismatch { pos; name; expected; provided } ->
       let pos, expr = Position.resolve_start_expr pos in
+      let name = Module_hacks.Name.prettify_alias name in
       pos_prefix ~pos
         (Printf.sprintf "Kind mismatch: Type constructor %s has kind %s, but something of kind %s was expected. \nIn:\n%s\n"
              name provided expected expr)

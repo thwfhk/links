@@ -88,7 +88,7 @@ module Untyped = struct
     let apply : 'a TU.result -> transformer -> 'a TU.result
       = fun (TU.Result { program; state }) (module T) ->
         Debug.if_set Basicsettings.show_stages (fun () -> T.Untyped.name ^"...");
-        ModalEffects.Names.with_names state.Context.interface_names (fun () ->
+        ModalEffects.Names.with_names state.Context.type_names (fun () ->
           select (module T : Untyped.S) state program)
     in
     let (TU.Result { state; program }) =
@@ -107,7 +107,7 @@ end
 let check_program context terms program =
   let typing_environment = Context.typing_environment context in
   let program, datatype, terms, tycon_env =
-    ModalEffects.Names.with_names context.Context.interface_names (fun () ->
+    ModalEffects.Names.with_names context.Context.type_names (fun () ->
       Fresco.program ~interfaces:context.Context.effect_interfaces
         ~aliases:typing_environment.Types.tycon_env terms program) in
   let typing_environment = { typing_environment with
@@ -132,10 +132,15 @@ let check_sentence context terms sentence =
 module Modal = struct
   let initial_context () =
     let terms = FrescoContext.create Lib.type_env in
+    let module_scope = Env.String.fold (fun name _ scope ->
+      ModuleScope.Extend.typename name name scope)
+      Lib.typing_env.Types.tycon_env ModuleScope.empty in
     { Context.empty with
       Context.typing_environment = Lib.typing_env;
       fresco_environment = terms;
-      name_environment = Lib.nenv }, terms
+      name_environment = Lib.nenv;
+      module_scope;
+      type_names = ModuleScope.type_names module_scope }, terms
 
   let check untyped check context terms program =
     ModalEffects.Names.with_source_scopes (fun () ->
@@ -181,7 +186,7 @@ let transform show print untyped check select context program =
       Debug.if_set show_pre_frontend_ast
         (fun () -> Printf.sprintf "AST before frontend transformations:\n%s\n\n" (show program));
       let { program; context; _ } = untyped context program in
-      ModalEffects.Names.with_names context.Context.interface_names (fun () ->
+      ModalEffects.Names.with_names context.Context.type_names (fun () ->
         let result, _ = check context context.Context.fresco_environment program in
         let result = Typeability_preserving.run select check print context result in
         Debug.if_set show_post_frontend_ast

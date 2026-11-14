@@ -54,6 +54,25 @@ fi
 
 echo "SUCCESS: The REPL kept successive imports distinct and identified both hidden declarations"
 
+for engine in roundtrip old; do
+    if ! output=$(./links --set=types_pretty_printer_engine="$engine" 2>&1 <<'EOF'
+module Library { effect Reader { Ask : () => Int; } typename Thunk = [Reader] (() -> Int); sig read : Thunk fun read() { do Ask } }
+var previous = Library.read;
+module Library { effect Reader { Ask : () => Int; } typename Thunk = [Reader] (() -> Int); }
+previous;
+var wrong = (previous : Library.Thunk);
+EOF
+    ) || ! grep -Eq '^fun : \[Library\.Reader \(out of scope, declaration [0-9]+\)\] \(\(\) -> Int\)$' <<< "$output" ||
+        [[ "$output" != *'The modalities require different effect contexts'* ]] ||
+        [[ $(grep -c '^<stdin>:' <<< "$output") != 1 ]]; then
+        echo "FAILURE: The REPL lost the hidden interface behind a shadowed alias with the $engine printer"
+        printf '%s\n' "$output"
+        exit 1
+    fi
+
+    echo "SUCCESS: The REPL showed the hidden interface behind a shadowed alias with the $engine printer"
+done
+
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/links-effect-interfaces.XXXXXX") || exit 1
 trap 'rm -rf "$scratch"' EXIT
 

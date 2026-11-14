@@ -612,9 +612,10 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
        List.iter2 (fun lt rt -> unify_type_args' rec_env (lt, rt)) ls rs
     | Primitive t, RecursiveApplication a
     | RecursiveApplication a, Primitive t ->
+       let name = Module_hacks.Name.prettify_alias a.r_name in
        raise (Failure
                 (`Msg ("Cannot unify primitive type '"^string_of_datatype (Primitive t) ^
-                         "' with recursive type '"^ a.r_name ^"'")))
+                         "' with recursive type '"^ name ^"'")))
     | RecursiveApplication a1, RecursiveApplication a2 ->
        let (n1, args1) = (a1.r_unique_name, a1.r_args) in
        let (n2, args2) = (a2.r_unique_name, a2.r_args) in

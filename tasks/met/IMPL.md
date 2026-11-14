@@ -235,14 +235,27 @@ and interface signatures in local modules.
 
 #### 2.8 Shadowed type aliases
 
-Both printers display the stored alias name without checking what it
-denotes in the current scope. With `typename T = Int; var x = (1 : T);
-typename T = Bool;`, `x` still prints as `1 : T`, but `(x : T)` fails
-with `Expected Bool, got Int`. An alias can also hide a reference to
-an earlier interface declaration from the printer. Use a visible
-alias name only when it denotes the type being printed. If the alias
-has no such name, print its underlying type wherever that type can be
-written in the current scope.
+Each alias declaration has its own internal name. The source scopes
+used for interface printing also record the visible names for aliases.
+Both printers keep the original alias spelling when it still resolves
+to the same declaration. They use another visible spelling if needed.
+
+Before choosing type variable names or grouping types, the printers
+expand aliases with no usable name. With `typename T = Int;
+var x = (1 : T); typename T = Bool;`, `x` prints as `1 : Int`.
+If expansion exposes an interface with no name, the existing
+[interface marker](#27-interface-names-and-printing) identifies it.
+An alias that remains in scope can name a type containing such an
+interface. If its written arguments contain a name that is out of
+scope, the printer tries the underlying type as well. This can remove
+an argument that the alias body never uses.
+
+For an expanded recursive alias, a repeated application with the same
+arguments becomes a `mu` reference. Argument comparison allows renamed
+binders. Printers stop after 64 extra unfoldings with changed arguments
+in one expansion, or when a changed argument list exceeds the 256-node
+limit. At that point they mark the remaining alias as out of scope.
+These limits apply only to the printed type.
 
 ### Milestone 3 follow-up
 

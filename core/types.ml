@@ -1976,6 +1976,188 @@ end
 
 type names = (tid, string * Vars.spec) Hashtbl.t
 
+let alias_display_name ?(applied = false) name =
+  match ModalEffects.Names.alias ~applied name with
+  | Some name -> name
+  | None -> Module_hacks.Name.prettify_alias name ^ " (out of scope)"
+
+let abstract_display_name constructor =
+  let name = Abstype.name constructor in
+  if Abstype.equal constructor socket then alias_display_name name else name
+
+(* A mu binder can represent a repeated application only when its arguments
+   agree. Compare the structure without following recursive applications,
+   allowing for fresh binder IDs introduced during unfolding. *)
+let rec same_alias_argument binders (left_kind, left) (right_kind, right) =
+  left_kind = right_kind && same_alias_argument_type binders left right
+
+and same_alias_argument_type binders left right =
+  let same = same_alias_argument_type binders in
+  let same_args = List.equal (same_alias_argument binders) in
+  let right_bound id = List.exists (fun (_, right) -> right = id) binders in
+  (left == right && binders = []) ||
+  match left, right with
+  | Meta point, t -> same (Unionfind.find point) t
+  | t, Meta point -> same t (Unionfind.find point)
+  | Alias (_, _, body), t -> same body t
+  | t, Alias (_, _, body) -> same t body
+  | Var (l, lk, lf), Var (r, rk, rf) ->
+      lk = rk && lf = rf &&
+      (match List.assoc_opt l binders with
+       | Some bound -> r = bound
+       | None -> l = r && not (right_bound r))
+  | Recursive (l, lk, body), Recursive (r, rk, body') ->
+      lk = rk &&
+      (match List.assoc_opt l binders with
+       | Some bound -> r = bound
+       | None -> not (right_bound r) && same_alias_argument_type ((l, r) :: binders) body body')
+  | Primitive l, Primitive r -> l = r
+  | Application (l, ls), Application (r, rs) ->
+      Abstype.equal l r && same_args ls rs
+  | RecursiveApplication l, RecursiveApplication r ->
+      l.r_unique_name = r.r_unique_name && same_args l.r_args r.r_args
+  | AmbientFunction (lin, dom, cod), AmbientFunction (lin', dom', cod') ->
+      lin = lin' && same dom dom' && same cod cod'
+  | Function (dom, eff, cod), Function (dom', eff', cod')
+  | Lolli (dom, eff, cod), Lolli (dom', eff', cod') ->
+      same dom dom' && same eff eff' && same cod cod'
+  | Modal (m, body), Modal (m', body') ->
+      ModalEffects.equivalent ~equal:same m m' && same body body'
+  | ForAll (qs, body), ForAll (qs', body') ->
+      List.equal (fun (_, l) (_, r) -> l = r) qs qs' &&
+      let bound = List.map2 (fun (l, _) (r, _) -> l, r) qs qs' in
+      same_alias_argument_type (bound @ binders) body body'
+  | Record l, Record r | Variant l, Variant r | Effect l, Effect r | Present l, Present r ->
+      same l r
+  | Row (fields, tail), Row (fields', tail') ->
+      StringMap.equal same fields fields' && same (Meta tail) (Meta tail')
+  | Operation (dom, cod), Operation (dom', cod') ->
+      same dom dom' && same cod cod'
+  | Closed, Closed | Absent, Absent | Not_typed, Not_typed -> true
+  | _ -> false
+
+let alias_arguments_fit args =
+  let remaining = ref 256 in
+  let counter = object (self)
+    inherit type_predicate as super
+
+    method! type_satisfies scope typ =
+      if !remaining = 0 then false
+      else begin
+        decr remaining;
+        match typ with
+        | Alias (_, (_, _, args), body) ->
+            self#type_satisfies scope body && List.for_all (self#type_satisfies_arg scope) args
+        | RecursiveApplication { r_args = args; _ } ->
+            List.for_all (self#type_satisfies_arg scope) args
+        | Not_typed -> true
+        | _ -> super#type_satisfies scope typ
+      end
+  end in
+  List.for_all (counter#type_satisfies_arg (StringSet.empty, IntSet.empty, IntSet.empty)) args
+
+class aliases_for_printing = object (self)
+  inherit Transform.visitor as super
+
+  val expanding = StringMap.empty
+  val unfoldings_left = None
+  val has_hidden_name = None
+
+  method private note_hidden_name =
+    Option.iter (fun hidden -> hidden := true) has_hidden_name
+
+  method private named_arguments name args =
+    match ModalEffects.Names.alias ~applied:(args <> []) name with
+    | None -> None
+    | Some _ when args = [] -> Some []
+    | Some _ ->
+        let hidden = ref false in
+        let trial = {< has_hidden_name = Some hidden >} in
+        let _, args = trial#type_args args in
+        if !hidden then None else Some args
+
+  method private active name = Option.value ~default:[] (StringMap.find_opt name expanding)
+
+  method private expand name args body =
+    let kind = pk_type, (lin_any, res_any) in
+    let binder = lazy (
+      let id = fresh_raw_variable () in
+      id, Unionfind.fresh (Var (id, kind, `Rigid))) in
+    let active = (args, binder) :: self#active name in
+    let unfoldings_left = match unfoldings_left with
+      | Some _ -> unfoldings_left
+      | None -> Some (ref 64) in
+    let inner = {< expanding = StringMap.add name active expanding; unfoldings_left >} in
+    let _, body = inner#typ body in
+    if Lazy.is_val binder then begin
+      let id, point = Lazy.force binder in
+      Unionfind.change point (Recursive (id, kind, body));
+      self, Meta point
+    end else
+      self, body
+
+  method private expand_recursive typ app =
+    let active = self#active app.r_name in
+    let same_args (args, _) = List.equal (same_alias_argument []) app.r_args args in
+    match List.find_opt same_args active with
+    | Some (_, binder) -> self, Meta (snd (Lazy.force binder))
+    | None ->
+        (* Changed arguments may repeat after further unfolding. Bound the
+           total extra unfolding and the size of each new argument list. *)
+        let remaining = if active = [] then None else unfoldings_left in
+        let fits = Option.is_none remaining || alias_arguments_fit app.r_args in
+        let exhausted = Option.fold ~none:false ~some:(fun remaining -> !remaining = 0) remaining in
+        if exhausted || not fits then begin
+          self#note_hidden_name;
+          if not fits && Option.is_none (ModalEffects.Names.alias ~applied:true app.r_name) then
+            self, RecursiveApplication { app with r_args = [] }
+          else super#typ typ
+        end else
+          let body = app.r_unwind app.r_args in
+          if List.exists (fun (_, arg) -> body == arg) app.r_args then
+            self#typ body
+          else begin
+            Option.iter decr remaining;
+            self#expand app.r_name app.r_args body
+          end
+
+  method private check_modality_names modality =
+    Option.iter (fun hidden ->
+      let extension_visible extension =
+        List.for_all (fun (id, _) -> ModalEffects.Names.interface_visible id)
+          (ModalEffects.extension_entries extension) in
+      let visible = match modality with
+        | ModalEffects.Absolute ctx -> extension_visible (ModalEffects.context_extension ctx)
+        | ModalEffects.Relative (mask, extension) ->
+            List.for_all ModalEffects.Names.interface_visible (ModalEffects.mask_entries mask)
+            && extension_visible extension in
+      if not visible then hidden := true) has_hidden_name
+
+  method! typ = function
+    | Alias (kind, (name, params, args), body) ->
+        begin match self#named_arguments name args with
+        | Some args -> self, Alias (kind, (name, params, args), body)
+        | None -> self#expand name args body
+        end
+    | RecursiveApplication app as typ ->
+        begin match self#named_arguments app.r_name app.r_args with
+        | Some r_args -> self, RecursiveApplication { app with r_args }
+        | None -> self#expand_recursive typ app
+        end
+    | Application (constructor, _) as typ when Abstype.equal constructor socket ->
+        if Option.is_none (ModalEffects.Names.alias (Abstype.name constructor)) then
+          self#note_hidden_name;
+        super#typ typ
+    | Modal (modality, body) ->
+        self#check_modality_names modality;
+        let self, modality = ModalEffects.fold_map_arguments (fun self -> self#typ) self modality in
+        let self, body = self#typ body in
+        self, Modal (modality, body)
+    | typ -> super#typ typ
+end
+
+let aliases_for_printing = (new aliases_for_printing)#set_refresh_tyvars false
+
 let rec list_element_needs_parentheses = function
   | Function _ | Lolli _ | AmbientFunction _ | Modal _ | Operation _
   | ForAll _ | Recursive _ -> true
@@ -2165,21 +2347,20 @@ struct
          | Var _ | Recursive _ | Closed ->
             failwith ("[11] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
          | Alias (_, (s, _, ts), _) | RecursiveApplication { r_name = s; r_args = ts; _ } ->
+            let name = alias_display_name ~applied:(ts <> []) s in
             begin match List.map (type_arg context p) ts with
-            | [] -> Module_hacks.Name.prettify s
+            | [] -> name
             | ts ->
-               Printf.sprintf "%s (%s)"
-                 (Module_hacks.Name.prettify s)
-                 (String.concat "," ts)
+               Printf.sprintf "%s (%s)" name (String.concat "," ts)
             end
          | Application (l, [(PrimaryKind.Type, elem)]) when Abstype.equal l list ->
             let elem_str = datatype context p elem in
             if list_element_needs_parentheses elem then "List (" ^ elem_str ^ ")"
             else "List " ^ elem_str
-         | Application (s, []) -> Abstype.name s
+         | Application (s, []) -> abstract_display_name s
          | Application (s, ts) ->
             let vars = String.concat "," (List.map (type_arg context p) ts) in
-            Printf.sprintf "%s (%s)" (Abstype.name s) vars
+            Printf.sprintf "%s (%s)" (abstract_display_name s) vars
          | Meta point ->
             begin
               match Unionfind.find point with
@@ -2691,7 +2872,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
   and alias_recapp : (string * type_arg list) printer
     = let open Printer in
       Printer (fun ctx (name, arg_types) buf ->
-          StringBuffer.write buf (Module_hacks.Name.prettify name);
+          StringBuffer.write buf (alias_display_name ~applied:(arg_types <> []) name);
           (match arg_types with
            | [] -> ()
            | _ -> StringBuffer.write buf " (";
@@ -2863,9 +3044,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
              Printer.apply datatype ctx elem buf;
              if grouped then StringBuffer.write buf ")"
           | (abstp, []) ->
-             StringBuffer.write buf (Abstype.name abstp)
+             StringBuffer.write buf (abstract_display_name abstp)
           | (abstp, args) ->
-             StringBuffer.write buf (Abstype.name abstp);
+             StringBuffer.write buf (abstract_display_name abstp);
              StringBuffer.write buf " (";
              Printer.concat_items ~sep:"," type_arg args ctx buf;
              StringBuffer.write buf ")"
@@ -3202,6 +3383,7 @@ let string_of_datatype : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bool
     if Policy.quantifiers policy then ty
     else strip_quantifiers ty
   in
+  let _, ty' = aliases_for_printing#typ ty' in
   build_tyvar_names ~refresh_tyvar_names free_bound_type_vars [ty'];
   generate_string policy Vars.tyvar_name_map (fun (module Printer : PRETTY_PRINTER) -> Printer.string_of_datatype) ty'
 
@@ -3212,24 +3394,30 @@ let string_of_row : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bool -> r
 let string_of_presence : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bool -> field_spec -> string
   = fun ?(policy=Policy.default_policy) ?(refresh_tyvar_names=true) pre ->
   let policy = policy () in
+  let _, pre = aliases_for_printing#field_spec pre in
   build_tyvar_names ~refresh_tyvar_names free_bound_field_spec_type_vars [pre];
   generate_string policy Vars.tyvar_name_map (fun (module Printer : PRETTY_PRINTER) -> Printer.string_of_presence) pre
 
 let string_of_type_arg : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bool -> type_arg -> string
   = fun ?(policy=Policy.default_policy) ?(refresh_tyvar_names=true) tyarg ->
   let policy = policy () in
+  let _, tyarg = aliases_for_printing#type_arg tyarg in
   build_tyvar_names ~refresh_tyvar_names free_bound_type_arg_type_vars [tyarg];
   generate_string policy Vars.tyvar_name_map (fun (module Printer : PRETTY_PRINTER) -> Printer.string_of_type_arg) tyarg
 
 let string_of_row_var : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bool -> row_var -> string
   = fun ?(policy=Policy.default_policy) ?(refresh_tyvar_names=true) rvar ->
   let policy = policy () in
+  let _, rvar = aliases_for_printing#row_var rvar in
   build_tyvar_names ~refresh_tyvar_names free_bound_row_var_vars [rvar];
   generate_string policy Vars.tyvar_name_map (fun (module Printer : PRETTY_PRINTER) -> Printer.string_of_row_var) rvar
 
 let string_of_tycon_spec : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bool -> tycon_spec -> string
   = fun ?(policy=Policy.default_policy) ?(refresh_tyvar_names=true) tycon ->
   let policy = policy () in
+  let tycon = match tycon with
+    | `Alias (kind, qs, body) -> `Alias (kind, qs, snd (aliases_for_printing#typ body))
+    | other -> other in
   build_tyvar_names ~refresh_tyvar_names free_bound_tycon_type_vars [tycon];
   generate_string policy Vars.tyvar_name_map (fun (module Printer : PRETTY_PRINTER) -> Printer.string_of_tycon_spec) tycon
 

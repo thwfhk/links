@@ -38,3 +38,50 @@ Recursive list element types retain parentheses with the old printer
 sig f : () -> List (mu t. (|Leaf|More:t|)) fun f() { [] } ~f
 args : --set=types_pretty_printer_engine=old
 stdout : fun : [] (() -> List (mu a . (|Leaf|More:a|)))
+
+A shadowed type alias expands with the roundtrip printer
+typename T = Int; var x = (1 : T); typename T = Bool; x
+args : --set=types_pretty_printer_engine=roundtrip
+stdout : 1 : Int
+
+A shadowed type alias expands with the old printer
+typename T = Int; var x = (1 : T); typename T = Bool; x
+args : --set=types_pretty_printer_engine=old
+stdout : 1 : Int
+
+A bare primitive name cannot name an opened alias with the roundtrip printer
+module M { typename Int = Bool; } open M; var x = (true : M.Int); module M { typename Int = String; } x
+args : --set=types_pretty_printer_engine=roundtrip
+stdout : true : Bool
+
+A bare primitive name cannot name an opened alias with the old printer
+module M { typename Int = Bool; } open M; var x = (true : M.Int); module M { typename Int = String; } x
+args : --set=types_pretty_printer_engine=old
+stdout : true : Bool
+
+Shadowed aliases in a type error with the roundtrip printer
+typename T = Int; sig f : T -> T fun f(x) { x } typename T = Bool; sig g : T -> T fun g(x) { x } if (true) f else g
+args : --set=types_pretty_printer_engine=roundtrip
+exit : 1
+stderr : @.*Type error: Expected \[\] \(\(Int\) -> Int\), got \[\] \(\(T\) -> T\)\nIn expression: if \(true\) f else g\..*
+
+Shadowed aliases in a type error with the old printer
+typename T = Int; sig f : T -> T fun f(x) { x } typename T = Bool; sig g : T -> T fun g(x) { x } if (true) f else g
+args : --set=types_pretty_printer_engine=old
+exit : 1
+stderr : @.*Type error: Expected \[\] \(\(Int\) -> Int\), got \[\] \(\(T\) -> T\)\nIn expression: if \(true\) f else g\..*
+
+A shadowed non-regular recursive alias with the roundtrip printer
+typename Expr(a::Abs) = (|Leaf:a|More:Expr(List(a))|); sig f : () -> Expr(Int) fun f() { Leaf(1) } typename Expr(a::Abs) = Bool; ~f
+args : --set=types_pretty_printer_engine=roundtrip
+stdout : @fun : .*Leaf:Int.*Expr.*out of scope.*
+
+A shadowed non-regular recursive alias with the old printer
+typename Expr(a::Abs) = (|Leaf:a|More:Expr(List(a))|); sig f : () -> Expr(Int) fun f() { Leaf(1) } typename Expr(a::Abs) = Bool; ~f
+args : --set=types_pretty_printer_engine=old
+stdout : @fun : .*Leaf:Int.*Expr.*out of scope.*
+
+Printing a shadowed recursive alias stops when its arguments duplicate types
+typename Pair(a::Abs) = (a,a); typename Expr(a::Abs) = (|Leaf:a|More:Expr(Pair(a))|); sig f : () -> Expr(Int) fun f() { Leaf(1) } typename Expr(a::Abs) = Bool; ~f
+args : --set=types_pretty_printer_engine=roundtrip
+stdout : @fun : .*Leaf:Int.*Expr.*out of scope.*

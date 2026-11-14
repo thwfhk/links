@@ -75,7 +75,7 @@ module Phases = struct
   module Compile = struct
     module IR = struct
       let run ?linear_variables Frontend.({ context; datatype; program }) =
-        ModalEffects.Names.with_names context.Context.interface_names (fun () ->
+        ModalEffects.Names.with_names context.Context.type_names (fun () ->
           Sugartoir.program ?linear_variables context datatype program)
     end
   end
@@ -86,7 +86,7 @@ module Phases = struct
       let program' =
         Ir.with_bindings globals program (* TODO(dhil): This looks silly, and I think it may be wrong... *)
       in
-      ModalEffects.Names.with_names context.Context.interface_names (fun () ->
+      ModalEffects.Names.with_names context.Context.type_names (fun () ->
         Backend.program context datatype program')
   end
 

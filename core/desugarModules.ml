@@ -76,8 +76,9 @@ module Epithet = struct
   let expand st name =
     build ((-1, name) :: st)
 
-  let expand_escapee st name =
-    build ((-1, name) :: fresh "?" :: st)
+  let expand_alias st name =
+    let id, _ = fresh name in
+    Printf.sprintf "%s$%d" (expand st name) id
 
   let qualified_source_name st name =
     let parts = List.fold_left (fun parts (_, name) ->
@@ -104,7 +105,7 @@ and desugar ?(toplevel=false) ?names renamer imports (scope' : Scope.t) =
   let open Sugartypes in
   let names = match names with
     | Some names -> names
-    | None -> lazy (Scope.interface_names scope') in
+    | None -> lazy (Scope.type_names scope') in
   object(self : 'self_type)
     inherit SugarTraversals.map as super
 
@@ -112,11 +113,11 @@ and desugar ?(toplevel=false) ?names renamer imports (scope' : Scope.t) =
     val mutable names = names
     val renamer = renamer
     method get_scope = scope
-    method get_interface_names = Lazy.force names
+    method get_type_names = Lazy.force names
 
-    method private set_effect_scope new_scope =
+    method private set_type_scope new_scope =
       scope <- new_scope;
-      names <- lazy (Scope.interface_names new_scope)
+      names <- lazy (Scope.type_names new_scope)
 
     method! position pos =
       ModalEffects.Names.record_scope pos names;
@@ -128,10 +129,7 @@ and desugar ?(toplevel=false) ?names renamer imports (scope' : Scope.t) =
     method type_binder : Name.t -> Name.t
       = fun name ->
       (* Construct a prefixed name for [name]. *)
-      let name' =
-        if toplevel then Epithet.expand renamer name
-        else Epithet.expand_escapee renamer name
-      in
+      let name' = Epithet.expand_alias renamer name in
       self#bind_type name name'; name'
 
     method! binder : Binder.with_pos -> Binder.with_pos
@@ -151,7 +149,7 @@ and desugar ?(toplevel=false) ?names renamer imports (scope' : Scope.t) =
       scope <- Scope.Extend.var name name' scope
 
     method bind_type name name' =
-      scope <- Scope.Extend.typename name name' scope
+      self#set_type_scope (Scope.Extend.typename name name' scope)
 
     method resolve_interface pos = function
       | Datatype.InterfaceId _ as reference -> reference
@@ -173,7 +171,7 @@ and desugar ?(toplevel=false) ?names renamer imports (scope' : Scope.t) =
       let name = declaration.interface_name in
       let qualified = Epithet.qualified_source_name renamer name in
       let id = ModalEffects.Interface.fresh qualified in
-      self#set_effect_scope (Scope.Extend.interface name id scope);
+      self#set_type_scope (Scope.Extend.interface name id scope);
       let define_member member =
         let name = member.member_name in
         if Scope.defines_operation name scope then
@@ -189,7 +187,7 @@ and desugar ?(toplevel=false) ?names renamer imports (scope' : Scope.t) =
     method open_module pos path =
       try
         let module_scope = Scope.Resolve.module' path scope in
-        self#set_effect_scope (Scope.open_module module_scope scope)
+        self#set_type_scope (Scope.open_module module_scope scope)
       with Notfound.NotFound _ ->
         raise (Errors.module_error ~pos (Printf.sprintf "Unbound module %s" (Scope.Resolve.best_guess path)))
 
@@ -207,7 +205,7 @@ and desugar ?(toplevel=false) ?names renamer imports (scope' : Scope.t) =
             end
         | _ -> scope in
       match Scope.Resolve.module' path scope with
-      | _ -> self#set_effect_scope scope
+      | _ -> self#set_type_scope scope
       | exception Notfound.NotFound _ ->
           raise (Errors.module_error ~pos (Printf.sprintf "Unbound module %s" (Scope.Resolve.best_guess path)))
 
@@ -412,7 +410,7 @@ and desugar ?(toplevel=false) ?names renamer imports (scope' : Scope.t) =
       | ({ node = Module _; _ } as module') :: bs ->
       (* Affects [scope] and hoists [bs'] *)
          let bs', scope' = desugar_module ~toplevel renamer imports scope module' in
-         self#set_effect_scope scope'; bs' @ self#bindings bs
+         self#set_type_scope scope'; bs' @ self#bindings bs
       | b :: bs ->
          let b = self#binding b in
          b :: self#bindings bs
@@ -438,7 +436,7 @@ let desugar_program_in_scope scope (bindings, body) =
     ) (StringMap.empty, []) dependencies in
   let visitor = desugar ~toplevel:true Epithet.empty imports scope in
   let bindings, body = visitor#program (bindings, body) in
-  (List.concat (List.rev dependencies) @ bindings, body), visitor#get_scope, visitor#get_interface_names
+  (List.concat (List.rev dependencies) @ bindings, body), visitor#get_scope, visitor#get_type_names
 
 let desugar_program program =
   let program, _, _ = desugar_program_in_scope Scope.empty program in
@@ -453,8 +451,8 @@ module Untyped = struct
   let name = "modules"
 
   let resolve state program =
-    let program, module_scope, interface_names = desugar_program_in_scope state.Context.module_scope program in
-    Context.{ state with module_scope; interface_names }, program
+    let program, module_scope, type_names = desugar_program_in_scope state.Context.module_scope program in
+    Context.{ state with module_scope; type_names }, program
 
   let program state program =
     let state = Context.{ state with module_scope = Scope.renew state.module_scope } in
@@ -470,7 +468,7 @@ module Untyped = struct
         let state, (bindings, phrase) = resolve state ([], Some phrase) in
         let state = Context.{ state with
           module_scope = original.module_scope;
-          interface_names = original.interface_names } in
+          type_names = original.type_names } in
         let phrase = Option.get phrase in
         let phrase = if bindings = [] then phrase else with_node phrase (Block (bindings, phrase)) in
         return state (Expression phrase)

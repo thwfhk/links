@@ -7,7 +7,7 @@ val renew : t -> t
 val open_module : scope -> t -> t
 val defines_operation : string -> t -> bool
 val module_was_imported : scope -> bool
-val interface_names : t -> ModalEffects.Names.t
+val type_names : t -> ModalEffects.Names.t
 
 module Resolve : sig
   val best_guess : string list -> string

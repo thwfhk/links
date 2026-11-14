@@ -281,6 +281,15 @@ module Primitive = struct
     | Float    -> "Float"
     | String   -> "String"
     | DateTime -> "DateTime"
+
+  let of_string = function
+    | "Bool"     -> Some Bool
+    | "Int"      -> Some Int
+    | "Char"     -> Some Char
+    | "Float"    -> Some Float
+    | "String"   -> Some String
+    | "DateTime" -> Some DateTime
+    | _ -> None
 end
 
 module Constant = struct

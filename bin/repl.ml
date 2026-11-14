@@ -95,6 +95,10 @@ let welcome_note = Settings.(option ~default:(Some welcome_note) ~readonly:true 
                              |> to_string from_string_option
                              |> sync)
 
+let printed_alias_name key spec =
+  let applied = match spec with `Alias (_, _ :: _, _) -> true | _ -> false in
+  ModalEffects.Names.alias ~applied key
+
 let rec directives : (string * ((Context.t -> string list -> Context.t) * string)) list Lazy.t
   = let perform f context args =
       ignore (f args); context
@@ -158,12 +162,11 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
             let tenv = Context.typing_environment context in
             tenv.Types.tycon_env
           in
-          StringSet.iter (fun k ->
-              let s = Env.String.find k tycon_env in
-              Printf.fprintf stderr " %s = %s\n"
-                (Module_hacks.Name.prettify k)
-                (Types.string_of_tycon_spec s))
-            (StringSet.diff (Env.String.domain tycon_env) (Env.String.domain Lib.typing_env.Types.tycon_env));
+          Env.String.iter (fun key spec ->
+            if not (Env.String.has key Lib.typing_env.Types.tycon_env) then
+              Option.iter (fun name ->
+                Printf.fprintf stderr " %s = %s\n" name (Types.string_of_tycon_spec spec))
+                (printed_alias_name key spec)) tycon_env;
           context),
          "display the current type alias environment");
 
@@ -198,7 +201,7 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
              begin match Driver.Phases.recover_linear_bindings context (fun on_variable linear_variables ->
                Driver.Phases.whole_program ~on_variable ~propagate_exit:true ~linear_variables context filename) with
              | Ok (context, datatype, value) ->
-                 ModalEffects.Names.with_names context.Context.interface_names (fun () ->
+                 ModalEffects.Names.with_names context.Context.type_names (fun () ->
                    print_value ~rtype:datatype value);
                  context
              | Error (Evalir.Exceptions.Early_exit (_, value), context) ->
@@ -286,12 +289,10 @@ let handle previous_context current_context = function
            else new_tycons)
          tycon_env' Env.String.empty
      in
-     Env.String.fold
-       (fun name spec () ->
-         Printf.printf "%s = %s\n%!"
-           (Module_hacks.Name.prettify name)
-           (Types.string_of_tycon_spec spec))
-       tycon_env' ();
+     Env.String.iter (fun key spec ->
+       Option.iter (fun name ->
+         Printf.printf "%s = %s\n%!" name (Types.string_of_tycon_spec spec))
+         (printed_alias_name key spec)) tycon_env';
      let diff previous_context current_context =
        let new_vars =
          let nenv, nenv' =
@@ -356,7 +357,7 @@ let interact : Context.t -> unit
        print_error exn; loop context
     | Ok I.({ sentence; context = context' }) ->
        let context'' =
-         try ModalEffects.Names.with_names context'.Context.interface_names (fun () ->
+         try ModalEffects.Names.with_names context'.Context.type_names (fun () ->
            handle context context' sentence)
          with exn -> print_error exn; context'
        in

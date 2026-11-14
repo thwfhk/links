@@ -27,16 +27,38 @@ end
 module Interface_map = Map.Make (Interface)
 
 module Names = struct
-  type t = string Interface_map.t
+  type t = {
+    interfaces : string Interface_map.t;
+    aliases : string Utility.StringMap.t;
+    applied_aliases : string Utility.StringMap.t;
+  }
 
-  let empty = Interface_map.empty
+  let empty = {
+    interfaces = Interface_map.empty;
+    aliases = Utility.StringMap.empty;
+    applied_aliases = Utility.StringMap.empty;
+  }
 
-  let of_bindings bindings =
-    Seq.fold_left (fun names (name, interface) ->
-      Interface_map.update interface (function
-        | Some previous when
-            (String.length previous, previous) <= (String.length name, name) -> Some previous
-        | _ -> Some name) names) empty bindings
+  let prefer_shorter name = function
+    | Some previous when (String.length previous, previous) <= (String.length name, name) ->
+        Some previous
+    | _ -> Some name
+
+  let of_bindings ~interfaces ~aliases =
+    let interfaces = Seq.fold_left (fun names (name, interface) ->
+      Interface_map.update interface (prefer_shorter name) names) empty.interfaces interfaces in
+    let aliases, applied_aliases = Seq.fold_left (fun (aliases, applied_aliases) (name, identity) ->
+      let original = Module_hacks.Name.prettify_alias identity in
+      let choose previous =
+        if name = original then Some name
+        else if previous = Some original then previous
+        else prefer_shorter name previous in
+      if Option.is_some (CommonTypes.Primitive.of_string name) then
+        aliases, Utility.StringMap.update identity choose applied_aliases
+      else
+        Utility.StringMap.update identity choose aliases, applied_aliases
+    ) (empty.aliases, empty.applied_aliases) aliases in
+    { interfaces; aliases; applied_aliases }
 
   let current = Domain.DLS.new_key (fun () -> None)
   let source_scopes = Domain.DLS.new_key (fun () -> None)
@@ -76,9 +98,23 @@ module Names = struct
     match Domain.DLS.get current with
     | None -> name
     | Some names ->
-        match Interface_map.find_opt interface (Lazy.force names) with
+        match Interface_map.find_opt interface (Lazy.force names).interfaces with
         | Some name -> name
         | None -> Printf.sprintf "%s (out of scope, declaration %d)" name interface.Interface.id
+
+  let alias ?(applied = false) identity =
+    match Domain.DLS.get current with
+    | None -> Some (Module_hacks.Name.prettify_alias identity)
+    | Some names ->
+        let names = Lazy.force names in
+        match Utility.StringMap.find_opt identity names.aliases with
+        | None when applied -> Utility.StringMap.find_opt identity names.applied_aliases
+        | result -> result
+
+  let interface_visible interface =
+    match Domain.DLS.get current with
+    | None -> true
+    | Some names -> Interface_map.mem interface (Lazy.force names).interfaces
 end
 
 type 'a extension = 'a list list Interface_map.t
