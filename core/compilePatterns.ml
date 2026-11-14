@@ -184,11 +184,12 @@ struct
   open PrimaryKind
 
   let eq _env t v1 v2 =
+    let arguments, t = Instantiate.typ t in
     ApplyPure
       (TApp
          (Variable (NEnv.find "==" Lib.nenv),
           [(Type, t)]),
-       [v1; v2])
+       [tapp (v1, arguments); v2])
 end
 open CompileEq
 
@@ -269,14 +270,13 @@ let let_pattern : raw_env -> Pattern.t -> value * Types.datatype -> computation 
                            StringSet.add name names)
                         fields
                         StringSet.empty in
-                    let rt = TypeUtils.erase_type names t in
-                      lp rt p (Erase (names, value)) body
-(*                      lp rt p (`Coerce (value, rt)) body *)
+                    let rest, rt = erase_record_fields names (value, t) in
+                    lp rt p rest body
             in
               StringMap.fold
                 (fun name p body ->
-                   let t' = (TypeUtils.project_type name t) in
-                     (lp t' p (Project (name, value)) body))
+                   let field, field_type = project_record_field name (value, t) in
+                   lp field_type p field body)
                 fields
                 body
         | Pattern.Constant c ->
@@ -740,6 +740,8 @@ and match_record
     bound_computation -> var -> bound_computation =
   fun vars xs def var env ->
     let t = lookup_type var env in
+    let record = Variable var, t in
+    let _, record_body_type = TypeUtils.split_quantified_type t in
 
     let names =
       List.fold_right
@@ -750,7 +752,7 @@ and match_record
                                      | (_, Some _, _) -> false) xs in
 
     (* type of the flattened record continuation *)
-    let restt = TypeUtils.erase_type names t in
+    let remainder, restt = erase_record_fields names record in
     let restb, rest = Var.fresh_var_of_type restt in
 
     let annotated_clauses =
@@ -770,16 +772,14 @@ and match_record
                     if closed then
                       ([], Pattern.Any)::ps, fields
                     else
-                      let xt = TypeUtils.project_type name t in
+                      let _, xt = project_record_field name record in
                       let xb, x = Var.fresh_var_of_type xt in
                         ([], Pattern.Variable xb)::ps, StringMap.add name (Variable x) fields)
                names
                ([], StringMap.empty) in
            let rps, body =
-             if all_closed then
+             if closed then
                rps, body
-             else if closed then
-               ([], Pattern.Any)::List.rev rps, body
              else
                let original_names =
                  StringMap.fold
@@ -789,7 +789,10 @@ and match_record
                    StringSet.empty in
 
                (* type of the original record continuation *)
-               let pt = TypeUtils.erase_type original_names t in
+               let restored, pt = under_record_quantifiers (Variable rest, restt)
+                 (fun arguments (base, _) ->
+                   let fields = StringMap.map (fun field -> tapp (field, arguments)) fields in
+                   Extend (fields, Some base), TypeUtils.erase_type original_names record_body_type) in
 
                let body =
                  fun env ->
@@ -799,16 +802,16 @@ and match_record
                      | (annotation, Pattern.Any) ->
                          let yb, y = Var.fresh_var_of_type pt in
                            with_bindings
-                             [Let (yb, ([], Return (Extend (fields, Some (Variable rest)))))]
+                             [letmv (yb, restored)]
                              ((apply_annotation (Variable y) (annotation, body)) env)
                      | (annotation, Pattern.Variable yb) ->
                          let y = Var.var_of_binder yb in
                            with_bindings
-                             [Let (yb, ([], Return (Extend (fields, Some (Variable rest)))))]
+                             [letmv (yb, restored)]
                              ((apply_annotation (Variable y) (annotation, body)) env)
                      | _ -> assert false
                in
-                 ([], Pattern.Variable restb)::rps, body in
+                 rps, body in
            let ps = List.rev rps @ ps in
              (annotation, (ps, body))::annotated_clauses
         ) xs [] in
@@ -816,9 +819,9 @@ and match_record
     let bindings, xs, env =
       StringSet.fold
         (fun name (bindings, xs, env) ->
-           let xt = TypeUtils.project_type name t in
+           let field, xt = project_record_field name record in
            let xb, x = Var.fresh_var_of_type xt in
-           let binding = letmv (xb, Project (name, Variable var)) in
+           let binding = letmv (xb, field) in
              binding::bindings, x::xs, bind_type x xt env)
         names
         ([], [], env) in
@@ -827,14 +830,7 @@ and match_record
       if all_closed then
         bindings, xs, env
       else
-        let bindings =
-          let qs =
-            match restt with
-              | Types.ForAll (qs, _) -> qs
-              | _ -> [] in
-          let tyargs = List.map Types.type_arg_of_quantifier qs in
-            Let (restb, (qs, Return (tapp (Erase (names, Variable var), tyargs)))) :: bindings in
-        let xs = rest :: xs in
+        let bindings = letmv (restb, remainder) :: bindings in
         let env = bind_type rest restt env in
           bindings, xs, env in
 

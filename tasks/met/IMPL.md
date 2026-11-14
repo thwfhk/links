@@ -533,6 +533,15 @@ Only a call to the built-in primitive can use its `ApplyPure` flag.
 A scoped comparison uses the standard precedence when it has no
 fixity declaration of its own.
 
+#### 5.14 Quantified record and tuple patterns
+
+Record projections and patterns apply the record's type arguments
+before reading a field or removing fields. They abstract over the same
+arguments afterwards. Tuple patterns use numbered fields in the same
+code. Switch alternatives rebuild their rest records under those
+quantifiers. Constant patterns instantiate the field for the comparison
+and keep the quantified type for any binder.
+
 ### Deferred optimisation issues
 
 Dead-definition elimination can remove unused calls to `crypt`, `chr`

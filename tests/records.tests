@@ -39,6 +39,26 @@ var r = ((id=fun(x) { x }) : forall a. (id:a -> a)); var f = r.id; (f(42), f(tru
 args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
 stdout : (42, true) : (Int, Bool)
 
+Record binding preserves a quantified field type
+var r = ((id=fun(x) { x }) : forall a. (id:a -> a)); { var (id=f) = r; (f(42), f(true)) }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : (42, true) : (Int, Bool)
+
+Tuple binding preserves a quantified field type
+var r = ((fun(x) { x }, 1) : forall a. (a -> a, Int)); { var (f, _) = r; (f(42), f(true)) }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : (42, true) : (Int, Bool)
+
+Record binding preserves quantifiers on the remaining fields
+var r = ((id=fun(x) { x }, n=1) : forall a. (id:a -> a, n:Int)); { var (n=_ | rest) = r; (rest.id(42), rest.id(true)) }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : (42, true) : (Int, Bool)
+
+Record cases preserve quantifiers when rebuilding remaining fields
+var r = ((id=fun(x) { x }, n=1, ok=true) : forall a. (id:a -> a, n:Int, ok:Bool)); switch (r) { case (ok=false | rest) -> (rest.id(42), rest.id(true), false) case (n=_ | rest) -> (rest.id(42), rest.id(true), rest.ok[Int]) }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : (42, true, true) : (Int, Bool, Bool)
+
 Record extension preserves quantified inherited fields
 var r = /\ [a]. { (id=fun(x:a) {x}) }; var s = (n=2 | r); var f = s.id; (s.n, f(42), f(true))
 args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true

@@ -109,6 +109,22 @@ let tapp (v, tyargs) =
     | [] -> v
     | _ -> TApp (v, tyargs)
 
+let under_record_quantifiers (record, typ) use_record =
+  let qs, body = TypeUtils.split_quantified_type typ in
+  let arguments = List.map Types.type_arg_of_quantifier qs in
+  let value, typ = use_record arguments (tapp (record, arguments), body) in
+  match qs with
+  | [] -> value, typ
+  | _ -> TAbs (qs, value), Types.for_all (qs, typ)
+
+let project_record_field name record =
+  under_record_quantifiers record (fun _ (value, typ) ->
+    Project (name, value), TypeUtils.project_type ~overstep_quantifiers:false name typ)
+
+let erase_record_fields names record =
+  under_record_quantifiers record (fun _ (value, typ) ->
+    Erase (names, value), TypeUtils.erase_type ~overstep_quantifiers:false names typ)
+
 let letm ?(tyvars=[]) (b, tc) = Let (b, (tyvars, tc))
 let letmv (b, v) = letm (b, Return v)
 

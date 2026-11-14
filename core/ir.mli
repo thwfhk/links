@@ -100,6 +100,13 @@ val binder_of_fun_def : fun_def -> binder
 
 val tapp : value * tyarg list -> value
 
+val under_record_quantifiers :
+  value * Types.datatype ->
+  (tyarg list -> value * Types.datatype -> value * Types.datatype) ->
+  value * Types.datatype
+val project_record_field : Name.t -> value * Types.datatype -> value * Types.datatype
+val erase_record_fields : name_set -> value * Types.datatype -> value * Types.datatype
+
 val letm : ?tyvars:tyvar list -> binder * tail_computation -> binding
 val letmv : binder * value -> binding
 (*val letv : tybinder * value -> binding*)

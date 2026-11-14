@@ -325,16 +325,6 @@ struct
   let comp_of_value s =
     bind s (fun v -> lift (Return v, sem_type s))
 
-  let under_record_quantifiers s use_record =
-    match TypeUtils.split_quantified_type (sem_type s) with
-    | [], _ -> use_record s
-    | qs, body ->
-        bind s (fun record ->
-          let arguments = List.map Types.type_arg_of_quantifier qs in
-          let result = use_record (lift (TApp (record, arguments), body)) in
-          bind result (fun value ->
-            lift (TAbs (qs, value), Types.for_all (qs, sem_type result))))
-
   (* eval parameters *)
   let constant c = lift (Constant c, Types.Primitive (Constant.type_of c))
   let var (x, t) = lift (Variable x, t)
@@ -422,13 +412,10 @@ struct
                   lift (Extend (values, None), Types.make_record_type field_types))))
 
   let project (s, name) =
-    under_record_quantifiers s (fun record ->
-      let t = TypeUtils.project_type name (sem_type record) in
-      bind record (fun value -> lift (Project (name, value), t)))
+    bind s (fun record -> lift (Ir.project_record_field name (record, sem_type s)))
 
   let erase (s, names) =
-    let t = TypeUtils.erase_type names (sem_type s) in
-      bind s (fun v -> lift (Erase (names, v), t))
+    bind s (fun record -> lift (Ir.erase_record_fields names (record, sem_type s)))
 
   let coerce (s, t) =
     bind s (fun v -> lift (Coerce (v, t), t))
@@ -450,7 +437,7 @@ struct
     | [] -> record (fields, Some (erase (s, names)))
     | _ ->
         change_record fields s (fun fields s ->
-          let remaining = under_record_quantifiers s (fun record -> erase (record, names)) in
+          let remaining = erase (s, names) in
           record (fields, Some remaining))
 
   let inject (name, s, t) =
