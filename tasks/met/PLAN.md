@@ -272,7 +272,7 @@ Depends on milestone 3.
   typing when `n : Int`. In a handler with an effectful input of type
   `Int`, both clauses should reject an expected result of `[] Int`.
   Keep an explicit modality on the clause result, as in `n : [] Int`.
-- [ ] **4.12** Propagate expected result types through `switch` returns
+- [x] **4.12** (`367b904e`) Propagate expected result types through `switch` returns
   that forward the handler input in every branch. Test a return through
   a pattern alias and a shadowing binding that returns a different value.
 - [ ] **4.13** Report incompatible type requirements for a shared handler

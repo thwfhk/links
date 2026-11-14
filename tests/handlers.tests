@@ -524,6 +524,41 @@ effect State(a::Abs) { Get : () => a; Put : (a) => (); } handle({ var n = do Get
 stderr : @.*Expected Int, got Bool.*
 exit : 1
 
+An interface argument cannot be both Int and Bool
+effect State(a::Abs) { Get : () => a; Put : (a) => (); } handle({ do Put(42); do Put(true); do Get }) { case <Get => k> -> k(42) case <Put(n) => k> -> k(()) }
+stderr : @.*Type error: Incompatible types for a handled interface argument of State \(Bool and Int\).*
+exit : 1
+
+Reversing incompatible interface argument uses gives the same error
+effect State(a::Abs) { Get : () => a; Put : (a) => (); } handle({ do Put(true); do Put(42); do Get }) { case <Get => k> -> k(42) case <Put(n) => k> -> k(()) }
+stderr : @.*Type error: Incompatible types for a handled interface argument of State \(Bool and Int\).*
+exit : 1
+
+An interface argument cannot be both List Int and List Bool
+effect State(a::Abs) { Put : (a) => (); } handle({ do Put([42]); do Put([true]) }) { case <Put(n) => k> -> k(()) }
+stderr : @.*Type error: Incompatible types for a handled interface argument of State \(List Bool and List Int\).*
+exit : 1
+
+An interface argument with two possible types needs an annotation
+effect State(a::Abs) { Get : () => a; Put : (a) => (); } handle({ do Put(1); do Put(2 : [] Int); do Get }) { case <Get => k> -> k(42) case <Put(n) => k> -> k(()) }
+stderr : @.*Type error: A handled interface argument needs a type or parameter annotation.*
+exit : 1
+
+Reversing ambiguous interface argument uses still needs an annotation
+effect State(a::Abs) { Get : () => a; Put : (a) => (); } handle({ do Put(2 : [] Int); do Put(1); do Get }) { case <Get => k> -> k(42) case <Put(n) => k> -> k(()) }
+stderr : @.*Type error: A handled interface argument needs a type or parameter annotation.*
+exit : 1
+
+An interface argument can need a modality absent from its observed types
+effect E { E : () => (); } effect F { F : () => (); } effect State(a::Abs) { Put : (a) => (); } handle({ do Put((fun() { 42 } : [E] (() -> Int))); do Put((fun() { 42 } : [F] (() -> Int))); 42 }) { case <Put(f) => k> -> k(()) }
+stderr : @.*Type error: A handled interface argument needs a type or parameter annotation.*
+exit : 1
+
+A clause annotation can supply the missing interface argument modality
+effect E { E : () => (); } effect F { F : () => (); } effect State(a::Abs) { Put : (a) => (); } handle({ do Put((fun() { 42 } : [E] (() -> Int))); do Put((fun() { 42 } : [F] (() -> Int))); 42 }) { case <Put(f : [E, F] (() -> Int)) => k> -> k(()) }
+args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
+stdout : 42 : Int
+
 A deep handler passes linear state on to its return clause
 effect Clock { Tick : () => (); } handle({ do Tick; 42 })(f <- (linfun() { 1 } : [](() -@ Int))) { case <Tick => k> -> k((), f) case n -> n + f() }
 stdout : 43 : Int

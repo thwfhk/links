@@ -442,6 +442,14 @@ the enclosing scope. A pattern binder for the whole scrutinee can
 forward the input when the scrutinee itself forwards it and the pattern
 keeps its type.
 
+#### 4.13 Incompatible shared interface arguments
+
+When no observed candidate works and the fallback would request an
+annotation, compare the known closed monotypes with their modalities
+removed. A mismatch such as `Int` and `Bool` reports incompatible
+types. Keep asking for an annotation when one could supply a missing
+modality or choose between two usable candidates.
+
 ### Milestone 5 follow-up
 
 #### 5.5 Interface environments

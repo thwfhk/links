@@ -1091,7 +1091,28 @@ let infer_interface_arguments pos context entries hints =
         Context.solve context) in
       let distinct = List.fold_left (fun types candidate ->
         if List.exists (FrescoTypes.equal candidate) types then types else candidate :: types) [] in
-      let pick types = match distinct types with
+      let annotation_needed () =
+        error pos "A handled interface argument needs a type or parameter annotation" in
+      let no_matching_type types =
+        (* The observed modalities may still admit a type supplied by an
+           annotation. Incompatible closed monotype bodies rule that out. *)
+        let monotypes = List.filter_map (fun typ ->
+          let body = TypeUtils.erase_modalities typ in
+          if Unify.can_be_mono body && TypeVarSet.is_empty (free_type_vars body)
+          then Some (string_of_datatype typ, body) else None) types
+          |> List.sort (fun (left, _) (right, _) -> String.compare left right) in
+        let conflict = match monotypes with
+          | [] -> None
+          | (first, body) :: rest ->
+              List.find_map (fun (other, other_body) ->
+                if viable (fun () -> FrescoTypes.consistent body other_body)
+                then None else Some (first, other)) rest in
+        match conflict with
+        | None -> annotation_needed ()
+        | Some (left, right) ->
+            error pos (Printf.sprintf "Incompatible types for a handled interface argument of %s (%s and %s)"
+              (ModalEffects.Names.name interface) left right) in
+      let pick ?(on_conflict = fun _ -> annotation_needed ()) types = match distinct types with
         | [] -> fresh ~subkind:(snd kind) ()
         | [typ] -> complete typ
         | first :: rest ->
@@ -1099,7 +1120,7 @@ let infer_interface_arguments pos context entries hints =
             if viable (fun () -> List.iter (fun typ -> consistent pos candidate (complete typ)) rest) then begin
               List.iter (fun typ -> consistent pos candidate (complete typ)) rest;
               candidate
-            end else error pos "A handled interface argument needs a type or parameter annotation" in
+            end else on_conflict types in
       let candidates = List.map snd converted in
       let typ = match exact with
         | first :: rest ->
@@ -1113,7 +1134,7 @@ let infer_interface_arguments pos context entries hints =
               candidate
         | [] ->
             match List.filter accepts candidates with
-            | [] -> pick candidates
+            | [] -> pick ~on_conflict:no_matching_type candidates
             | matching -> pick matching in
       check_kind typ;
       typ in
