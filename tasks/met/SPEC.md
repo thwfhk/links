@@ -456,6 +456,18 @@ declaration when such a name is in scope. If no source name is in
 scope, the printer marks the declaration as out of scope. Diagnostics
 distinguish declarations that share a name.
 
+```links
+effect Reader { First : () => Int; }
+var readOld = (fun() { do First } : [Reader] (() -> Int));
+effect Reader { Second : () => Int; }
+readOld
+```
+
+The first `Reader` is still part of `readOld`'s type. At the final
+expression, `Reader` names the second declaration and there is no
+qualified name for the first. The result displays the first `Reader`
+with an out-of-scope marker.
+
 Imports follow the same rules as imports of `typename` declarations.
 Within one dependency pass, repeated imports share the same module.
 When a later input loads the module again, new references use the

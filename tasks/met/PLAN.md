@@ -116,6 +116,11 @@ Depends on milestone 1.
   interfaces with no visible name as out of scope and distinguish
   shadowed identities in diagnostics. Verify the resolved identities
   in print-and-reparse checks.
+- [ ] **2.8** Fix [printing of shadowed type aliases](IMPL.md#28-shadowed-type-aliases).
+  After an alias is shadowed, check an earlier value against the type
+  printed by each printer. Cover plain aliases and modal aliases that
+  refer to visible interfaces. Check that a modal alias with no usable
+  name exposes the out-of-scope marker when its interface is hidden.
 
 Completion check: the migrated list and variant syntax and the modal
 type representation have focused checks. Record, variant and presence

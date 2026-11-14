@@ -223,13 +223,26 @@ The frontend discards those source scopes at the end of the pass.
 When no visible name resolves to an interface, its display includes
 the original path, an out-of-scope mark and its declaration number.
 The number also distinguishes repeated loads from the same location.
+It is local to the interpreter process and appears only in diagnostic
+text.
 
 The roundtrip checks use a shorter module path that still names the
 old declaration after the original path is shadowed. Rechecking the
 expression against the printed type verifies the identity. The
-[interface environment work](#55-interface-environments) still covers
+[interface environment work](#55-interface-environments) covers
 source name scope across non-isolated file inputs and custom preludes,
 and interface signatures in local modules.
+
+#### 2.8 Shadowed type aliases
+
+Both printers display the stored alias name without checking what it
+denotes in the current scope. With `typename T = Int; var x = (1 : T);
+typename T = Bool;`, `x` still prints as `1 : T`, but `(x : T)` fails
+with `Expected Bool, got Int`. An alias can also hide a reference to
+an earlier interface declaration from the printer. Use a visible
+alias name only when it denotes the type being printed. If the alias
+has no such name, print its underlying type wherever that type can be
+written in the current scope.
 
 ### Milestone 3 follow-up
 
