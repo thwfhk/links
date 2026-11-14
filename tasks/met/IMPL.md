@@ -1,9 +1,7 @@
 # SmallLinks modal effect types implementation notes
 
-This file is an initial framework. The [specification](SPEC.md) contains
-the proposed language design and questions for review. The [plan](PLAN.md)
-contains milestones, status and check results. No compiler implementation
-has started.
+The [specification](SPEC.md) contains the approved language design.
+The [plan](PLAN.md) contains milestones, status and check results.
 
 As each milestone proceeds, record significant implementation decisions
 under its heading. Include the affected source, the reason for the
@@ -19,7 +17,11 @@ decisions here as implementation proceeds.
 
 ## 1. Reviewed design and baseline
 
-Pending design review and baseline inventory.
+The design review is complete. The baseline inventory is pending.
+
+Removed `unsafe_cast` from the native primitive table in `core/lib.ml`.
+Checked upcasts use IR coercions. `tests/native.tests` checks that the
+primitive is unavailable.
 
 ## 2. Syntax, types and scoped contexts
 

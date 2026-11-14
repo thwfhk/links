@@ -713,12 +713,6 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
     datatype ("(String) ~> [Char]"),
     PURE));
 
-  (* HACK *)
-  ("unsafe_cast",
-   (p1 (fun v -> v),
-    datatype "(a) ~> b",
-    PURE));
-
   (* non-deterministic random number generator *)
   "random",
   (pure_pfun (fun _ -> (Value.box_float (Random.float 1.0))),

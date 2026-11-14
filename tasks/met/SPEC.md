@@ -1,14 +1,13 @@
 # Modal effect types for SmallLinks
 
-This is a design draft for modal effect types in SmallLinks. It
+This is the design for modal effect types in SmallLinks. It
 replaces the effect system in the [SmallLinks language
 guide](../small/SPEC.md). The [plan](PLAN.md) records the work and
 checks. [Implementation notes](IMPL.md) will record implementation
-decisions after review.
+decisions as the work proceeds.
 
 The examples specify the modal compiler's behaviour. The decisions
-below record the review. Source syntax still awaiting review is marked
-under R7.
+below record the review.
 
 ## Scope
 
@@ -67,24 +66,11 @@ under R7.
    redefine it.
 8. **R7.3. Function arrows.** Allow `A -> B` as shorthand for
    `(A) -> B` in function types.
-
-### Open questions
-
-R7.2 remains open:
-
-1. **R7.2. Effect-interface declarations.** Is this declaration syntax
-   suitable?
-
-   ```links
-   effect Reader(a::Abs) {
-     Ask : () => a;
-   }
-   ```
-
-Two smaller questions are separate from R2 and R6: the range helper
-lookup described under [Value restriction](#value-restriction), and
-whether to retain the explicitly unsafe primitive `unsafe_cast`.
-No compiler changes start before the design review is complete.
+9. **R7.2. Effect-interface declarations.** Use `effect Reader(a::Abs)
+   { Ask : () => a; }` as shown under [Effect interfaces](#effect-interfaces).
+10. **Range helper.** Range syntax always uses the standard pure
+    `intRange` helper. See [Value restriction](#value-restriction).
+11. **Unsafe cast.** Remove the unused `unsafe_cast` primitive.
 
 ## Effect contexts and modalities
 
@@ -313,8 +299,7 @@ Keep non-effect upcasts with their existing checks.
 
 ### Effect interfaces
 
-Declare operations together in an effect interface. The following
-declaration spelling is proposed under R7.2:
+Declare operations together in an effect interface:
 
 ```links
 effect Reader(a::Abs) {
@@ -454,15 +439,10 @@ conditional, projection or block must preserve evaluation order and
 evaluate it once. This extends the thesis's value-only introduction
 rule to the pure expressions already recognised by SmallLinks.
 
-Range expressions pass the current check when their bounds pass.
-Their lowering currently looks up `intRange` by name, so a local
-replacement can perform effects. To keep ranges eligible, propose that
-range syntax use the standard pure helper. This change to helper lookup
-needs review separately from the top-level signature decision. If
-shadowable lookup is retained, ranges must be
-excluded from the shared check for generalisation and modal
-introduction. Add a regression that shadows
-`intRange` and checks the selected policy.
+Range expressions pass the check when their bounds pass. Range syntax
+always uses the standard pure `intRange` helper, even if a binding
+shadows that name. Explicit calls to `intRange` follow ordinary name
+lookup. Test both forms with a local binding for `intRange`.
 
 ### Binding rules
 
@@ -687,9 +667,7 @@ such functions. User-defined handlers cannot handle or add `wild`.
 
 The built-in `exit` ends evaluation and requires `wild`. Its argument
 must have an absolute type. Its result type can be instantiated at each
-call. Retaining `unsafe_cast` remains a separate question. If kept, it
-must stay explicitly unsafe and cannot implement ordinary modal
-conversions in the library.
+call.
 
 Recursion, range construction and installing an algebraic handler add
 no `wild` requirement themselves. For example, factorial can have a

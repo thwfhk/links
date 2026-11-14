@@ -56,6 +56,11 @@ redirect("/")
 stderr : @.*redirect.*
 exit : 1
 
+Unsafe cast primitive is unavailable
+unsafe_cast(42)
+stderr : @.*Unknown variable unsafe_cast\..*
+exit : 1
+
 XML literal is rejected
 <p>text</p>
 stderr : @.*Unknown variable p\..*

@@ -4,8 +4,7 @@ The language design and scope are in [SPEC.md](SPEC.md#scope).
 This plan records milestones, dependencies, progress and checks.
 [IMPL.md](IMPL.md) will record significant implementation decisions.
 
-Work stays on `small-met`. The current task ends with design review;
-compiler implementation starts only after the user approves the design.
+Work stays on `small-met`. The design review is complete.
 
 ## Tracking
 
@@ -57,9 +56,8 @@ decisions in the spec. Keep implementation decisions in IMPL.md.
 - [x] **1.1** (`3552e33f`) Read the repository guide, thesis and
   Fresco sources. Draft the syntax, typing and inference contract,
   examples, review choices, milestones and implementation framework.
-- [ ] **1.2** R1–R6, R7.1, R7.3 and R7.4 are resolved. Finish R7.2
-  and the two separate questions listed in SPEC.md. Revise the
-  affected examples and checks. Record approval before compiler edits.
+- [x] **1.2** Record the approved design decisions in SPEC.md and
+  update the affected checks.
 - [ ] **1.3** Build and record the starting compiler, native entry points,
   regression suites and IR unit tests. Inventory effect-bearing types
   in primitives, both preludes, standard library modules and examples.
@@ -121,8 +119,9 @@ new inference path is completed with its library dependencies.
 - [ ] **3.2** Add ambient contexts, binding contexts, locks and
   first-class modal types to the Fresco checker. Cover functions, calls,
   annotations, modal introduction and variable access. Reuse the
-  reviewed SmallLinks value-restriction check and resolve the range
-  helper lookup policy. Check absolute kinds independently of linearity.
+  reviewed SmallLinks value-restriction check. Use the standard pure
+  `intRange` helper for range syntax and test shadowing. Check absolute
+  kinds independently of linearity.
 - [ ] **3.3** Integrate the retained explicit polymorphism forms,
   freezing, type abstraction and type application. Implement the
   reviewed generalisation rules for value, data-row and data-presence
@@ -255,26 +254,38 @@ an explicit inventory.
 ## Status
 
 Milestone 1, item 1.1 is committed as `3552e33f` on `small-met`.
-The compiler remains at source revision
-`e117db9da0bca9f45e9a12d2c3df808ec3880a6e`.
+The user approved the remaining [design decisions](SPEC.md#design-decisions)
+in 1.2.
 
-The decisions R1–R6, R7.1, R7.3 and R7.4 are recorded in SPEC.md. The draft
-and milestones use declared effect interfaces, the confirmed signature
-and `wild` rules, `(| |)` variant types and built-in `List`.
-
-Next action: finish the [open questions](SPEC.md#open-questions), then
-complete 1.2 before recording the implementation baseline. User review
-is the dependency for compiler work.
+Next action: record the implementation baseline in 1.3. The starting
+compiler source revision is `e117db9da0bca9f45e9a12d2c3df808ec3880a6e`.
 
 The deferred-case inventory will be populated in 1.3 using the criteria
 in [SPEC.md](SPEC.md#migration-and-deferred-coverage).
 
-### Latest checks
+### Design approval and `unsafe_cast` removal
+
+Checks used `a557219f` with the approved design and removal changes.
+Logs are under `/private/tmp/smalllinks-unsafe-cast.QOdUZ6/`.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make` | Passed. | `build.log` |
+| `./links -e 'unsafe_cast(42)'` | Rejected with `Unknown variable unsafe_cast.` | `removed.log` |
+| `./test-harness tests/native.tests` | 71 passed, including the removal regression. | `native.log` |
+| `./test-harness tests/handlers.tests` | 107 passed. | `handlers.log` |
+| `./test-harness tests/effect_annotations.tests` | 18 passed. | `effect-annotations.log` |
+| `./test-harness tests/typecheck_examples.tests` | 35 passed. | `typecheck-examples.log` |
+| `./links examples/extensible-case.links` | Returned `("A", "B", "C")`. | `extensible-case.log` |
+| `make rule-check` | Passed. GNU find was unavailable for the tabs rule. The same file patterns passed with `rg`. | `rule-check.log`, `tabs.log` |
+| `git diff --check` | Passed. | `diff-check.log` |
+
+### Initial design checks
 
 The initial draft received separate read-only reviews against the thesis,
 Fresco sources and SmallLinks implementation. Corrections to locks,
 generalisation, kind restrictions, syntax and native effects are
-included. The open questions are listed in SPEC.md.
+included.
 
 Checks on 14 November 2026 used
 `e117db9da0bca9f45e9a12d2c3df808ec3880a6e` plus these documents.
