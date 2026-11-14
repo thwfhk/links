@@ -20,7 +20,7 @@ types with the modal checker before changing any registration.
 
 ## Native primitives and type aliases
 
-The table covers all 101 active entries in [core/lib.ml](../../core/lib.ml)
+The table covers all 103 active entries in [core/lib.ml](../../core/lib.ml)
 and includes signatures built by OCaml helpers. Classify the native
 permission from what the primitive does. Keep the existing IR
 `PURE`/`IMPURE` flag for `ApplyPure` independent of this permission.
@@ -31,13 +31,13 @@ permission from what the primitive does. Keep the existing IR
 | `Nil` | Translate: `List a`. |
 | `+`, `-`, `*`, `/`, `^`, `mod`, `+.`, `-.`, `*.`, `/.`, `^.`, `^^`, `==`, `<>`, `<`, `>`, `<=`, `>=`, `not`, `negate`, `negatef` | Translate: pure arithmetic, comparison and concatenation. Preserve the runtime failure of integer division and modulo by zero. |
 | `intToString`, `stringToInt`, `intToFloat`, `floatToInt`, `floatToString`, `stringToFloat` | Translate: pure conversions. Remove the fresh effect-row quantifier made by `conversion_op`; retain runtime failures for invalid input. |
-| `Cons`, `Concat`, `hd`, `tl`, `$$hd`, `$$tl`, `length`, `Sum`, `take`, `drop`, `max`, `min` | Translate: pure list operations. Use `List` and the new result variant syntax for `max` and `min`. Retain the failure of head and tail on empty lists and the internal names used in pattern lowering. |
+| `Cons`, `Concat`, `hd`, `tl`, `$$hd`, `$$tl`, `length`, `Sum`, `take`, `drop`, `max`, `min`, `intRange`, `$$intRange` | Translate: pure list operations. Use `List` and the new result variant syntax for `max` and `min`. Retain the failure of head and tail on empty lists and the internal names used in pattern and range lowering. |
 | `least`, `greatest`, `dateToInt`, `intToDate`, `dateYear`, `dateDay`, `dateMonth`, `dateHours`, `dateMinutes`, `dateSeconds`, `dateMilliseconds`, `showUTC` | Translate: pure operations on supplied dates, timestamps and UTC offsets. Preserve the errors at infinite dates where applicable. |
 | `ord`, `chr`, `floor`, `ceiling`, `cos`, `sin`, `tan`, `log`, `log10`, `exp`, `sqrt`, `tilde`, `ltilde`, `stilde`, `charAt`, `strsub`, `strlen`, `strescape`, `strunescape`, `strContains`, `implode`, `explode`, `verify` | Translate: pure functions of supplied arguments. Migrate the list types of `ltilde`, `implode` and `explode`. |
 | `print`, `debug`, `sysexit`, `serverTime`, `serverTimeMilliseconds`, `now`, `utcOffset`, `parseDate`, `show`, `random`, `gensym`, `getArgs`, `crypt` | Translate to `[wild]`. `parseDate` uses the local time zone when the input omits an offset; `show` uses it for dates, including dates in containers. `getArgs` reads process arguments. `crypt` supplies no seed to `Bcrypt.hash`, which reads `/dev/urandom`. `now`, `random` and `gensym` use bare arrows today. |
 | `connectSocket`, `writeToSocket`, `readFromSocket`, `closeSocket` | Translate to `[wild]`; migrate the `Nothing`/`Just` result types of `connectSocket` and `readFromSocket`. |
 | `exit` | Change expectation: `forall a::Abs,b. [wild] ((a) -> b)`. Retain its runtime continuation and independent result instantiation. Check an absolute argument and reject an ambient function argument. |
-| `error`, `sleep` | Translate the existing runtime failures. Check the permission at 4.4: `error` explicitly ends evaluation with a runtime error, and `sleep` currently always reports that it is unimplemented. Update callers after classifying these two. |
+| `error`, `sleep` | `error` is a pure, deterministic failure. `sleep` requires `[wild]` for timing and currently reports that it is unimplemented. |
 | `List`, `Socket`, `Repeat`, `Regex` | Translate: reserve the built-in `List` constructor and preserve `Socket` in [core/defaultAliases.ml](../../core/defaultAliases.ml). Migrate both variant strings in [core/linksregex.ml](../../core/linksregex.ml), including the recursive `Regex` type and its nested `Repeat` variant. |
 
 ## Preludes and standard library

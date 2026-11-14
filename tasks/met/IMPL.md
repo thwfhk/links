@@ -124,11 +124,40 @@ preserves binding contexts across successive sentences. Tests check
 linearity within a program or sentence. Integration must account for
 reuse of a linear binding across sentences. The typed transforms and
 native driver still use the row-based checker. See the
-[milestone 3 checks and handover](PLAN.md#handover-to-milestone-4).
+[milestone 3 checks and handover](PLAN.md#milestone-3-checks).
 
 ## 4. Operations, handlers and native effects
 
-Pending implementation.
+`Fresco` resolves each operation to its declaration and selects the
+newest instance of that interface. The instance fixes the shared
+arguments before member quantifiers are instantiated. A handler checks
+coverage by declaration identity and installs one instance per interface.
+The partial pass uses known type structure from calls, clause annotations
+and patterns. Full checking verifies the arguments in scope. The checker
+uses rigid member quantifiers in clauses and checks that those variables
+cannot escape through the result, shared arguments or source annotations.
+
+The handled computation has an extension lock. Return patterns carry
+that dependency into fields and elements. An omitted return uses a
+synthetic identity clause. Deep resumptions take the operation result
+followed by the state arguments. Shallow resumptions carry the extension
+and return the input computation's result. Each state initialiser uses
+the enclosing scope. State binders are in scope for both kinds of clause.
+
+The modal handler descriptor records the enclosing context, extension
+and instantiated member schemes by resolved label. The alternatives of
+one member use the same rigid quantifier identities. The legacy row
+slots remain for the running compiler. The lowering work in 5.2 needs
+the modal descriptor, the carried return type and the resolved labels.
+
+`Frontend.Modal.initial_context` supplies the modal primitive types and
+starts with `wild`. `Lib.modal_type_env` uses an explicit set of native
+permissions independent of `ApplyPure`. It reuses the value types from
+the legacy primitive table. The modal `exit` scheme requires an absolute
+payload and instantiates its result separately. `error` raises a
+deterministic runtime error and is pure. `sleep` retains its timing
+permission while its implementation is pending. See the
+[milestone 4 checks](PLAN.md#milestone-4-checks).
 
 ## 5. Compiler and library integration
 

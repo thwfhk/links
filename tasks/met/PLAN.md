@@ -141,20 +141,20 @@ rejected higher-rank, modal, data-row and linear cases.
 
 Depends on milestone 3.
 
-- [ ] **4.1** Implement lookup of an operation's owning interface and
+- [x] **4.1** (`0a9eaaa9`) Implement lookup of an operation's owning interface and
   its newest instance. Infer shared interface arguments and instantiate
   per-operation quantifiers separately at each call. Check absolute
   payloads and results. Reject incomplete interface handlers.
-- [ ] **4.2** Implement deep handlers, input locks, modal return bindings,
+- [x] **4.2** (`0a9eaaa9`) Implement deep handlers, input locks, modal return bindings,
   implicit returns, forwarding and multi-shot resumptions. Cover nested
   instances of one interface with different type arguments and
   enclosing-context operation and return clauses. Cover several
   complete interfaces in one handler, forwarding of other interfaces,
   explicit forwarding of members and handlers with only a return clause.
-- [ ] **4.3** Implement shallow and parameterised handler rules. Preserve
+- [x] **4.3** (`0a9eaaa9`) Implement shallow and parameterised handler rules. Preserve
   state evaluation order, resumption argument order and existing value
   usage checks. Cover dependent return values inside records and lists.
-- [ ] **4.4** Implement the reviewed native permission rules. Test
+- [x] **4.4** (`0a9eaaa9`) Implement the reviewed native permission rules. Test
   native calls under absolute annotations, recursion and ranges. Keep
   native primitive classification separate from `ApplyPure`.
 
@@ -253,32 +253,46 @@ an explicit inventory.
 
 ## Status
 
-Milestones 1–3 are complete on `small-met`. The
+Milestones 1–4 are complete on `small-met`. The
 [migration inventory](MIGRATION.md) names the affected sources and
 fixtures and links to the deferred `escape` cases.
 
-### Handover to milestone 4
+### Handover to milestones 5–6
 
-Start operation, handler and native-effect typing from `33b15eaa`.
-`Frontend.Modal.program` and `Frontend.Modal.interactive` resolve and
-check source with Fresco and return the binding contexts needed by
-successive sentences. The running compiler still uses the row-based
-checker. Keep the modal checker available for focused source tests
-while implementing milestone 4.
+Start the library and compiler integration from `0a9eaaa9`.
+`Frontend.Modal.initial_context` sets up modal primitives and the
+native top-level context. `Frontend.Modal.program` and
+`Frontend.Modal.interactive` check source and return the binding
+contexts for successive sentences.
 
-In `core/fresco.ml`, extend the `DoOperation` and `Handle` cases.
-The partial pass already reads declared operation result shapes.
-Use `Context.ambient` and the resolved operation's interface to choose
-the newest instance in full checking. Check a handled expression
-under `under state modality` and use `FrescoContext.carry` and
-`FrescoPatterns` for return bindings. Use the existing usage checks
-for clause and state binders. See [implementation notes](IMPL.md#3-modal-inference-and-polymorphism).
+The modal handler descriptor contains the effect context, extension
+and member schemes needed by the typed transforms and handler lowering.
+See [implementation notes](IMPL.md#4-operations-handlers-and-native-effects).
+The running compiler uses the row-based checker. In 5.2 and 5.3,
+integrate modal types through lowering and switch the entry points.
+Then run the modal examples through native dispatch, including failed
+operation patterns, forwarding, state evaluation and resumption order.
+The existing runtime fixtures still check those behaviours on the
+row-based path. See the [migration inventory](MIGRATION.md) for the
+library changes and the `escape` deferrals.
 
-The modal cases in SPEC.md that invoke operations or handlers,
-including the effectful parts of examples 1–9, 11–12 and 15, need
-milestone 4. Example 13 needs the native permission rules. Runtime
-checks through the modal entry points need milestone 5. The recorded
-`escape` deferrals are in the [migration inventory](MIGRATION.md).
+### Milestone 4 checks
+
+The checks used `0a9eaaa9`. Logs are under
+`/private/tmp/smalllinks-met-4/`. An independent review checked the
+handler rules against the thesis and Fresco, and checked the retained
+runtime fixtures. Source tests cover the fixes for rigid variables,
+state scope, and modal result and argument inference.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make` and `make all-ci` | Passed. | `build.log`, `ci-build.log` |
+| `opam exec -- ./run-tests unit-tests` | All 101 passed, including 17 modal effect test groups. | `unit.log` |
+| `./test-harness tests/handlers.tests` and `./test-harness tests/effect_annotations.tests` | 115 and 18 passed. | `handlers.log`, `effect_annotations.log` |
+| `./test-harness tests/<suite>.tests` for `modal_syntax`, `native`, `polymorphism` and `typecheck_examples` | 16, 73, 56 and 35 passed. | `<suite>.log` |
+| `make tests` | 937 passed in 41 suites, with two existing ignored cases. All four scripts passed. | `all-regressions.log` |
+| `make rule-check` and `git diff --check aeb228c2..HEAD` | Passed. GNU find was unavailable for the tabs rule. The same file patterns passed with `rg`. | `rule-check.log`, `tabs.log`, `diff-check.log` |
+| `opam exec -- dune install --profile=ci --prefix="$prefix" links` and `./tests/check-install.sh "$prefix/bin/linx"` | Passed on the row-based native entry points. | `install.log`, `install-check.log` |
 
 ### Milestone 3 checks
 
