@@ -80,7 +80,51 @@ helper. The [baseline and milestone checks](PLAN.md#status) and
 
 ## 3. Modal inference and polymorphism
 
-Pending implementation.
+`Fresco` checks resolved source in inference, checking and application
+modes. Its partial pass uses copies of flexible variables and leaves
+holes where a term supplies no type information. It reads annotations
+and frozen types directly. Full checking passes the expected argument
+types back to the terms and checks their bodies and uses of bindings.
+
+`FrescoTypes` controls instantiation and kind checks. It collects
+information about each quantified argument before substitution.
+`Unify.consistent` compares known quantifiers, modalities and data
+types, and restricts flexible type, row and presence variables to
+monotypes. Explicit type application checks the declared kind and
+preserves the surrounding modalities. Aliases preserve their
+quantifiers in the modal frontend. Prefix traversal rejects a
+recursive alias that repeats before reaching a type constructor.
+
+`FrescoContext` retains a binding's effect context and the locks
+between binding and use. It derives a residual for access across those
+locks. Modality conversion can postpone the choice between an
+absolute body and matching interface arguments. The solver settles
+choices forced by later type information and requests an annotation
+for remaining choices. It does not search combinations of unresolved
+conversions. Type-variable changes and pending conversions roll back
+on a failed check.
+
+Generalisation excludes the term environment, the ambient context,
+the locks and active rigid type variables. It preserves restrictions
+and the existing quantification of implicit signature variables.
+Unannotated recursive groups share monotypes while all bodies are
+checked. Generalisation follows checking the whole group, and leaves
+variables shared with frozen definitions monomorphic.
+
+`FrescoPatterns` passes modal dependencies to matched and projected
+fields and checks uses of linear values. Updating or extending a
+closed modal record carries its dependencies on the inherited fields.
+An open modal row must be usable in the current context before
+extension. List elements must satisfy the built-in constructor's
+unrestricted kind. Range syntax calls a fixed pure `intRange`
+primitive. Explicit `intRange` calls still use lexical lookup.
+
+`Frontend.Modal` exposes this checker for source-level tests and
+preserves binding contexts across successive sentences. Tests check
+linearity within a program or sentence. Integration must account for
+reuse of a linear binding across sentences. The typed transforms and
+native driver still use the row-based checker. See the
+[milestone 3 checks and handover](PLAN.md#handover-to-milestone-4).
 
 ## 4. Operations, handlers and native effects
 

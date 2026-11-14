@@ -111,24 +111,24 @@ types parse back to equivalent types.
 Depends on milestone 2. Keep the running compiler buildable while the
 new inference path is completed with its library dependencies.
 
-- [ ] **3.1** Introduce Fresco's bidirectional inference and checking,
+- [x] **3.1** (`33b15eaa`) Introduce Fresco's bidirectional inference and checking,
   partial type information, consistency and instantiation. Reuse Links'
   unification for monotypes, data rows and presences where suitable.
   Make Fresco's control of polymorphic instantiation separate from
   monotype solving.
-- [ ] **3.2** Add ambient contexts, binding contexts, locks and
+- [x] **3.2** (`33b15eaa`) Add ambient contexts, binding contexts, locks and
   first-class modal types to the Fresco checker. Cover functions, calls,
   annotations, modal introduction and variable access. Reuse the
   reviewed SmallLinks value-restriction check. Use the standard pure
   `intRange` helper for range syntax and test shadowing. Check absolute
   kinds independently of linearity.
-- [ ] **3.3** Integrate the retained explicit polymorphism forms,
+- [x] **3.3** (`33b15eaa`) Integrate the retained explicit polymorphism forms,
   freezing, type abstraction and type application. Implement the
   reviewed generalisation rules for value, data-row and data-presence
   variables. Add rejection checks for missing modal information,
   ambiguous interface-argument/kind constraints and generalisation of
   shared interface arguments.
-- [ ] **3.4** Cover recursive and mutually recursive functions, local and
+- [x] **3.4** (`33b15eaa`) Cover recursive and mutually recursive functions, local and
   global bindings, modules and imports. Update pattern typing and the
   rules for lists, tuples, records, variants and recursive types so that
   modal dependencies survive storage, projection and matching.
@@ -253,20 +253,51 @@ an explicit inventory.
 
 ## Status
 
-Milestones 1 and 2 are complete on `small-met`. The
+Milestones 1–3 are complete on `small-met`. The
 [migration inventory](MIGRATION.md) names the affected sources and
 fixtures and links to the deferred `escape` cases.
 
-### Handover to milestone 3
+### Handover to milestone 4
 
-Start Fresco inference from `9de77c76`. Use `ModalEffects`,
-`Types.AmbientFunction`, `Types.Modal`, and the interface registry in
-`Context.effect_interfaces`. Expose leading modalities through aliases
-when comparing types and crossing locks. The active compiler still uses
-the row-based checker. Keep it buildable while Fresco is developed.
-The range-helper lookup and explicit type argument checks are part of
-milestone 3. Review the [implementation decisions](IMPL.md#decisions-for-review)
-before extending their scope. Milestone 3 has no outstanding prerequisites.
+Start operation, handler and native-effect typing from `33b15eaa`.
+`Frontend.Modal.program` and `Frontend.Modal.interactive` resolve and
+check source with Fresco and return the binding contexts needed by
+successive sentences. The running compiler still uses the row-based
+checker. Keep the modal checker available for focused source tests
+while implementing milestone 4.
+
+In `core/fresco.ml`, extend the `DoOperation` and `Handle` cases.
+The partial pass already reads declared operation result shapes.
+Use `Context.ambient` and the resolved operation's interface to choose
+the newest instance in full checking. Check a handled expression
+under `under state modality` and use `FrescoContext.carry` and
+`FrescoPatterns` for return bindings. Use the existing usage checks
+for clause and state binders. See [implementation notes](IMPL.md#3-modal-inference-and-polymorphism).
+
+The modal cases in SPEC.md that invoke operations or handlers,
+including the effectful parts of examples 1–9, 11–12 and 15, need
+milestone 4. Example 13 needs the native permission rules. Runtime
+checks through the modal entry points need milestone 5. The recorded
+`escape` deferrals are in the [migration inventory](MIGRATION.md).
+
+### Milestone 3 checks
+
+The combined checks used `33b15eaa`. Logs are under
+`/private/tmp/smalllinks-met-3/`. Independent reviews covered the
+type solver, lock and modal checking, polymorphic application and
+generalisation, pattern typing and the range helper. The regression
+tests include the fixes found in review.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make` and `make all-ci` | Passed. | `build.log`, `ci-build.log` |
+| `opam exec -- ./run-tests unit-tests` | All 84 passed. Source checks cover accepted and rejected higher-rank, modal, data-row, presence and linear cases. | `unit.log` |
+| `./test-harness tests/handlers.tests` and `./test-harness tests/effect_annotations.tests` | 115 and 18 passed. The other affected suites passed separately, including the two new range tests in `native`. | `handlers.log`, `effect_annotations.log`, `<suite>.log` |
+| `make tests` | 937 passed in 41 suites, with two existing ignored cases. All four scripts passed. | `all-regressions.log` |
+| `./links -e '40 + 2'` and `./links --path=examples/handlers examples/handlers/tests.links` | Returned `42 : Int` and `() : ()`. | `expression.log`, `import.log` |
+| `./tests/repl_handlers.testscript` and `./links --set=typecheck_only=true examples/extensible-case.links` | Passed. | `repl.log`, `typecheck.log` |
+| `make rule-check` and `git diff --check ea12bfed..33b15eaa` | Passed. GNU find was unavailable for the tabs rule. The same file patterns passed with `rg`. | `rule-check.log`, `tabs.log`, `diff-check.log` |
+| `opam exec -- dune install --profile=ci --prefix="$prefix" links` and `./tests/check-install.sh "$prefix/bin/linx"` | Passed. | `install.log`, `install-check.log` |
 
 ### Milestone 2 checks
 
