@@ -1320,7 +1320,9 @@ and infer_handler state pos mode { sh_expr; sh_effect_cases; sh_value_cases; sh_
             check_input (Check expected)
         end in
   let returns = List.map2 (fun (pattern, env) body ->
-    let body = infer ~allow_intro:false (bind_all clause_state env) mode body in
+    (* Check a value produced by a clause at its own expected type. The
+       forwarding return must retain the type of the handled computation. *)
+    let body = infer ~allow_intro:(not identity_return) (bind_all clause_state env) mode body in
     (pattern, term body), body, clause_usage pattern.pos env body) patterns bodies in
   let output = match mode, returns with
     | Check expected, _ -> expected
@@ -1344,7 +1346,7 @@ and infer_handler state pos mode { sh_expr; sh_effect_cases; sh_value_cases; sh_
       let args, envs = List.split (List.map2 (FrescoPatterns.check ~variants:`Open) domains args) in
       let k, kenv = FrescoPatterns.check resumption k in
       let env = List.fold_left Env.extend kenv envs in
-      let body = infer ~allow_intro:false (bind_all (with_rigids clause_state qs) env) mode body in
+      let body = infer (bind_all (with_rigids clause_state qs) env) mode body in
       same_handler_result pos output (typ body);
       let uses = clause_usage pos env body in
       (make ~pos (Pattern.Operation (label, args, k)), term body), uses in

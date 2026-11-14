@@ -275,6 +275,11 @@ var n = 42; ({ print("once"); n } : [] Int)
 stderr : @.*Modal introduction requires a value.*
 exit : 1
 
+A modality cannot be introduced by a handler's implicit return
+((handle({ print("once"); 42 }) {}) : [] Int)
+stderr : @.*Modal introduction requires a value.*
+exit : 1
+
 A value can acquire a written quantifier without changing its runtime type
 var n = 42; var p = (n : forall a. Int); (~p)[Bool]
 args : --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
