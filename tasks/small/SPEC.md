@@ -6,80 +6,61 @@ lists the boundaries of the subset.
 
 ## Running programs
 
-Run `make` from the repository root to build SmallLinks and create
-the `./links` launcher. Use `linx` when running the installed
-interpreter. See the [installation instructions](../../INSTALL.md)
-for dependencies and installation commands.
+Run these commands from the repository root. For an installed
+interpreter, use `linx` in place of `./links`. See the
+[installation instructions](../../INSTALL.md) for dependencies.
 
-```sh
-./links main.links
-./links -e '6 * 7'
-./links --set=typecheck_only=true main.links
-./links
-```
+1. `make` builds SmallLinks and creates the `./links` launcher.
+2. `./links examples/factorial.links` runs the factorial example.
+3. `./links -e '6 * 7'` evaluates the expression and prints `42 : Int`.
+4. `./links --set=typecheck_only=true examples/factorial.links` checks
+   the factorial example without evaluating it.
+5. `./links` starts the REPL. End each expression or function
+   definition with a semicolon. Enter `fun double(x) { x * 2 };`
+   and then `double(21);` to print `42 : Int`. Enter `@quit;` to exit.
 
-The first command runs a source file. The second evaluates an expression
-and prints `42 : Int`. The third checks a file without evaluating it.
-The fourth starts the REPL. End expressions and function definitions
-in the REPL with a semicolon. For example, enter
-`fun double(x) { x * 2 };` and then `double(21);`. Enter `@quit;` to
-exit.
-
-## Values and expressions
+## Basic features
 
 A source file contains declarations and may end with an expression. A
 `#` starts a comment that runs to the end of the line.
 
-| Type | Example values |
-| --- | --- |
-| `()` | `()`, the unit value |
-| `Bool` | `true`, `false` |
-| `Int` | `42`, `-3` |
-| `Float` | `3.5`, `-.0.5` |
-| `Char` | `'a'`, `'\n'` |
-| `String` | `"hello"`, `"line\n"` |
-| `DateTime` | `intToDate(0)`, `parseDate("2022-08-04 12:03:12")` |
-| `(Int, String)` | `(42, "hello")` |
-| `[Int]` | `[]`, `[1, 2, 3]` |
-| `(x:Int, ready:Bool)` | `(x=42, ready=true)` |
-| `[\|Nothing \| Just:Int\|]` | `Nothing`, `Just(42)` |
+### Terms by type
 
-Tuple components can have different types. Use `pair.1` to read the
-first component. All elements of a list have the same type.
+| Type | Example values | Common terms |
+| --- | --- | --- |
+| `()` | `()` | Use the unit value when there is no other result to return. |
+| `Bool` | `true`, `false` | Use `not(b)` for negation, `a && b` for and, and `a \|\| b` for or. The last two evaluate the right operand only when needed. In `if (b) yes else no`, `b` must be a `Bool`, both branches must have the same type, and only the chosen branch runs. |
+| `Int` | `42`, `-3` | Use `+`, `-`, `*` and `/` for integer arithmetic. |
+| `Float` | `3.5`, `-.0.5` | Use `+.`, `-.`, `*.` and `/.` for floating-point arithmetic. |
+| `Char` | `'a'`, `'\n'` | Use `ord(c)` to get a character's integer code. |
+| `String` | `"hello"`, `"line\n"` | Join strings with `s ^^ t`. |
+| `DateTime` | `intToDate(0)`, `parseDate("2022-08-04 12:03:12")` | Format a date with `show(d)`. |
+| Tuple `(Int, String)` | `(42, "hello")` | Read the first component with `pair.1`. Components can have different types. |
+| List `[Int]` | `[]`, `[1, 2, 3]` | Prepend with `x :: xs` and join with `xs ++ ys`. All elements have the same type. An integer range such as `[1..4]` includes both endpoints. A descending range such as `[4..1]` is empty. |
+| Record `(x:Int, ready:Bool)` | `(x=42, ready=true)` | Read field `x` with `r.x`. Add it with `(x=42 \| r)` when absent, or replace it with `(r with x=42)` when present. Both forms produce a new record. |
+| Variant `[\|Nothing \| Just:Int\|]` | `Nothing`, `Just(42)` | A constructor starts with a capital letter. It may carry a payload, as in `Just(42)`. Use `switch` to match the constructor. |
 
-Use `+`, `-`, `*` and `/` for integer arithmetic, and `+.`, `-.`,
-`*.` and `/.` for floating-point arithmetic. Use `==` and `<>` for
-equality and inequality, and `<`, `<=`, `>` and `>=` for ordering.
-Equality works on lists, records and variants when their contents can
-be compared. Comparing functions raises a runtime error.
-Use `not(x)` for Boolean negation. The operators `&&` and `||`
-evaluate their right operand only when needed. Use `^^` to join
-strings and `++` to join lists. Put a function name in backticks to
-call it as an infix operator, as in ``3 `elem` [1, 2, 3]``.
+### Bindings and blocks
 
-An expression `if (condition) yes else no` evaluates `yes` when the
-condition is true and `no` when it is false. The condition has type
-`Bool` and both branches have the same type.
+Use `var name = expression;` to evaluate
+an expression and bind its value. The binding lasts to the end of
+the surrounding block or file. A new binding with the same name
+shadows the earlier one. A block `{ ... }` evaluates its contents in
+order and returns its final expression. An expression followed by a
+semicolon in a block must have type `()`. End the block with `()`
+when it should return unit.
 
-### Bindings and patterns
+### Patterns and `switch`
 
-Use `var name = expression;` to evaluate an expression and bind its
-value. Bindings are in scope from their declaration to the end of the
-surrounding block or file. A new binding with the same name shadows
-the earlier one. A block evaluates its bindings and expressions in
-order, then returns its final expression. An expression followed by a
-semicolon in a block must have type `()`. Write `()` at the end when
-the block should return unit.
-
-Within a block, `var pattern = expression;` can take apart a value.
-Function parameters can also be patterns. Use `switch` to choose a
-branch by matching a value against patterns in order. Patterns include
-variables, the wildcard `_`, literals, tuples, records, lists and
-variants. In a list pattern `head :: tail`, `head` matches the first
-element and `tail` matches the rest. The pattern `Just(n) as value`
-binds the payload to `n` and the whole variant to `value`. A local
-binding or function parameter with a pattern that fails to match raises
-a runtime error.
+Use `var pattern = expression;` within a
+block to take apart a value. Function parameters can also be
+patterns. Evaluation raises a runtime error if a local binding or
+parameter pattern fails to match. A `switch` uses the first matching
+case. Patterns include variables, the wildcard `_`, literals, tuples,
+records, lists and variants. In a list pattern `head :: tail`,
+`head` matches the first element and `tail` matches the rest.
+`Just(n) as value` binds the payload to `n` and the whole variant
+to `value`.
 
 ```links
 var input = Just((20, [22, 99]));
@@ -89,18 +70,13 @@ switch (input) {
 }
 ```
 
-This returns `42`. A variant constructor starts with a capital letter.
-It can have a payload, as in `Just(42)`, or stand on its own, as in
-`Nothing`. The prelude defines the aliases `Maybe(a)` for `Nothing`
+This returns `42`. The prelude defines `Maybe(a)` for `Nothing`
 and `Just(a)`, and `Either(a,b)` for `Left(a)` and `Right(b)`.
 
-### Records and lists
+### Record patterns
 
-Use `r.x` to read field `x`. The expression `(x=42 | r)` adds a new
-field to a record that lacks `x`. The expression `(r with x=42)`
-replaces an existing field. Both produce a new record. A record pattern
-`(x=value | rest)` binds field `x` to `value` and the remaining fields
-to `rest`.
+The pattern `(x=value | rest)` binds field `x`
+to `value` and the remaining fields to `rest`.
 
 ```links
 var point = (x=20, y=22);
@@ -114,19 +90,17 @@ var moved = (named with x=21);
 
 This returns `(43, "start")`.
 
-The expression `x :: xs` adds `x` to the front of `xs`. An integer
-range such as `[1..4]` includes both endpoints. A range with a lower
-end value, such as `[4..1]`, is empty. The prelude supplies list
-functions such as `map`, `filter` and `fold_left`.
+### List comprehensions
 
-In `for (pattern <- xs) body`, the generator draws values from `xs`.
-The body returns a list for each set of values drawn, and the
-comprehension concatenates these lists. Use `where (condition)` to
-choose which results to keep and `orderby (key)` to sort them by a
-key of a base type such as `Int`, `String` or `DateTime`. Separate
-multiple generators or sort keys with commas. Each generator's source
-uses the scope outside the comprehension. The body, filter and sort
-keys can use the names bound by all generators.
+In `for (pattern <- xs) body`, the
+generator draws values from `xs`. The body returns a list for each
+set of values drawn, and the comprehension joins these lists. Use
+`where (condition)` to filter the results and `orderby (key)` to
+sort them by a key of a base type such as `Int`, `String` or
+`DateTime`. Separate multiple generators or sort keys with commas.
+Each generator's source uses the scope outside the comprehension.
+The body, filter and sort keys can use the names bound by all
+generators.
 
 ```links
 for ((name, score) <- [("Kim", 8), ("Ali", 6), ("Jo", 2)])
@@ -135,15 +109,17 @@ for ((name, score) <- [("Kim", 8), ("Ali", 6), ("Jo", 2)])
   [name]
 ```
 
-This returns `["Ali", "Kim"]`.
+This returns `["Ali", "Kim"]`. The prelude supplies list functions
+such as `map`, `filter` and `fold_left`.
 
 ### Functions and recursion
 
-Use `fun name(x, y) { body }` to define a function and `name(1, 2)` to
-call it. A call evaluates its arguments before running the function
-body. An anonymous function has the form `fun(x) { body }`. A function
-can use names from the scope where it was defined. Each group of
-parameters in a curried definition takes a separate call.
+Use `fun name(x, y) { body }` to define a
+function and `name(1, 2)` to call it. A call evaluates its arguments
+before running the function body. An anonymous function has the
+form `fun(x) { body }`. A function can use names from the scope
+where it was defined. Each group of parameters in a curried
+definition takes a separate call.
 
 ```links
 fun add(x)(y) { x + y }
@@ -154,8 +130,8 @@ map(addTwo, [10, 20])
 This returns `[12, 22]`. The function `addTwo` keeps the argument
 `x` from `add(2)`.
 
-A named function can call itself. Use `mutual` to let several functions
-call one another.
+A named function can call itself. Use `mutual` to let
+several functions call one another.
 
 ```links
 fun factorial(n) {
@@ -172,10 +148,19 @@ mutual {
 
 This returns `(120, true)`.
 
+### Comparisons and operators
+
+Use `==` and `<>` for equality and
+inequality, and `<`, `<=`, `>` and `>=` for ordering. Equality
+works on lists, records and variants when their contents can be
+compared. Comparing functions raises a runtime error. Put a function
+name in backticks to call it as an infix operator, as in
+``3 `elem` [1, 2, 3]``.
+
 Declare an operator's precedence and associativity with `infix`,
 `infixl` or `infixr`, or its position with `prefix` or `postfix`.
-Define the operator with `op`. For example, `!` can be an ordinary
-prefix operator.
+Define the operator with `op`. This example defines `!` as a
+prefix operator and returns `true`.
 
 ```links
 prefix 9 !;
@@ -184,18 +169,19 @@ op ! x { not(x) }
 !false
 ```
 
-### Modules
+### Modules and imports
 
-Use `module Name { declarations }` to group declarations in a file.
-Names can be qualified, as in `Name.f` for a function or `Name.T` for
-a type. Use `open Name;` to bring names from the module into scope
-without a qualifier.
+Use `module Name { declarations }` to
+group declarations in a file. Use a qualified name such as `Name.f`
+or `Name.T` to refer to a function or a type. Use `open Name;` to
+bring the module's names into scope without a qualifier.
 
-To use another file as a module, write `import Name;`. For example,
+Use `import Name;` to load another file as a module. For example,
 `import Arithmetic;` loads declarations from `arithmetic.links`.
 The file name starts with the lower-case form of the module name's
-first letter. Use `--path=dir` to add a directory to the module search
-path. The combined form `open import Name;` also opens the module.
+first letter. Use `--path=dir` to add a directory to the module
+search path. The combined form `open import Name;` also opens the
+module.
 
 Save these declarations as `arithmetic.links`.
 
@@ -206,7 +192,7 @@ sig double : (Number) -> Number
 fun double(n) { n * 2 }
 ```
 
-Save this program as `main.links` in the same directory and run
+Save this program as `main.links` in the same directory. Run
 `./links --path=dir dir/main.links` from the repository root, using
 the directory containing the two files for `dir`.
 
@@ -219,37 +205,40 @@ Arithmetic.double(value)
 
 The program returns `42`.
 
-## Types and inference
+### Type annotations and aliases
 
-SmallLinks infers types and effects. Use `sig name : T` before a
-function definition or a top-level `var` declaration to give it a
-signature. Use `e : T` to check the type of an expression or
-`x : T` to annotate a parameter. Declare an alias with `typename`.
-For example, `typename Pair(a) = (a, a);` names a pair type, and
-`Pair(Int)` uses the alias at `Int`.
+SmallLinks infers types and effects. Use these forms to write types
+explicitly.
 
-The type `(Int, Bool) -> String` takes two arguments. The type
-`((Int, Bool)) -> String` takes one tuple argument. Curried types have
-an arrow for each argument group, as in `(Int) -> (Int) -> Int`.
+| Form | Use |
+| --- | --- |
+| `sig name : T` | Give a function definition or a top-level `var` declaration a signature. |
+| `e : T` | Check an expression against a type. |
+| `x : T` | Annotate a parameter. |
+| `typename Pair(a) = (a, a);` | Name a pair type. Use `Pair(Int)` for a pair of integers. |
 
-A generalised binding can be used at different types. For example,
-`fun same(x) { x }` can be called as both `same(1)` and `same(true)`.
-The value restriction limits which expressions can be generalised. A
-function definition can be generalised. A `var` binding whose
-right-hand side is a function call gains no new type quantifiers.
-A function that calls itself at different types needs a polymorphic
-signature. Write `forall` to specify which variables a type quantifies
-over.
+In a function type, each arrow follows one group of arguments.
 
-Use `mu` to write a recursive type. In `mu n. [|Zero | Succ:n|]`,
-`n` refers to the whole variant type, so `Succ` contains another
-value of that type.
+- `(Int, Bool) -> String` takes two arguments.
+- `((Int, Bool)) -> String` takes one tuple argument.
+- `(Int) -> (Int) -> Int` takes its arguments in two separate calls.
+
+See [Effect annotation syntax](#effect-annotation-syntax) for function
+types in aliases and explicit `forall` types.
+
+## Advanced features
+
+### Recursive types
+
+- **Syntax.** Write `mu n. T` to define a recursive type. Within `T`,
+  `n` refers to the whole type.
+- **Example.** `Nat` is a variant with `Zero` and `Succ`. Each `Succ`
+  contains another `Nat`. `toInt(Succ(Succ(Zero)))` returns `2`.
 
 ```links
 typename Nat = mu n. [|Zero | Succ:n|];
 
-sig toInt : (Nat) ~> Int
-fun toInt(n) {
+fun toInt(n:Nat) {
   switch (n) {
     case Zero -> 0
     case Succ(previous) -> 1 + toInt(previous)
@@ -259,23 +248,29 @@ fun toInt(n) {
 toInt(Succ(Succ(Zero)))
 ```
 
-This returns `2`.
-
 ### Rows
 
-Rows describe record fields, variant alternatives and operations. A
-row with no tail is closed. A row can end in a variable after `|`,
-such as `r` in `(x:a | r)`. Write `x:T` or `x{:T}` for a field
-present at type `T`, and `x-` or `x{-}` for an absent field. In
-`x{p}`, the presence variable `p` specifies whether `x` is absent or
-present with a type. Quantification can range over types, rows and
-field presence. In explicit type arguments, `{x:Int}` is a row,
-`{:Int}` is a present field and `{-}` is an absent field.
+Rows describe record fields, variant alternatives and operations.
 
-Use `a::Type`, `r::Row` and `p::Presence` to declare the kind of a
-quantified variable. `e::Eff` declares an effect row. A restriction
-such as `a::Base` limits a type variable to primitive types. For a
-row tail, `r::Base` limits its fields to primitive types.
+| Form | Meaning |
+| --- | --- |
+| `(x:a)` | The record has a closed row with field `x`. |
+| `(x:a \| r)` | The record has an open row. The tail `r` can describe more fields. |
+| `x:T` or `x{:T}` | The field `x` is present at type `T`. |
+| `x-` or `x{-}` | The field `x` is absent. |
+| `x{p}` | The variable `p` specifies whether `x` is absent or present with a type. |
+
+Use `{x:Int}` to supply a row as a type argument, `{:Int}` to supply
+a present field and `{-}` to supply an absent field.
+
+In a quantifier, use `a::Type` for a type variable, `r::Row` for a row
+variable, `p::Presence` for a presence variable and `e::Eff` for an
+effect row variable. `a::Base` limits a type variable to primitive
+types. In a row tail such as `(x:Int | r::Base)`, `r::Base` limits the
+remaining fields to primitive types.
+
+**Record example.** The two calls to `getX` use different types for
+`x` and different extra fields. The result is `(1, "one")`.
 
 ```links
 sig getX : ((x:a | r)) -> a
@@ -284,9 +279,8 @@ fun getX(r) { r.x }
 (getX((x=1, y=true)), getX((x="one", z=0)))
 ```
 
-This returns `(1, "one")`. The two calls use different types for
-`x` and different extra fields. With variants, a row tail allows
-alternatives beyond the named ones.
+**Variant example.** In `[|One | r|]`, `One` has no payload and `r`
+allows other constructors such as `Many`. The result is `(true, false)`.
 
 ```links
 sig isOne : ([|One | r|]) -> Bool
@@ -295,14 +289,20 @@ fun isOne(v) { switch (v) { case One -> true case _ -> false } }
 (isOne(One), isOne(Many(3)))
 ```
 
-This returns `(true, false)`. In `[|One | r|]`, `One` has no payload
-and `r` allows other constructors such as `Many`.
+### FreezeML
 
-### FreezeML and linear functions
+An ordinary use of a polymorphic variable instantiates its type.
 
-An ordinary use of a polymorphic variable instantiates its type. A
-frozen use, such as `~ident`, keeps its quantified type. Here, `poly`
-needs an argument it can call at both `Int` and `Bool`.
+| Form | Use |
+| --- | --- |
+| `~ident` | Keep the quantified type of `ident`. |
+| `$(e)` | Generalise the type of a value. |
+| `e@` | Instantiate a polymorphic expression. |
+| `/\ [a]. { e }` | Introduce a type variable explicitly. |
+| `e[Int]` | Supply a type argument. |
+
+**Passing a polymorphic function.** `poly` needs an argument it can
+call at both `Int` and `Bool`. The result is `(42, true)`.
 
 ```links
 sig ident : forall a,e::Row. (a) -e-> a
@@ -312,19 +312,19 @@ fun poly(f : (forall a,e::Row. (a) -e-> a)) { (f(42), f(true)) }
 poly(~ident)
 ```
 
-This returns `(42, true)`. Use `$(e)` to generalise a value and
-`e@` to instantiate a polymorphic expression. Use `/\ [a]. { e }`
-to introduce a type variable explicitly and `e[Int]` to supply a type
-argument.
+**Supplying a type argument.** `keep` has a type parameter `a`. The
+call supplies `Int` and returns `42`.
 
 ```links
 var keep = /\ [a]. { fun(x:a) { x } : (a) {}~> a };
 (~keep)[Int](42)
 ```
 
-`linfun` creates a linear function. Its type uses the `-@` or `~@`
-arrow. A linear local or parameter must be used once on each branch of
-its scope. A linear closure can capture a linear value.
+### Linear types
+
+- Use `linfun` to create a linear function. Its type uses `-@` or `~@`.
+- Use a linear local or parameter once on each branch of its scope.
+- A linear closure can capture a linear value.
 
 ```links
 {
@@ -350,27 +350,29 @@ row variable.
 | `(A) -e-> B` | The effect row is `e`. This abbreviates `(A) {\|e}-> B`. |
 | `(A) ~> B` | The fresh effect row contains `wild`. |
 | `(A) ~e~> B` | The effect row extends `e` with `wild`. |
+| `(A) {}~> B` | The row is closed and contains only `wild`. |
 
-Each bare `->` introduces its own row. To share a tail between rows,
-use the same named variable in each row and write the presence fields
-each row needs. Supply all alias arguments, including row arguments.
-Aliases and explicit `forall` types require their row variables to be
-bound. In signatures with implicit quantification, `_` denotes a
-fresh rigid variable and `%` denotes a fresh flexible variable.
+- **Sharing rows.** Each bare `->` introduces its own row. To share
+  a tail, use the same named variable in each row and write the
+  presence fields each row needs.
+- **Row variables and alias arguments.** Supply all alias arguments,
+  including row arguments. Aliases and explicit `forall` types
+  require their row variables to be bound. In signatures with
+  implicit quantification, `_` denotes a fresh rigid variable and
+  `%` denotes a fresh flexible variable.
+- **Matching effects at a call.** The top-level effect row is
+  `{wild:()}`. A call matches the function's effect row against the
+  current row. A function with a closed empty row needs an empty
+  current row.
+- **The `wild` effect.** Recursive calls, list ranges, handlers and
+  functions such as `print` require `wild`. You can write `(A) ~> B`
+  as `(A) {wild:() | _}-> B` and `(A) {}~> B` as `(A) {wild:()}-> B`.
 
-`wild` is required by recursive calls, list ranges, handlers and
-functions such as `print`.
-The top-level effect row is `{wild:()}`. A call matches the
-function's effect row against the current effect row, so a call to
-a function with a closed empty row needs an empty current row.
-`(A) ~> B` can also be written `(A) {wild:() | _}-> B`. The `_`
-introduces a fresh row tail. `(A) {}~> B` has a closed row containing
-only `wild` and can be written `(A) {wild:()}-> B`.
-
-Use `effectname` to name an effect row. The following signature supplies
-an explicit empty row argument to `Reader`. The operation field
-`Ask:() => a` can also be written `Ask:a`. An operation with
-arguments lists their types before `=>`, as in `Put:(Int) => ()`.
+**Effect aliases.** Use `effectname` to name an effect row. Write an
+operation field as `Ask:() => a` or `Ask:a` for an operation with no
+arguments. For an operation with arguments, list their types before
+`=>`, as in `Put:(Int) => ()`. The example supplies an empty row
+argument to `Reader`, adds `wild` with `~>` and returns `42`.
 
 ```links
 effectname Reader(a,e::Eff) = {Ask:() => a | e};
@@ -380,9 +382,6 @@ fun ask() { do Ask }
 
 handle(ask()) { case <Ask => k> -> k(42) }
 ```
-
-This returns `42`. The `~>` arrow adds `wild` to the row named by
-`Reader(Int,{})`.
 
 ## Algebraic effects and handlers
 
