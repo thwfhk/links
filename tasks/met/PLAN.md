@@ -399,6 +399,18 @@ switching the active inference path.
   narrowed type through records, tuples, lists and variants. Check
   successful matches, fallthrough and linear payloads under strict IR
   checking.
+- [ ] **5.21** Restore [transitive import visibility](SPEC.md#module-imports).
+  Test qualified terms, type aliases, interfaces and operations,
+  repeated imports and shadowing across source scopes.
+- [ ] **5.22** Check [import initialisation order](SPEC.md#module-imports).
+  Dependencies run before their importers. Independent imports follow
+  written order and a shared dependency runs once.
+- [ ] **5.23** Make SAT `leftBiased` pure to construct. Test construction
+  in an empty effect context, invocation under a handler and rejection
+  of invocation without `Failure`.
+- [ ] **5.24** Apply [exit recovery to file inputs](SPEC.md#exit-from-a-file).
+  Check definition rollback, linear uses, later inputs, `@load` and
+  the existing handling of ordinary runtime errors.
 
 Keep the concrete [handler demos](SPEC.md#prelude-and-example-behaviour)
 while the old APIs that let callers choose additional effects are
@@ -441,6 +453,8 @@ Depends on milestone 5.
 - [x] **6.7** (`f9d190ef`) Review 5.20 independently and run the combined
   checks on the new revision. Keep the results from 6.5 and 6.6 as
   historical checks.
+- [ ] **6.8** Review items 5.21–5.24 independently and run the combined
+  checks on the new revision.
 
 Completion check: a clean CI build and temporary installation work,
 all in-scope regressions and unit tests pass, the guide matches the
@@ -527,6 +541,9 @@ and the [future work](SPEC.md#future-work) for inference and type holes.
 The [milestone 4 design review](#milestone-4-design-checks) confirmed the
 current rules for interface arguments, forwarding returns and leading
 relative prefixes on branch results.
+The milestone 5 design review approved items 5.21–5.24. Restore import
+visibility first, then check order, update `leftBiased` and implement
+file exit recovery before the combined checks in 6.8.
 Items 5.5 and 5.7–5.13 share the compiler and library commit
 `7f1f3f8c` because the startup, frontend and IR changes share code and
 checks. Commit `4b63194d` keeps source preprocessing off the bundled

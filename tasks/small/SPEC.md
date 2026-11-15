@@ -25,6 +25,13 @@ interruption are used up. Earlier native effects such as printing
 still take effect. `exit(v)` prints `v` by itself and returns to the
 prompt. It requires `wild` and an absolute, unrestricted argument.
 
+In a file, `exit(v)` prints `v` by itself, discards definitions from
+that input, and continues with the next file. Earlier definitions,
+uses of earlier linear bindings, and native effects that already ran
+are kept. With `--set=isolation=false`, later files can use definitions
+from earlier successful inputs. `@load` treats the file and its imports
+as one input.
+
 ## Basic features
 
 A source file contains declarations and may end with an expression. A
@@ -209,6 +216,14 @@ The file name starts with the lower-case form of the module name's
 first letter. Use `--path=dir` to add a directory to the module
 search path. The combined form `open import Name;` also opens the
 module.
+
+External modules loaded by imports are visible by name throughout the
+input, including modules loaded through another module's imports. For
+example, if `Arithmetic` imports `Constants`, you can use
+`Constants.pi` after importing `Arithmetic`. `open Constants` makes
+its members available without the qualifier in the current scope.
+Each external module is loaded once per input. Dependencies are
+initialised first, with independent imports following written order.
 
 Save these declarations as `arithmetic.links`.
 

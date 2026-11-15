@@ -214,6 +214,21 @@ its result a modal type.
 
 ## Surface syntax
 
+### Module imports
+
+An external module found through an `import` belongs to the outer
+scope of the input. This includes imports inside blocks and imports
+in other external modules. For example, if `B` imports `C`, a file
+that imports `B` can use `C.f`, `C.T` and `C.Reader`. Opening `B`
+makes its own members available without a qualifier. To use the
+members of `C` without a qualifier, open `C` in the current scope.
+Local module declarations can shadow an external module name.
+
+Compile an external module once per input and share its declarations
+across all imports of that module. Initialisers run before the input's
+own declarations. Each dependency runs before the module that imports
+it. Visit independent imports in written order.
+
 ### Types and annotations
 
 The type syntax includes these forms.
@@ -694,6 +709,16 @@ If the error occurred before the move, `f` is still available.
 
 The REPL continues after `exit(v)` and displays the value `v` by itself.
 
+### Exit from a file
+
+`exit(v)` interrupts the current file, including any imports that are
+still being evaluated. Discard the definitions introduced by that
+input. Keep earlier definitions and record any uses of their linear
+bindings that already ran. Native effects already performed, such as
+printing, still take effect. Print `v` by itself and continue with the
+next input. At the prompt, `@load` treats the entire file and its
+dependencies as one input before returning to the prompt.
+
 ### First-class polymorphism and modal types
 
 Use Fresco's separation of partial type information from full checking.
@@ -980,7 +1005,7 @@ requires `wild`.
 Its argument must have an absolute, unrestricted type. Its result type
 can be instantiated independently at each call and is unrestricted.
 The signature is `forall a::Abs,b. [wild] ((a) -> b)`.
-At the prompt, see [REPL recovery](#repl-recovery).
+See [REPL recovery](#repl-recovery) and [exit from a file](#exit-from-a-file).
 
 Recursion, range construction and installing an algebraic handler add
 no `wild` requirement themselves. For example, factorial can have a
@@ -1416,10 +1441,12 @@ that value in the state computation. `fmap` and `sequence` can return
 values, including functions, that they produce in the state computation
 without requiring those result types to be absolute.
 
-In the SAT example, `leftBiased` tries the right branch if the left
-branch fails. A final failure from `leftBiased` or `parse` signals
-`Fail` in the caller's context. `parseTextExpression` handles that
-operation and returns `Nothing` on failure.
+In the SAT example, `leftBiased` accepts a callback with context
+`[Choice, Failure]`. Creating the returned function is pure. Calling
+it requires `Failure`; it tries the right branch if the left branch
+fails. A final failure from that call or from `parse` signals `Fail`
+in the caller's context. `parseTextExpression` handles that operation
+and returns `Nothing` on failure.
 
 Keep the fixed effect contexts in the concurrency, transaction, AOP
 and shift/reset demos. For example, a task passed to concurrency's

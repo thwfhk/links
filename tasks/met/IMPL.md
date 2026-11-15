@@ -462,8 +462,10 @@ The compiler context carries the source name scope. Isolated inputs
 start with the prelude scope. Non-isolated inputs and successful REPL
 commands carry that scope forward. Each file checks its own duplicate
 operation names. `ModuleScope` is shared by the dependency loader and
-resolver. Imported declarations are compiled once per input, and an
-import exposes names in the scope that requested them.
+resolver. Imported declarations are compiled once per input. This
+step exposed imported names in the scope that requested them. The
+[reviewed import rules](SPEC.md#module-imports) restore outer-scope
+visibility for external modules.
 
 Datatype desugaring keeps interface signatures by declaration identity
 through blocks, recursive definitions and frontend rechecks. Leaving a
@@ -503,8 +505,9 @@ the bindings that were read and restores the preceding compiler scope.
 
 The evaluator reports early exit separately from an ordinary return.
 The REPL prints its value without the enclosing expression's type and
-discards the new definitions. The driver preserves the existing exit
-behaviour for files and `-e`. See the [native `exit` signature](SPEC.md#native-effects).
+discards the new definitions. This step covered REPL commands and
+`@load`. See the [native `exit` signature](SPEC.md#native-effects) and
+the [reviewed rule for file arguments](SPEC.md#exit-from-a-file).
 
 #### 5.10 State helpers
 
