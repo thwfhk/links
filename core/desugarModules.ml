@@ -90,18 +90,18 @@ end
 module Scope = ModuleScope
 
 let rec desugar_module : ?toplevel:bool -> ?imported:bool -> (int * string) list ->
-    Scope.scope StringMap.t -> Scope.t -> Sugartypes.binding -> binding list * Scope.t
-  = fun ?(toplevel=false) ?(imported=false) renamer imports scope binding ->
+    Scope.t -> Sugartypes.binding -> binding list * Scope.t
+  = fun ?(toplevel=false) ?(imported=false) renamer scope binding ->
   match binding.node with
   | Module { binder; members } ->
      let name = Binder.to_name binder in
-     let visitor = desugar ~toplevel (Epithet.remember ~escapes:(not toplevel) name renamer) imports (Scope.renew scope) in
+     let visitor = desugar ~toplevel (Epithet.remember ~escapes:(not toplevel) name renamer) (Scope.renew scope) in
      let bs'    = visitor#bindings members in
      let scope' = visitor#get_scope in
      let scope'' = Scope.Extend.module' ~imported name scope' scope in
      (bs', scope'')
   | _ -> assert false
-and desugar ?(toplevel=false) ?names renamer imports (scope' : Scope.t) =
+and desugar ?(toplevel=false) ?names renamer (scope' : Scope.t) =
   let open Sugartypes in
   let names = match names with
     | Some names -> names
@@ -124,7 +124,7 @@ and desugar ?(toplevel=false) ?names renamer imports (scope' : Scope.t) =
       pos
 
     method clone =
-      desugar ~toplevel:false ~names renamer imports (Scope.renew scope)
+      desugar ~toplevel:false ~names renamer (Scope.renew scope)
 
     method type_binder : Name.t -> Name.t
       = fun name ->
@@ -192,20 +192,8 @@ and desugar ?(toplevel=false) ?names renamer imports (scope' : Scope.t) =
         raise (Errors.module_error ~pos (Printf.sprintf "Unbound module %s" (Scope.Resolve.best_guess path)))
 
     method import_module pos path =
-      let scope =
-        match path with
-        | [name] ->
-            begin match Scope.Resolve.module' path scope with
-            | members when not (Scope.module_was_imported members) -> scope
-            | _ | exception Notfound.NotFound _ ->
-                begin match StringMap.find_opt name imports with
-                | Some members -> Scope.Extend.expose_module name members scope
-                | None -> scope
-                end
-            end
-        | _ -> scope in
       match Scope.Resolve.module' path scope with
-      | _ -> self#set_type_scope scope
+      | _ -> ()
       | exception Notfound.NotFound _ ->
           raise (Errors.module_error ~pos (Printf.sprintf "Unbound module %s" (Scope.Resolve.best_guess path)))
 
@@ -417,7 +405,7 @@ and desugar ?(toplevel=false) ?names renamer imports (scope' : Scope.t) =
          self#open_module pos names; self#bindings bs
       | ({ node = Module _; _ } as module') :: bs ->
       (* Affects [scope] and hoists [bs'] *)
-         let bs', scope' = desugar_module ~toplevel renamer imports scope module' in
+         let bs', scope' = desugar_module ~toplevel renamer scope module' in
          self#set_type_scope scope'; bs' @ self#bindings bs
       | b :: bs ->
          let b = self#binding b in
@@ -434,15 +422,14 @@ and desugar ?(toplevel=false) ?names renamer imports (scope' : Scope.t) =
 
 let desugar_program_in_scope scope (bindings, body) =
   let dependencies = Chaser.dependencies scope (bindings, body) in
-  let imports, dependencies =
-    List.fold_left (fun (imports, bindings) (name, dependency) ->
+  let scope, dependencies =
+    List.fold_left (fun (scope, bindings) (_, dependency) ->
       let dependency = DesugarSwitchFuns.desugar_switching#binding dependency in
-      let declarations, resolved =
-        desugar_module ~toplevel:true ~imported:true Epithet.empty imports scope dependency in
-      let members = Scope.Resolve.module' [name] resolved in
-      StringMap.add name members imports, declarations :: bindings
-    ) (StringMap.empty, []) dependencies in
-  let visitor = desugar ~toplevel:true Epithet.empty imports scope in
+      let declarations, scope =
+        desugar_module ~toplevel:true ~imported:true Epithet.empty scope dependency in
+      scope, declarations :: bindings
+    ) (scope, []) dependencies in
+  let visitor = desugar ~toplevel:true Epithet.empty scope in
   let bindings, body = visitor#program (bindings, body) in
   (List.concat (List.rev dependencies) @ bindings, body), visitor#get_scope, visitor#get_type_names
 
@@ -451,7 +438,7 @@ let desugar_program program =
   program
 
 let desugar_datatype ?(scope=Scope.empty) datatype =
-  (desugar Epithet.empty StringMap.empty scope)#datatype datatype
+  (desugar Epithet.empty scope)#datatype datatype
 
 module Untyped = struct
   open Transform.Untyped

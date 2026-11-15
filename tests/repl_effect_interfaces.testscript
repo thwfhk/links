@@ -133,6 +133,46 @@ fi
 
 echo "SUCCESS: Input isolation controls whether later inputs can use earlier declarations"
 
+cat > "$scratch/import-first.links" <<'FIRST'
+import Effect_identity;
+var previous = Effect_identity.readEffect;
+fun usePrevious() {
+  handle(previous()) { case <Effect_identity.Ask => k> -> k(41) }
+}
+FIRST
+cat > "$scratch/import-second.links" <<'SECOND'
+var fresh = handle(Effect_identity.readEffect()) {
+  case <Effect_identity.Ask => k> -> k(42)
+};
+import Effect_identity;
+(usePrevious(), fresh)
+SECOND
+cat > "$scratch/import-mismatch.links" <<'MISMATCH'
+var old = handle(previous()) {
+  case <Effect_identity.Ask => k> -> k(42)
+};
+import Effect_identity;
+old
+MISMATCH
+
+if ! output=$(./links --set=isolation=false --path=tests/modules \
+    "$scratch/import-first.links" "$scratch/import-second.links" 2>&1) ||
+    [[ "$output" != $'() : ()\n(41, 42) : (Int, Int)' ]]; then
+    echo "FAILURE: A repeated import changed an earlier binding's effect declaration"
+    printf '%s\n' "$output"
+    exit 1
+fi
+
+if output=$(./links --set=isolation=false --path=tests/modules \
+    "$scratch/import-first.links" "$scratch/import-mismatch.links" 2>&1) ||
+    [[ "$output" != *'The modalities require different effect contexts'* ]]; then
+    echo "FAILURE: A reference before a repeated import used the earlier declaration"
+    printf '%s\n' "$output"
+    exit 1
+fi
+
+echo "SUCCESS: Reloaded interfaces are visible throughout a later input"
+
 cat > "$scratch/failed.links" <<'FAILED'
 effect PendingReader { PendingAsk : () => Int; }
 module Recovered {

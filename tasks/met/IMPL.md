@@ -614,6 +614,16 @@ original test order and share the initial value when rebuilding a
 record. A whole-list alias keeps the original element type. Matches
 inside a list element can still narrow that element's own aliases.
 
+#### 5.21 Transitive import visibility
+
+The module resolver adds each external module to the input scope as
+it resolves that module's declarations. The next dependency and the
+input's own declarations use that scope. Only a module's declarations
+are recorded as its members. `open` and `open import` still affect
+unqualified lookup in the current scope. The loader supplies one copy
+of each dependency per input, so all references in that input share
+its interface and operation identities.
+
 ### Deferred optimisation issues
 
 Dead-definition elimination can remove unused calls to `crypt`, `chr`

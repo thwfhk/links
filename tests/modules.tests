@@ -217,6 +217,54 @@ args : --path=tests/modules
 stderr : @.*
 exit : 1
 
+An external value is qualified before its import
+var before = Import0.x; import Import0; before + 40
+args : --path=tests/modules
+stdout : 42 : Int
+
+An external type alias is qualified before its import
+var empty = Leaf : BinaryTree.BinaryTree(Int); import BinaryTree; empty
+stdout : Leaf : BinaryTree.BinaryTree (Int)
+
+A qualified value alone does not load a module
+Import0.x
+args : --path=tests/modules
+stderr : @.*Unknown variable Import0\.x.*
+exit : 1
+
+Open can use a module loaded by a later import
+open Import0; import Import0; x + 40
+args : --path=tests/modules
+stdout : 42 : Int
+
+Open import introduces unqualified names at its position
+var before = x; open import Import0; before
+args : --path=tests/modules
+stderr : @.*Unknown variable x.*
+exit : 1
+
+Local modules can shadow an external module loaded by the input
+var before = Import0.x; import Import0; module Inner { module Import0 { var x = 40; } import Import0; var value = Import0.x; } before + Inner.value
+args : --path=tests/modules
+stdout : 42 : Int
+
+Transitive interfaces and operations are qualified before the direct import
+var answer = handle(Late_dependency.read()) { case <Effect_identity.Ask => k> -> k(42) }; import Late_dependency; answer
+args : --path=tests/modules
+stdout : 42 : Int
+
+An external file can use an interface before its import
+./tests/modules/late_dependency.links
+filemode : true
+args : --path=tests/modules
+stdout : 42 : Int
+
+An external module does not export its imported module as a member
+import Late_dependency; do Late_dependency.Effect_identity.Ask
+args : --path=tests/modules
+stderr : @.*Unbound operation Late_dependency\.Effect_identity\.Ask.*
+exit : 1
+
 Shadowed interface declarations have distinct identities
 effect Reader { Old : () => Int; } sig first : [Reader] (() -> Int) fun first() { do Old } effect Reader { New : () => Int; } (first : [Reader] (() -> Int))
 stderr : @.*Type error: The modalities require different effect contexts.*
@@ -306,11 +354,10 @@ An explicit import inside a local module can use an external interface
 args : --path=tests/modules
 stdout : 42 : Int
 
-An import inside a local module does not expose its interface outside
+An external interface is qualified outside the local module that imports it
 var answer = { module Local { open import Effect_identity; fun read() { handle(do Ask) { case <Ask => k> -> k(42) } } } Local.read() }; answer : [Effect_identity.Reader] Int
 args : --path=tests/modules
-stderr : @.*Module Error: Unbound effect interface Effect_identity\.Reader.*
-exit : 1
+stdout : 42 : [Effect_identity.Reader] (Int)
 
 A recursive definition retains its local interface during frontend rechecking
 mutual { fun answer(n) { module Local { effect Reader { Ask : () => Int; } } if (n > 0) answer(n - 1) else { handle(do Local.Ask) { case <Local.Ask => k> -> k(42) } } } } answer(1)

@@ -1,0 +1,6 @@
+sig read : [Effect_identity.Reader] (() -> Int)
+fun read() { do Effect_identity.Ask }
+
+import Effect_identity;
+
+handle(read()) { case <Effect_identity.Ask => k> -> k(42) }

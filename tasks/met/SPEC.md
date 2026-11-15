@@ -217,9 +217,9 @@ its result a modal type.
 ### Module imports
 
 An external module found through an `import` belongs to the outer
-scope of the input. This includes imports inside blocks and imports
-in other external modules. For example, if `B` imports `C`, a file
-that imports `B` can use `C.f`, `C.T` and `C.Reader`. Opening `B`
+scope of the input. This includes imports in local module declarations
+and imports in other external modules. For example, if `B` imports
+`C`, a file that imports `B` can use `C.f`, `C.T` and `C.Reader`. Opening `B`
 makes its own members available without a qualifier. To use the
 members of `C` without a qualifier, open `C` in the current scope.
 Local module declarations can shadow an external module name.
@@ -501,8 +501,9 @@ with an out-of-scope marker.
 
 Imports follow the same rules as imports of `typename` declarations.
 Within one dependency pass, repeated imports share the same module.
-When a later input loads the module again, new references use the
-newly loaded declarations and earlier references keep their identities.
+When a later input loads the module again, references throughout that
+input use its newly loaded declarations. References resolved in earlier
+inputs keep their identities.
 Isolated inputs start with the interface names supplied by the prelude.
 Non-isolated inputs also see the names from previous inputs. At the
 prompt, names from a command remain in scope when it completes normally.
