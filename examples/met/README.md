@@ -36,6 +36,6 @@ Y. Boussaa's Fresco implementation.
 
 In the source checkout, see the [language guide](../../tasks/met/GUIDE.md)
 for the SmallLinks syntax, the
-[source inventory](../../tasks/met/PLAN.md#example-source-coverage)
+[source inventory](../../tasks/met/examples.md#example-source-coverage)
 for the expected results and deferred examples, and the
 [issue record](../../tasks/met/EXAMPLE_ISSUES.md) for reproductions.

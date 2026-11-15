@@ -2,8 +2,8 @@
 
 These findings use compiler source revision
 `7b764a87e6414b46de8feb00c2de0c8c704dbca2`.
-See [PLAN.md](PLAN.md#example-source-coverage) for the source inventory and
-examples that depend on deferred features.
+See [examples.md](examples.md#example-source-coverage) for the source
+inventory and examples that depend on deferred features.
 
 ## Partial switches constrain closed variant types
 
