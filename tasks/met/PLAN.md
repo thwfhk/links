@@ -118,10 +118,11 @@ Depends on milestone 1.
   Cover plain aliases and modal aliases that refer to visible interfaces.
   Check the out-of-scope marker when expansion exposes a hidden interface
   or reaches the recursive alias expansion limit.
-- [ ] **2.9** Fix [tuple positions in printed types](IMPL.md#29-tuple-positions-in-printed-types).
-  Check both printers on a ten-position tuple and a function with ten
-  arguments. Reparse each printed type and check it against the original.
-  Keep labels and their order in ordinary records.
+- [x] **2.9** (`e2a708ee`) Fix [tuple positions in printed types](IMPL.md#29-tuple-positions-in-printed-types).
+  Check both printers on tuples, functions and operation signatures
+  with at least ten positions. Reparse the printed tuple and function
+  types and check them against the original. Keep labels and their
+  order in ordinary records.
 
 Completion check: the migrated list and variant syntax and the modal
 type representation have focused checks. Record, variant and presence
@@ -516,14 +517,14 @@ Use the default execution path for follow-up checks. Checks specific to
 
 ## Status
 
-The recorded MET milestones and reviewed choices are complete on
-`small-met`. The tuple printing fix in item 2.9 is in progress.
-The latest tested compiler is `b9b6e057`. See the
+All MET milestones and reviewed choices are complete on `small-met`.
+The [tuple printer checks](#milestone-29-checks) passed on `e2a708ee`.
+The latest combined checks used `b9b6e057`. See the
 [milestone 3.15 checks](#milestone-315-checks).
 The [language guide and documentation checks](#documentation-checks)
 passed for 6.9.
-The example review can retest `fromPair` and the blocked Church example
-on `b9b6e057`.
+The example review can retest `fromPair`, the blocked Church example
+and the ten-position tuple on `e2a708ee`.
 
 [Deferred language work](SPEC.md#future-work) includes effect variables,
 term-level masks, lock access across quantifiers and `escape`. It also
@@ -531,6 +532,23 @@ includes [anonymous type holes](SPEC.md#anonymous-type-holes) and
 [modality-parameterised handlers](SPEC.md#modality-parameterised-handlers).
 See the [optimisation notes](IMPL.md#deferred-optimisation-issues)
 and the [migration inventory](MIGRATION.md) for deferred fixes and examples.
+
+### Milestone 2.9 checks
+
+The checks used `e2a708ee` and OCaml 5.4.0. Logs are in
+`/private/tmp/met-tuple-print.uvgrZp/`. At `ccf79394`, the compact
+printer put `String` in position 2 of the ten-position tuple type.
+Independent review checked which types use tuple syntax, including
+nested records and function and operation signatures.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make` | Passed. | `make.log` |
+| `./links -e` with both printer settings | The ten-position tuple and sparse numeric records printed and reparsed as expected. The operation error showed both argument lists in order. | `baseline.log`, `probes.log` |
+| `./test-harness` on `type_print`, `roundtrippable_types`, `records`, `functions`, `handlers`, `effect_annotations`, `variants` and `parser` | All 390 passed. | `<suite>.log` |
+| `./tests/roundtrippable_types.testscript` | All 34 passed. | `roundtrip.log` |
+| `opam exec -- ./run-tests unit-tests` | All 105 passed. | `unit-tests.log` |
+| `make rule-check`, `git diff --check`, the link check and the `rg` tab scan | Passed. The scan covered the tabs rule skipped without GNU find. | `rule-check.log`, `diff-check.log`, `documents.log`, `tabs.log` |
 
 ### Milestone 3.15 checks
 
