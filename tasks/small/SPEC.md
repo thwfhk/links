@@ -237,6 +237,9 @@ The program returns `42`.
 SmallLinks infers ordinary types. Write a signature when a global
 function needs effects supplied by its caller. Bind every type, row
 and presence variable introduced by a signature using `forall`.
+Source signatures and type aliases reject anonymous `%` holes.
+A recursive function that returns a polymorphic value needs a signature
+with `forall` in the result type.
 
 | Form | Use |
 | --- | --- |

@@ -95,11 +95,12 @@ on a failed check.
 
 Generalisation excludes the term environment, the ambient context,
 the locks and active rigid type variables. It preserves restrictions.
-The initial implementation kept implicit quantification in signatures.
-See [item 3.7](#37-explicit-binders) for explicit binders.
-Unannotated recursive groups share monotypes while all bodies are
-checked. Generalisation follows checking the whole group, and leaves
-variables shared with frozen definitions monomorphic.
+See [item 3.7](#37-explicit-binders) for source signature checking.
+`Fresco.prepare_recursive` gives unannotated recursive definitions
+monomorphic parameter and result types before checking any body. An
+explicit result quantifier comes from the signature. Generalisation
+follows checking the whole group and leaves variables shared with
+frozen definitions monomorphic.
 
 `FrescoPatterns` passes modal dependencies to matched and projected
 fields and checks uses of linear values. Updating or extending a
@@ -281,7 +282,8 @@ skips interface arguments discarded by cancellation.
 #### 3.7 Explicit binders
 
 `DesugarTypeVariables` checks source signatures and aliases for unbound
-type, row and presence variables and anonymous holes. A modality keeps
+type, row and presence variables. Both use the explicit binder check,
+which rejects anonymous `%` holes before inference. A modality keeps
 the surrounding type variable scope. Explicit universal binders are
 scoped to their type. The migrated library signatures name previously
 implicit row tails, and bodies that refer to those variables use
@@ -305,8 +307,9 @@ variable open. `FrescoTypes` uses known types of frozen arguments for
 consistency checks, then prefers the expected result type to convertible
 argument hints. If the body can be absolute, full checking uses
 later type information to settle any interface argument constraints.
-Competing modal types that would fix the same instantiation need an
-annotation when the expected type leaves the choice open.
+`FrescoTypes` also compares the modal hints for a quantified argument.
+It requests an annotation when neither a fixed type nor the expected
+type resolves competing hints. See [item 3.13](#313-argument-types-before-instantiation).
 Polymorphic `do` calls use the same frozen argument hints when choosing
 the operation's own type arguments.
 
@@ -332,10 +335,9 @@ record upcasts. Both compare function arguments by position after
 checking their count. They compare arguments from target to source
 and the result from source to target.
 
-Record projection and extension keep quantifiers around inherited
-field types, including binders unused by a field. Freezing the projection
-of `n` from `forall a. (n:Int, id:a -> a)` gives `forall a. Int`.
-Lowering instantiates the base with its own type variables before
+`FrescoPatterns.unprefix` supplies the wrapper used to carry the
+[leading binders](SPEC.md#modal-record-extension) onto inherited field
+types. Lowering instantiates the base with its own type variables before
 projecting each inherited field and binds those variables again on
 each field. It evaluates the base once before the new fields.
 List comprehensions check their body against the known list type.

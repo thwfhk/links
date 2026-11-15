@@ -518,13 +518,25 @@ The [combined checks in 6.6](#milestone-66-checks) passed on `5e971724`.
 Item 5.20 passed the enclosing alias, annotation and record rest probes
 under default and strict settings. The
 [combined checks in 6.7](#milestone-67-checks) passed on `f9d190ef`.
-The separate design proposals remain paused.
+The milestone 3 design review is complete. The current checker matches
+the reviewed rules. See the [design checks](#milestone-3-design-checks)
+and the [future work](SPEC.md#future-work) for inference and type holes.
 Items 5.5 and 5.7–5.13 share the compiler and library commit
 `7f1f3f8c` because the startup, frontend and IR changes share code and
 checks. Commit `4b63194d` keeps source preprocessing off the bundled
 comprehension helpers. The final guide and verification record cover
 the combined revision. Optimisation work remains in the
 [deferred list](IMPL.md#deferred-optimisation-issues).
+
+### Milestone 3 design checks
+
+| Revision and command | Result | Log |
+| --- | --- | --- |
+| SmallLinks `f1b8b80e`, `make` and `./links -e` with frontend rechecking and strict IR checks | Build and all 15 probes passed. Both modal argument orders asked for an annotation. The signed recursive calls and quantified record examples passed. `%` in aliases and signatures was rejected. | `/private/tmp/met-reviewed-design.zvoKtw/build.log`, `probes.log` |
+| SmallLinks `f1b8b80e`, `./test-harness` on `handlers`, `effect_annotations`, `polymorphism`, `records` and `desugar_datatypes` | 407 tests passed across the five suites. | `/private/tmp/met-reviewed-design.zvoKtw/`, `<suite>.log` |
+| `make rule-check`, `git diff --check`, document link check and `rg` tab scan | Passed. The tab scan covered the source files checked by the GNU find rule. | `/private/tmp/met-reviewed-design.zvoKtw/`, `rule-check.log`, `diff-check.log`, `documents.log`, `tabs.log` |
+| Links `4e5c78c5` and SmallLinks `4407a649`, `./links -e` in separate builds | Both accepted `%` in aliases. Direct uses shared one type variable. An eligible binding could generalise that variable. | `/private/tmp/met-alias-history.gdyiZZ/`, `*-probes.log`, `*-alias-binding-probes.log` |
+| Links `1912d9b7` and SmallLinks `4407a649`, `./links -e` in separate builds | Both solved and generalised signature holes. Links rejected an unresolved hole beside explicit `forall` with `Inconsistent quantifiers`. SmallLinks generalised it. | `/private/tmp/met-signature-history.mDhCUw/1912d9b7-refined-signature-probes.log`, `4407a649-signature-probes.log` |
 
 ### Milestone 4 final review checks
 

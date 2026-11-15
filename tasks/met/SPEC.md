@@ -66,7 +66,8 @@ See [Future work](#future-work) for deferred features.
     `intRange` helper. See [Value restriction](#value-restriction).
 11. **Unsafe cast.** Remove the unused `unsafe_cast` primitive.
 12. **Explicit quantification in signatures.** Write every universal
-    quantifier in a source signature. See [Types and
+    quantifier in a source `sig`. Source `sig` declarations and type
+    aliases reject anonymous `%` holes. See [Types and
     annotations](#types-and-annotations).
 13. **Upcasts and record updates.** Use the [checked upcast
     rules](#upcasts-and-record-updates) and reject repeated field names
@@ -316,12 +317,12 @@ variable must be bound in the signature or already in scope. Write
 `sig id : forall a. a -> a` for a polymorphic identity.
 The signature `sig id : a -> a` is rejected when `a` is unbound.
 For a polymorphic row tail, write a named binder such as
-`forall r::Row`. A type or row hole in a signature cannot introduce
-an implicit quantifier. The same rule applies whether the signature
-starts with a modality or a quantifier. Unannotated definitions still
-infer polymorphic types.
-Type aliases also reject anonymous holes. Declare a type parameter
-when an alias must stand for different types at different uses.
+`forall r::Row`. Source `sig` declarations and type aliases reject anonymous
+holes, including `%`. For example, `sig id : % -> Int` and
+`typename Unknown = %;` are rejected. Declare a type parameter when
+an alias must stand for different types at different uses. Unannotated
+definitions still infer polymorphic types. See
+[Anonymous type holes](#anonymous-type-holes) for future work.
 
 Remove effect-bearing arrows `{...}->`, `-e->`, `~>`, `~e~>`, and their
 linear forms after migration. `->` and `-@` are the unrestricted and
@@ -382,6 +383,14 @@ var record = ((run=fun() { do Ask }) : [Reader] (run:() -> Int));
 
 The result has type `(n:Int, run:[Reader] (() -> Int))`. Adding `n`
 leaves `run` available to call in the `Reader` context.
+
+For a record with known field presences and a closed row, extending or
+updating it carries its leading `forall` binders onto each inherited
+field. Projection also carries the leading binders onto the selected
+field. Keep their order, including binders unused by a field. For
+example, extending `forall a. (id:a -> a, n:Int)` with `k=2` gives
+`(id:forall a. a -> a, k:Int, n:forall a. Int)`. Freezing the projection
+of `n` from the original record gives `forall a. Int`.
 
 In `[Reader] (n{-} | r)`, `n` is absent and `r`
 stands for the other fields. If `r` contains `run:() -> Int`,
@@ -621,9 +630,14 @@ R2 keeps inference for simple top-level functions:
 4. Unannotated recursion is monomorphic within its recursive group,
    followed by eligible generalisation. Polymorphic recursion requires
    signatures. Local recursive functions keep their surrounding context;
-   global recursive functions follow the global rule. A recursive
-   function that returns a frozen polymorphic value such as `~ident`
-   also needs a signature that gives its result a `forall`.
+   global recursive functions follow the global rule.
+
+A recursive function whose result is itself polymorphic needs a signature
+with a `forall` in its result type. This includes returning a known
+polymorphic value such as `~ident` in a base case. Ordinary
+let-generalisation after checking the group can add quantifiers to the
+type of the recursive function. Those quantifiers are instantiated when
+the function is called.
 
 In the following example `f` only calls itself with `Int`. The
 signature puts `forall a` inside the result of the outer arrow.
@@ -725,6 +739,14 @@ from later constraints. Request a type or parameter annotation when
 that information still leaves a choice. The result must be independent
 of constraint order. The thesis describes the two alternatives. The
 annotation requirement is a SmallLinks rule.
+
+An application can also leave the type argument itself undetermined.
+For `fun same(x,y) { [x,y] }`, an ordinary call with arguments of types
+`<R> Int` and `<S> Int` can be checked against `List Int`,
+`List (<R> Int)` or `List (<S> Int)`. If the other constraints leave
+the choice open, require an annotation such as `List Int` on the result.
+See [More automatic modal inference](#more-automatic-modal-inference).
+
 Without an expected type, branches must agree without introducing
 a new polymorphic or modal common type.
 
@@ -742,7 +764,9 @@ and `<Reader(Bool)> Int` both yield `Int`.
 | Lambda supplied to a known handler function | Infer its ordinary type and check its body using the expected relative modality. |
 | Higher-rank or modal parameter whose structure is otherwise unknown | A parameter annotation or expected function type. |
 | Polymorphic recursion | A signature for each polymorphically recursive function. |
+| Recursive function returning a polymorphic value | A signature with `forall` in the result type. |
 | Polymorphic operation | A quantified signature in its interface declaration. Each `do` instantiates the operation's own quantifiers separately. |
+| Several modal types remain possible for a type argument | An annotation that fixes the type argument. |
 | Ambiguous interface argument or absolute-kind constraint | A signature fixing the unresolved choice. |
 | Effect-variable abstraction or generic higher-order effect interface requiring it | Postponed. |
 
@@ -1371,13 +1395,48 @@ effect variables.
    and modalities for lock access and subtyping. Defer that extension,
    including composing modalities across a still-bound quantifier
    and moving quantifiers during lock access.
-4. **Complete inference for parameterised modality conversions.**
-   The thesis leaves open how to choose between an absolute body
-   and equal interface arguments without losing completeness. SmallLinks
-   uses the annotation rule in [First-class polymorphism and modal
-   types](#first-class-polymorphism-and-modal-types).
-5. **`escape`.** Handler resumptions remain available. The migration
+4. **`escape`.** Handler resumptions remain available. The migration
    inventory lists the examples and tests that require `escape`.
+
+### More automatic modal inference
+
+The thesis leaves open how to choose between an absolute body and equal
+interface arguments without losing completeness. A separate question is
+when to infer a shared type argument from several convertible modal types.
+Study whether a type such as `Int` can be chosen for the `same` example
+without making the result depend on argument order or discarding a
+modality fixed by a frozen value or an annotation. The current
+[annotation rules](#first-class-polymorphism-and-modal-types) apply.
+
+### Anonymous type holes
+
+Source `sig` declarations and type aliases currently reject `%`. Future work can
+study whether a hole should stand for one inferred monotype or be
+eligible for generalisation. For aliases, define whether separate
+references to an alias share the solution to a hole. For signatures,
+define whether an explicit `forall` changes the treatment of a hole and
+how the value restriction applies.
+
+Earlier Links accepted `typename Hole = %;`. Ascribing `42` and `true`
+to `Hole` in the same program failed on the second ascription because
+both references shared one flexible type variable. Separate alias
+declarations had separate variables. With `typename Hole = %;` and
+`var empty = ([] : [Hole]);`, let-generalisation let `empty` be used
+at both `Int` and `Bool` element types. Generalisation also made the
+alias's original variable rigid. A later `(42 : Hole)` failed to set
+it to `Int`.
+
+In a signature such as `sig f : (%) -> %`, each `%` started as a fresh
+flexible type variable. An identity body unified the two variables and
+let-generalisation gave `f` a polymorphic type. A body `x + 1` fixed
+both variables to `Int`. If a `var` binding obtained the identity
+function by calling a function, the value restriction kept one type
+for the bound function across its uses. With an explicit `forall`,
+the tested Links checker accepted a hole solved
+in the body and rejected an unresolved hole with inconsistent
+quantifiers. The earlier SmallLinks checker generalised the unresolved
+hole alongside the written binders. See the
+[historical checks](PLAN.md#milestone-3-design-checks).
 
 ### Modal types and data rows
 
