@@ -121,9 +121,10 @@ one component of the corresponding SmallLinks program's output.
 | `tests/pass/unix.mle:123–152` | `unix.links` | The scheduler resumes two paused branches and returns `([2, 1], "")`. The finished list accumulates each result at the front. |
 | `tests/pass/unix.mle:154–167` | `unix.links` | Both statuses are `[0, 0]`. An interruption before each write makes the scheduler alternate the two outputs until Hamlet finishes. |
 | `tests/pass/unix.mle:169–184` | `unix.links` | The parameterised `State` interface and state-threading handler return `(40, 42)`. |
-| `tests/pass/faux-tt.mle:3–198` | [faux-tt.links](../../examples/met/fresco-programs/faux-tt.links) | Recursive syntax and terms, occurrence checking, a fresh ID supply, polymorphic errors, and a scoped store of metavariables. These support both elaboration demonstrations below. |
+| `tests/pass/faux-tt.mle:3–198` | [faux-tt.links](../../examples/met/fresco-programs/faux-tt.links) | Recursive syntax and terms, occurrence checking, a fresh ID supply, polymorphic errors, and a scoped store of metavariables. These support the elaboration demonstrations below. |
 | `tests/pass/faux-tt.mle:200–378` | `faux-tt.links` | Capture-avoiding substitution, normalisation and unification. In the hole demonstration unification solves the metavariable with `Type`. |
-| `tests/pass/faux-tt.mle:381–468` | `faux-tt.links` | The checked identity elaborates to `Lam(0, Type, Lam(2, Var(0), Var(2)))`. An ascription with a hole infers `(Type, Type)`, the elaborated term and its inferred type. [example-issues.md](example-issues.md) records a defect in the source application rule. |
+| `tests/pass/faux-tt.mle:381–468` | `faux-tt.links` | The checked identity elaborates to `Lam(0, Type, Lam(2, Var(0), Var(2)))`. An ascription with a hole infers `(Type, Type)`, the elaborated term and its inferred type. |
+| `tests/pass/faux-tt.mle:405–410` | `faux-tt.links` | The upstream `SApp` checks the argument against the codomain. The SmallLinks correction checks it against the domain, then substitutes it into the codomain. The regression applies the identity to `Type` and expects `(Lam(3, Type, Var(3)), Pi(2, Type, Type))` in both default and strict modes. See the [source application issue](example-issues.md#application-checks-the-wrong-type-in-the-example-elaborator). |
 
 ### Fresco typing cases
 

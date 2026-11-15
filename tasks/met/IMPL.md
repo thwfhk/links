@@ -193,7 +193,7 @@ handles recursive data types, and the optimiser keeps handler-local
 bindings and exported prelude definitions live where they are needed.
 
 The [SmallLinks guide](GUIDE.md) describes the modal language.
-See the [latest combined checks](PLAN.md#milestone-68-checks). The
+See the [combined example and compiler checks](PLAN.md#milestone-610-checks). The
 [migration inventory](MIGRATION.md) links to the deferred fixtures.
 
 ## Follow-up review

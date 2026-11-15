@@ -421,6 +421,11 @@ switching the active inference path.
   [exit recovery to file inputs](SPEC.md#exit-from-a-file).
   Check definition rollback, linear uses, later inputs, `@load` and
   the existing handling of ordinary runtime errors.
+- [ ] **5.25** Correct the application rule in the SmallLinks
+  [elaborator example](examples.md#larger-fresco-programs). Check the
+  argument against the domain before substituting it into the codomain.
+  Keep both demonstrations and check the identity application with
+  default settings and strict checking.
 
 Keep the concrete [handler demos](SPEC.md#prelude-and-example-behaviour)
 while the old APIs that let callers choose additional effects are
@@ -466,6 +471,10 @@ Depends on milestone 5.
 - [x] **6.9** Create the programmer-facing [language guide](GUIDE.md),
   update documentation links, and keep the latest check results in this
   plan. Check the guide's examples and local links.
+- [ ] **6.10** Review and verify the combined callback rechecking fix
+  in 3.15, tuple printer fix in 2.9 and elaborator correction in 5.25.
+  Run full regressions, IR unit tests, strict examples and the example
+  registration check.
 
 Completion check: a clean CI build and temporary installation work,
 all in-scope regressions and unit tests pass, the guide matches the
@@ -517,14 +526,8 @@ Use the default execution path for follow-up checks. Checks specific to
 
 ## Status
 
-All MET milestones and reviewed choices are complete on `small-met`.
-The [tuple printer checks](#milestone-29-checks) passed on `e2a708ee`.
-The latest combined checks used `b9b6e057`. See the
-[milestone 3.15 checks](#milestone-315-checks).
-The [language guide and documentation checks](#documentation-checks)
-passed for 6.9.
-The example review can retest `fromPair`, the blocked Church example
-and the ten-position tuple on `e2a708ee`.
+The elaborator correction and the [combined checks in 6.10](#milestone-610-checks)
+are in progress on `small-met`.
 
 [Deferred language work](SPEC.md#future-work) includes effect variables,
 term-level masks, lock access across quantifiers and `escape`. It also
@@ -533,68 +536,39 @@ includes [anonymous type holes](SPEC.md#anonymous-type-holes) and
 See the [optimisation notes](IMPL.md#deferred-optimisation-issues)
 and the [migration inventory](MIGRATION.md) for deferred fixes and examples.
 
+### Milestone 6.10 checks
+
+At `cd8276bf`, `make` and both original elaborator demonstrations
+passed. The reported identity application exited with status 1 in
+both default and strict modes. It printed `error: type mismatch` and
+reported `Runtime error: Elaboration failed`. See
+`/private/tmp/smalllinks-met-faux-tt/baseline-build.log` and
+`/private/tmp/smalllinks-met-faux-tt/baseline-probes.log`.
+
+## Earlier verification
+
 ### Milestone 2.9 checks
 
-The checks used `e2a708ee` and OCaml 5.4.0. Logs are in
-`/private/tmp/met-tuple-print.uvgrZp/`. At `ccf79394`, the compact
-printer put `String` in position 2 of the ten-position tuple type.
-Independent review checked which types use tuple syntax, including
-nested records and function and operation signatures.
-
-| Command or check | Result | Log |
-| --- | --- | --- |
-| `make` | Passed. | `make.log` |
-| `./links -e` with both printer settings | The ten-position tuple and sparse numeric records printed and reparsed as expected. The operation error showed both argument lists in order. | `baseline.log`, `probes.log` |
-| `./test-harness` on `type_print`, `roundtrippable_types`, `records`, `functions`, `handlers`, `effect_annotations`, `variants` and `parser` | All 390 passed. | `<suite>.log` |
-| `./tests/roundtrippable_types.testscript` | All 34 passed. | `roundtrip.log` |
-| `opam exec -- ./run-tests unit-tests` | All 105 passed. | `unit-tests.log` |
-| `make rule-check`, `git diff --check`, the link check and the `rg` tab scan | Passed. The scan covered the tabs rule skipped without GNU find. | `rule-check.log`, `diff-check.log`, `documents.log`, `tabs.log` |
+The tuple printers and sparse record labels were checked on
+`e2a708ee`. Logs are in `/private/tmp/met-tuple-print.uvgrZp/`.
 
 ### Milestone 3.15 checks
 
-The baseline `81a07af4` rejected both callbacks during frontend
-rechecking with `Type abstraction needs a type annotation`.
-The checks for `b9b6e057` used OCaml 5.4.0. Logs are in
-`/private/tmp/met-callback-pair.YNhYmY/`. Independent review checked
-callbacks with aliases, nested quantifiers, and row and presence
-variables. It also checked that using one result at `Int` and `Bool`
-still fails and that source type abstractions still require all local
-unknowns to be resolved. Review logs are in
+The callback fix was checked on `b9b6e057`. The baseline
+`81a07af4` failed frontend rechecking with
+`Type abstraction needs a type annotation`. Logs are in
+`/private/tmp/met-callback-pair.YNhYmY/` and
 `/private/tmp/met-callback-review.DNm6Lm/`.
-
-| Command or check | Result | Log |
-| --- | --- | --- |
-| `make` and `make all-ci` | Passed. | `candidate-build.log`, `ci-build.log` |
-| `./links` on `fromPair` and `church-pair-result.links` | Each example produced the same type in all four modes. | `baseline.log`, `final-modes.log` |
-| `./test-harness` on the affected suites | Passed, including frontend rechecking (6), polymorphism (70), FreezeML (67), typed IR (30) and example typechecking (94). | `<suite>.log` |
-| `make tests` | 1,330 passed across 43 suites. Two existing cases were ignored. All six scripts passed. | `all-tests.log` |
-| IR unit tests via `opam exec -- dune exec --profile=dev tests/unit/unit_tests.exe` with a separate build directory | All 105 passed. | `unit-tests.log` |
-| `make rule-check`, `git diff --check`, document links and the `rg` tab scan | Passed. The tab scan covered the rule skipped without GNU find. | `rule-check.log`, `diff-check.log`, `documents.log`, `tabs.log` |
 
 ### Milestone 6.8 checks
 
-The combined checks used `8efa59ce` with OCaml 5.4.0. Logs are
-in `/private/tmp/smalllinks-met-6-8/`. Independent review checked import
-scope and repeated declarations, pure SAT construction and caller
-failure handling, and file exit rollback and isolation.
-
-| Command or check | Result | Log |
-| --- | --- | --- |
-| `make all-ci`, including a fresh Dune build directory | Passed with `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk`. | `final-ci-build.log`, `final-clean-ci-build.log` |
-| `make tests` | 1,236 passed across 42 suites. Two existing cases were ignored. All six scripts passed. | `all-tests.log` |
-| `./test-harness tests/<suite>.tests` on affected suites | All passed, including modules (67), handlers (154), effect annotations (76), native permissions (13), example typechecking (34) and typed IR (30). | `default-<suite>.log` |
-| Frontend rechecking and strict IR checks with the default prelude | Passed for handlers (154), effect annotations (76), collections (70), modules (67), records (51) and patterns (54). Both REPL scripts, the import order and file exit scripts, and the handler example runner passed under strict checking. | `strict-<suite>.log`, `strict-repl.log`, `strict-repl_effect_interfaces.log`, `strict-import_order.log`, `strict-file_exit.log`, `strict-examples.log` |
-| `opam exec -- ./run-tests unit-tests` | All 105 passed. | `unit-tests.log` |
-| Guide and temporary installation | All 18 runnable guide blocks and four entry points passed. `dune install` from the fresh CI build and `./tests/check-install.sh` passed. Installed probes covered transitive imports, order, SAT construction and file exit. | `guide.log`, `install.log`, `install-check.log`, `installed-follow-up.log` |
-| `make rule-check`, `git diff --check`, tabs and document links | Passed. An `rg` scan covered the tabs rule because GNU find was unavailable. | `rule-check.log`, `diff-check.log`, `tabs.log`, `documents.log` |
+The import, SAT and file exit changes were checked on `8efa59ce`.
+Logs are in `/private/tmp/smalllinks-met-6-8/`.
 
 ### Documentation checks
 
-The guide and navigation update used compiler source revision
-`7b764a87` with documentation edits. No compiler or prelude files changed.
-
-| Command or check | Result | Log |
-| --- | --- | --- |
-| `python3 /private/tmp/smalllinks-met-guide.dOGSYd/check_guide.py` using `./links` | All 28 fenced blocks checked: 25 programs returned the documented values, two produced the expected type errors, and one supplied the import fixture. All 16 additional syntax, file and REPL checks passed. | `/private/tmp/smalllinks-met-guide.dOGSYd/summary.log` and per-example logs in that directory |
-| `python3 /private/tmp/smalllinks-met-guide-docs/check_docs.py` | Local links, headings, fences, tables and whitespace passed across the MET documents and documentation entry points. | `/private/tmp/smalllinks-met-guide-docs/documents.log` |
-| `make rule-check` and `git diff --check` | Passed. | `/private/tmp/smalllinks-met-guide-docs/rule-check.log`, `diff-check.log` |
+The guide and navigation update was checked on `7b764a87` with
+documentation edits. All 28 fenced blocks and 16 additional syntax,
+file and REPL checks passed. See
+`/private/tmp/smalllinks-met-guide.dOGSYd/summary.log` and
+`/private/tmp/smalllinks-met-guide-docs/documents.log`.
