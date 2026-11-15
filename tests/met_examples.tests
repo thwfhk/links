@@ -66,7 +66,7 @@ stdout : 1 : Int
 Run modal example fresco-programs/faux-tt.links
 examples/met/fresco-programs/faux-tt.links
 filemode : true
-stdout : (Lam(0, Type, Lam(2, Var(0), Var(2))), (Type, Type)) : (Term, (Term, Term))
+stdout : (Lam(0, Type, Lam(2, Var(0), Var(2))), (Type, Type), (Lam(3, Type, Var(3)), Pi(2, Type, Type))) : (Term, (Term, Term), (Term, Term))
 
 Run modal example fresco-programs/unix.links
 import Unix; { var (stopped, lucile, users, (forked, forkOutput), resumed, (interleaved, interleavedOutput), state) = Unix.results; (stopped, lucile, users, (forked, strescape(forkOutput)), resumed, (interleaved, strescape(interleavedOutput)), state) }

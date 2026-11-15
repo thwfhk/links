@@ -338,10 +338,10 @@ mutual {
       case SApp(m, n) ->
         var (head, type) = infer(m);
         switch (normalise(type)) {
-          case VPi(x, _, u) ->
-            # The source checks against the codomain here.
-            var argument = check(n, u);
-            (App(head, argument), substSingle(x, argument, u))
+          case VPi(x, domain, codomain) ->
+            # The upstream Fresco example checks against the codomain here.
+            var argument = check(n, domain);
+            (App(head, argument), substSingle(x, argument, codomain))
           case other -> do ExpectedFunction(other)
         }
       case SHole -> do CannotInferHole
@@ -404,4 +404,11 @@ var identity = checkTopLevel(SLam("A", Nothing, SLam("x", Nothing, SVar("x"))),
                              Pi(0, Type, Pi(1, Var(0), Var(0))));
 
 # Checking Type against a hole solves the hole as Type.
-(identity, inferTopLevel(SAs(SType, SHole)))
+var hole = inferTopLevel(SAs(SType, SHole));
+
+# Applying the identity to Type gives a function from Type to Type.
+var application = inferTopLevel(SApp(SLam("A", Just(SType),
+                                          SLam("x", Just(SVar("A")), SVar("x"))),
+                                     SType));
+
+(identity, hole, application)
