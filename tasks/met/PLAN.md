@@ -9,6 +9,17 @@ The [example status](examples.md) records source coverage and checks.
 Work stays on `small-met`. See [Status](#status) for the completion
 record and deferred work.
 
+## Chat ownership
+
+| Codex chat | Work | Chat ID |
+| --- | --- | --- |
+| Design modal effect types | Language design, specification, milestone planning and coordination across the MET chats. | `01a1d798-8605-7320-8010-0bbcb5bf437c` |
+| MET 1–2: Baseline and syntax | Baseline checks, surface syntax, scoped effect contexts and modalities, declarations and type printing. | `01a1d82f-b4e7-7db0-b206-2ecb7a08a9af` |
+| MET 3: Fresco inference | Bidirectional typing, monotype unification, modal checking and locks, instantiation, generalisation and data typing. | `01a1d82f-c3c3-74b2-a115-6b3e9dac451f` |
+| MET 4: Handlers and native effects | Operation lookup and typing, interface arguments, handler clauses and resumptions, and native effect permissions. | `01a1d82f-ce00-7932-945c-4682691e466e` |
+| MET 5–6: Integration and verification | Typed frontend and IR integration, migration of primitives, the prelude, the standard library, existing examples and tests, and combined build, test and installation checks. | `01a1d82f-dbeb-7a11-b1e8-2da85c3b7f2f` |
+| MET guide and examples | Programmer guide, thesis and Fresco example ports, example registration and checks, and the example inventory and defect reports. | `01a1dd80-8244-7300-bb43-c9d254e2b891` |
+
 ## Tracking
 
 Refine the lists as implementation proceeds. Each numbered item is one

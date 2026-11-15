@@ -1,14 +1,14 @@
 # Modal effect examples
 
 The [example README](../../examples/met/README.md) gives run commands.
-[EXAMPLE_ISSUES.md](EXAMPLE_ISSUES.md) records compiler issues and
-inference limits.
+[Example notes](example-issues.md) record defects, unsupported
+features and typing differences.
 
 ## Status
 
 The examples, registrations and documentation are complete. The
 standalone Church case in `blocked/` is a reproducer. See
-[EXAMPLE_ISSUES.md](EXAMPLE_ISSUES.md#frontend-rechecking-fails-for-a-callback-pair-with-an-unconstrained-result).
+[example-issues.md](example-issues.md#frontend-rechecking-fails-for-a-callback-pair-with-an-unconstrained-result).
 The [thesis inventory](#thesis-tutorial) records the deferred generic
 `Coop e` interface and the two adaptations for term masks. The
 [Fresco inventory](#fresco-effect-and-data-examples) records the two
@@ -123,7 +123,7 @@ one component of the corresponding SmallLinks program's output.
 | `tests/pass/unix.mle:169–184` | `unix.links` | The parameterised `State` interface and state-threading handler return `(40, 42)`. |
 | `tests/pass/faux-tt.mle:3–198` | [faux-tt.links](../../examples/met/fresco-programs/faux-tt.links) | Recursive syntax and terms, occurrence checking, a fresh ID supply, polymorphic errors, and a scoped store of metavariables. These support both elaboration demonstrations below. |
 | `tests/pass/faux-tt.mle:200–378` | `faux-tt.links` | Capture-avoiding substitution, normalisation and unification. In the hole demonstration unification solves the metavariable with `Type`. |
-| `tests/pass/faux-tt.mle:381–468` | `faux-tt.links` | The checked identity elaborates to `Lam(0, Type, Lam(2, Var(0), Var(2)))`. An ascription with a hole infers `(Type, Type)`, the elaborated term and its inferred type. [EXAMPLE_ISSUES.md](EXAMPLE_ISSUES.md) records a defect in the source application rule. |
+| `tests/pass/faux-tt.mle:381–468` | `faux-tt.links` | The checked identity elaborates to `Lam(0, Type, Lam(2, Var(0), Var(2)))`. An ascription with a hole infers `(Type, Type)`, the elaborated term and its inferred type. [example-issues.md](example-issues.md) records a defect in the source application rule. |
 
 ### Fresco typing cases
 
