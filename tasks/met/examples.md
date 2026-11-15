@@ -6,9 +6,12 @@ features and typing differences.
 
 ## Status
 
-The examples, registrations and documentation are complete. The
-standalone Church case in `blocked/` is a reproducer. See
-[example-issues.md](example-issues.md#frontend-rechecking-fails-for-a-callback-pair-with-an-unconstrained-result).
+All 60 registered examples passed their runtime or expected rejection
+checks in default and strict configurations. The standalone
+[Church callback](../../examples/met/fresco-types/church-pair-result.links)
+keeps its unconstrained accumulator type. The
+[Fresco evaluator issue](example-issues.md#the-fresco-evaluator-loads-eager-definitions-in-reverse-order)
+remains open in the reference interpreter.
 The [thesis inventory](#thesis-tutorial) records the deferred generic
 `Coop e` interface and the two adaptations for term masks. The
 [Fresco inventory](#fresco-effect-and-data-examples) records the two
@@ -124,7 +127,7 @@ one component of the corresponding SmallLinks program's output.
 | `tests/pass/faux-tt.mle:3–198` | [faux-tt.links](../../examples/met/fresco-programs/faux-tt.links) | Recursive syntax and terms, occurrence checking, a fresh ID supply, polymorphic errors, and a scoped store of metavariables. These support the elaboration demonstrations below. |
 | `tests/pass/faux-tt.mle:200–378` | `faux-tt.links` | Capture-avoiding substitution, normalisation and unification. In the hole demonstration unification solves the metavariable with `Type`. |
 | `tests/pass/faux-tt.mle:381–468` | `faux-tt.links` | The checked identity elaborates to `Lam(0, Type, Lam(2, Var(0), Var(2)))`. An ascription with a hole infers `(Type, Type)`, the elaborated term and its inferred type. |
-| `tests/pass/faux-tt.mle:405–410` | `faux-tt.links` | The upstream `SApp` checks the argument against the codomain. The SmallLinks correction checks it against the domain, then substitutes it into the codomain. The regression applies the identity to `Type` and expects `(Lam(3, Type, Var(3)), Pi(2, Type, Type))` in both default and strict modes. See the [source application issue](example-issues.md#application-checks-the-wrong-type-in-the-example-elaborator). |
+| `tests/pass/faux-tt.mle:405–410` | `faux-tt.links` | The upstream `SApp` checks the argument against the codomain. The SmallLinks correction checks it against the domain, then substitutes it into the codomain. The regression applies the identity to `Type` and expects `(Lam(3, Type, Var(3)), Pi(2, Type, Type))` in both default and strict modes. |
 
 ### Fresco typing cases
 
@@ -205,7 +208,7 @@ the table refers to the indicated component of the program's output.
 | `pass/f8.mle` native | `native-list-results.links` `fromIntCallback` | The callback returns `List Id`. Its consumer returns `(42, true)`. |
 | `pass/f8.mle` Church | `church-list-results.links` `fromIntCallback` | Returns a fold with an instantiated accumulator. Counting returns `2`. |
 | `pass/f9.mle` native | `native-list-results.links` `fromPairCallback` | The callback returns a pair with `List Id` in the second component. Its consumer returns `(42, true)`. |
-| `pass/f9.mle` Church | `church-list-results.links` `fromPairCallback` and `blocked/church-pair-result.links` | Folding the result at `Int` returns `2` in both modes. The standalone expression passes the default checker and fails frontend rechecking when the accumulator remains unconstrained. |
+| `pass/f9.mle` Church | `church-list-results.links` `fromPairCallback` and `church-pair-result.links` | Folding the result at `Int` returns `2`. The standalone expression retains an unconstrained accumulator and passes with frontend rechecking and strict IR checking enabled. |
 | `pass/f10.mle` native | `native-list-results.links` `fromIdCallback` | A callback takes `Id` and returns `List Id`. Its consumer returns `(42, true)`. |
 | `pass/f10.mle` Church | `church-list-results.links` `fromIdCallback` | A callback takes `Id` and returns a fold with an instantiated accumulator. Counting returns `2`. |
 | `pass/f11a.mle` native | `native-list-results.links` `checkedCall` | The expected type of the singleton retains `Id`. Returns `(42, true)`. |
@@ -242,19 +245,26 @@ universally quantified.
 
 ## Example verification
 
-Combined checks used SmallLinks compiler revision
-`7b764a87e6414b46de8feb00c2de0c8c704dbca2` with OCaml 5.4.0.
-The logs and temporary configs below are under
-`/private/tmp/smalllinks-met-examples/` unless a path is given.
+The retest used checkout revision
+`02b3e4abf605de8f8be70307b1483fef12b6b39b` with the example path and
+registration updates. The compiler and elaborator fixes are included
+through `cf07fd2d`. See the
+[combined compiler checks](PLAN.md#milestone-610-checks) for the full
+regression and IR unit suites. The logs and temporary configurations
+below are in `/private/tmp/smalllinks-met-example-retest.YrzBhK/`.
 
 | Command | Result | Log |
 | --- | --- | --- |
-| `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk make all-ci` | Built the compiler and example installation files. | `ci-build.log` |
-| `make tests` | 1,327 passed across 43 suites, with two existing ignores. All six scripts passed. The example typecheck suite passed all 94 entries, including 60 new ones. | `all-tests.log` |
-| `./test-harness tests/met_examples.tests /private/tmp/smalllinks-met-examples/strict.config` | All 31 runnable examples gave the expected output with frontend rechecking and strict IR checking. | `strict-runtime.log` |
-| `./test-harness /private/tmp/smalllinks-met-examples/strict-rejections.tests /private/tmp/smalllinks-met-examples/strict-rejections.config` | All 28 negative examples produced their expected type errors with the strict flags enabled. | `strict-rejections.log` |
-| `./links` on `blocked/church-pair-result.links`, with default, IR-only and frontend-rechecking settings | Default and IR-only runs succeeded. Frontend rechecking reproduced `Type abstraction needs a type annotation`. | `known-frontend.log` |
-| `opam exec -- dune install --profile=ci --prefix="$prefix" links`, `./tests/check-install.sh "$prefix/bin/linx"` and `python3 /private/tmp/smalllinks-met-examples/installed.py` | Installed files matched the checkout. All 60 installed examples produced the expected result or rejection from outside the checkout. | `install.log`, `install-check.log`, `installed-examples.log` |
-| `./links --config=/private/tmp/smalllinks-met-examples/strict.config examples/met/fresco-effects/find_mask_paper.links` | The new guide reference produced the list, first match and outer predicate yields shown in the inventory. | `guide-search.log` |
-| `make rule-check`, `git diff --check` and `python3 /private/tmp/smalllinks-met-examples/check-docs.py` | Passed. The Python check covered whitespace, including tabs after the GNU find check was skipped, plus links, source coverage and registrations. | `rule-check.log`, `diff-check.log`, `documents.log` |
-| Fresco `./test.sh bin/met.exe tests/` and `./test.sh bin/met.exe tests/fresco` | The reference implementation reported zero failures in 25 effect and data tests and 57 typing tests. | `/tmp/met-fresco-effects-reference.log`, `/tmp/met-fresco-artifact-tests.log` |
+| `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk make all-ci` | Built the compiler and updated the example installation files. | `final-build.log` |
+| `./links` on the Church callback and minimal `fromPair` | Both retained their inferred type with default settings, frontend rechecking, strict IR and both checks together. | `direct-probes.log` |
+| `./links --set=types_pretty_printer_engine=old` and `./links --set=types_pretty_printer_engine=roundtrip` on the ten-element tuple | Both printers put `Bool` second and `String` tenth. | `direct-probes.log` |
+| `./links` on `faux-tt.links` with default and strict flags | Both original demonstrations and the application of the identity to `Type` returned the results in the inventory. | `direct-probes.log` |
+| `./test-harness tests/met_examples.tests`, once by default and once with `strict.config` | All 32 runtime examples gave the expected output in each run. | `runtime-default.log`, `runtime-strict.log` |
+| `./test-harness tests/typecheck_examples.tests` and `./test-harness strict-typecheck.tests` with the temporary strict configuration | All 94 entries passed in each run, including 28 expected MET rejections. | `typecheck-default.log`, `typecheck-strict.log` |
+| `./test-harness tests/recheck_frontend_transformations.tests` and `./tests/roundtrippable_types.testscript` | Six frontend regressions and 34 type print-and-reparse checks passed. | `frontend-regressions.log`, `print-and-reparse.log` |
+| `./tests/validate_typecheck_testfile.testscript`, `make rule-check`, `git diff --check` and the document and manifest checks | Registrations, source checks and links passed. The document check also scanned for tabs because GNU find was unavailable. | `example-registration.log`, `rule-check.log`, `diff-check.log`, `documents.log` |
+| `opam exec -- dune install --profile=ci --prefix="$prefix" links` and `./tests/check-install.sh "$prefix/bin/linx"` | Installation checks passed. All 60 example files and the README matched the checkout. The installed Church example passed with both configurations from outside the repository. | `install.log`, `install-check.log`, `installed-examples.log` |
+
+The original Fresco runs passed all 25 effect and data tests and 57
+typing tests. See `/tmp/met-fresco-effects-reference.log` and
+`/tmp/met-fresco-artifact-tests.log`.

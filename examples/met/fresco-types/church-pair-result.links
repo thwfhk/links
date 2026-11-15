@@ -1,4 +1,4 @@
-# F9 in isolation. Frontend rechecking fails when the result accumulator type is unconstrained.
+# F9 infers a Church-list result with an unconstrained accumulator type.
 
 sig fromPair : forall a. (forall b. b -> (b, a)) -> a
 fun fromPair(f) { f(42).2 }

@@ -93,6 +93,11 @@ examples/met/fresco-types/church-lists.links
 filemode : true
 stdout : ((1, 42, true, 42), (3, 3), ([42, 41], 3), [(42, true)], true, [(42, true), (42, true)], [(42, true), (42, true)], [(true, 42), (true, 42)]) : ((Int, Int, Bool, Int), (Int, Int), (List Int, Int), List (Int, Bool), Bool, List (Int, Bool), List (Int, Bool), List (Bool, Int))
 
+Run modal example fresco-types/church-pair-result.links
+examples/met/fresco-types/church-pair-result.links
+filemode : true
+stdout : fun : (a) -> ((forall b.[] ((b) -> b)) -> (a) -> a) -> a
+
 Run modal example fresco-types/inference-differences.links
 examples/met/fresco-types/inference-differences.links
 filemode : true

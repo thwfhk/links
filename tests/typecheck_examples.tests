@@ -251,10 +251,6 @@ Typecheck example file examples/met/fresco-types/application.links
 examples/met/fresco-types/application.links
 filemode : true
 
-Typecheck example file examples/met/fresco-types/blocked/church-pair-result.links
-examples/met/fresco-types/blocked/church-pair-result.links
-filemode : true
-
 Typecheck example file examples/met/fresco-types/choice.links
 examples/met/fresco-types/choice.links
 filemode : true
@@ -265,6 +261,10 @@ filemode : true
 
 Typecheck example file examples/met/fresco-types/church-lists.links
 examples/met/fresco-types/church-lists.links
+filemode : true
+
+Typecheck example file examples/met/fresco-types/church-pair-result.links
+examples/met/fresco-types/church-pair-result.links
 filemode : true
 
 Typecheck example file examples/met/fresco-types/inference-differences.links

@@ -218,7 +218,7 @@ new inference path is completed with its library dependencies.
   and check that a call cannot introduce a fresh `forall`.
 - [x] **3.15** (`b9b6e057`) Preserve the scope of an unconstrained monotype when
   rechecking an inferred callback with a quantified parameter. Check
-  the `fromPair` and [Church fold](example-issues.md#frontend-rechecking-fails-for-a-callback-pair-with-an-unconstrained-result)
+  the `fromPair` and [Church fold](../../examples/met/fresco-types/church-pair-result.links)
   examples with default settings, frontend rechecking, strict IR checking,
   and both checks enabled. Keep rejecting source abstractions with an
   unconstrained type variable introduced inside the abstraction.
@@ -527,6 +527,8 @@ Use the default execution path for follow-up checks. Checks specific to
 ## Status
 
 The [combined checks in 6.10](#milestone-610-checks) passed on `cf07fd2d`.
+The [example retest](examples.md#example-verification) includes the
+standalone Church callback in the runtime suite.
 
 [Deferred language work](SPEC.md#future-work) includes effect variables,
 term-level masks, lock access across quantifiers and `escape`. It also

@@ -26,9 +26,6 @@ Files under `rejected/` are examples of type errors. Their first
 comments describe the expected rejection. To check them from the
 repository root, run `./test-harness tests/typecheck_examples.tests`.
 To check the runtime results, run `./test-harness tests/met_examples.tests`.
-The runtime suite omits the example under `blocked/`. It runs with
-default settings and reports `Type abstraction needs a type annotation`
-with `--set=recheck_frontend_transformations=true`.
 
 The examples come from the Maetel tutorial in Wenhao Tang's thesis
 (`chapters/overview.tex`) and the README and tests of Aghilas
