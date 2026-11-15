@@ -241,10 +241,11 @@ Depends on milestone 3.
   native calls under absolute annotations, recursion and ranges. Keep
   native primitive classification separate from `ApplyPure`.
 - [x] **4.5** (`13b074fd`) Fix inference of shared interface arguments. Use known
-  types from handled expressions and clauses before choosing an
-  instance. Check that reordering equally valid constraints produces
-  the same type or the same request for an annotation. Cover known
-  types in branches, local value bindings and local function bodies.
+  types from handled expressions and clauses to
+  [choose the interface arguments](SPEC.md#shared-interface-type-arguments).
+  Check that reordering equally valid constraints produces the same
+  type or the same request for an annotation. Cover known types in
+  branches, local value bindings and local function bodies.
 - [x] **4.6** (`13b074fd`) Use return and operation clauses when inferring the
   handler's result. Retain known modal types from aborting clauses
   and pass expected type information through return bindings. Test
@@ -273,8 +274,9 @@ Depends on milestone 3.
   `Int`, both clauses should reject an expected result of `[] Int`.
   Keep an explicit modality on the clause result, as in `n : [] Int`.
 - [x] **4.12** (`367b904e`) Propagate expected result types through `switch` returns
-  that forward the handler input in every branch. Test a return through
-  a pattern alias and a shadowing binding that returns a different value.
+  that [forward the handler input](SPEC.md#forwarding-returns) in every
+  branch. Test a return through a pattern alias and a shadowing binding
+  that returns a different value.
 - [x] **4.13** (`6c054ee5`) Report incompatible type requirements for a shared handler
   interface argument. Preserve the annotation diagnostic when the
   observed types leave a genuine choice or omit a possible modality.
@@ -522,6 +524,9 @@ under default and strict settings. The
 The milestone 3 design review is complete. The current checker matches
 the reviewed rules. See the [design checks](#milestone-3-design-checks)
 and the [future work](SPEC.md#future-work) for inference and type holes.
+The [milestone 4 design review](#milestone-4-design-checks) confirmed the
+current rules for interface arguments, forwarding returns and leading
+relative prefixes on branch results.
 Items 5.5 and 5.7–5.13 share the compiler and library commit
 `7f1f3f8c` because the startup, frontend and IR changes share code and
 checks. Commit `4b63194d` keeps source preprocessing off the bundled
@@ -538,6 +543,18 @@ the combined revision. Optimisation work remains in the
 | `make rule-check`, `git diff --check`, document link check and `rg` tab scan | Passed. The tab scan covered the source files checked by the GNU find rule. | `/private/tmp/met-reviewed-design.zvoKtw/`, `rule-check.log`, `diff-check.log`, `documents.log`, `tabs.log` |
 | Links `4e5c78c5` and SmallLinks `4407a649`, `./links -e` in separate builds | Both accepted `%` in aliases. Direct uses shared one type variable. An eligible binding could generalise that variable. | `/private/tmp/met-alias-history.gdyiZZ/`, `*-probes.log`, `*-alias-binding-probes.log` |
 | Links `1912d9b7` and SmallLinks `4407a649`, `./links -e` in separate builds | Both solved and generalised signature holes. Links rejected an unresolved hole beside explicit `forall` with `Inconsistent quantifiers`. SmallLinks generalised it. | `/private/tmp/met-signature-history.mDhCUw/1912d9b7-refined-signature-probes.log`, `4407a649-signature-probes.log` |
+
+### Milestone 4 design checks
+
+Independent review checked the three rules against the compiler and
+the existing regressions. The reviewed rules match the implementation
+at `174e6cf0`. Logs are in `/private/tmp/met4-reviewed-design.fMvtf6/`.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make` and `./links -e` with frontend rechecking and strict IR checks | Build and all 15 probes passed. They cover supplied and conflicting candidates, forwarding and helper calls, and leading and nested prefixes in branch result types. | `build.log`, `probes.log` |
+| `./test-harness tests/handlers.tests` and `./test-harness tests/effect_annotations.tests` | All 153 handler and 76 effect annotation cases passed. | `handlers.log`, `effect_annotations.log` |
+| `make rule-check`, `git diff --check`, local document links and `rg` tab scan | Passed. The tab scan covered the files checked by the GNU find rule. | `rule-check.log`, `diff-check.log`, `documents.log`, `tabs.log` |
 
 ### Milestone 4 final review checks
 

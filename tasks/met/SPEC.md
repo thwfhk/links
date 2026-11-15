@@ -705,7 +705,8 @@ interface arguments where necessary. Full checking selects the visible
 interface instance and checks its type arguments and availability.
 For a handler's result, partial inference uses known types from both
 return and operation clauses, whether the return clause is implicit
-or explicit. The [value restriction](#value-restriction) still applies.
+or explicit. See [forwarding returns](#forwarding-returns) for how the
+result type can also guide checking the input.
 
 Infer instantiation with polymorphic or modal types when that structure
 is supplied by an annotation, a known value type or an expected type.
@@ -755,10 +756,14 @@ See [More automatic modal inference](#more-automatic-modal-inference).
 Without an expected type, branches must agree without introducing
 a new polymorphic or modal common type.
 
-When inferring the result of an `if`, `switch` or handler, relative
-prefixes do not affect agreement once the common underlying type is
-known to be absolute. For example, branches of type `<Reader(Int)> Int`
-and `<Reader(Bool)> Int` both yield `Int`.
+When inferring the result of an `if`, `switch` or handler, treat a
+bare type as having the identity prefix. If the branch types have
+leading relative prefixes, first compare their bodies. When the common
+body is known to be absolute, use it as the result. Otherwise the full
+branch types must agree. For example, branches of type `<Reader(Int)> Int`
+and `<Reader(Bool)> Int` yield `Int`. A leading absolute prefix stays
+part of the type. Compare types inside record fields, list elements and
+bodies of `forall` by the usual type agreement rules.
 
 ### Annotation summary
 
@@ -772,7 +777,7 @@ and `<Reader(Bool)> Int` both yield `Int`.
 | Recursive function returning a polymorphic value | A signature with `forall` in the result type. |
 | Polymorphic operation | A quantified signature in its interface declaration. Each `do` instantiates the operation's own quantifiers separately. |
 | Several modal types remain possible for a type argument | An annotation that fixes the type argument. |
-| Ambiguous interface argument or absolute-kind constraint | A signature fixing the unresolved choice. |
+| Ambiguous interface argument or absolute-kind constraint | An annotation fixing the unresolved choice. |
 | Effect-variable abstraction or generic higher-order effect interface requiring it | Postponed. |
 
 ## Operations and handlers
@@ -817,23 +822,17 @@ arguments per interface, shared by all its clauses.
 5. All clauses return `B`. An omitted return clause means the same
    checked `case x -> x` as an explicit identity clause.
 
-A redundant type annotation on a forwarded value keeps the same
-typing. For an effectful input of type `Int`, both `case n -> n`
-and `case n -> (n : Int)` reject an expected `[] Int` result.
-Writing `case n -> (n : [] Int)` supplies the modality explicitly.
-
 Deep handler clauses may capture only unrestricted values from the
 enclosing scope. The state, operation argument and return patterns
 introduce local bindings in their respective clauses. A linear local
 binding must be used once on each branch of its clause.
 
 Get each clause's operation signature from the interface declaration.
-Infer the interface's type arguments from patterns, calls, resumption
-arguments and expected types. A clause annotation must agree with the
-declared operation scheme and may constrain the shared interface type
-arguments. It cannot specialise the operation's own rigid quantifiers
-or declare a new operation. Preserve both existing resumption
-binders `=> k` and `-> k` for deep and shallow clauses.
+A clause annotation must agree with the declared operation scheme and
+may constrain the [shared interface type arguments](#shared-interface-type-arguments).
+It cannot specialise the operation's own rigid quantifiers or declare
+a new operation. Preserve both existing resumption binders `=> k` and
+`-> k` for deep and shallow clauses.
 
 A flexible type variable used in annotations only within one operation
 clause may be solved to a type that mentions a rigid type variable from
@@ -873,10 +872,52 @@ the corresponding handler can restore its ambient type. Transforming
 a computation's result must evaluate that computation once in its
 current context before transforming the resulting value.
 
+#### Shared interface type arguments
+
+Use the type structure supplied by operation patterns and calls,
+resumption arguments, annotations and expected types. Infer unknown
+parts from the constraints on the shared argument. If the program
+supplies one usable type, keep its type structure. Require an
+annotation when the supplied types leave more than one choice. For
+example, a lone `do Put(2 : [] Int)` can give `State` the argument
+`[] Int`. With `do Put(1)` as well, both `Int` and `[] Int` may fit.
+An annotation can also supply a modality absent from the observed
+types. Report incompatible types when no candidate fits and known
+closed monotypes still disagree with modalities removed. For example,
+`do Put(42)` and `do Put(true)` require incompatible types for the
+same argument.
+
+#### Forwarding returns
+
+The expected handler result type `B` can guide checking the handled
+input when the return forwards the input value and either `B` is
+absolute or the handler installs no interfaces. The implicit return
+forwards the input. A single explicit return can forward it through
+its bound variable, a chain of local alias bindings, or an `if` or
+`switch` whose branches all forward it. A switch can also bind an
+alias of the whole forwarded scrutinee through a variable pattern or
+an `as` pattern on a variable, wildcard or literal. Calls to helpers
+use ordinary application typing. A return-pattern annotation can
+supply the input type when a helper call needs one.
+
+A modal or quantified type supplied by another clause can guide
+instantiation of the handled input through a forwarding return. This
+includes a modal or quantified type inside a compound result type.
+This input check disables implicit prefix introduction. See the
+[value restriction](#value-restriction).
+
+A matching ordinary annotation on the forwarded value preserves
+forwarding. For an effectful input of type `Int`, both `case n -> n` and
+`case n -> (n : Int)` reject an expected `[] Int` result.
+Writing `case n -> (n : [] Int)` supplies the modality explicitly.
+
 ### Shallow and parameterised handlers
 
 A shallow handler checks the same input and clause contexts as a deep
-handler. Its resumption has type `<D> ((Q) -> A)`: it returns the input
+handler and follows the same rules for
+[shared interface type arguments](#shared-interface-type-arguments)
+and [forwarding returns](#forwarding-returns).
+Its resumption has type `<D> ((Q) -> A)`: it returns the input
 computation's result and does not reinstall the handler. A new handler
 for `D` permits calling it. The presence of an older instance of the
 same interface alone does not remove this relative dependency.

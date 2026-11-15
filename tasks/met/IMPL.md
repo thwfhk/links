@@ -379,7 +379,8 @@ type.
 
 ### Milestone 4 follow-up
 
-See the [milestone 4 checks](PLAN.md#milestone-4-follow-up-checks).
+See the [follow-up checks](PLAN.md#milestone-4-follow-up-checks)
+and [design checks](PLAN.md#milestone-4-design-checks).
 
 #### 4.5 Shared interface arguments
 
@@ -389,20 +390,20 @@ position of the installed interface occurrence through nested handlers
 and modal locks. A `do` call uses the newest occurrence. A function's
 required context can also constrain an older occurrence.
 
-The checker compares candidate arguments against annotations, provided
-types and expected types before fixing the instance. Both orders of
-`do Put(1)` and `do Put(2 : [] Int)` ask for an annotation if both `Int`
-and `[] Int` remain possible. Frontend rechecking uses the instance
-stored in the typed handler and checks the clauses against its schemes.
+`infer_interface_arguments` checks equality constraints and probes
+conversions from supplied types to each candidate and from the
+candidate to expected types. See the
+[shared interface argument rule](SPEC.md#shared-interface-type-arguments)
+and [incompatible arguments](#413-incompatible-shared-interface-arguments).
+Frontend rechecking uses the instance stored in the typed handler and
+checks the clauses against its schemes.
 
 #### 4.6 Handler result types
 
-Partial inference combines known result types from both kinds of
-clause. When a return forwards the input value, including through local
-aliases, a known absolute result type can guide checking the handled
-expression. A result inferred from another clause can guide the
-instantiation of `do Fail` at a known modal type or a type containing
-one. Clause checking still applies the value restriction.
+`Partial.handler_result` combines known types from return and operation
+clauses. For a [forwarding return](SPEC.md#forwarding-returns), full
+checking can try the combined type on the input. It falls back to
+ordinary input inference if that check fails.
 
 #### 4.7 Operation clause quantifier scope
 
@@ -423,10 +424,12 @@ their uses in sequence.
 
 #### 4.9 Relative prefixes on absolute results
 
-`if`, `switch` and handlers share the inferred branch result check.
-It checks all branch bodies before deciding whether the common type is
-absolute. This lets a later branch determine whether the relative
-prefixes can be dropped.
+`branch_results` implements the
+[branch agreement rule](SPEC.md#first-class-polymorphism-and-modal-types)
+for inferred `if`, `switch` and handler results. It compares all branch
+bodies before testing whether the common type is absolute. This lets a
+later branch determine whether the leading relative prefixes can be
+dropped.
 
 #### 4.11 Redundant annotations on forwarding returns
 
@@ -439,19 +442,17 @@ can still remove a modality or instantiate a quantifier.
 
 #### 4.12 Forwarding switch returns
 
-Expected types flow back to the handled input when every switch
-branch returns the input value. Clause patterns shadow names from
-the enclosing scope. A pattern binder for the whole scrutinee can
-forward the input when the scrutinee itself forwards it and the pattern
-keeps its type.
+`identity_return` follows the forms listed under
+[forwarding returns](SPEC.md#forwarding-returns). For each switch
+branch it removes names bound by the pattern from the tracked aliases
+before adding any aliases for the whole scrutinee.
 
 #### 4.13 Incompatible shared interface arguments
 
-When no observed candidate works and the fallback would request an
-annotation, compare the known closed monotypes with their modalities
-removed. A mismatch such as `Int` and `Bool` reports incompatible
-types. Keep asking for an annotation when one could supply a missing
-modality or choose between two usable candidates.
+When no observed candidate passes and the fallback comparison fails,
+`infer_interface_arguments` compares closed monotypes after erasing
+modalities to detect the conflict described in the
+[shared interface argument rule](SPEC.md#shared-interface-type-arguments).
 
 ### Milestone 5 follow-up
 
