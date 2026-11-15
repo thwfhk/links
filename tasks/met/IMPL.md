@@ -624,6 +624,13 @@ unqualified lookup in the current scope. The loader supplies one copy
 of each dependency per input, so all references in that input share
 its interface and operation identities.
 
+#### 5.22 Import initialisation order
+
+The loader visits imports in written order and lists each module after
+its dependencies. The regression checks both orders of two independent
+imports that share a dependency, then checks their effects occur before
+the input's own initialiser.
+
 ### Deferred optimisation issues
 
 Dead-definition elimination can remove unused calls to `crypt`, `chr`

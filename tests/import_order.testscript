@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+
+set -eu
+
+scratch=$(mktemp -d "${TMPDIR:-/tmp}/links-import-order.XXXXXX")
+trap 'rm -rf "$scratch"' EXIT
+
+cat > "$scratch/order_shared.links" <<'EOF'
+var started = print("D");
+EOF
+cat > "$scratch/order_z_first.links" <<'EOF'
+import Order_shared;
+var started = print("Z");
+EOF
+cat > "$scratch/order_a_second.links" <<'EOF'
+import Order_shared;
+var started = print("A");
+EOF
+cat > "$scratch/written.links" <<'EOF'
+import Order_z_first;
+import Order_a_second;
+import Order_z_first;
+var started = print("M");
+EOF
+cat > "$scratch/reversed.links" <<'EOF'
+import Order_a_second;
+import Order_z_first;
+var started = print("M");
+EOF
+
+check_output() {
+    local file=$1 expected=$2 output
+    if ! output=$(./links --path="$scratch" "$scratch/$file.links" 2>&1) ||
+        [[ "$output" != "$expected" ]]; then
+        printf 'FAILURE: %s expected %s, got %s\n' "$file" "$expected" "$output"
+        exit 1
+    fi
+}
+
+check_output written 'DZAM() : ()'
+check_output reversed 'DAZM() : ()'
+
+echo "SUCCESS: Imports run dependency-first, once each and in written order"
