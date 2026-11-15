@@ -23,11 +23,11 @@ describes the language supported by this repository.
 
 Create a new `tasks/X` only when the user asks to create it.
 
-For each independent large task `X` that spans sessions or needs a
-handover, keep one `tasks/X/PLAN.md`. Record milestones, completed and
-remaining work, dependencies, completion checks, and the latest check
-results. At each pause or handover, record the next action and any
-blockers. Mark the plan complete when its completion checks pass.
+For each independent large task `X`, keep one `tasks/X/PLAN.md`.
+Record milestones, completed and remaining work, dependencies,
+completion checks, and the latest check results. At each pause or
+handover, record the next action and any blockers. Mark the plan
+complete when its completion checks pass.
 
 Use `tasks/X/SPEC.md` for a specification of the language feature
 design. Use `tasks/X/IMPL.md` for significant implementation
@@ -35,6 +35,10 @@ decisions. Mark design questions that need the user's review. Once
 resolved, replace each question with the decision.
 
 Link between these documents without repeating their contents.
+
+For tasks within `X` but independent of the main work, no need to
+track them in `PLAN.md`. If they need extra documentation, use
+new files in `tasks/X/`.
 
 ## Working procedure
 
