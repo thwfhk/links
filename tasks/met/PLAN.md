@@ -211,6 +211,12 @@ new inference path is completed with its library dependencies.
   expected result type even when another branch is a computation. Turn the
   [signed recursive example](SPEC.md#binding-rules) into a regression
   and check that a call cannot introduce a fresh `forall`.
+- [x] **3.15** (`b9b6e057`) Preserve the scope of an unconstrained monotype when
+  rechecking an inferred callback with a quantified parameter. Check
+  the `fromPair` and [Church fold](example-issues.md#frontend-rechecking-fails-for-a-callback-pair-with-an-unconstrained-result)
+  examples with default settings, frontend rechecking, strict IR checking,
+  and both checks enabled. Keep rejecting source abstractions with an
+  unconstrained type variable introduced inside the abstraction.
 
 Completion check: the inference examples in SPEC.md have the specified
 types and annotation requirements. Tests cover both accepted and
@@ -507,10 +513,12 @@ Use the default execution path for follow-up checks. Checks specific to
 ## Status
 
 All MET milestones and reviewed choices are complete on `small-met`.
-The latest tested compiler is `8efa59ce`. See
-[milestone 6.8 checks](#milestone-68-checks).
+The latest tested compiler is `b9b6e057`. See the
+[milestone 3.15 checks](#milestone-315-checks).
 The [language guide and documentation checks](#documentation-checks)
 passed for 6.9.
+The example review can retest `fromPair` and the blocked Church example
+on `b9b6e057`.
 
 [Deferred language work](SPEC.md#future-work) includes effect variables,
 term-level masks, lock access across quantifiers and `escape`. It also
@@ -518,6 +526,27 @@ includes [anonymous type holes](SPEC.md#anonymous-type-holes) and
 [modality-parameterised handlers](SPEC.md#modality-parameterised-handlers).
 See the [optimisation notes](IMPL.md#deferred-optimisation-issues)
 and the [migration inventory](MIGRATION.md) for deferred fixes and examples.
+
+### Milestone 3.15 checks
+
+The baseline `81a07af4` rejected both callbacks during frontend
+rechecking with `Type abstraction needs a type annotation`.
+The checks for `b9b6e057` used OCaml 5.4.0. Logs are in
+`/private/tmp/met-callback-pair.YNhYmY/`. Independent review checked
+callbacks with aliases, nested quantifiers, and row and presence
+variables. It also checked that using one result at `Int` and `Bool`
+still fails and that source type abstractions still require all local
+unknowns to be resolved. Review logs are in
+`/private/tmp/met-callback-review.DNm6Lm/`.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make` and `make all-ci` | Passed. | `candidate-build.log`, `ci-build.log` |
+| `./links` on `fromPair` and `church-pair-result.links` | Each example produced the same type in all four modes. | `baseline.log`, `final-modes.log` |
+| `./test-harness` on the affected suites | Passed, including frontend rechecking (6), polymorphism (70), FreezeML (67), typed IR (30) and example typechecking (94). | `<suite>.log` |
+| `make tests` | 1,330 passed across 43 suites. Two existing cases were ignored. All six scripts passed. | `all-tests.log` |
+| IR unit tests via `opam exec -- dune exec --profile=dev tests/unit/unit_tests.exe` with a separate build directory | All 105 passed. | `unit-tests.log` |
+| `make rule-check`, `git diff --check`, document links and the `rg` tab scan | Passed. The tab scan covered the rule skipped without GNU find. | `rule-check.log`, `diff-check.log`, `documents.log`, `tabs.log` |
 
 ### Milestone 6.8 checks
 

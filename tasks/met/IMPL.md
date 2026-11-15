@@ -379,6 +379,21 @@ can introduce the result quantifier on its base-case lambda. Its
 recursive call returns a function with that quantifier already in its
 type.
 
+#### 3.15 Rechecking inferred callback types
+
+When Fresco introduces a type abstraction, it stores the type used to
+check it in a `Checked` node. That type can contain a free variable
+from instantiating the enclosing function. In `fromPair`, the function's
+type argument `a` can remain unsolved after the callback is checked at
+`forall b. b -> (b, a)`.
+
+During rechecking, Fresco collects the free flexible variables of the
+stored type before checking the abstraction again. These variables
+are already in scope for the callback. The value restriction and the
+check for unresolved variables introduced in the body still apply.
+An explicit source abstraction has no stored checked type on its first
+check. See the [checks for 3.15](PLAN.md#milestone-315-checks).
+
 ### Milestone 4 follow-up
 
 See the [combined checks](PLAN.md#milestone-68-checks).
