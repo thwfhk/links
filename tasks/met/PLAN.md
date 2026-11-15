@@ -421,7 +421,7 @@ switching the active inference path.
   [exit recovery to file inputs](SPEC.md#exit-from-a-file).
   Check definition rollback, linear uses, later inputs, `@load` and
   the existing handling of ordinary runtime errors.
-- [ ] **5.25** Correct the application rule in the SmallLinks
+- [x] **5.25** (`cf07fd2d`) Correct the application rule in the SmallLinks
   [elaborator example](examples.md#larger-fresco-programs). Check the
   argument against the domain before substituting it into the codomain.
   Keep both demonstrations and check the identity application with
@@ -471,7 +471,7 @@ Depends on milestone 5.
 - [x] **6.9** Create the programmer-facing [language guide](GUIDE.md),
   update documentation links, and keep the latest check results in this
   plan. Check the guide's examples and local links.
-- [ ] **6.10** Review and verify the combined callback rechecking fix
+- [x] **6.10** (`cf07fd2d`) Review and verify the combined callback rechecking fix
   in 3.15, tuple printer fix in 2.9 and elaborator correction in 5.25.
   Run full regressions, IR unit tests, strict examples and the example
   registration check.
@@ -526,8 +526,7 @@ Use the default execution path for follow-up checks. Checks specific to
 
 ## Status
 
-The elaborator correction and the [combined checks in 6.10](#milestone-610-checks)
-are in progress on `small-met`.
+The [combined checks in 6.10](#milestone-610-checks) passed on `cf07fd2d`.
 
 [Deferred language work](SPEC.md#future-work) includes effect variables,
 term-level masks, lock access across quantifiers and `escape`. It also
@@ -537,6 +536,32 @@ See the [optimisation notes](IMPL.md#deferred-optimisation-issues)
 and the [migration inventory](MIGRATION.md) for deferred fixes and examples.
 
 ### Milestone 6.10 checks
+
+Logs for `cf07fd2d` are in `/private/tmp/smalllinks-met-faux-tt/`.
+Independent review covered the callback recheck, tuple printing and
+elaborator changes. The elaborator reviewer confirmed that the regression
+fails when the argument is checked against the codomain or when
+substitution is omitted.
+
+| Check | Result and logs |
+| --- | --- |
+| `make all-ci`, including a clean build in a separate Dune directory | Passed. `final-ci-build.log`, `clean-ci-build.log`. |
+| `make tests` | 1,333 passed across 43 suites, with two existing ignores. All six scripts passed. `all-tests.log`. |
+| `./test-harness tests/<suite>.tests` for the affected suites | 688 passed across 14 suites. `check-affected.sh`, `default-*.log`. |
+| Frontend recheck and strict IR checks | 522 passed across nine suites, including the three callback regressions, 154 handler tests, 31 MET example runs and 94 example typechecks. The handler example aggregate also passed. `check-strict.sh`, `strict-*.log`. |
+| Direct callback, tuple and elaborator probes | All 24 compiler probes passed. Both original elaborator demonstrations and the reported application passed in default and strict modes. A wrong-domain argument failed in both. `compiler-probes.log`, `targeted-example.log`. |
+| `opam exec -- ./run-tests unit-tests` | All 105 passed. `unit-tests.log`. |
+| `./tests/validate_typecheck_testfile.testscript` and `./tests/roundtrippable_types.testscript` | All examples registered and all 34 print-and-reparse checks passed. `example-registration.log`, `print-and-reparse.log`. |
+| Temporary `dune install` and `./tests/check-install.sh "$prefix/bin/linx"` | Three installation checks passed. The installed elaborator ran outside the checkout in default and strict modes. `install.log`, `install-check.log`, `installed-faux-tt*.log`. |
+| `make rule-check`, `git diff --check 81a07af4` and documentation link check | Passed. The rule runner skipped its tab scan because GNU find was unavailable. A separate scan of the changed files passed. `rule-check.log`, `diff-check.log`, `tabs.log`, `documents.log`. |
+
+Legacy case `T882` passed with its configured frontend recheck on both
+the installed `8efa59ce` build from milestone 6.8 and `cf07fd2d`.
+Adding `--set=typecheck_ir=true --set=fail_on_ir_type_error=true` caused
+both builds to exit with status 1 and report `IR Type Error: Type mismatch`
+in the same call between mutually recursive functions. See
+`T882-before-configured.log`, `default-recheck_frontend_transformations.log`,
+`T882-before-extra-ir.log` and `extra-ir-T882.log`.
 
 At `cd8276bf`, `make` and both original elaborator demonstrations
 passed. The reported identity application exited with status 1 in
