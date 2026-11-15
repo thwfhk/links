@@ -399,16 +399,19 @@ switching the active inference path.
   narrowed type through records, tuples, lists and variants. Check
   successful matches, fallthrough and linear payloads under strict IR
   checking.
-- [ ] **5.21** Restore [transitive import visibility](SPEC.md#module-imports).
+- [x] **5.21** (`baabdd76`) Restore
+  [transitive import visibility](SPEC.md#module-imports).
   Test qualified terms, type aliases, interfaces and operations,
   repeated imports and shadowing across source scopes.
-- [ ] **5.22** Check [import initialisation order](SPEC.md#module-imports).
+- [x] **5.22** (`553db80e`) Check
+  [import initialisation order](SPEC.md#module-imports).
   Dependencies run before their importers. Independent imports follow
   written order and a shared dependency runs once.
-- [ ] **5.23** Make SAT `leftBiased` pure to construct. Test construction
+- [x] **5.23** (`c2d62aeb`) Make SAT `leftBiased` pure to construct. Test construction
   in an empty effect context, invocation under a handler and rejection
   of invocation without `Failure`.
-- [ ] **5.24** Apply [exit recovery to file inputs](SPEC.md#exit-from-a-file).
+- [x] **5.24** (`8efa59ce`) Apply
+  [exit recovery to file inputs](SPEC.md#exit-from-a-file).
   Check definition rollback, linear uses, later inputs, `@load` and
   the existing handling of ordinary runtime errors.
 
@@ -453,8 +456,8 @@ Depends on milestone 5.
 - [x] **6.7** (`f9d190ef`) Review 5.20 independently and run the combined
   checks on the new revision. Keep the results from 6.5 and 6.6 as
   historical checks.
-- [ ] **6.8** Review items 5.21–5.24 independently and run the combined
-  checks on the new revision.
+- [x] **6.8** (`8efa59ce`) Review items 5.21–5.24 independently and run
+  the combined checks on the new revision.
 
 Completion check: a clean CI build and temporary installation work,
 all in-scope regressions and unit tests pass, the guide matches the
@@ -541,9 +544,11 @@ and the [future work](SPEC.md#future-work) for inference and type holes.
 The [milestone 4 design review](#milestone-4-design-checks) confirmed the
 current rules for interface arguments, forwarding returns and leading
 relative prefixes on branch results.
-The milestone 5 design review approved items 5.21–5.24. Restore import
-visibility first, then check order, update `leftBiased` and implement
-file exit recovery before the combined checks in 6.8.
+Items 5.21 and 5.22 passed the checks for import visibility, declaration
+identity and initialisation order. The `leftBiased` change in 5.23
+passed the default and strict handler suites. Item 5.24 passed the
+review of file exit recovery. The
+[combined checks in 6.8](#milestone-68-checks) passed on `8efa59ce`.
 Items 5.5 and 5.7–5.13 share the compiler and library commit
 `7f1f3f8c` because the startup, frontend and IR changes share code and
 checks. Commit `4b63194d` keeps source preprocessing off the bundled
@@ -746,6 +751,38 @@ quantified types and mixed handler operations. See
 | `opam exec -- ./run-tests unit-tests` | All 105 passed. | `unit-tests.log` |
 | Direct `./links -e` probes | All 24 cases passed with default settings and strict checking. These include `(Some(-Skip) as outer)`, annotated record rests, and linear payloads after fallthrough. | `final-direct-probes.log` |
 | Guide and temporary installation | All 18 runnable guide blocks and four entry points passed. `dune install` from the fresh CI build and `./tests/check-install.sh` passed. The installed interpreter passed the enclosing alias, quantified rest and linear fallthrough probes. | `guide.log`, `install.log`, `install-check.log`, `installed-examples.log`, `installed-pattern-probes.log` |
+| `make rule-check`, `git diff --check`, tabs and document links | Passed. An `rg` scan covered the tabs rule because GNU find was unavailable. | `rule-check.log`, `diff-check.log`, `tabs.log`, `documents.log` |
+
+### Milestone 6.8 checks
+
+The combined checks used `8efa59ce` with OCaml 5.4.0. Logs are
+in `/private/tmp/smalllinks-met-6-8/`. Independent review checked import
+scope and repeated declarations, pure SAT construction and caller
+failure handling, and file exit rollback and isolation.
+
+The pre-MET `eba6c051` build accepted `History_c.base` and
+`open History_c` before `import History_b`, where `History_b` imports
+`History_c`. It rejected `History_b.History_c.base`. The `f9d190ef`
+build rejected the transitive type reference with `Unbound type
+constructor History_c.Number`. See
+`/private/tmp/smalllinks-met-5-21-history/` for both runs and
+`/private/tmp/smalllinks-met-5-21/independent-review.log` for the
+check of fresh declarations across inputs.
+
+The file exit probe before 5.24 printed `"stopped" : Int` and reported
+that the skipped linear value had already been used. See
+`/private/tmp/smalllinks-met-5-24/file-exit-before.log` and
+`independent-integration.log` in the same directory for the review
+checks after the fix.
+
+| Command or check | Result | Log |
+| --- | --- | --- |
+| `make all-ci`, including a fresh Dune build directory | Passed with `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk`. | `final-ci-build.log`, `final-clean-ci-build.log` |
+| `make tests` | 1,236 passed across 42 suites. Two existing cases were ignored. All six scripts passed. | `all-tests.log` |
+| `./test-harness tests/<suite>.tests` on affected suites | All passed, including modules (67), handlers (154), effect annotations (76), native permissions (13), example typechecking (34) and typed IR (30). | `default-<suite>.log` |
+| Frontend rechecking and strict IR checks with the default prelude | Passed for handlers (154), effect annotations (76), collections (70), modules (67), records (51) and patterns (54). Both REPL scripts, the import order and file exit scripts, and the handler example runner passed under strict checking. | `strict-<suite>.log`, `strict-repl.log`, `strict-repl_effect_interfaces.log`, `strict-import_order.log`, `strict-file_exit.log`, `strict-examples.log` |
+| `opam exec -- ./run-tests unit-tests` | All 105 passed. | `unit-tests.log` |
+| Guide and temporary installation | All 18 runnable guide blocks and four entry points passed. `dune install` from the fresh CI build and `./tests/check-install.sh` passed. Installed probes covered transitive imports, order, SAT construction and file exit. | `guide.log`, `install.log`, `install-check.log`, `installed-follow-up.log` |
 | `make rule-check`, `git diff --check`, tabs and document links | Passed. An `rg` scan covered the tabs rule because GNU find was unavailable. | `rule-check.log`, `diff-check.log`, `tabs.log`, `documents.log` |
 
 ### Milestone 4 follow-up checks
