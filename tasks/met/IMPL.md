@@ -261,6 +261,14 @@ in one expansion, or when a changed argument list exceeds the 256-node
 limit. At that point they mark the remaining alias as out of scope.
 These limits apply only to printing, and the marker is diagnostic text.
 
+#### 2.9 Tuple positions in printed types
+
+The compact printer reads fields `1` through `n` in order when it uses
+tuple syntax for a row with `n` fields. This also orders the arguments
+in function and operation signatures. The legacy printer already orders
+tuple fields by their integer positions. Ordinary records keep their
+labels and the record map's string order.
+
 ### Milestone 3 follow-up
 
 #### 3.5 Recursive types

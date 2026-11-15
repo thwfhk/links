@@ -6,6 +6,20 @@ Onetuple with unit
 (1=())
 stdout : (1 = ()) : (1:())
 
+Tuple types with eleven fields print in positional order with the roundtrip printer
+(1, true, 3, 4, 5, 6, 7, 8, 9, "ten", 11.0)
+args : --set=types_pretty_printer_engine=roundtrip
+stdout : (1, true, 3, 4, 5, 6, 7, 8, 9, "ten", 11.0) : (Int, Bool, Int, Int, Int, Int, Int, Int, Int, String, Float)
+
+Tuple types with eleven fields print in positional order with the old printer
+(1, true, 3, 4, 5, 6, 7, 8, 9, "ten", 11.0)
+args : --set=types_pretty_printer_engine=old
+stdout : (1, true, 3, 4, 5, 6, 7, 8, 9, "ten", 11.0) : (Int, Bool, Int, Int, Int, Int, Int, Int, Int, String, Float)
+
+Record types with non-consecutive numeric labels retain their labels and order
+(1=1, 2=true, 10="ten", 11=11.0)
+stdout : (1 = 1, 10 = "ten", 11 = 11.0, 2 = true) : (1:Int,10:String,11:Float,2:Bool)
+
 Alias record functional update
 tests/roundtrip/record_update.links
 filemode : true

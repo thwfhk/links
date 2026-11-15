@@ -69,6 +69,12 @@ roundtrip "Open-only variants with the old printer" \
     '~f' --set=types_pretty_printer_engine=old --set=show_quantifiers=true || status=1
 
 for engine in roundtrip old; do
+    roundtrip "Eleven function parameters and tuple fields with the $engine printer" '' \
+        'fun(a : Int, b : Bool, c : Int, d : Int, e : Int, f : Int,
+             g : Int, h : Int, i : Int, j : String, k : Float) {
+             (a, b, c, d, e, f, g, h, i, j, k)
+         }' --set=types_pretty_printer_engine="$engine" || status=1
+
     roundtrip "Absent variant fields with the $engine printer" \
         'sig f : forall r::Row. ((|None{-}|Some:Int|r|)) -> (|None{-}|Some:Int|r|) fun f(x) { x }' \
         '~f' --set=types_pretty_printer_engine="$engine" --set=show_quantifiers=true || status=1

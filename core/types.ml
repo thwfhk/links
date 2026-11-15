@@ -2883,24 +2883,26 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     = let open Printer in
       Printer (fun ctx (rfields, rvar) buf ->
           let field_printer lbl pre printers =
-            if Context.is_ambient_tuple ctx
-            then with_value presence pre :: printers
-            else (Printer (fun ctx () buf ->
-                      StringBuffer.write buf lbl;
-                      let pre = match pre with
-                        | Meta point -> Unionfind.find point
-                        | _ -> pre
-                      in
-                      match pre with
-                      | Var (v,knd,_) when Kind.primary_kind knd = PrimaryKind.Presence ->
-                         Printer.apply var ctx (v, knd) buf
-                      | Present _ | Absent ->
-                         Printer.apply presence ctx pre buf
-                      | t -> raise (internal_error ("Not present: " ^ show_datatype (DecycleTypes.datatype t)))
-                 )) :: printers
+            Printer (fun ctx () buf ->
+              StringBuffer.write buf lbl;
+              let pre = match pre with
+                | Meta point -> Unionfind.find point
+                | _ -> pre in
+              match pre with
+              | Var (v,knd,_) when Kind.primary_kind knd = PrimaryKind.Presence ->
+                 Printer.apply var ctx (v, knd) buf
+              | Present _ | Absent ->
+                 Printer.apply presence ctx pre buf
+              | t -> raise (internal_error ("Not present: " ^ show_datatype (DecycleTypes.datatype t))))
+            :: printers
           in
 
-          let printers = List.rev (FieldEnv.fold field_printer rfields []) in
+          let printers =
+            if Context.is_ambient_tuple ctx then
+              List.init (FieldEnv.size rfields) (fun index ->
+                let label = string_of_int (index + 1) in
+                with_value presence (FieldEnv.find label rfields))
+            else List.rev (FieldEnv.fold field_printer rfields []) in
           let sep =
             let open Context in
             match ambient ctx with

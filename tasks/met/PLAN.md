@@ -118,6 +118,10 @@ Depends on milestone 1.
   Cover plain aliases and modal aliases that refer to visible interfaces.
   Check the out-of-scope marker when expansion exposes a hidden interface
   or reaches the recursive alias expansion limit.
+- [ ] **2.9** Fix [tuple positions in printed types](IMPL.md#29-tuple-positions-in-printed-types).
+  Check both printers on a ten-position tuple and a function with ten
+  arguments. Reparse each printed type and check it against the original.
+  Keep labels and their order in ordinary records.
 
 Completion check: the migrated list and variant syntax and the modal
 type representation have focused checks. Record, variant and presence
@@ -512,7 +516,8 @@ Use the default execution path for follow-up checks. Checks specific to
 
 ## Status
 
-All MET milestones and reviewed choices are complete on `small-met`.
+The recorded MET milestones and reviewed choices are complete on
+`small-met`. The tuple printing fix in item 2.9 is in progress.
 The latest tested compiler is `b9b6e057`. See the
 [milestone 3.15 checks](#milestone-315-checks).
 The [language guide and documentation checks](#documentation-checks)
