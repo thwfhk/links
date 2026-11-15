@@ -242,9 +242,11 @@ unit, tuples and a type in grouping parentheses.
 empty row, alternatives separated by `|`, and a final `| r` row tail.
 
 Use `=>` for an operation signature in an interface declaration or a
-parenthesised handler clause annotation. Both forms can have leading
-quantifiers. A `typename` declaration, function signature or other
-value type with a `=>` arrow is rejected.
+handler clause annotation. In a clause, put parentheses around the
+whole signature, as in `case <Ask => k> : (() => Int) -> k(42)`.
+The signature can start with `forall` in either position. A `typename`
+declaration, function signature or other value type with a `=>` arrow
+is rejected.
 
 An empty argument list is `()`. Empty entries give `[]` and `<>`.
 `<Reader |>` masks one `Reader` instance; `<Reader, Reader |>` masks
@@ -462,10 +464,13 @@ SmallLinks shadowing rules. A later interface declaration with the same
 name shadows the earlier one, as with `typename`. Earlier references
 keep their declaration identity, and each operation keeps the identity
 of its declaring interface. Runtime labels preserve that identity.
-A printed type uses an interface name that resolves to the same
-declaration when such a name is in scope. If no source name is in
-scope, the printer marks the declaration as out of scope. Diagnostics
-distinguish declarations that share a name.
+
+When printing an interface, choose the name with the fewest characters
+that resolves to the same declaration in the current scope. Break ties
+in alphabetical order, with uppercase letters before lowercase letters.
+If no name resolves to the declaration, the printer marks it as out of
+scope. This marker is diagnostic text. It distinguishes declarations
+that share a name.
 
 ```links
 effect Reader { First : () => Int; }

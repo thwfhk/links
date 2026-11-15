@@ -102,11 +102,11 @@ Depends on milestone 1.
   type printers. Cover interface arguments, modal prefixes, quantifiers
   and their combinations with list and variant types.
 - [x] **2.6** (`a566ff95`) Enforce the reviewed surface syntax. Restrict `=>` to
-  interface member signatures and handler clause annotations. Reject
-  nested list and modal element types without parentheses, and migrate
-  any affected source or printer output. Test both unary arrow forms,
-  `List A` and `List(A)`, the reserved `effect` keyword and the rejection
-  of empty interfaces.
+  interface member signatures and parenthesised handler clause
+  annotations. Reject nested list and modal element types without
+  parentheses, and migrate any affected source or printer output. Test
+  both unary arrow forms, `List A` and `List(A)`, the reserved `effect`
+  keyword and the rejection of empty interfaces.
 - [x] **2.7** (`9b9a1e10`) Check that sequential interface declarations and repeated
   imports follow the same scope as `typename`. Preserve the identities
   of earlier references and the existing rule against duplicate operation
@@ -497,7 +497,8 @@ inventory](MIGRATION.md) records the retained and deferred cases.
 The final review fixes for milestones 2–4 are complete. Commit
 `67f8eded` extends frozen argument inference to polymorphic `do` calls.
 Items 3.13 and 3.14 cover argument inference and conditional branches.
-Item 2.8 is complete at `66861cb0`. Items 4.11–4.13 cover return
+Item 2.8 is complete at `66861cb0`. The review of type printing and
+clause annotation syntax is complete. Items 4.11–4.13 cover return
 annotations, forwarding switches and conflicting interface arguments.
 The final review of milestone 5 completed 5.14 at `85ad25b5`. The
 record, polymorphism and collection suites passed with 43, 70 and 61
@@ -582,6 +583,12 @@ the printing limits.
 | Temporary CI installation and `./tests/check-install.sh "$prefix/bin/linx"` | Passed. The installed interpreter also expanded a shadowed modal alias from outside the checkout. | `install.log`, `install-check.log` |
 | Both printers on the review probes and a REPL alias listing | Passed. The growing alias showed the out-of-scope marker and the unused parameter case printed a `mu` type. | `review-probes.log` |
 | `make rule-check`, `git diff --check` and the `rg` tabs check | Passed. GNU find was unavailable for the tabs rule. | `rule-check.log`, `diff-check.log`, `tabs.log` |
+
+The printing and clause syntax documentation review used `87a9401a`.
+`./links -e` returned `42 : Int` for the clause annotation and showed
+the declaration number for the out-of-scope interface. The local link
+check, `make rule-check`, `git diff --check` and the `rg` tabs check
+passed. Logs are in `/private/tmp/smalllinks-met-printing-docs.I8ws2L/`.
 
 ### Milestone 3 final review checks
 

@@ -217,9 +217,10 @@ explicit `mu` binders and nested lists.
 #### 2.7 Interface names and printing
 
 The module resolver builds a map from each interface identity to its
-shortest visible source name. Both type printers use the map from the
-completed input when displaying a result. For frontend errors, use the
-scope recorded at the source position for both sides of the comparison.
+[chosen source name](SPEC.md#effect-interfaces). Both type printers use
+the map from the completed input when displaying a result. For frontend
+errors, use the scope recorded at the source position for both sides
+of the comparison.
 The frontend discards those source scopes at the end of the pass.
 When no visible name resolves to an interface, its display includes
 the original path, an out-of-scope mark and its declaration number.
@@ -256,7 +257,7 @@ arguments becomes a `mu` reference. Argument comparison allows renamed
 binders. Printers stop after 64 extra unfoldings with changed arguments
 in one expansion, or when a changed argument list exceeds the 256-node
 limit. At that point they mark the remaining alias as out of scope.
-These limits apply only to the printed type.
+These limits apply only to printing, and the marker is diagnostic text.
 
 ### Milestone 3 follow-up
 
