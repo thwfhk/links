@@ -105,9 +105,15 @@ frozen definitions monomorphic.
 `FrescoPatterns` passes modal dependencies to matched and projected
 fields and checks uses of linear values. Updating or extending a
 closed modal record carries its dependencies on the inherited fields.
-An open modal row must be usable in the current context before
-extension. The initial implementation required unrestricted list
-elements. Range syntax calls a fixed pure `intRange` primitive.
+Extending an open modal record requires an instantiated base that is
+usable in the current context. A tail with kind `Row(Abs)` meets this
+requirement for the unknown fields. An instantiated closed record can
+keep a field whose presence has kind `Presence(Abs)`. See
+[modal record extension](SPEC.md#modal-record-extension).
+
+The initial implementation required unrestricted list elements.
+[Item 5.8](#58-linear-lists) added linear list elements. Range syntax
+calls a fixed pure `intRange` primitive.
 Explicit `intRange` calls still use lexical lookup.
 
 At the end of milestone 3, `Frontend.Modal` exposed the new checker
@@ -190,9 +196,9 @@ handles recursive data types, and the optimiser keeps handler-local
 bindings and exported prelude definitions live where they are needed.
 
 The [SmallLinks guide](../small/SPEC.md) describes the modal language.
-The [verification record](PLAN.md#milestones-56-checks) records the
-combined checks, and the [migration inventory](MIGRATION.md) links to
-the deferred fixtures.
+See the [latest combined checks](PLAN.md#milestone-68-checks) and the
+[historical integration checks](PLAN.md#milestones-56-checks). The
+[migration inventory](MIGRATION.md) links to the deferred fixtures.
 
 ## Follow-up review
 

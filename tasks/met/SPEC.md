@@ -717,8 +717,15 @@ still being evaluated. Discard the definitions introduced by that
 input. Keep earlier definitions and record any uses of their linear
 bindings that already ran. Native effects already performed, such as
 printing, still take effect. Print `v` by itself and continue with the
-next input. At the prompt, `@load` treats the entire file and its
-dependencies as one input before returning to the prompt.
+next input.
+
+By default, each command-line file starts with the prelude scope. With
+`--set=isolation=false`, later files can use definitions from earlier
+successful inputs. An ordinary runtime error in a command-line file
+stops the batch.
+
+At the prompt, `@load` treats the entire file and its dependencies as
+one input before returning to the prompt.
 
 ### First-class polymorphism and modal types
 
