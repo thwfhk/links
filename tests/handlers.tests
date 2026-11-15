@@ -635,15 +635,21 @@ filemode : true
 stdout : () : ()
 args : --path=examples/handlers
 
-SAT choice tries the second branch after failure
-import Sat; handle(Sat.leftBiased(fun() { if (Sat.choose()) Sat.fail() else 42 })()) { case <Sat.Fail> -> 0 case x -> x }
-args : --path=examples/handlers
+SAT choice can be constructed in pure code and tries the second branch after failure
+import Sat; sig make : [] (() -> [Sat.Failure] (() -> Int)) fun make() { Sat.leftBiased(fun() { if (Sat.choose()) Sat.fail() else 42 }) } var later = make(); handle(later()) { case <Sat.Fail> -> 0 case x -> x }
+args : --path=examples/handlers --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
 stdout : 42 : Int
 
 SAT choice forwards failure to its caller
-import Sat; handle(Sat.leftBiased(fun() { var _ = Sat.choose(); Sat.fail() : Int })()) { case <Sat.Fail> -> 42 case x -> x }
-args : --path=examples/handlers
+import Sat; var later = Sat.leftBiased(fun() { var _ = Sat.choose(); Sat.fail() : Int }); handle(later()) { case <Sat.Fail> -> 42 case x -> x }
+args : --path=examples/handlers --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true
 stdout : 42 : Int
+
+SAT choice requires Failure when the returned thunk is called
+import Sat; var later = Sat.leftBiased(fun() { 42 }); later()
+args : --path=examples/handlers
+stderr : @.*Type error: The modalities require different effect contexts: \[Sat\.Failure\] and <>.*In expression: later\(\).*
+exit : 1
 
 SAT parser forwards failure to its caller
 import Sat; handle({ var _ = Sat.parse(Sat.char('x'), [])(); false }) { case <Sat.Fail> -> true case x -> x }

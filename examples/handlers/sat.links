@@ -56,7 +56,7 @@ fun maybe(m)() {
 }
 
 # Left-biased choice with backtracking on failure.
-sig leftBiased : forall a::Abs. [Failure] ((<Choice, Failure> (() -> a)) -> () -> a)
+sig leftBiased : forall a::Abs. ([Choice, Failure] (() -> a)) -> [Failure] (() -> a)
 fun leftBiased(m)() {
   var result = handle(m()) {
     case x -> Just(x)

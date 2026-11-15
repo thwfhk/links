@@ -631,6 +631,13 @@ its dependencies. The regression checks both orders of two independent
 imports that share a dependency, then checks their effects occur before
 the input's own initialiser.
 
+#### 5.23 Constructing the SAT thunk
+
+The first arrow of `leftBiased` uses the empty effect context. Its
+callback has the absolute type `[Choice, Failure] (() -> a)`, which can
+cross the returned function's `[Failure]` lock. Only calling that
+function enters the handler and can signal the final `Fail`.
+
 ### Deferred optimisation issues
 
 Dead-definition elimination can remove unused calls to `crypt`, `chr`
