@@ -638,6 +638,14 @@ callback has the absolute type `[Choice, Failure] (() -> a)`, which can
 cross the returned function's `[Failure]` lock. Only calling that
 function enters the handler and can signal the final `Fail`.
 
+#### 5.24 Exit from a file input
+
+The file driver lets `Early_exit` leave the Fresco transaction, then
+uses the REPL's linear move tracking to restore the preceding context.
+It prints the exit value and passes that context to the file loop. The
+loop applies its usual isolation setting. Other exceptions go directly
+to the existing command-line error handler.
+
 ### Deferred optimisation issues
 
 Dead-definition elimination can remove unused calls to `crypt`, `chr`

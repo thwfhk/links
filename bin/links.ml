@@ -56,10 +56,18 @@ let handle_errors comp =
   Errors.display ~default:(fun _ -> exit 1) comp
 
 let process_file context file =
-  let (context', datatype, value) =
-    handle_errors (lazy (Driver.Phases.whole_program context file))
-  in
-  print_simple context' datatype value; context'
+  let recover = function Evalir.Exceptions.Early_exit _ -> true | _ -> false in
+  let evaluate () =
+    Driver.Phases.recover_linear_bindings ~recover context (fun on_variable linear_variables ->
+      Driver.Phases.whole_program ~on_variable ~linear_variables ~propagate_exit:true context file) in
+  match handle_errors (lazy (evaluate ())) with
+  | Ok (context, datatype, value) ->
+      print_simple context datatype value;
+      context
+  | Error (Evalir.Exceptions.Early_exit (_, value), context) ->
+      Printf.printf "%s\n%!" (Value.string_of_value value);
+      context
+  | Error (exn, _) -> raise exn
 
 let process_expr context expr_string =
   let (context', datatype, value) =

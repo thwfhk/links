@@ -24,7 +24,7 @@ module Phases = struct
       | Some typ when not (Types.Unl.can_type_be typ) -> IntMap.add var name names
       | _ -> names) (Context.name_environment context) IntMap.empty
 
-  let recover_linear_bindings context f =
+  let recover_linear_bindings ?(recover = fun _ -> true) context f =
     let linear_names = linear_bindings context in
     let linear_variables = IntMap.fold (fun var _ -> IntSet.add var) linear_names IntSet.empty in
     let used = ref StringSet.empty in
@@ -32,7 +32,7 @@ module Phases = struct
       Option.iter (fun name -> used := StringSet.add name !used) (IntMap.lookup var linear_names) in
     match f on_variable linear_variables with
     | value -> Ok value
-    | exception exn ->
+    | exception exn when recover exn ->
         let terms = context.Context.fresco_environment in
         let fresco_environment =
           StringSet.fold (fun name terms -> FrescoContext.consume ~from:terms terms name) !used terms in

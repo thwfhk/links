@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+
+set -eu
+
+scratch=$(mktemp -d "${TMPDIR:-/tmp}/links-file-exit.XXXXXX")
+trap 'rm -rf "$scratch"' EXIT
+
+cat > "$scratch/first.links" <<'EOF'
+typename SavedNumber = Int;
+module Saved { var number = 42; }
+var used = (linfun() { 6 } : [] (() -@ Int));
+var available = (linfun() { 43 } : [] (() -@ Int));
+EOF
+cat > "$scratch/pending.links" <<'EOF'
+var loaded = print("import ");
+EOF
+cat > "$scratch/interrupted.links" <<'EOF'
+import Pending;
+typename SavedNumber = Bool;
+module Saved { var number = false; }
+var pendingValue = 0;
+{
+  var moved = used;
+  print("file ");
+  exit("stopped") : ();
+  moved() + available()
+}
+EOF
+cat > "$scratch/after.links" <<'EOF'
+(Saved.number : SavedNumber, available())
+EOF
+cat > "$scratch/use-used.links" <<'EOF'
+used()
+EOF
+cat > "$scratch/use-pending.links" <<'EOF'
+Pending.loaded
+EOF
+cat > "$scratch/use-pending-value.links" <<'EOF'
+pendingValue
+EOF
+
+if ! output=$(./links --set=isolation=false --path="$scratch" \
+    "$scratch/first.links" "$scratch/interrupted.links" "$scratch/after.links" 2>&1) ||
+    [[ "$output" != $'() : ()\nimport file "stopped"\n(42, 43) : (SavedNumber, Int)' ]]; then
+    echo "FAILURE: File exit did not restore definitions and keep the skipped linear value"
+    printf '%s\n' "$output"
+    exit 1
+fi
+
+check_rejected() {
+    local last_file=$1 diagnostic=$2 output
+    if output=$(./links --set=isolation=false --path="$scratch" \
+        "$scratch/first.links" "$scratch/interrupted.links" "$scratch/$last_file.links" 2>&1) ||
+        [[ "$output" != *"$diagnostic"* ]]; then
+        printf 'FAILURE: %s expected %s, got %s\n' "$last_file" "$diagnostic" "$output"
+        exit 1
+    fi
+}
+
+check_rejected use-used 'Linear variable used has already been used'
+check_rejected use-pending 'Unknown variable Pending.loaded'
+check_rejected use-pending-value 'Unknown variable pendingValue'
+
+echo "SUCCESS: File exit restored scope and kept the executed linear move"
+
+cat > "$scratch/halts.links" <<'EOF'
+var halted = {
+  print("dependency ");
+  exit(7) : ()
+};
+EOF
+cat > "$scratch/imports-halt.links" <<'EOF'
+import Halts;
+print("importer ran")
+EOF
+cat > "$scratch/later.links" <<'EOF'
+42
+EOF
+
+if ! output=$(./links --path="$scratch" "$scratch/imports-halt.links" "$scratch/later.links" 2>&1) ||
+    [[ "$output" != $'dependency 7\n42 : Int' ]]; then
+    echo "FAILURE: Exit in an imported module did not interrupt its file input"
+    printf '%s\n' "$output"
+    exit 1
+fi
+
+echo "SUCCESS: Exit in a dependency skipped its importer and continued to the next file"
+
+cat > "$scratch/error.links" <<'EOF'
+error("ordinary failure") : ()
+EOF
+
+error_status=0
+output=$(./links "$scratch/error.links" "$scratch/later.links" 2>&1) || error_status=$?
+if [[ "$error_status" != 1 || "$output" != *"ordinary failure"* || "$output" == *"42 : Int"* ]]; then
+    echo "FAILURE: An ordinary runtime error did not stop file execution"
+    printf '%s\n' "$output"
+    exit 1
+fi
+
+echo "SUCCESS: An ordinary runtime error still stops file execution"
