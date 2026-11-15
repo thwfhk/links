@@ -6,35 +6,6 @@ These notes use SmallLinks revision
 See [examples.md](examples.md#example-source-coverage) for the source
 inventory and examples that depend on deferred features.
 
-## Fresco defects
-
-### The Fresco evaluator loads eager definitions in reverse order
-
-This defect is in the reference Fresco interpreter at
-`333738dbe9da1dcd094a6b2c2c9dbb9eec701ea4`. The source
-`tests/pass/unix.mle` passes its type check, but running it with
-`--eval` reports `missing a definition for symbol basicIO`.
-The evaluator processes a list built by prepending each checked
-definition. It thus evaluates eager definitions before earlier
-dependencies. The source also declares `stdout` without a value
-and supplies no `main` function. The SmallLinks port uses the
-simulated descriptor `FD(1)` and a final expression.
-
-```text
-type unit = Unit
-let earlier = 1
-let later = earlier
-val main : [](unit -> unit)
-let main u = ()
-```
-
-Run `bin/met.exe --eval reference-order.mle` from a built copy of
-the Fresco artefact. The program should evaluate `main` and exit
-successfully. It exits with status 1 and reports
-`missing a definition for symbol earlier`. Logs are
-`/private/tmp/smalllinks-met-examples/reference-order.log` and
-`/private/tmp/smalllinks-met-examples/reference-unix.log`.
-
 ## Unsupported features
 
 ### Fresco `eff#` modifier

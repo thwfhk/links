@@ -1,17 +1,15 @@
 # Modal effect examples
 
 The [example README](../../examples/met/README.md) gives run commands.
-[Example notes](example-issues.md) record defects, unsupported
-features and typing differences.
+[Example notes](example-issues.md) record unsupported features and
+typing differences.
 
 ## Status
 
 All 60 registered examples passed their runtime or expected rejection
 checks in default and strict configurations. The standalone
 [Church callback](../../examples/met/fresco-types/church-pair-result.links)
-keeps its unconstrained accumulator type. The
-[Fresco evaluator issue](example-issues.md#the-fresco-evaluator-loads-eager-definitions-in-reverse-order)
-remains open in the reference interpreter.
+keeps its unconstrained accumulator type.
 The [thesis inventory](#thesis-tutorial) records the deferred generic
 `Coop e` interface and the two adaptations for term masks. The
 [Fresco inventory](#fresco-effect-and-data-examples) records the two
