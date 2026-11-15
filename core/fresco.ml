@@ -1412,14 +1412,15 @@ and introduce state expected phrase =
       introduce_quantifiers state qs (fun () ->
         let body = infer (with_rigids state qs) (Check body) phrase in
         check_introduction (term body) expected;
-        wrap_usage phrase.pos (TAbstr (sugar_quantifiers qs, term body)) expected (usage body))
+        let abstraction = with_node phrase (TAbstr (sugar_quantifiers qs, term body)) in
+        wrap_usage phrase.pos (Checked (abstraction, expected)) expected (usage body))
   | Modal (modality, body) ->
       let body = infer (under state modality) (Check body) phrase in
       check_introduction (term body) expected;
       wrap_usage phrase.pos (ModalIntro (term body, expected)) expected (usage body)
   | _ -> infer_node state (Check expected) phrase
 
-and infer_node ?(allow_intro = true) state mode phrase =
+and infer_node ?(allow_intro = true) ?(enclosing_flexibles = TypeVarSet.empty) state mode phrase =
   let pos = phrase.pos in
   let infer_here = infer state in
   let finish node typ usage =
@@ -1444,7 +1445,13 @@ and infer_node ?(allow_intro = true) state mode phrase =
       end
   | Constant c -> finish phrase.node (Primitive (Constant.type_of c)) Usage.empty
   | Checked (body, expected) ->
-      let body = infer_node ~allow_intro state (Check expected) body in
+      (* A checked type can refer to variables from an enclosing application
+         that have no corresponding term binding. Record them before checking
+         the body so new variables cannot count as enclosing ones. *)
+      let enclosing_flexibles = match body.node with
+        | TAbstr _ -> free_flexible_type_vars expected
+        | _ -> TypeVarSet.empty in
+      let body = infer_node ~allow_intro ~enclosing_flexibles state (Check expected) body in
       finish (Checked (term body, expected)) expected (usage body)
   | ModalIntro (body, expected) ->
       let body = introduce state expected body in
@@ -1598,7 +1605,8 @@ and infer_node ?(allow_intro = true) state mode phrase =
             infer state (Check target) body
         | _ -> infer state Infer body) in
       if not (TypeSugar.is_generalisable (term body)) then error pos "Type abstraction requires a value";
-      let unknowns = TypeVarSet.diff (free_flexible_type_vars (typ body)) (Context.excluded state.terms) in
+      let enclosing = TypeVarSet.union enclosing_flexibles (Context.excluded state.terms) in
+      let unknowns = TypeVarSet.diff (free_flexible_type_vars (typ body)) enclosing in
       if not (TypeVarSet.is_empty unknowns) then error pos "Type abstraction needs a type annotation";
       finish (TAbstr (qs, term body)) (Types.for_all (rigid, typ body)) (usage body)
   | Upcast (body, ((_, Some target) as to_), ((_, Some source) as from_)) ->
