@@ -1,0 +1,76 @@
+# Native lists whose elements are polymorphic functions.
+
+sig choose : forall a. a -> a -> a
+fun choose(_)(y) { y }
+
+sig nil : forall a. List a
+var nil = [];
+
+typename Id = forall a. [] (a -> a);
+
+sig ident : forall a. [] (a -> a)
+fun ident(x) { x }
+
+sig ids : List Id
+var ids = [~ident, ~ident];
+
+sig head : forall a. List a -> a
+fun head(x :: _) { x }
+
+sig tail : forall a. List a -> List a
+fun tail(_ :: xs) { xs }
+
+sig single : forall a. a -> List a
+fun single(x) { [x] }
+
+sig cons : forall a. a -> List a -> List a
+fun cons(x)(xs) { x :: xs }
+
+sig append : forall a. List a -> List a -> List a
+fun append(xs)(ys) { xs ++ ys }
+
+sig inc : Int -> Int
+fun inc(x) { x + 1 }
+
+sig fmap : forall a, b. (a -> b) -> List a -> List b
+fun fmap(f)(xs) { map(f, xs) }
+
+sig poly : Id -> (Int, Bool)
+fun poly(f) { (f(42), f(true)) }
+
+sig pair : forall a, b. a -> b -> (a, b)
+fun pair(x)(y) { (x, y) }
+
+# A3: the list of identities determines the common element type.
+var inferredChoice = choose(nil)(ids);
+
+sig checkedChoice : List Id
+var checkedChoice = choose(nil)(ids);
+
+# B1: tail and head retain the existing polymorphic element type.
+var rest = tail(ids);
+var first = head(ids);
+var one = single(ident);
+
+# B2 and B3: cons gets the element type from the second argument.
+var withName = cons(ident)(ids);
+var withLambda = cons(fun(x) { x })(ids);
+
+# B4 and B5: the other list fixes the type of the singleton.
+var ints = append(single(inc))(single(ident));
+var moreIds = append(single(ident))(ids);
+
+# B6 and B8: use a higher-rank consumer or apply the selected identity.
+var mappedSingleton = fmap(poly)(single(ident));
+var appliedHead = head(ids)(true);
+
+# E4a, E4b and F1: the element type guides the mapping function.
+var mappedName = fmap(poly)(ids);
+var mappedLambda = fmap(fun(x) { poly(x) })(ids);
+var mappedTwice = fmap(fun(f) { pair(f(true))(f(42)) })(ids);
+
+((length(inferredChoice), length(checkedChoice)),
+ (length(rest), first(42), first(true), head(one)(42)),
+ (length(withName), length(withLambda)),
+ (map(fun(f) { f(41) }, ints), length(moreIds)),
+ mappedSingleton, appliedHead, mappedName, mappedLambda, mappedTwice)

@@ -1,0 +1,9 @@
+# The body needs a higher-rank parameter type.
+
+typename Id = forall a. [] (a -> a);
+
+sig poly : Id -> (Int, Bool)
+fun poly(f) { (f(42), f(true)) }
+
+fun infer(x) { poly(x) }
+infer

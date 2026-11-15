@@ -1,5 +1,8 @@
 # Installing SmallLinks
 
+See the [language guide](tasks/met/GUIDE.md) for running programs and
+using the REPL.
+
 Use an opam switch with OCaml 5.3.0 or later. From the SmallLinks
 checkout, install the local package:
 

@@ -1,0 +1,13 @@
+effect State(s::Abs) { Get : () => s; Put : (s) => (); }
+
+sig state : forall s::Abs, a::Abs. [] ((<State(s)> (() -> a)) -> s -> a)
+fun state(m) {
+  handle(m()) {
+    case x -> fun(_) { x }
+    case <Get => k> -> fun(s) { k(s)(s) }
+    case <Put(next) => k> -> fun(_) { k(())(next) }
+  }
+}
+
+# An ambient function cannot instantiate the absolute result type a.
+state(fun() { fun() { do Put(do Get + 42) } })(0)

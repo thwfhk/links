@@ -1,0 +1,49 @@
+# Choosing functions with monomorphic and polymorphic arguments.
+
+typename Id = forall a. [] (a -> a);
+
+sig ident : forall a. [] (a -> a)
+fun ident(x) { x }
+
+sig choose : forall a. a -> a -> a
+fun choose(_)(y) { y }
+
+sig auto : Id -> Id
+fun auto(f) { ~f }
+
+sig autoPrime : forall b. Id -> b -> b
+fun autoPrime(f) { f }
+
+# A1: infer and check the type of the second projection.
+fun inferredSecond(x)(y) { y }
+
+sig checkedSecond : forall a, b. a -> b -> b
+fun checkedSecond(x)(y) { y }
+
+# A2: the signature preserves the polymorphic parameter and result.
+var inferredChoice = choose(ident);
+
+sig checkedChoice : Id -> Id
+var checkedChoice = choose(ident);
+
+# A4: instantiating the first occurrence lets it accept the second.
+fun selfApply(f : Id) { f(f) }
+
+# A5 and A7: auto supplies the higher-rank function type.
+var inferredAuto = ident(auto);
+
+sig checkedAuto : Id -> Id
+var checkedAuto = ident(auto);
+
+var inferredAutoChoice = choose(ident)(auto);
+
+sig checkedAutoChoice : Id -> Id
+var checkedAutoChoice = choose(ident)(auto);
+
+# A6: the outer quantifier of autoPrime can be instantiated.
+var specialisedAuto = ident(autoPrime);
+
+((inferredSecond(true)(42), checkedSecond(42)(true)),
+ (inferredChoice(ident)(42), checkedChoice(ident)(true)), selfApply(ident)(42),
+ (inferredAuto(ident)(42), checkedAuto(ident)(true), specialisedAuto(ident)(42)),
+ (inferredAutoChoice(ident)(42), checkedAutoChoice(ident)(true)))

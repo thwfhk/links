@@ -1,0 +1,39 @@
+# Pass polymorphic functions through an annotation or a known parameter type.
+
+effect Gen(a::Abs) { Yield : (a) => (); }
+
+sig firstYield : forall a::Abs. [] ((<Gen(a)> (() -> ())) -> a)
+fun firstYield(action) {
+  handle(action()) {
+    case <Yield(x)> -> x
+    case () -> error("Expected a yield")
+  }
+}
+
+typename Consumer = forall a::Abs. (<Gen(a)> (() -> ())) -> a;
+
+fun infer1(f : Consumer) {
+  (f(fun() { do Yield(42) }), f(fun() { do Yield(true) }))
+}
+
+sig apply : ((Consumer -> (Int, Bool))) -> (Int, Bool)
+fun apply(f) { f(firstYield) }
+
+var infer2 = apply(fun(f) {
+  (f(fun() { do Yield(42) }), f(fun() { do Yield(true) }))
+});
+
+typename Producer = [] (forall a::Abs. a -> <Gen(a)> (() -> ()));
+
+sig poly : Producer -> (Int, Bool)
+fun poly(produce) {
+  (firstYield(produce(42)), firstYield(produce(true)))
+}
+
+sig check1 : Producer -> (Int, Bool)
+fun check1(produce) { poly(~produce) }
+
+sig makeYield : Producer
+fun makeYield(x) { fun() { do Yield(x) } }
+
+(infer1(firstYield), infer2, check1(~makeYield))

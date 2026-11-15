@@ -1,0 +1,6 @@
+# Rejected because the inferred ambient arrow fails the Abs bound.
+
+sig identity : forall a::Abs. a -> a
+fun identity(x) { x }
+
+var f = identity(fun(x) { 1 });

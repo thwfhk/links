@@ -1,0 +1,16 @@
+effect Gen(a::Abs) { Yield : (a) => (); }
+effect State(s::Abs) { Get : () => s; Put : (s) => (); }
+
+sig asList : forall a::Abs. [] (([Gen(a)] (() -> ())) -> List a)
+fun asList(f) {
+  handle(f()) {
+    case () -> []
+    case <Yield(x) => k> -> x :: k(())
+  }
+}
+
+# The absolute callback context contains a Gen instance alone.
+handle(asList(fun() { do Yield(do Get) }))(s <- 42) {
+  case <Get => k> -> k(s, s)
+  case <Put(n) => k> -> k((), n)
+}

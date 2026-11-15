@@ -1,0 +1,11 @@
+# Rejected because the handler clause disagrees with the unit callback result.
+
+effect Gen(a::Abs) { Yield : (a) => (); }
+
+sig run : (<Gen(Int)> (() -> ())) -> ()
+fun run(action) {
+  handle(action()) {
+    case <Yield(x)> -> x
+    case () -> ()
+  }
+}

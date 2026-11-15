@@ -1,0 +1,55 @@
+# Checking functions that receive a polymorphic value.
+
+sig app : forall a, b. (a -> b) -> a -> b
+fun app(f)(x) { f(x) }
+
+sig revapp : forall a, b. a -> (a -> b) -> b
+fun revapp(x)(f) { f(x) }
+
+typename ST(s, a) = (|Test:a | State:(s, a)|);
+
+sig runST : forall a. (forall s. ST(s, a)) -> a
+fun runST(st) {
+  switch (st) {
+    case Test(value) -> value
+    case State((_, value)) -> value
+  }
+}
+
+sig argST : forall s. ST(s, Int)
+var argST = Test(42);
+
+typename Id = forall a. [] (a -> a);
+
+sig pair : forall a, b. a -> b -> (a, b)
+fun pair(x)(y) { (x, y) }
+
+sig ident : forall a. [] (a -> a)
+fun ident(x) { x }
+
+sig g : (Id -> (Int, Bool)) -> ()
+fun g(f) { var _ = f(ident); () }
+
+sig r : (forall a. a -> (forall b. b -> b)) -> Int
+fun r(f) { f(())(42) }
+
+sig poly : Id -> (Int, Bool)
+fun poly(f) { (f(42), f(true)) }
+
+# A13: runST accepts a value quantified over the state type s.
+var forwardST = app(runST)(argST);
+var backwardST = revapp(argST)(runST);
+
+# C1b and C1c: a parameter annotation or the expected function type.
+fun useBoth(f : Id) { pair(f(42))(f(true)) }
+var checkedLambda = g(fun(f) { pair(f(42))(f(true)) });
+
+# C2: the expected type has one quantifier before each argument.
+var nestedQuantifiers = r(fun(x)(y) { y });
+
+# E2b: the signature supplies the higher-rank parameter.
+sig consume : Id -> (Int, Bool)
+fun consume(x) { poly(x) }
+
+(forwardST, backwardST, useBoth(ident), checkedLambda,
+ nestedQuantifiers, consume(ident))

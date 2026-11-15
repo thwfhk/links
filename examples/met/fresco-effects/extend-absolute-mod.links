@@ -1,0 +1,9 @@
+# A pure callback can be called when Gen is available.
+
+effect Gen { Yield : (Int) => Int; }
+
+sig extend : ([] (Int -> Int)) -> [Gen] (Int -> Int)
+fun extend(f) { f }
+
+var addOne = extend(fun(n) { n + 1 });
+handle(addOne(41)) { case <Yield(n) => k> -> k(n) }

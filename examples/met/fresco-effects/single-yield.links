@@ -1,0 +1,11 @@
+# The signature permits the function to call Yield in its caller’s context.
+
+effect Gen { Yield : (Int) => (); }
+
+sig yieldOne : [Gen] (() -> ())
+fun yieldOne() { do Yield(1) }
+
+handle(yieldOne()) {
+  case <Yield(n)> -> n
+  case () -> 0
+}

@@ -1,0 +1,14 @@
+effect Gen(a::Abs) { Yield : (a) => (); }
+
+sig find' : forall a::Abs. [] ((<Gen(a)> (a -> Bool)) -> List a -> Maybe(a))
+fun find'(p)(xs) {
+  handle(iter(fun(x) { if (p(x)) do Yield(x) else () }, xs)) {
+    case () -> Nothing
+    case <Yield(x)> -> Just(x)
+  }
+}
+
+# The predicate can also yield to the handler inside find'.
+(find'(fun(x) { x > 5 })([2, 6, 8]),
+ find'(fun(x) { x > 5 })([2, 4]),
+ find'(fun(x) { do Yield(x + 10); false })([2, 6, 8]))

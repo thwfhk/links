@@ -1,0 +1,29 @@
+# Instances of different effect interfaces can be named in either order.
+
+effect E1 { O1 : () => (); }
+effect E2 { O2 : () => (); }
+effect E3 { O3 : () => (); }
+
+sig id1 : ([E1, E2] (() -> ())) -> [E2, E1] (() -> ())
+fun id1(f) { f }
+
+sig id2 : ([E3, E1, E2] (() -> ())) -> [E3, E2, E1] (() -> ())
+fun id2(f) { f }
+
+sig id3 : ([E1, E2, E3] (() -> ())) -> [E2, E1, E3] (() -> ())
+fun id3(f) { f }
+
+sig id4 : ([E1, E3] (() -> ())) -> [E3, E1] (() -> ())
+fun id4(f) { f }
+
+handle({
+  id1(fun() { do O1; do O2 })();
+  id2(fun() { do O3; do O1; do O2 })();
+  id3(fun() { do O1; do O2; do O3 })();
+  id4(fun() { do O1; do O3 })()
+}) {
+  case <O1 => k> -> 1 :: k(())
+  case <O2 => k> -> 2 :: k(())
+  case <O3 => k> -> 3 :: k(())
+  case () -> []
+}

@@ -1,0 +1,48 @@
+# Higher-rank arguments in curried applications.
+
+typename Id = forall a. [] (a -> a);
+
+sig poly : Id -> (Int, Bool)
+fun poly(f) { (f(42), f(true)) }
+
+sig ident : forall a. [] (a -> a)
+fun ident(x) { x }
+
+sig app : forall a, b. (a -> b) -> a -> b
+fun app(f)(x) { f(x) }
+
+sig revapp : forall a, b. a -> (a -> b) -> b
+fun revapp(x)(f) { f(x) }
+
+sig pair : forall a, b. a -> b -> (a, b)
+fun pair(x)(y) { (x, y) }
+
+# A10: poly accepts a name or a lambda at the same polymorphic type.
+var named = poly(ident);
+var lambda = poly(fun(x) { x });
+var viaIdent = ident(poly)(fun(x) { x });
+
+# A12 and E3a: the order of the two arguments can vary.
+var forward = app(poly)(ident);
+var backward = revapp(ident)(poly);
+
+# Beta1 and Beta3: the application or its argument is returned by a call.
+var returnedApp = (fun(_) { app })(42)(poly)(ident);
+var returnedArgument = app((fun(_) { poly })(42))(ident);
+
+# E3b, E6 and E7: a frozen argument keeps its forall.
+var frozenArgument = app(fun(x) { poly(x) })(~ident);
+var returnedPartial = (fun(f) { app(f) })(poly)(ident);
+var passedToLambda = (fun(f) { app(poly)(f) })(~ident);
+
+# F2 and F4: the lambda calls its polymorphic parameter at both types.
+var viaApp = app(fun(f) { pair(f(true))(f(42)) })(~ident);
+var direct = (fun(f) { pair(f(42))(f(true)) })(~ident);
+
+# F5: the expected pair type supplies the unused parameter's type.
+sig checkedPair : (Id -> Int, Int)
+var checkedPair = pair(fun(_) { 42 })(42);
+
+((named, lambda, viaIdent), (forward, backward),
+ (returnedApp, returnedArgument), (frozenArgument, returnedPartial, passedToLambda),
+ (viaApp, direct), (checkedPair.1(ident), checkedPair.2))

@@ -1,0 +1,407 @@
+# Elaborate a small dependently typed object language. The surface
+# syntax uses names and holes. Core terms use integer variable IDs
+# and metavariables. The effect handlers supply names, bindings and
+# metavariable solutions to the elaborator.
+
+typename Surface = mu s.
+  (| SVar:String | SLam:(String, Maybe(s), s) | SApp:(s, s)
+   | SType | SPi:(String, s, s) | SAs:(s, s) | SHole |);
+
+typename Term = mu t.
+  (| Var:Int | Lam:(Int, t, t) | App:(t, t)
+   | Type | Pi:(Int, t, t) | Meta:Int |);
+
+typename Head = (| HVar:Int | HMeta:Int |);
+typename Value =
+  (| VType | VPi:(Int, Term, Term) | VLam:(Int, Term, Term)
+   | VSpine:(Head, List Term) |);
+
+sig occurs : (Int, Term) -> Bool
+fun occurs(x, term) {
+  switch (term) {
+    case Var(y) -> y == x
+    case Lam(y, t, body) -> occurs(x, t) || (y <> x && occurs(x, body))
+    case Pi(y, t, body) -> occurs(x, t) || (y <> x && occurs(x, body))
+    case App(m, n) -> occurs(x, m) || occurs(x, n)
+    case Type -> false
+    case Meta(_) -> false
+  }
+}
+
+# The fresh ID supply is a handler whose result takes the next ID.
+effect Fresh { FreshVar : () => Int; }
+
+sig withFresh : forall a::Abs. (<Fresh> (() -> a)) -> Int -> a
+fun withFresh(action) {
+  handle(action()) {
+    case result -> fun(_) { result }
+    case <FreshVar => k> -> fun(next) { k(next)(next + 1) }
+  }
+}
+
+# Each error abandons elaboration, regardless of the type expected
+# at the operation site.
+effect ElaborationError {
+  UnknownVar : forall a::Abs. (String) => a;
+  CannotInferArg : forall a::Abs. (String) => a;
+  ExpectedFunction : forall a::Abs. (Value) => a;
+  TypeMismatch : forall a::Abs. (Term, Term) => a;
+  InternalError : forall a::Abs. () => a;
+  CannotInferHole : forall a::Abs. () => a;
+}
+
+sig withPrintError : forall a::Abs. [wild]
+  ((<ElaborationError> (() -> a)) -> a)
+fun withPrintError(action) {
+  fun abort(message) {
+    println("error: " ^^ message);
+    error("Elaboration failed")
+  }
+  handle(action()) {
+    case <UnknownVar(name)> -> abort("unknown variable " ^^ name)
+    case <CannotInferArg(name)> ->
+      abort("cannot infer the type of the argument " ^^ name)
+    case <ExpectedFunction(_)> -> abort("expected a function")
+    case <TypeMismatch(_, _)> -> abort("type mismatch")
+    case <InternalError> -> abort("internal failure (shouldn't happen)")
+    case <CannotInferHole> -> abort("cannot infer type of a hole")
+  }
+}
+
+effect Context {
+  LookupVar : (Int) => Term;
+  LookupId : (String) => Int;
+  LookupMeta : (Int) => (Maybe(Term), Term);
+  FreshMeta : (Term) => Term;
+  SetMeta : (Int, Term) => Bool;
+}
+
+# A local binder answers lookups for its own name and ID. Metavariables
+# created under the binder are applied to the bound variable, so a
+# solution can represent dependencies on the variables in scope.
+sig withBind : forall a::Abs. [Context]
+  ((String, Int, Term, <Context> (() -> a)) -> a)
+fun withBind(name, id, type, action) {
+  handle(action()) {
+    case <LookupVar(y) => k> ->
+      if (y == id) k(type) else k(do LookupVar(y))
+    case <LookupId(other) => k> ->
+      if (name == other) k(id) else k(do LookupId(other))
+    case <LookupMeta(x) => k> -> k(do LookupMeta(x))
+    case <FreshMeta(u) => k> -> k(App(do FreshMeta(Pi(id, type, u)), Var(id)))
+    case <SetMeta(x, solution) => k> ->
+      if (occurs(id, solution)) k(false) else k(do SetMeta(x, solution))
+  }
+}
+
+sig withId : forall a::Abs. [Context, Fresh]
+  ((String, Term, <Context> (Int -> a)) -> a)
+fun withId(name, type, action) {
+  var id = do FreshVar;
+  withBind(name, id, type, fun() { action(id) })
+}
+
+sig withVar : forall a::Abs. [Context]
+  ((Int, Term, <Context> (() -> a)) -> a)
+fun withVar(id, type, action) { withBind("", id, type, action) }
+
+typename Store = List (Int, (Maybe(Term), Term));
+
+sig findMeta : (Int, Store) -> (Maybe(Term), Term)
+fun findMeta(id, store) {
+  switch (store) {
+    case [] -> error("Metavariable missing from the store")
+    case (x, entry) :: rest ->
+      if (x == id) entry else findMeta(id, rest)
+  }
+}
+
+# The outermost context owns the metavariable store. New solutions
+# shadow unsolved entries for the same ID.
+sig withEmptyContext : forall a::Abs. [Fresh, ElaborationError]
+  ((<Context> (() -> a)) -> Store -> a)
+fun withEmptyContext(action) {
+  handle(action()) {
+    case result -> fun(_) { result }
+    case <LookupId(name)> -> fun(_) { do UnknownVar(name) }
+    case <LookupVar(_)> -> fun(_) { do InternalError }
+    case <LookupMeta(id) => k> -> fun(store) { k(findMeta(id, store))(store) }
+    case <FreshMeta(t) => k> -> fun(store) {
+      var id = do FreshVar;
+      k(Meta(id))((id, (Nothing, t)) :: store)
+    }
+    case <SetMeta(id, solution) => k> -> fun(store) {
+      switch (findMeta(id, store)) {
+        case (Nothing, t) -> k(true)((id, (Just(solution), t)) :: store)
+        case (Just(_), _) -> error("Metavariable already solved")
+      }
+    }
+  }
+}
+
+# Substitution renames binders with fresh IDs to avoid capture.
+sig lookupSubstitution : (Int, List (Int, Term)) -> Maybe(Term)
+fun lookupSubstitution(id, substitutions) {
+  switch (substitutions) {
+    case [] -> Nothing
+    case (x, term) :: rest ->
+      if (x == id) Just(term) else lookupSubstitution(id, rest)
+  }
+}
+
+sig subst : [Fresh] ((List (Int, Term), Term) -> Term)
+fun subst(substitutions, term) {
+  switch (term) {
+    case Meta(_) -> term
+    case Type -> Type
+    case App(m, n) -> App(subst(substitutions, m), subst(substitutions, n))
+    case Var(x) ->
+      switch (lookupSubstitution(x, substitutions)) {
+        case Nothing -> term
+        case Just(n) -> n
+      }
+    case Lam(x, t, body) ->
+      var y = do FreshVar;
+      Lam(y, subst(substitutions, t), subst((x, Var(y)) :: substitutions, body))
+    case Pi(x, t, body) ->
+      var y = do FreshVar;
+      Pi(y, subst(substitutions, t), subst((x, Var(y)) :: substitutions, body))
+  }
+}
+
+sig substSingle : [Fresh] ((Int, Term, Term) -> Term)
+fun substSingle(x, replacement, term) { subst([(x, replacement)], term) }
+
+# Weak-head normalisation unfolds solved metavariables and reduces
+# applications only as far as needed to identify their head.
+sig whnf : [Fresh, Context] (Term -> Term)
+fun whnf(term) {
+  switch (term) {
+    case Meta(x) ->
+      switch (do LookupMeta(x)) {
+        case (Nothing, _) -> term
+        case (Just(solution), _) -> whnf(solution)
+      }
+    case App(m, n) ->
+      var head = whnf(m);
+      switch (head) {
+        case Lam(x, _, body) -> whnf(substSingle(x, n, body))
+        case _ -> App(head, n)
+      }
+    case _ -> term
+  }
+}
+
+sig foldSpine : (Term, List Term) -> (Head, List Term)
+fun foldSpine(term, arguments) {
+  switch (term) {
+    case Var(x) -> (HVar(x), arguments)
+    case Meta(x) -> (HMeta(x), arguments)
+    case App(m, n) -> foldSpine(m, n :: arguments)
+    case _ -> error("Expected a neutral term")
+  }
+}
+
+sig normalise : [Fresh, Context] (Term -> Value)
+fun normalise(term) {
+  var head = whnf(term);
+  switch (head) {
+    case Type -> VType
+    case Pi(x, t, u) -> VPi(x, t, u)
+    case Lam(x, t, body) -> VLam(x, t, body)
+    case _ -> VSpine(foldSpine(head, []))
+  }
+}
+
+sig evaluate : [Fresh, Context] (Term -> Term)
+fun evaluate(term) {
+  switch (term) {
+    case Type -> Type
+    case Var(_) -> term
+    case Meta(x) ->
+      switch (do LookupMeta(x)) {
+        case (Nothing, _) -> term
+        case (Just(solution), _) -> evaluate(solution)
+      }
+    case Pi(x, t, u) -> Pi(x, evaluate(t), evaluate(u))
+    case Lam(x, t, body) -> Lam(x, evaluate(t), evaluate(body))
+    case App(m, n) ->
+      var argument = evaluate(n);
+      var head = evaluate(m);
+      switch (head) {
+        case Lam(x, _, body) -> evaluate(substSingle(x, argument, body))
+        case _ -> App(head, argument)
+      }
+  }
+}
+
+# Compare terms at a known type. A metavariable applied to distinct
+# variables can be solved by abstracting over those variables.
+mutual {
+  sig unifyAt : [Fresh, Context] ((Term, Term, Term) -> Bool)
+  fun unifyAt(m, n, type) {
+    switch (normalise(type)) {
+      case VPi(x, t, u) ->
+        withVar(x, t, fun() { unifyAt(App(m, Var(x)), App(n, Var(x)), u) })
+      case VSpine(_, _) -> unifyTerms(m, n)
+      case VType -> unifyTerms(m, n)
+      case VLam(_, _, _) -> error("Expected a type")
+    }
+  }
+
+  sig unifyTerms : [Fresh, Context] ((Term, Term) -> Bool)
+  fun unifyTerms(m, n) {
+    switch ((normalise(m), normalise(n))) {
+      case (VType, VType) -> true
+      case (VPi(x, t, u), VPi(y, t1, u1)) ->
+        unifyAt(t, t1, Type) &&
+        withVar(x, t, fun() { unifyAt(u, substSingle(y, Var(x), u1), Type) })
+      case (VSpine(HVar(x), arguments), VSpine(HVar(y), others)) ->
+        x == y && unifySpines(do LookupVar(x), arguments, others)
+      case (VSpine(HMeta(x), arguments), VSpine(HMeta(y), others)) ->
+        if (x == y) {
+          var (_, t) = do LookupMeta(x);
+          unifySpines(t, arguments, others)
+        } else unifyMeta(x, arguments, n) || unifyMeta(y, others, m)
+      case (VSpine(HMeta(x), arguments), _) -> unifyMeta(x, arguments, n)
+      case (_, VSpine(HMeta(y), others)) -> unifyMeta(y, others, m)
+      case _ -> false
+    }
+  }
+
+  sig unifySpines : [Fresh, Context] ((Term, List Term, List Term) -> Bool)
+  fun unifySpines(type, arguments, others) {
+    switch ((arguments, others)) {
+      case ([], []) -> true
+      case (m :: rest, n :: remaining) ->
+        switch (normalise(type)) {
+          case VPi(x, t, u) ->
+            unifyAt(m, n, t) && unifySpines(substSingle(x, m, u), rest, remaining)
+          case _ -> false
+        }
+      case _ -> false
+    }
+  }
+
+  sig unifyMeta : [Fresh, Context] ((Int, List Term, Term) -> Bool)
+  fun unifyMeta(x, arguments, term) {
+    var (_, type) = do LookupMeta(x);
+    switch (abstractMeta(type, [], arguments, term)) {
+      case Nothing -> false
+      case Just(solution) -> do SetMeta(x, solution)
+    }
+  }
+
+  sig abstractMeta : [Fresh, Context]
+    ((Term, List Int, List Term, Term) -> Maybe(Term))
+  fun abstractMeta(type, seen, arguments, term) {
+    switch (arguments) {
+      case [] -> Just(term)
+      case n :: rest ->
+        var VPi(x, t, u) = normalise(type);
+        switch (whnf(n)) {
+          case Var(y) ->
+            if (elem(y, seen)) Nothing
+            else switch (abstractMeta(substSingle(x, Var(y), u), y :: seen, rest, term)) {
+              case Nothing -> Nothing
+              case Just(body) -> Just(Lam(y, t, body))
+            }
+          case _ -> Nothing
+        }
+    }
+  }
+}
+
+# Inference synthesises a type. Checking uses a known type for
+# unannotated binders and introduces metavariables for holes.
+mutual {
+  sig infer : [Context, Fresh, ElaborationError] (Surface -> (Term, Term))
+  fun infer(term) {
+    switch (term) {
+      case SType -> (Type, Type)
+      case SVar(name) ->
+        var x = do LookupId(name);
+        (Var(x), do LookupVar(x))
+      case SPi(name, t, u) ->
+        var domain = check(t, Type);
+        withId(name, domain, fun(x) { (Pi(x, domain, check(u, Type)), Type) })
+      case SLam(name, Just(t), body) ->
+        var domain = check(t, Type);
+        withId(name, domain, fun(x) {
+          var (value, codomain) = infer(body);
+          (Lam(x, domain, value), Pi(x, domain, codomain))
+        })
+      case SLam(name, Nothing, _) -> do CannotInferArg(name)
+      case SAs(m, t) ->
+        var type = check(t, Type);
+        (check(m, type), type)
+      case SApp(m, n) ->
+        var (head, type) = infer(m);
+        switch (normalise(type)) {
+          case VPi(x, _, u) ->
+            # The source checks against the codomain here.
+            var argument = check(n, u);
+            (App(head, argument), substSingle(x, argument, u))
+          case other -> do ExpectedFunction(other)
+        }
+      case SHole -> do CannotInferHole
+    }
+  }
+
+  sig check : [Context, Fresh, ElaborationError] ((Surface, Term) -> Term)
+  fun check(term, type) {
+    switch (term) {
+      case SLam(name, Nothing, body) ->
+        switch (normalise(type)) {
+          case VPi(y, t, u) ->
+            withId(name, t, fun(x) { Lam(x, t, check(body, substSingle(y, Var(x), u))) })
+          case other -> do ExpectedFunction(other)
+        }
+      case SHole -> do FreshMeta(type)
+      case _ ->
+        var (value, inferred) = infer(term);
+        if (unifyAt(type, inferred, Type)) value
+        else do TypeMismatch(type, inferred)
+    }
+  }
+}
+
+sig resolve : [Context, ElaborationError] (Term -> Term)
+fun resolve(term) {
+  switch (term) {
+    case Var(_) -> term
+    case Type -> Type
+    case Meta(x) ->
+      switch (do LookupMeta(x)) {
+        case (Just(solution), _) -> resolve(solution)
+        case (Nothing, _) -> do CannotInferHole
+      }
+    case App(m, n) -> App(resolve(m), resolve(n))
+    case Lam(x, t, body) -> Lam(x, resolve(t), resolve(body))
+    case Pi(x, t, u) -> Pi(x, resolve(t), resolve(u))
+  }
+}
+
+sig elaborate : forall a::Abs. [wild]
+  ((<Fresh, Context, ElaborationError> (() -> a)) -> a)
+fun elaborate(action) {
+  withPrintError(fun() { withFresh(fun() { withEmptyContext(action)([]) })(0) })
+}
+
+sig checkTopLevel : [wild] ((Surface, Term) -> Term)
+fun checkTopLevel(term, type) { elaborate(fun() { check(term, type) }) }
+
+sig inferTopLevel : [wild] (Surface -> (Term, Term))
+fun inferTopLevel(term) {
+  elaborate(fun() {
+    var (core, type) = infer(term);
+    (evaluate(resolve(core)), evaluate(resolve(type)))
+  })
+}
+
+# Check the identity at (A : Type) -> A -> A in the object language.
+var identity = checkTopLevel(SLam("A", Nothing, SLam("x", Nothing, SVar("x"))),
+                             Pi(0, Type, Pi(1, Var(0), Var(0))));
+
+# Checking Type against a hole solves the hole as Type.
+(identity, inferTopLevel(SAs(SType, SHole)))

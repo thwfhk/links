@@ -1,0 +1,33 @@
+effect State(s::Abs) { Get : () => s; Put : (s) => (); }
+
+sig state : forall s::Abs, a::Abs. [] ((<State(s)> (() -> a)) -> s -> a)
+fun state(m) {
+  handle(m()) {
+    case x -> fun(_) { x }
+    case <Get => k> -> fun(s) { k(s)(s) }
+    case <Put(next) => k> -> fun(_) { k(())(next) }
+  }
+}
+
+sig state' : forall s::Abs, a. [] ((<State(s)> (() -> a)) -> s -> <State(s)> a)
+fun state'(m) {
+  handle(m()) {
+    case x -> fun(_) { x }
+    case <Get => k> -> fun(s) { k(s)(s) }
+    case <Put(next) => k> -> fun(_) { k(())(next) }
+  }
+}
+
+var delayed = state'(fun() { fun() { do Put(do Get + 42) } })(0);
+var later = state(fun() { delayed(); do Get })(10);
+
+sig pureFuncs : List (forall a. [] (a -> a -> a))
+var pureFuncs = [fun(x)(_) { x }, fun(_)(y) { y }];
+
+var returned = state(fun() { do Put(42); pureFuncs })(0);
+var chosen = switch (returned) {
+  case first :: second :: _ -> (first(42)(0), first(true)(false), second("first")("second"))
+  case _ -> (0, false, "")
+};
+
+(later, chosen)

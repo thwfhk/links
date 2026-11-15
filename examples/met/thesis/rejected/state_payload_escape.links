@@ -1,0 +1,25 @@
+effect Gen(a::Abs) { Yield : (a) => (); }
+effect State(s::Abs) { Get : () => s; Put : (s) => (); }
+
+sig asList : forall a::Abs. [] ((<Gen(a)> (() -> ())) -> List a)
+fun asList(f) {
+  handle(f()) {
+    case () -> []
+    case <Yield(x) => k> -> x :: k(())
+  }
+}
+
+sig state : forall s::Abs, a::Abs. [] ((<State(s)> (() -> a)) -> s -> a)
+fun state(m) {
+  handle(m()) {
+    case x -> fun(_) { x }
+    case <Get => k> -> fun(s) { k(s)(s) }
+    case <Put(next) => k> -> fun(_) { k(())(next) }
+  }
+}
+
+# Put requires an absolute payload, so it cannot store this Gen-dependent value.
+state(fun() {
+  var _ = asList(fun() { do Put(fun() { do Yield(42) }) });
+  (do Get)()
+})(fun() { () })

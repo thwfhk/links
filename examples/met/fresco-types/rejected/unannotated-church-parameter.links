@@ -1,0 +1,17 @@
+# The checker cannot infer the polymorphic fold parameter from this body.
+
+typename Id = forall a. [] (a -> a);
+
+sig poly : Id -> (Int, Bool)
+fun poly(f) { (f(42), f(true)) }
+
+typename Church(a) = forall b. b -> (a -> b -> b) -> b;
+
+sig churchHead : forall a. Church(a) -> a
+fun churchHead(xs) {
+  var Just(x) = xs(Nothing)(fun(x)(_) { Just(x) });
+  x
+}
+
+fun infer(xs) { poly(churchHead(xs)) }
+infer

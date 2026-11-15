@@ -1,0 +1,26 @@
+# The singleton call instantiates ident before the later use.
+
+typename Church(a) = forall b. b -> (a -> b -> b) -> b;
+
+sig churchHead : forall a. Church(a) -> a
+fun churchHead(xs) {
+  var Just(x) = xs(Nothing)(fun(x)(_) { Just(x) });
+  x
+}
+
+typename Id = forall a. [] (a -> a);
+
+sig poly : Id -> (Int, Bool)
+fun poly(f) { (f(42), f(true)) }
+
+sig churchPolys : Church(Id) -> (Int, Bool)
+fun churchPolys(xs) { poly(churchHead(xs)) }
+
+sig churchSingle : forall a. a -> Church(a)
+fun churchSingle(x) { fun(z)(step) { step(x)(z) } }
+
+sig ident : forall a. [] (a -> a)
+fun ident(x) { x }
+
+var xs = churchSingle(ident);
+churchPolys(xs)

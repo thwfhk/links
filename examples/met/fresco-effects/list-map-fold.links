@@ -1,0 +1,51 @@
+# Each curried list helper shares its effect context with its callback.
+
+sig mapItems : forall a, b. (a -> b) -> List a -> List b
+fun mapItems(f)(xs) {
+  switch (xs) {
+    case [] -> []
+    case x :: rest -> f(x) :: mapItems(f)(rest)
+  }
+}
+
+sig foldLeft : forall a, b. (b -> a -> b) -> b -> List a -> b
+fun foldLeft(f)(acc)(xs) {
+  switch (xs) {
+    case [] -> acc
+    case x :: rest -> foldLeft(f)(f(acc)(x))(rest)
+  }
+}
+
+sig foldRight : forall a, b. (a -> b -> b) -> List a -> b -> b
+fun foldRight(f)(xs)(acc) {
+  switch (xs) {
+    case [] -> acc
+    case x :: rest -> f(x)(foldRight(f)(rest)(acc))
+  }
+}
+
+sig iter : forall a. (a -> ()) -> List a -> ()
+fun iter(f)(xs) {
+  switch (xs) {
+    case [] -> ()
+    case x :: rest -> { f(x); iter(f)(rest) }
+  }
+}
+
+effect Gen { Yield : (Int) => (); }
+
+sig yieldInt : [Gen] (Int -> ())
+fun yieldInt(n) { do Yield(n) }
+
+sig yieldInts : [Gen] (List Int -> ())
+fun yieldInts(xs) { iter(yieldInt)(xs) }
+
+var xs = [1, 2, 3];
+var yields = handle(yieldInts(xs)) {
+  case <Yield(n) => k> -> n :: k(())
+  case () -> []
+};
+(mapItems(fun(n) { n + 1 })(xs),
+ foldLeft(fun(acc)(n) { acc * 10 + n })(0)(xs),
+ foldRight(fun(n)(acc) { acc * 10 + n })(xs)(0),
+ yields)

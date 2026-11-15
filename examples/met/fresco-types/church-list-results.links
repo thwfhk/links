@@ -1,0 +1,87 @@
+# Higher-rank results from Church-encoded lists and callbacks.
+
+typename Church(a) = forall b. b -> (a -> b -> b) -> b;
+
+sig churchHead : forall a. Church(a) -> a
+fun churchHead(xs) {
+  var Just(x) = xs(Nothing)(fun(x)(_) { Just(x) });
+  x
+}
+
+sig fromChurch : forall a. (a -> a) -> Church(a) -> a
+fun fromChurch(f)(xs) { f(churchHead(xs)) }
+
+sig choose : forall a. a -> a -> a
+fun choose(_)(y) { y }
+
+typename Id = forall a. [] (a -> a);
+
+sig ident : forall a. [] (a -> a)
+fun ident(x) { x }
+
+sig churchIds : Church(Id)
+var churchIds = fun(z)(step) { step(~ident)(step(~ident)(z)) };
+
+sig churchCount : forall a. a -> Church(a) -> Int
+fun churchCount(_)(xs) { xs(0)(fun(_)(n) { n + 1 }) }
+
+sig poly : Id -> (Int, Bool)
+fun poly(f) { (f(42), f(true)) }
+
+sig churchXs : Church(Id -> (Int, Bool))
+fun churchXs(z)(step) { step(poly)(z) }
+
+sig churchK : forall a. a -> Church(a) -> a
+fun churchK(x)(_) { x }
+
+sig h : Int -> Id
+fun h(_) { ~ident }
+
+typename H = forall a. [] (Int -> a -> a);
+
+sig churchLst : Church(H)
+fun churchLst(z)(step) { step(fun(_)(x) { x })(z) }
+
+sig churchNil : forall a. Church(a)
+var churchNil = fun(z)(_) { z };
+
+sig fromInt : forall a. (Int -> a) -> a
+fun fromInt(f) { f(42) }
+
+sig fromPair : forall a. (forall b. b -> (b, a)) -> a
+fun fromPair(f) { f(42).2 }
+
+sig fromId : forall a. (Id -> a) -> a
+fun fromId(f) { f(ident) }
+
+sig churchPolys : Church(Id) -> (Int, Bool)
+fun churchPolys(xs) { poly(churchHead(xs)) }
+
+sig churchSingle : forall a. a -> Church(a)
+fun churchSingle(x) { fun(z)(step) { step(x)(z) } }
+
+# A9 and A11: the Church-list argument supplies the other argument's type.
+var chosenFunction = fromChurch(choose(ident))(churchIds);
+var sharedType = churchCount(fun(f) { (f(42), f(true)) })(churchXs);
+
+# E1b: the lambda can be checked with forall before the Int argument.
+var etaExpanded = churchK(fun(x) { h(x) })(churchLst);
+
+# F6 and F7: choosing between an empty fold and a list of identities.
+var chosenList = choose(churchNil)(churchIds);
+var chosenHead = churchHead(choose(churchNil)(~churchIds));
+
+# F8 through F10: callbacks can return a fold, which we run on integers.
+var fromIntCallback = fromInt(fun(_) { churchIds });
+var fromPairCallback = fromPair(fun(x) { (x, churchIds) });
+var fromIdCallback = fromId(fun(_) { churchIds });
+var count = fun(_)(n) { n + 1 };
+
+# F11a and F11b: the expected element type or freezing preserves forall.
+var checkedCall = churchPolys(churchSingle(ident));
+var frozenCall = { var xs = churchSingle(~ident); churchPolys(xs) };
+
+((chosenFunction(42), sharedType), etaExpanded(0)(true),
+ (chosenList(0)(count), chosenHead(42)),
+ (fromIntCallback(0)(count), fromPairCallback(0)(count), fromIdCallback(0)(count)),
+ (checkedCall, frozenCall))

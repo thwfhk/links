@@ -1,0 +1,12 @@
+# The unfrozen identity leaves the parameter monomorphic.
+
+sig app : forall a, b. (a -> b) -> a -> b
+fun app(f)(x) { f(x) }
+
+sig pair : forall a, b. a -> b -> (a, b)
+fun pair(x)(y) { (x, y) }
+
+sig ident : forall a. [] (a -> a)
+fun ident(x) { x }
+
+app(fun(f) { pair(f(true))(f(42)) })(ident)

@@ -1,0 +1,10 @@
+effect Gen(a::Abs) { Yield : (a) => (); }
+
+# The bare predicate arrow does not give it access to the local Gen.
+sig find' : forall a::Abs. [] ((a -> Bool) -> List a -> Maybe(a))
+fun find'(p)(xs) {
+  handle(iter(fun(x) { if (p(x)) do Yield(x) else () }, xs)) {
+    case () -> Nothing
+    case <Yield(x)> -> Just(x)
+  }
+}

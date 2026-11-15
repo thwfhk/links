@@ -138,3 +138,299 @@ filemode : true
 Typecheck example file examples/linearList.links
 examples/linearList.links
 filemode : true
+
+Typecheck example file examples/met/fresco-effects/effectful-empty-list.links
+examples/met/fresco-effects/effectful-empty-list.links
+filemode : true
+
+Typecheck example file examples/met/fresco-effects/effectful-list.links
+examples/met/fresco-effects/effectful-list.links
+filemode : true
+
+Typecheck example file examples/met/fresco-effects/effects-exchange.links
+examples/met/fresco-effects/effects-exchange.links
+filemode : true
+
+Typecheck example file examples/met/fresco-effects/extend-absolute-mod.links
+examples/met/fresco-effects/extend-absolute-mod.links
+filemode : true
+
+Typecheck example file examples/met/fresco-effects/find_mask_paper.links
+examples/met/fresco-effects/find_mask_paper.links
+filemode : true
+
+Typecheck example file examples/met/fresco-effects/fresco.links
+examples/met/fresco-effects/fresco.links
+filemode : true
+
+Typecheck example file examples/met/fresco-effects/handle-do-mono.links
+examples/met/fresco-effects/handle-do-mono.links
+filemode : true
+
+Typecheck example file examples/met/fresco-effects/handle-do-param-mono.links
+examples/met/fresco-effects/handle-do-param-mono.links
+filemode : true
+
+Typecheck example file examples/met/fresco-effects/handle-fun-param.links
+examples/met/fresco-effects/handle-fun-param.links
+filemode : true
+
+Typecheck example file examples/met/fresco-effects/higher-order-effects.links
+examples/met/fresco-effects/higher-order-effects.links
+filemode : true
+
+Typecheck example file examples/met/fresco-effects/infer-lambda-do.links
+examples/met/fresco-effects/infer-lambda-do.links
+filemode : true
+
+Typecheck example file examples/met/fresco-effects/list-map-fold.links
+examples/met/fresco-effects/list-map-fold.links
+filemode : true
+
+Reject example file examples/met/fresco-effects/rejected/effectful-list-non-value.links
+examples/met/fresco-effects/rejected/effectful-list-non-value.links
+filemode : true
+stderr : @.*Type error: Modal introduction requires a value
+exit : 1
+
+Reject example file examples/met/fresco-effects/rejected/extend-relative-mod.links
+examples/met/fresco-effects/rejected/extend-relative-mod.links
+filemode : true
+stderr : @.*Type error: The modalities require different effect contexts: <Gen \|> and <>
+exit : 1
+
+Reject example file examples/met/fresco-effects/rejected/handle-do-param-mismatch.links
+examples/met/fresco-effects/rejected/handle-do-param-mismatch.links
+filemode : true
+stderr : @.*Type error: Expected \(\), got Int
+exit : 1
+
+Reject example file examples/met/fresco-effects/rejected/handle-fun-mismatch.links
+examples/met/fresco-effects/rejected/handle-fun-mismatch.links
+filemode : true
+stderr : @.*Type error: Expected \(\), got Int
+exit : 1
+
+Reject example file examples/met/fresco-effects/rejected/leak-effect-paper.links
+examples/met/fresco-effects/rejected/leak-effect-paper.links
+filemode : true
+stderr : @.*Type error: Cannot call a value of type <Gen \|> \(_\)
+exit : 1
+
+Reject example file examples/met/fresco-effects/rejected/pure-id-fun.links
+examples/met/fresco-effects/rejected/pure-id-fun.links
+filemode : true
+stderr : @.*Type error: Type argument \(_::Any\) \-> Int must satisfy Abs
+exit : 1
+
+Reject example file examples/met/fresco-effects/rejected/relative-to-absolute.links
+examples/met/fresco-effects/rejected/relative-to-absolute.links
+filemode : true
+stderr : @.*Type error: Cannot access f across the change in effect context
+exit : 1
+
+Reject example file examples/met/fresco-effects/rejected/two-do-mismatch.links
+examples/met/fresco-effects/rejected/two-do-mismatch.links
+filemode : true
+stderr : @.*Type error: Expected \(\|First\|\), got \(\|Second\|\)
+exit : 1
+
+Typecheck example file examples/met/fresco-effects/single-yield.links
+examples/met/fresco-effects/single-yield.links
+filemode : true
+
+Typecheck example file examples/met/fresco-programs/faux-tt.links
+examples/met/fresco-programs/faux-tt.links
+filemode : true
+
+Typecheck example file examples/met/fresco-programs/unix.links
+examples/met/fresco-programs/unix.links
+filemode : true
+
+Typecheck example file examples/met/fresco-types/application.links
+examples/met/fresco-types/application.links
+filemode : true
+
+Typecheck example file examples/met/fresco-types/blocked/church-pair-result.links
+examples/met/fresco-types/blocked/church-pair-result.links
+filemode : true
+
+Typecheck example file examples/met/fresco-types/choice.links
+examples/met/fresco-types/choice.links
+filemode : true
+
+Typecheck example file examples/met/fresco-types/church-list-results.links
+examples/met/fresco-types/church-list-results.links
+filemode : true
+
+Typecheck example file examples/met/fresco-types/church-lists.links
+examples/met/fresco-types/church-lists.links
+filemode : true
+
+Typecheck example file examples/met/fresco-types/inference-differences.links
+examples/met/fresco-types/inference-differences.links
+filemode : true
+
+Typecheck example file examples/met/fresco-types/native-list-results.links
+examples/met/fresco-types/native-list-results.links
+filemode : true
+
+Typecheck example file examples/met/fresco-types/native-lists.links
+examples/met/fresco-types/native-lists.links
+filemode : true
+
+Typecheck example file examples/met/fresco-types/rank-two.links
+examples/met/fresco-types/rank-two.links
+filemode : true
+
+Reject example file examples/met/fresco-types/rejected/application-unfrozen-argument.links
+examples/met/fresco-types/rejected/application-unfrozen-argument.links
+filemode : true
+stderr : @.*Type error: A quantified type variable would escape its scope
+exit : 1
+
+Reject example file examples/met/fresco-types/rejected/apply-unfrozen-identity.links
+examples/met/fresco-types/rejected/apply-unfrozen-identity.links
+filemode : true
+stderr : @.*Type error: Expected Bool, got Int
+exit : 1
+
+Reject example file examples/met/fresco-types/rejected/bound-church-singleton.links
+examples/met/fresco-types/rejected/bound-church-singleton.links
+filemode : true
+stderr : @.*Type error: Expected \(a\) \-> \(\(Id\) \-> \(a\) \-> a\) \-> a, got \(a\) \-> \(\(\[\] \(\(b\) \-> b\)\) \-> \(a\) \-> a\) \-> a
+exit : 1
+
+Reject example file examples/met/fresco-types/rejected/bound-singleton.links
+examples/met/fresco-types/rejected/bound-singleton.links
+filemode : true
+stderr : @.*Type error: Expected List Id, got List \(\[\] \(\(a\) \-> a\)\)
+exit : 1
+
+Reject example file examples/met/fresco-types/rejected/call-unfrozen-identity.links
+examples/met/fresco-types/rejected/call-unfrozen-identity.links
+filemode : true
+stderr : @.*Type error: Expected Int, got Bool
+exit : 1
+
+Reject example file examples/met/fresco-types/rejected/choice-polymorphic-result.links
+examples/met/fresco-types/rejected/choice-polymorphic-result.links
+filemode : true
+stderr : @.*Type error: Expected \(forall a\.\[\] \(\(a\) \-> a\)\) \-> forall a\.\[\] \(\(a\) \-> a\), got \(Id\) \-> \(a\) \-> a
+exit : 1
+
+Reject example file examples/met/fresco-types/rejected/church-map-head.links
+examples/met/fresco-types/rejected/church-map-head.links
+filemode : true
+stderr : @.*Type error: Expected \(a\) \-> \(\(_\) \-> \(a\) \-> a\) \-> a, got \(a\) \-> \(\(Id\) \-> \(a\) \-> a\) \-> a
+exit : 1
+
+Reject example file examples/met/fresco-types/rejected/church-quantifier-placement.links
+examples/met/fresco-types/rejected/church-quantifier-placement.links
+filemode : true
+stderr : @.*Type error: Expected \(Int\) \-> \(a\) \-> a, got \(Int\) \-> Id
+exit : 1
+
+Reject example file examples/met/fresco-types/rejected/lambda-unfrozen-argument.links
+examples/met/fresco-types/rejected/lambda-unfrozen-argument.links
+filemode : true
+stderr : @.*Type error: A quantified type variable would escape its scope
+exit : 1
+
+Reject example file examples/met/fresco-types/rejected/list-quantifier-placement.links
+examples/met/fresco-types/rejected/list-quantifier-placement.links
+filemode : true
+stderr : @.*Type error: Expected \(Int\) \-> \(a\) \-> a, got \(Int\) \-> Id
+exit : 1
+
+Reject example file examples/met/fresco-types/rejected/unannotated-church-parameter.links
+examples/met/fresco-types/rejected/unannotated-church-parameter.links
+filemode : true
+stderr : @.*Type error: Expected \(a\) \-> \(\(forall b\.\[\] \(\(b\) \-> b\)\) \-> \(a\) \-> a\) \-> a, got _::Any
+exit : 1
+
+Reject example file examples/met/fresco-types/rejected/unannotated-list-parameter.links
+examples/met/fresco-types/rejected/unannotated-list-parameter.links
+filemode : true
+stderr : @.*Type error: Expected List \(forall a\.\[\] \(\(a\) \-> a\)\), got _::Any
+exit : 1
+
+Reject example file examples/met/fresco-types/rejected/unannotated-poly-consumer.links
+examples/met/fresco-types/rejected/unannotated-poly-consumer.links
+filemode : true
+stderr : @.*Type error: Expected \(a\) \-> a, got _::\(Any,Abs\)
+exit : 1
+
+Reject example file examples/met/fresco-types/rejected/unannotated-polymorphic-parameter.links
+examples/met/fresco-types/rejected/unannotated-polymorphic-parameter.links
+filemode : true
+stderr : @.*Type error: Expected Int, got Bool
+exit : 1
+
+Typecheck example file examples/met/thesis/find.links
+examples/met/thesis/find.links
+filemode : true
+
+Typecheck example file examples/met/thesis/handler_results.links
+examples/met/thesis/handler_results.links
+filemode : true
+
+Typecheck example file examples/met/thesis/handlers.links
+examples/met/thesis/handlers.links
+filemode : true
+
+Typecheck example file examples/met/thesis/higher_order_coop.links
+examples/met/thesis/higher_order_coop.links
+filemode : true
+
+Typecheck example file examples/met/thesis/print_list.links
+examples/met/thesis/print_list.links
+filemode : true
+
+Typecheck example file examples/met/thesis/processes.links
+examples/met/thesis/processes.links
+filemode : true
+
+Typecheck example file examples/met/thesis/pure.links
+examples/met/thesis/pure.links
+filemode : true
+
+Reject example file examples/met/thesis/rejected/absolute_generator_callback.links
+examples/met/thesis/rejected/absolute_generator_callback.links
+filemode : true
+stderr : @.*Type error: Operation Get requires effect interface State in the current context
+exit : 1
+
+Reject example file examples/met/thesis/rejected/find_unannotated_callback.links
+examples/met/thesis/rejected/find_unannotated_callback.links
+filemode : true
+stderr : @.*Type error: The modalities require different effect contexts: <Gen \|> and <>
+exit : 1
+
+Reject example file examples/met/thesis/rejected/iter_pure_result.links
+examples/met/thesis/rejected/iter_pure_result.links
+filemode : true
+stderr : @.*Type error: Cannot access f across the change in effect context
+exit : 1
+
+Reject example file examples/met/thesis/rejected/print_list_without_io.links
+examples/met/thesis/rejected/print_list_without_io.links
+filemode : true
+stderr : @.*Type error: Operation Print requires effect interface IO in the current context
+exit : 1
+
+Reject example file examples/met/thesis/rejected/state_payload_escape.links
+examples/met/thesis/rejected/state_payload_escape.links
+filemode : true
+stderr : @.*Type error: Type argument \(\) \-> \(\) must satisfy Abs
+exit : 1
+
+Reject example file examples/met/thesis/rejected/state_result_escape.links
+examples/met/thesis/rejected/state_result_escape.links
+filemode : true
+stderr : @.*Type error: Type argument \(\) \-> \(\) must satisfy Abs
+exit : 1
+
+Typecheck example file examples/met/thesis/yield_state.links
+examples/met/thesis/yield_state.links
+filemode : true

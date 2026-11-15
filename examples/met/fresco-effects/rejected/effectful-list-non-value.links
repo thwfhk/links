@@ -1,0 +1,9 @@
+# Rejected because a list containing a call cannot acquire a new absolute modality.
+
+effect Gen { Yield : (Int) => (); }
+
+sig makeAction : [Gen] (() -> (() -> ()))
+fun makeAction() { fun() { do Yield(1) } }
+
+sig hideGen : [Gen] (() -> [Gen] (List (() -> ())))
+fun hideGen() { [makeAction()] }

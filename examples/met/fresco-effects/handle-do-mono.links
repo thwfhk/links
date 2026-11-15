@@ -1,0 +1,13 @@
+# Handle a call to a monomorphic operation.
+
+effect Gen { Yield : (Int) => (); }
+
+sig run : () -> ()
+fun run() {
+  handle(do Yield(1)) {
+    case <Yield(_)> -> ()
+    case () -> ()
+  }
+}
+
+run()

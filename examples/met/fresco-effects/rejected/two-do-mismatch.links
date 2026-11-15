@@ -1,0 +1,19 @@
+# Rejected because both yields must use the same interface type argument.
+
+typename First = (|First|);
+typename Second = (|Second|);
+
+effect Gen(a::Abs) { Yield : (a) => (); }
+
+sig run : forall a::Abs. (<Gen(a)> (() -> ())) -> ()
+fun run(action) {
+  handle(action()) {
+    case <Yield(_)> -> ()
+    case () -> ()
+  }
+}
+
+run(fun() {
+  do Yield(First : First);
+  do Yield(Second : Second)
+})

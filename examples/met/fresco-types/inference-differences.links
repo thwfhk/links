@@ -1,0 +1,68 @@
+# List applications SmallLinks accepts in the Fresco rejection set.
+
+sig fmap : forall a, b. (a -> b) -> List a -> List b
+fun fmap(f)(xs) { map(f, xs) }
+
+sig head : forall a. List a -> a
+fun head(x :: _) { x }
+
+sig single : forall a. a -> List a
+fun single(x) { [x] }
+
+typename Id = forall a. [] (a -> a);
+
+sig ident : forall a. [] (a -> a)
+fun ident(x) { x }
+
+sig ids : List Id
+var ids = [~ident, ~ident];
+
+sig compose : forall a, b, c. (b -> c) -> (a -> b) -> a -> c
+fun compose(f)(g)(x) { f(g(x)) }
+
+sig poly : Id -> (Int, Bool)
+fun poly(f) { (f(42), f(true)) }
+
+typename Church(a) = forall b. b -> (a -> b -> b) -> b;
+
+sig churchHead : forall a. Church(a) -> a
+fun churchHead(xs) {
+  var Just(x) = xs(Nothing)(fun(x)(_) { Just(x) });
+  x
+}
+
+sig churchIds : Church(Id)
+var churchIds = fun(z)(step) { step(~ident)(step(~ident)(z)) };
+
+sig churchMap : forall a, b. (a -> b) -> Church(a) -> Church(b)
+fun churchMap(f)(xs) {
+  fun(z)(step) { xs(z)(fun(x)(acc) { step(f(x))(acc) }) }
+}
+
+sig churchNil : forall a. Church(a)
+var churchNil = fun(z)(_) { z };
+
+sig choose : forall a. a -> a -> a
+fun choose(_)(y) { y }
+
+sig polys : List Id -> (Int, Bool)
+fun polys(f :: _) { (f(42), f(true)) }
+
+sig churchPolys : Church(Id) -> (Int, Bool)
+fun churchPolys(xs) { poly(churchHead(xs)) }
+
+# B7 and E5a: a known list element type supplies a higher-rank type argument.
+var mappedHeads = fmap(head)(single(ids));
+var consumeHead = compose(poly)(head);
+var consumeChurchHead = compose(poly)(churchHead);
+
+# F3: map can instantiate ident at the polymorphic element type.
+var mappedIds = fmap(ident)(ids);
+var mappedChurchIds = churchMap(ident)(churchIds);
+
+# F7: the expected Church-list type also permits the unfrozen argument.
+var chosenHead = churchHead(choose(churchNil)(churchIds));
+
+(polys(mappedHeads), consumeHead(ids), consumeChurchHead(churchIds),
+ polys(mappedIds), churchPolys(mappedChurchIds),
+ (chosenHead(42), chosenHead(true)))

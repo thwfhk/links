@@ -1,0 +1,13 @@
+# A relative type lets the handler supply Gen to its callback.
+
+effect Gen(a::Abs) { Yield : (a) => (); }
+
+sig run : (<Gen(Int)> (() -> ())) -> ()
+fun run(action) {
+  handle(action()) {
+    case <Yield(_)> -> ()
+    case () -> ()
+  }
+}
+
+run(fun() { do Yield(1) })

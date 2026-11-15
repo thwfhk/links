@@ -1,0 +1,7 @@
+# The unannotated parameter is used at both Int and Bool.
+
+sig pair : forall a, b. a -> b -> (a, b)
+fun pair(x)(y) { (x, y) }
+
+fun infer(f) { pair(f(42))(f(true)) }
+infer

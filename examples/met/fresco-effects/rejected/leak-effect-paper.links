@@ -1,0 +1,20 @@
+# Rejected because invoking the predicate here could send its yields to the inner handler.
+
+sig iter : forall a. (a -> ()) -> List a -> ()
+fun iter(f)(xs) {
+  switch (xs) {
+    case [] -> ()
+    case x :: rest -> { f(x); iter(f)(rest) }
+  }
+}
+
+effect Gen(a::Abs) { Yield : (a) => (); }
+
+fun findWrong(p)(xs) {
+  handle(iter(fun(x) {
+    if (p(x)) do Yield(x) else ()
+  })(xs)) {
+    case <Yield(x)> -> Just(x)
+    case () -> Nothing
+  }
+}

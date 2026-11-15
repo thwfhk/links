@@ -1,0 +1,90 @@
+# Run a FIFO scheduler with a Boolean fork and with a fork that takes a task.
+
+typename Task = mu task. ((List task) -> ());
+
+sig next : List Task -> ()
+fun next(queue) {
+  switch (queue) {
+    case [] -> ()
+    case first :: rest -> first(rest)
+  }
+}
+
+effect UCoop {
+  UFork : () => Bool;
+  USuspend : () => ();
+}
+
+sig scheduleU : (<UCoop> (() -> ())) -> Task
+fun scheduleU(action) {
+  handle(action()) {
+    case <USuspend => k> -> fun(queue) {
+      next(queue ++ [fun(rest) { k(())(rest) }])
+    }
+    case <UFork => k> -> fun(queue) {
+      k(true)(queue ++ [fun(rest) { k(false)(rest) }])
+    }
+    case () -> next
+  }
+}
+
+sig fullScheduleU : (<UCoop> (() -> ())) -> ()
+fun fullScheduleU(action) { scheduleU(action)([]) }
+
+effect Trace { Mark : (Int) => (); }
+
+# Fork takes a task in a fixed context so the task type is absolute.
+effect Coop {
+  Fork : ([Trace, Coop] (() -> ())) => ();
+  Suspend : () => ();
+}
+
+sig schedule : [Trace] (([Trace, Coop] (() -> ())) -> Task)
+fun schedule(action) {
+  handle(action()) {
+    case <Suspend => k> -> fun(queue) {
+      next(queue ++ [fun(rest) { k(())(rest) }])
+    }
+    case <Fork(task) => k> -> fun(queue) {
+      schedule(task)(queue ++ [fun(rest) { k(())(rest) }])
+    }
+    case () -> next
+  }
+}
+
+sig fullSchedule : [Trace] (([Trace, Coop] (() -> ())) -> ())
+fun fullSchedule(action) { schedule(action)([]) }
+
+var firstOrder = handle(fullScheduleU(fun() {
+  do Mark(1);
+  if (do UFork) {
+    do Mark(2);
+    do USuspend;
+    do Mark(5)
+  } else {
+    do Mark(3);
+    do USuspend;
+    do Mark(6)
+  };
+  do Mark(4)
+})) {
+  case <Mark(n) => k> -> n :: k(())
+  case () -> []
+};
+
+var higherOrder = handle(fullSchedule(fun() {
+  do Mark(1);
+  do Fork(fun() {
+    do Mark(2);
+    do Suspend;
+    do Mark(4)
+  });
+  do Mark(3);
+  do Suspend;
+  do Mark(5)
+})) {
+  case <Mark(n) => k> -> n :: k(())
+  case () -> []
+};
+
+(firstOrder, higherOrder)

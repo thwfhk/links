@@ -1,0 +1,19 @@
+# A list with a fixed effect context can store callbacks that use Yield.
+
+effect Gen { Yield : (Int) => (); }
+
+sig yieldOne : [Gen] (() -> ())
+fun yieldOne() { do Yield(1) }
+
+sig actions : [Gen] (List (() -> ()))
+var actions = [yieldOne];
+
+handle({
+  switch (actions) {
+    case [] -> ()
+    case first :: _ -> first()
+  }
+}) {
+  case <Yield(n) => k> -> n :: k(())
+  case () -> []
+}

@@ -1,0 +1,12 @@
+# The checker cannot infer a list of polymorphic elements from this body.
+
+typename Id = forall a. [] (a -> a);
+
+sig poly : Id -> (Int, Bool)
+fun poly(f) { (f(42), f(true)) }
+
+sig head : forall a. List a -> a
+fun head(x :: _) { x }
+
+fun infer(xs) { poly(head(xs)) }
+infer

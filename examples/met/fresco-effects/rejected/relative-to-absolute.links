@@ -1,0 +1,6 @@
+# Rejected because the relative callback cannot cross into the fixed absolute context.
+
+effect Gen { Yield : (Int) => Int; }
+
+sig fixContext : (<Gen> (Int -> Int)) -> [Gen] (Int -> Int)
+fun fixContext(f) { f }

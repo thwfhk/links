@@ -1,0 +1,38 @@
+# A list, a function, and a pair of functions from the pure programs section.
+sig pi : [] (List Int)
+var pi = [3, 1, 4, 1, 5, 9];
+
+sig inc : Int -> Int
+fun inc(x) { x + 1 }
+
+sig pinc : [] (Int -> Int, Int -> Int)
+var pinc = (inc, inc);
+
+sig map : [] (forall a, b. ((a -> b), List a) -> List b)
+fun map(f, xs) {
+  switch (xs) {
+    case [] -> []
+    case x :: rest -> f(x) :: map(f, rest)
+  }
+}
+
+sig iter : forall a. [] ((a -> ()) -> List a -> ())
+fun iter(f)(xs) {
+  switch (xs) {
+    case [] -> ()
+    case x :: rest -> f(x); iter(f)(rest)
+  }
+}
+
+# map and iter also accept these placements of forall.
+sig mapOuter : forall a, b. [] (((a -> b), List a) -> List b)
+var mapOuter = map;
+
+sig iterInner : [] (forall a. (a -> ()) -> List a -> ())
+var iterInner = iter;
+
+{
+  var _ = mapOuter(inc, pi);
+  var _ = iterInner(fun(_) { () })(pi);
+  (iter(fun(_) { () })(pi), map(inc, pi), pinc.1(41), pinc.2(42))
+}

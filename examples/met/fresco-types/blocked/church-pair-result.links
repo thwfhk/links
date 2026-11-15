@@ -1,0 +1,16 @@
+# F9 in isolation. Frontend rechecking fails when the result accumulator type is unconstrained.
+
+sig fromPair : forall a. (forall b. b -> (b, a)) -> a
+fun fromPair(f) { f(42).2 }
+
+typename Church(a) = forall b. b -> (a -> b -> b) -> b;
+
+typename Id = forall a. [] (a -> a);
+
+sig ident : forall a. [] (a -> a)
+fun ident(x) { x }
+
+sig churchIds : Church(Id)
+var churchIds = fun(z)(step) { step(~ident)(step(~ident)(z)) };
+
+fromPair(fun(x) { (x, churchIds) })

@@ -1,0 +1,37 @@
+effect Gen(a::Abs) { Yield : (a) => (); }
+effect State(s::Abs) { Get : () => s; Put : (s) => (); }
+
+module YieldCurrentState {
+  effect Callback { RunCallback : () => (); }
+
+  sig yieldState : [Callback, Gen(Int), State(Int)] (() -> ())
+  fun yieldState() {
+    do RunCallback;
+    do Yield(do Get)
+  }
+
+  sig collect : [State(Int)] ((() -> ()) -> List Int)
+  fun collect(f) {
+    handle(yieldState()) {
+      # This clause runs with the outer Gen and the current State.
+      case <RunCallback => k> -> f(); k(())
+      case <Yield(n) => k> -> n :: k(())
+      case () -> []
+    }
+  }
+}
+
+handle(
+  handle(YieldCurrentState.collect(fun() {
+    do Yield("callback");
+    do Put(do Get + 2)
+  }))(s <- 40) {
+    case <Get => k> -> k(s, s)
+    case <Put(n) => k> -> k((), n)
+  }
+) {
+  case <Yield(label) => k> ->
+    var (ns, labels) = k(());
+    (ns, label :: labels)
+  case ns -> (ns, [])
+}

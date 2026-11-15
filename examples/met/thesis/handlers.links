@@ -1,0 +1,118 @@
+effect Gen(a::Abs) { Yield : (a) => (); }
+effect State(s::Abs) { Get : () => s; Put : (s) => (); }
+effect ND { Choose : () => Bool; Fail : forall a::Abs. () => a; }
+
+module PolymorphicResult {
+  effect ND { Choose : () => Bool; Fail : () => [] (forall a. a); }
+}
+
+sig map : [] (forall a, b. ((a -> b), List a) -> List b)
+fun map(f, xs) {
+  switch (xs) {
+    case [] -> []
+    case x :: rest -> f(x) :: map(f, rest)
+  }
+}
+
+sig iter : forall a. [] ((a -> ()) -> List a -> ())
+fun iter(f)(xs) {
+  switch (xs) {
+    case [] -> ()
+    case x :: rest -> f(x); iter(f)(rest)
+  }
+}
+
+sig genInc : [Gen(Int)] (Int -> ())
+fun genInc(x) { do Yield(x + 1) }
+
+sig stateInc : [State(Int)] (() -> ())
+fun stateInc() { do Put(do Get + 1) }
+
+sig randomInc : [ND] (Int -> Int)
+fun randomInc(x) { if (do Choose) x + 1 else x }
+
+sig asList : forall a::Abs. [] ((<Gen(a)> (() -> ())) -> List a)
+fun asList(f) {
+  handle(f()) {
+    case () -> []
+    case <Yield(x) => k> -> x :: k(())
+  }
+}
+
+sig all : forall a::Abs. [] ((<ND> (() -> a)) -> List a)
+fun all(m) {
+  handle(m()) {
+    case x -> [x]
+    case <Choose => k> -> k(true) ++ k(false)
+    case <Fail> -> []
+  }
+}
+
+sig state : forall s::Abs, a::Abs. [] ((<State(s)> (() -> a)) -> s -> a)
+fun state(m) {
+  handle(m()) {
+    case x -> fun(_) { x }
+    case <Get => k> -> fun(s) { k(s)(s) }
+    case <Put(next) => k> -> fun(_) { k(())(next) }
+  }
+}
+
+sig asListAbsolute : forall a::Abs. [] (([Gen(a)] (() -> ())) -> List a)
+fun asListAbsolute(f) {
+  handle(f()) {
+    case () -> []
+    case <Yield(x) => k> -> x :: k(())
+  }
+}
+
+sig prefixSum : [State(Int), Gen(Int)] (List Int -> ())
+fun prefixSum(xs) {
+  iter(fun(x) { do Put(do Get + x); do Yield(do Get) })(xs)
+}
+
+sig subsetSum : [State(Int), ND] (List Int -> Int)
+fun subsetSum(xs) {
+  iter(fun(x) { if (do Choose) do Put(do Get + x) else () })(xs);
+  do Get
+}
+
+# Inside this function, the three local arrows share the ambient context.
+sig localIncrements : [Gen(Int), State(Int), ND] (List Int -> List Int)
+fun localIncrements(xs) {
+  sig genInc : Int -> ()
+  fun genInc(x) { do Yield(x + 1) }
+  sig stateInc : () -> ()
+  fun stateInc() { do Put(do Get + 1) }
+  sig randomInc : Int -> Int
+  fun randomInc(x) { if (do Choose) x + 1 else x }
+  iter(genInc)(xs);
+  iter(fun(_) { stateInc() })(xs);
+  map(randomInc, xs)
+}
+
+var pi = [3, 1, 4, 1, 5, 9];
+var generated = asList(fun() { iter(genInc)(pi) });
+var choices = all(fun() { map(randomInc, pi) });
+var finalState = state(fun() { iter(fun(_) { stateInc() })(pi); do Get })(0);
+var prefixes = asList(fun() { state(fun() { prefixSum(pi) })(0) });
+var subsets = all(fun() { state(fun() { subsetSum(pi) })(0) });
+var local = handle(state(fun() {
+  var outcomes = all(fun() { localIncrements(pi) });
+  (do Get, length(outcomes))
+})(0)) {
+  case (s, n) -> (s, n, [])
+  case <Yield(x) => k> ->
+    var (s, n, tail) = k(());
+    (s, n, x :: tail)
+};
+var failed = all(fun() { if (do Choose) 42 else do Fail });
+var failedWithPolymorphicResult =
+  handle(if (do PolymorphicResult.Choose) 42 else (do PolymorphicResult.Fail : Int)) {
+    case <PolymorphicResult.Choose => k> -> k(true) ++ k(false)
+    case <PolymorphicResult.Fail> -> []
+    case x -> [x]
+  };
+
+(generated, (length(choices), hd(choices), last(choices)), finalState,
+ prefixes, (length(subsets), take(3, subsets), last(subsets)), local,
+ asListAbsolute(fun() { genInc(41) }), failed, failedWithPolymorphicResult)

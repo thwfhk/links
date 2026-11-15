@@ -1,0 +1,6 @@
+# Rejected because the ambient callback cannot gain a relative Gen requirement.
+
+effect Gen { Yield : (Int) => Int; }
+
+sig extend : (<> (Int -> Int)) -> <Gen> (Int -> Int)
+fun extend(f) { f }

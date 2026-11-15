@@ -1,0 +1,13 @@
+effect IO { Read : () => String; Print : (String) => (); }
+
+sig printlist : forall a. [IO] (List a -> (a -> String) -> ())
+fun printlist(xs)(f) { iter(fun(x) { do Print(f(x)) }, xs) }
+
+handle({
+  var heading = do Read;
+  printlist([3, 1, 4])(fun(n) { heading ^^ intToString(n) })
+}) {
+  case <Read => k> -> k("digit ")
+  case <Print(s) => k> -> s :: k(())
+  case () -> []
+}

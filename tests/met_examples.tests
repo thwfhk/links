@@ -1,0 +1,154 @@
+Run modal example fresco-effects/effectful-empty-list.links
+examples/met/fresco-effects/effectful-empty-list.links
+filemode : true
+stdout : ([], []) : (List Int, List Bool)
+
+Run modal example fresco-effects/effectful-list.links
+examples/met/fresco-effects/effectful-list.links
+filemode : true
+stdout : [1] : List Int
+
+Run modal example fresco-effects/effects-exchange.links
+examples/met/fresco-effects/effects-exchange.links
+filemode : true
+stdout : [1, 2, 3, 1, 2, 1, 2, 3, 1, 3] : List Int
+
+Run modal example fresco-effects/extend-absolute-mod.links
+examples/met/fresco-effects/extend-absolute-mod.links
+filemode : true
+stdout : 42 : Int
+
+Run modal example fresco-effects/find_mask_paper.links
+examples/met/fresco-effects/find_mask_paper.links
+filemode : true
+stdout : ([1, 2, 3], Just(3), (Just(2), [1, 2])) : (List Int, Maybe (Int), (Maybe (Int), List Int))
+
+Run modal example fresco-effects/fresco.links
+examples/met/fresco-effects/fresco.links
+filemode : true
+stdout : ((42, true), (42, true), (42, true)) : ((Int, Bool), (Int, Bool), (Int, Bool))
+
+Run modal example fresco-effects/handle-do-mono.links
+examples/met/fresco-effects/handle-do-mono.links
+filemode : true
+stdout : () : ()
+
+Run modal example fresco-effects/handle-do-param-mono.links
+examples/met/fresco-effects/handle-do-param-mono.links
+filemode : true
+stdout : () : ()
+
+Run modal example fresco-effects/handle-fun-param.links
+examples/met/fresco-effects/handle-fun-param.links
+filemode : true
+stdout : () : ()
+
+Run modal example fresco-effects/higher-order-effects.links
+examples/met/fresco-effects/higher-order-effects.links
+filemode : true
+stdout : ([1, 2, 3, 5, 4, 6, 4], [1, 2, 3, 4, 5]) : (List Int, List Int)
+
+Run modal example fresco-effects/infer-lambda-do.links
+examples/met/fresco-effects/infer-lambda-do.links
+filemode : true
+stdout : () : ()
+
+Run modal example fresco-effects/list-map-fold.links
+examples/met/fresco-effects/list-map-fold.links
+filemode : true
+stdout : ([2, 3, 4], 123, 321, [1, 2, 3]) : (List Int, Int, Int, List Int)
+
+Run modal example fresco-effects/single-yield.links
+examples/met/fresco-effects/single-yield.links
+filemode : true
+stdout : 1 : Int
+
+Run modal example fresco-programs/faux-tt.links
+examples/met/fresco-programs/faux-tt.links
+filemode : true
+stdout : (Lam(0, Type, Lam(2, Var(0), Var(2))), (Type, Type)) : (Term, (Term, Term))
+
+Run modal example fresco-programs/unix.links
+import Unix; { var (stopped, lucile, users, (forked, forkOutput), resumed, (interleaved, interleavedOutput), state) = Unix.results; (stopped, lucile, users, (forked, strescape(forkOutput)), resumed, (interleaved, strescape(interleavedOutput)), state) }
+args : --path=examples/met/fresco-programs
+stdout : ((1, "dead"), "lucile", (0, "alice bob root "), ([0, 0], "UNIX is basically a simple operating system, but you have to be a genius  to understand the simplicity.To be, or not to be, that is the question:Whether \226\128\153tis nobler in the mind to suffer"), ([2, 1], ""), ([0, 0], "UNIX is basically To be, or not to be, a simple operating system, that is the question:but Whether \226\128\153tis nobler in the mind to sufferyou have to be a genius  to understand the simplicity."), (40, 42)) : ((Int, String), String, (Int, String), (List (<Unix.ProcessFork> (Int)), String), (List Int, String), (List Int, String), (Int, Int))
+
+Run modal example fresco-types/application.links
+examples/met/fresco-types/application.links
+filemode : true
+stdout : (((42, true), (42, true), (42, true)), ((42, true), (42, true)), ((42, true), (42, true)), ((42, true), (42, true), (42, true)), ((true, 42), (42, true)), (42, 42)) : (((Int, Bool), (Int, Bool), (Int, Bool)), ((Int, Bool), (Int, Bool)), ((Int, Bool), (Int, Bool)), ((Int, Bool), (Int, Bool), (Int, Bool)), ((Bool, Int), (Int, Bool)), (Int, Int))
+
+Run modal example fresco-types/choice.links
+examples/met/fresco-types/choice.links
+filemode : true
+stdout : ((42, true), (42, true), 42, (42, true, 42), (42, true)) : ((Int, Bool), (Int, Bool), Int, (Int, Bool, Int), (Int, Bool))
+
+Run modal example fresco-types/church-list-results.links
+examples/met/fresco-types/church-list-results.links
+filemode : true
+stdout : ((42, 1), true, (2, 42), (2, 2, 2), ((42, true), (42, true))) : ((Int, Int), Bool, (Int, Int), (Int, Int, Int), ((Int, Bool), (Int, Bool)))
+
+Run modal example fresco-types/church-lists.links
+examples/met/fresco-types/church-lists.links
+filemode : true
+stdout : ((1, 42, true, 42), (3, 3), ([42, 41], 3), [(42, true)], true, [(42, true), (42, true)], [(42, true), (42, true)], [(true, 42), (true, 42)]) : ((Int, Int, Bool, Int), (Int, Int), (List Int, Int), List (Int, Bool), Bool, List (Int, Bool), List (Int, Bool), List (Bool, Int))
+
+Run modal example fresco-types/inference-differences.links
+examples/met/fresco-types/inference-differences.links
+filemode : true
+stdout : ((42, true), (42, true), (42, true), (42, true), (42, true), (42, true)) : ((Int, Bool), (Int, Bool), (Int, Bool), (Int, Bool), (Int, Bool), (Int, Bool))
+
+Run modal example fresco-types/native-list-results.links
+examples/met/fresco-types/native-list-results.links
+filemode : true
+stdout : ((42, 1), true, 42, ((42, true), (42, true), (42, true)), ((42, true), (42, true))) : ((Int, Int), Bool, Int, ((Int, Bool), (Int, Bool), (Int, Bool)), ((Int, Bool), (Int, Bool)))
+
+Run modal example fresco-types/native-lists.links
+examples/met/fresco-types/native-lists.links
+filemode : true
+stdout : ((2, 2), (1, 42, true, 42), (3, 3), ([42, 41], 3), [(42, true)], true, [(42, true), (42, true)], [(42, true), (42, true)], [(true, 42), (true, 42)]) : ((Int, Int), (Int, Int, Bool, Int), (Int, Int), (List Int, Int), List (Int, Bool), Bool, List (Int, Bool), List (Int, Bool), List (Bool, Int))
+
+Run modal example fresco-types/rank-two.links
+examples/met/fresco-types/rank-two.links
+filemode : true
+stdout : (42, 42, (42, true), (), 42, (42, true)) : (Int, Int, (Int, Bool), (), Int, (Int, Bool))
+
+Run modal example thesis/find.links
+examples/met/thesis/find.links
+filemode : true
+stdout : (Just(6), Nothing, Just(12)) : (Maybe (Int), Maybe (Int), Maybe (Int))
+
+Run modal example thesis/handler_results.links
+examples/met/thesis/handler_results.links
+filemode : true
+stdout : (52, (42, true, "second")) : (Int, (Int, Bool, String))
+
+Run modal example thesis/handlers.links
+examples/met/thesis/handlers.links
+filemode : true
+stdout : ([4, 2, 5, 2, 6, 10], (64, [4, 2, 5, 2, 6, 10], [3, 1, 4, 1, 5, 9]), 6, [3, 4, 8, 9, 14, 23], (64, [23, 14, 18], 0), (6, 64, [4, 2, 5, 2, 6, 10]), [42], [42], [42]) : (List Int, (Int, List Int, List Int), Int, List Int, (Int, List Int, Int), (Int, Int, List Int), List Int, List Int, List Int)
+
+Run modal example thesis/higher_order_coop.links
+examples/met/thesis/higher_order_coop.links
+filemode : true
+stdout : 3 : Int
+
+Run modal example thesis/print_list.links
+examples/met/thesis/print_list.links
+filemode : true
+stdout : ["digit 3", "digit 1", "digit 4"] : List String
+
+Run modal example thesis/processes.links
+examples/met/thesis/processes.links
+filemode : true
+stdout : (42, 42, ["start", "child", "parent", "child resumed", "parent resumed"]) : (Int, Int, List String)
+
+Run modal example thesis/pure.links
+examples/met/thesis/pure.links
+filemode : true
+stdout : ((), [4, 2, 5, 2, 6, 10], 42, 43) : ((), List Int, Int, Int)
+
+Run modal example thesis/yield_state.links
+examples/met/thesis/yield_state.links
+filemode : true
+stdout : ([42], ["callback"]) : (List Int, List String)

@@ -1,0 +1,8 @@
+effect IO { Read : () => String; Print : (String) => (); }
+effect Gen(a::Abs) { Yield : (a) => (); }
+effect State(s::Abs) { Get : () => s; Put : (s) => (); }
+effect ND { Choose : () => Bool; Fail : forall a::Abs. () => a; }
+
+# The surrounding context has no IO instance for the call to Print.
+sig printlist : forall a. [Gen(Int), State(Int), ND] (List a -> (a -> String) -> ())
+fun printlist(xs)(f) { iter(fun(x) { do Print(f(x)) }, xs) }

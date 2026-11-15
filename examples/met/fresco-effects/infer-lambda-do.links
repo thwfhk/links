@@ -1,0 +1,14 @@
+# The expected type supplies Gen to the lambda, and the argument fixes its parameter.
+
+effect Gen(a::Abs) { Yield : (a) => (); }
+
+fun infer(f : (forall a::Abs. (<Gen(a)> (() -> ())) -> a)) {
+  f(fun() { do Yield(()) })
+}
+
+infer(fun(action) {
+  handle(action()) {
+    case <Yield(x)> -> x
+    case () -> error("Expected a yield")
+  }
+})

@@ -1,0 +1,11 @@
+# Rejected because the handler clause returns an Int where unit is required.
+
+effect Gen(a::Abs) { Yield : (a) => (); }
+
+sig run : () -> ()
+fun run() {
+  handle(do Yield(1)) {
+    case <Yield(x)> -> x
+    case () -> ()
+  }
+}

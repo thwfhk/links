@@ -1,0 +1,8 @@
+# The returned function calls f in the context where f was passed to iter.
+sig iter : forall a. [] ((a -> ()) -> [] (List a -> ()))
+fun iter(f)(xs) {
+  switch (xs) {
+    case [] -> ()
+    case x :: rest -> f(x); iter(f)(rest)
+  }
+}

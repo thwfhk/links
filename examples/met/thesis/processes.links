@@ -1,0 +1,75 @@
+# A list represented by a recursive variant.
+typename TutorialList(a) = mu l. (|Nil | Cons:(a, l)|);
+
+sig sum : TutorialList(Int) -> Int
+fun sum(xs) {
+  switch (xs) {
+    case Nil -> 0
+    case Cons((x, rest)) -> x + sum(rest)
+  }
+}
+
+# A suspended process receives the rest of the queue.
+typename Proc = mu p. (|Proc:(List p -> ())|);
+
+sig push : [] (Proc -> List Proc -> List Proc)
+fun push(p)(ps) { ps ++ [p] }
+
+sig next : [] (List Proc -> ())
+fun next(ps) {
+  switch (ps) {
+    case [] -> ()
+    case Proc(p) :: rest -> p(rest)
+  }
+}
+
+effect State(s::Abs) { Get : () => s; Put : (s) => (); }
+
+sig stateInc : [State(Int)] (() -> ())
+fun stateInc() { do Put(do Get + 1) }
+
+sig incProc : [State(Int)] Proc
+var incProc = Proc(fun(ps) { stateInc(); next(ps) });
+
+var finalState = handle({ next([incProc, incProc]); do Get })(s <- 40) {
+  case <Get => k> -> k(s, s)
+  case <Put(n) => k> -> k((), n)
+};
+
+effect UCoop { UFork : () => Bool; Suspend : () => (); }
+
+sig schedule : [] ((<UCoop> (() -> ())) -> List Proc -> ())
+fun schedule(m) {
+  handle(m()) {
+    case () -> fun(ps) { next(ps) }
+    case <Suspend => k> -> fun(ps) {
+      next(push(Proc(fun(rest) { k(())(rest) }))(ps))
+    }
+    case <UFork => k> -> fun(ps) {
+      k(true)(push(Proc(fun(rest) { k(false)(rest) }))(ps))
+    }
+  }
+}
+
+effect Trace { Note : (String) => (); }
+
+sig task : [UCoop, Trace] (() -> ())
+fun task() {
+  do Note("start");
+  if (do UFork) {
+    do Note("child");
+    do Suspend;
+    do Note("child resumed")
+  } else {
+    do Note("parent");
+    do Suspend;
+    do Note("parent resumed")
+  }
+}
+
+var trace = handle(schedule(task)([])) {
+  case <Note(label) => k> -> label :: k(())
+  case () -> []
+};
+
+(sum(Cons((20, Cons((22, Nil))))), finalState, trace)

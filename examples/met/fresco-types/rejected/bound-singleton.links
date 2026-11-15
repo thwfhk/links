@@ -1,0 +1,15 @@
+# The singleton call instantiates ident before the later use.
+
+typename Id = forall a. [] (a -> a);
+
+sig polys : List Id -> (Int, Bool)
+fun polys(f :: _) { (f(42), f(true)) }
+
+sig single : forall a. a -> List a
+fun single(x) { [x] }
+
+sig ident : forall a. [] (a -> a)
+fun ident(x) { x }
+
+var xs = single(ident);
+polys(xs)

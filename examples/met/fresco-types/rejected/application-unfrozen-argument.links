@@ -1,0 +1,14 @@
+# The lambda needs an argument with a retained forall.
+
+sig app : forall a, b. (a -> b) -> a -> b
+fun app(f)(x) { f(x) }
+
+typename Id = forall a. [] (a -> a);
+
+sig poly : Id -> (Int, Bool)
+fun poly(f) { (f(42), f(true)) }
+
+sig ident : forall a. [] (a -> a)
+fun ident(x) { x }
+
+app(fun(x) { poly(x) })(ident)

@@ -1,0 +1,80 @@
+# Producing or consuming a list of identities through a callback.
+
+sig fromList : forall a. (a -> a) -> List a -> a
+fun fromList(f)(x :: _) { f(x) }
+
+sig choose : forall a. a -> a -> a
+fun choose(_)(y) { y }
+
+typename Id = forall a. [] (a -> a);
+
+sig ident : forall a. [] (a -> a)
+fun ident(x) { x }
+
+sig ids : List Id
+var ids = [~ident, ~ident];
+
+sig k : forall a. a -> List a -> Int
+fun k(_)(xs) { length(xs) }
+
+sig pair : forall a, b. a -> b -> (a, b)
+fun pair(x)(y) { (x, y) }
+
+sig poly : Id -> (Int, Bool)
+fun poly(f) { (f(42), f(true)) }
+
+sig xs : List (Id -> (Int, Bool))
+var xs = [poly];
+
+sig keep : forall a. a -> List a -> a
+fun keep(x)(_) { x }
+
+sig h : Int -> Id
+fun h(_) { ~ident }
+
+typename H = forall a. [] (Int -> a -> a);
+
+sig lst : List H
+var lst = [fun(_)(x) { x }];
+
+sig head : forall a. List a -> a
+fun head(x :: _) { x }
+
+sig nil : forall a. List a
+var nil = [];
+
+sig fromInt : forall a. (Int -> a) -> a
+fun fromInt(f) { f(42) }
+
+sig fromPair : forall a. (forall b. b -> (b, a)) -> a
+fun fromPair(f) { f(42).2 }
+
+sig fromId : forall a. (Id -> a) -> a
+fun fromId(f) { f(ident) }
+
+sig polys : List Id -> (Int, Bool)
+fun polys(f :: _) { (f(42), f(true)) }
+
+sig single : forall a. a -> List a
+fun single(x) { [x] }
+
+# A9 and A11: the list argument supplies the other argument's type.
+var chosenFunction = fromList(choose(ident))(ids);
+var sharedType = k(fun(f) { pair(f(42))(f(true)) })(xs);
+
+# E1b: the lambda can be checked with forall before the Int argument.
+var etaExpanded = keep(fun(x) { h(x) })(lst);
+
+# F7 through F10: identities survive selection and callback results.
+var chosenHead = head(choose(nil)(ids));
+var fromIntCallback = fromInt(fun(_) { ids });
+var fromPairCallback = fromPair(fun(x) { pair(x)(ids) });
+var fromIdCallback = fromId(fun(_) { ids });
+
+# F11a and F11b: the expected list type or freezing preserves the forall.
+var checkedCall = polys(single(ident));
+var frozenCall = { var xs = single(~ident); polys(xs) };
+
+((chosenFunction(42), sharedType), etaExpanded(0)(true), chosenHead(42),
+ (polys(fromIntCallback), polys(fromPairCallback), polys(fromIdCallback)),
+ (checkedCall, frozenCall))

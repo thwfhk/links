@@ -1,0 +1,49 @@
+# Use a second operation to evaluate the predicate outside the search handler.
+
+effect Gen(a::Abs) { Yield : (a) => (); }
+
+sig asList : (<Gen(Int)> (() -> ())) -> List Int
+fun asList(action) {
+  handle(action()) {
+    case <Yield(n) => k> -> n :: k(())
+    case () -> []
+  }
+}
+
+sig iter : forall a. (a -> ()) -> List a -> ()
+fun iter(f)(xs) {
+  switch (xs) {
+    case [] -> ()
+    case x :: rest -> { f(x); iter(f)(rest) }
+  }
+}
+
+module Search {
+  effect Predicate(a::Abs) { Test : (a) => Bool; }
+
+  sig find : forall a::Abs. (a -> Bool) -> List a -> Maybe(a)
+  fun find(p)(xs) {
+    handle(iter(fun(x) {
+      if (do Test(x)) do Yield(x) else ()
+    })(xs)) {
+      # The predicate's operations reach the caller's handler.
+      case <Test(x) => k> -> k(p(x))
+      case <Yield(x)> -> Just(x)
+      case () -> Nothing
+    }
+  }
+}
+
+var collected = asList(fun() { iter(fun(n) { do Yield(n) })([1, 2, 3]) });
+var found = Search.find(fun(n) { n > 2 })([1, 2, 3, 4]);
+
+var observed = handle(Search.find(fun(n) {
+  do Yield(n);
+  n >= 2
+})([1, 2, 3])) {
+  case <Yield(n) => k> ->
+    { var (found, seen) = k(()); (found, n :: seen) }
+  case found -> (found, [])
+};
+
+(collected, found, observed)

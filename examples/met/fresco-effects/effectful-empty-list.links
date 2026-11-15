@@ -1,0 +1,10 @@
+# The absolute type of the empty list keeps its element type polymorphic.
+
+effect Gen { Yield : (Int) => (); }
+
+sig nil : forall a. [Gen] (List a)
+var nil = [];
+
+handle((nil : List Int, nil : List Bool)) {
+  case <Yield(_) => k> -> k(())
+}

@@ -1,7 +1,7 @@
 # AGENTS.md
 
 SmallLinks is a native subset of Links. Its compiler and interpreter
-are written mainly in OCaml. The [language guide](tasks/small/SPEC.md)
+are written mainly in OCaml. The [language guide](tasks/met/GUIDE.md)
 describes the language supported by this repository.
 
 ## Repository shape
@@ -15,18 +15,19 @@ describes the language supported by this repository.
   contains the OCaml IR unit tests.
 - `examples/` contains SmallLinks programs. `doc/` contains the older
   Links manuals.
-- `tasks/small/` contains the language guide, plan and implementation
-  notes. `.github/workflows/default.yml` runs CI.
+- `tasks/met/` contains the language guide, design specification, plan
+  and implementation notes. `.github/workflows/default.yml` runs CI.
 
 
 ## Task management
 
-When the user asks, for each independent large task `X` that spans
-sessions or needs a handover, keep one `tasks/X/PLAN.md`. Record
-milestones, completed and remaining work, dependencies, completion
-checks, and the latest check results. At each pause or handover,
-record the next action and any blockers. Mark the plan complete when
-its completion checks pass.
+Create a new `tasks/X` only when the user asks to create it.
+
+For each independent large task `X` that spans sessions or needs a
+handover, keep one `tasks/X/PLAN.md`. Record milestones, completed and
+remaining work, dependencies, completion checks, and the latest check
+results. At each pause or handover, record the next action and any
+blockers. Mark the plan complete when its completion checks pass.
 
 Use `tasks/X/SPEC.md` for a specification of the language feature
 design. Use `tasks/X/IMPL.md` for significant implementation
@@ -149,7 +150,7 @@ opam exec -- dune install --profile=ci --prefix="$prefix" links
 
 ## Code changes
 
-- Make only changes needed for the requested outcome.
+- Make only changes needed for the requested outcome and try to reuse existing code. But if rewriting would improve the code structure significantly, do it.
 - Follow the surrounding OCaml and Links code style. Keep `.ml` and
   `.mli` files consistent. Follow the nearest `.ocamlformat` and
   avoid reformatting unrelated code.

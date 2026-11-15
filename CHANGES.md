@@ -1,3 +1,6 @@
+This file records earlier Links development and releases. For the current
+SmallLinks language, see the [language guide](tasks/met/GUIDE.md).
+
 # Unreleased
 
 ## Require OCaml 5.1.1

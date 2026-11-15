@@ -3,6 +3,7 @@
 The language design and scope are in [SPEC.md](SPEC.md#scope).
 This plan records milestones, dependencies, progress and checks.
 [IMPL.md](IMPL.md) records significant implementation decisions.
+[GUIDE.md](GUIDE.md) documents the language for programmers.
 
 Work stays on `small-met`. See [Status](#status) for the completion
 record and deferred work.
@@ -17,23 +18,6 @@ record its commit ID after committing.
 
 Follow the [implementation approach](IMPL.md#implementation-approach)
 when choosing what to reuse or restructure.
-
-## Chat handovers
-
-Use four chats in this order:
-
-1. Milestones 1–2: finish the design review, record the baseline, and
-   implement syntax and type representation.
-2. Milestone 3: implement Fresco inference and modal types.
-3. Milestone 4: implement operation, handler and native-effect typing.
-4. Milestones 5–6: integrate the compiler, migrate libraries and tests,
-   review the combined changes and run final checks.
-
-Each chat reads the latest SPEC.md, PLAN.md and IMPL.md before starting.
-Use the same `small-met` branch and finish the preceding work before
-starting the next chat's implementation. At handover, update this plan
-with completed items, commits, checks, next action and blockers, and
-record implementation decisions in IMPL.md.
 
 ## Milestone tracking
 
@@ -451,13 +435,14 @@ Depends on milestone 5.
   default runtime path. Include the full strict handler suite. Record
   the tested revision and check logs.
 - [x] **6.6** (`5e971724`) Review 5.19 independently and run the combined
-  checks on the new revision. Keep the results from 6.5 as a record of
-  the earlier run.
+  checks on the new revision.
 - [x] **6.7** (`f9d190ef`) Review 5.20 independently and run the combined
-  checks on the new revision. Keep the results from 6.5 and 6.6 as
-  historical checks.
+  checks on the new revision.
 - [x] **6.8** (`8efa59ce`) Review items 5.21–5.24 independently and run
   the combined checks on the new revision.
+- [x] **6.9** Create the programmer-facing [language guide](GUIDE.md),
+  update documentation links, and keep the latest check results in this
+  plan. Check the guide's examples and local links.
 
 Completion check: a clean CI build and temporary installation work,
 all in-scope regressions and unit tests pass, the guide matches the
@@ -512,6 +497,8 @@ Use the default execution path for follow-up checks. Checks specific to
 All MET milestones and reviewed choices are complete on `small-met`.
 The latest tested compiler is `8efa59ce`. See
 [milestone 6.8 checks](#milestone-68-checks).
+The [language guide and documentation checks](#documentation-checks)
+passed for 6.9.
 
 [Deferred language work](SPEC.md#future-work) includes effect variables,
 term-level masks, lock access across quantifiers and `escape`. It also
@@ -527,21 +514,6 @@ in `/private/tmp/smalllinks-met-6-8/`. Independent review checked import
 scope and repeated declarations, pure SAT construction and caller
 failure handling, and file exit rollback and isolation.
 
-The pre-MET `eba6c051` build accepted `History_c.base` and
-`open History_c` before `import History_b`, where `History_b` imports
-`History_c`. It rejected `History_b.History_c.base`. The `f9d190ef`
-build rejected the transitive type reference with `Unbound type
-constructor History_c.Number`. See
-`/private/tmp/smalllinks-met-5-21-history/` for both runs and
-`/private/tmp/smalllinks-met-5-21/independent-review.log` for the
-check of fresh declarations across inputs.
-
-The file exit probe before 5.24 printed `"stopped" : Int` and reported
-that the skipped linear value had already been used. See
-`/private/tmp/smalllinks-met-5-24/file-exit-before.log` and
-`independent-integration.log` in the same directory for the review
-checks after the fix.
-
 | Command or check | Result | Log |
 | --- | --- | --- |
 | `make all-ci`, including a fresh Dune build directory | Passed with `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk`. | `final-ci-build.log`, `final-clean-ci-build.log` |
@@ -552,595 +524,271 @@ checks after the fix.
 | Guide and temporary installation | All 18 runnable guide blocks and four entry points passed. `dune install` from the fresh CI build and `./tests/check-install.sh` passed. Installed probes covered transitive imports, order, SAT construction and file exit. | `guide.log`, `install.log`, `install-check.log`, `installed-follow-up.log` |
 | `make rule-check`, `git diff --check`, tabs and document links | Passed. An `rg` scan covered the tabs rule because GNU find was unavailable. | `rule-check.log`, `diff-check.log`, `tabs.log`, `documents.log` |
 
-## Historical check records
+### Documentation checks
 
-The results below apply to their listed revisions and drafts.
-
-### Earlier milestone results
-
-The final review fixes for milestones 2–4 are complete. Commit
-`67f8eded` extends frozen argument inference to polymorphic `do` calls.
-Items 3.13 and 3.14 cover argument inference and conditional branches.
-Item 2.8 is complete at `66861cb0`. The review of type printing and
-clause annotation syntax is complete. Items 4.11–4.13 cover return
-annotations, forwarding switches and conflicting interface arguments.
-The final review of milestone 5 completed 5.14 at `85ad25b5`. The
-record, polymorphism and collection suites passed with 43, 70 and 61
-cases after `make`. Logs are in `/private/tmp/smalllinks-met-5-14/`.
-Item 5.15 passed all 10 REPL checks with default settings and with
-frontend rechecking and strict IR checks. Logs are in
-`/private/tmp/smalllinks-met-5-15/`. Item 5.16 passed the 66 collection,
-three frontend recheck and 30 typed IR tests. Logs are in
-`/private/tmp/smalllinks-met-5-16/`. Item 5.17 passed the 69 collection
-and 58 module tests, with additional checks of source order, nesting
-and shadowing. Logs are in `/private/tmp/smalllinks-met-5-17/`.
-Item 5.18 passed the full strict handler suite, including `(-Tag as x)`,
-and the pattern suite with both default and strict settings. Logs are
-in `/private/tmp/smalllinks-met-5-18/`. The
-[combined checks in 6.5](#milestone-65-checks) passed on `66ee9476`.
-Item 5.19 passed both reported probes with default and strict settings.
-The [combined checks in 6.6](#milestone-66-checks) passed on `5e971724`.
-Item 5.20 passed the enclosing alias, annotation and record rest probes
-under default and strict settings. The
-[combined checks in 6.7](#milestone-67-checks) passed on `f9d190ef`.
-The [milestone 3 design checks](#milestone-3-design-checks) confirmed
-the reviewed rules for inference and type holes. See the
-[future work](SPEC.md#future-work) for deferred extensions.
-The [milestone 4 design review](#milestone-4-design-checks) confirmed the
-current rules for interface arguments, forwarding returns and leading
-relative prefixes on branch results.
-
-Items 5.5 and 5.7–5.13 share the compiler and library commit
-`7f1f3f8c` because the startup, frontend and IR changes share code and
-checks. Commit `4b63194d` keeps source preprocessing off the bundled
-comprehension helpers.
-
-The milestone 4 review draft passed `git diff --check`
-against `98d39ac8`.
-
-### Milestone 3 design checks
-
-| Revision and command | Result | Log |
-| --- | --- | --- |
-| SmallLinks `f1b8b80e`, `make` and `./links -e` with frontend rechecking and strict IR checks | Build and all 15 probes passed. Both modal argument orders asked for an annotation. The signed recursive calls and quantified record examples passed. `%` in aliases and signatures was rejected. | `/private/tmp/met-reviewed-design.zvoKtw/build.log`, `probes.log` |
-| SmallLinks `f1b8b80e`, `./test-harness` on `handlers`, `effect_annotations`, `polymorphism`, `records` and `desugar_datatypes` | 407 tests passed across the five suites. | `/private/tmp/met-reviewed-design.zvoKtw/`, `<suite>.log` |
-| `make rule-check`, `git diff --check`, document link check and `rg` tab scan | Passed. The tab scan covered the source files checked by the GNU find rule. | `/private/tmp/met-reviewed-design.zvoKtw/`, `rule-check.log`, `diff-check.log`, `documents.log`, `tabs.log` |
-| Links `4e5c78c5` and SmallLinks `4407a649`, `./links -e` in separate builds | Both accepted `%` in aliases. Direct uses shared one type variable. An eligible binding could generalise that variable. | `/private/tmp/met-alias-history.gdyiZZ/`, `*-probes.log`, `*-alias-binding-probes.log` |
-| Links `1912d9b7` and SmallLinks `4407a649`, `./links -e` in separate builds | Both solved and generalised signature holes. Links rejected an unresolved hole beside explicit `forall` with `Inconsistent quantifiers`. SmallLinks generalised it. | `/private/tmp/met-signature-history.mDhCUw/1912d9b7-refined-signature-probes.log`, `4407a649-signature-probes.log` |
-
-### Milestone 4 design checks
-
-Independent review checked the three rules against the compiler and
-the existing regressions. The reviewed rules match the implementation
-at `174e6cf0`. Logs are in `/private/tmp/met4-reviewed-design.fMvtf6/`.
+The guide and navigation update used compiler source revision
+`7b764a87` with documentation edits. No compiler or prelude files changed.
 
 | Command or check | Result | Log |
 | --- | --- | --- |
-| `make` and `./links -e` with frontend rechecking and strict IR checks | Build and all 15 probes passed. They cover supplied and conflicting candidates, forwarding and helper calls, and leading and nested prefixes in branch result types. | `build.log`, `probes.log` |
-| `./test-harness tests/handlers.tests` and `./test-harness tests/effect_annotations.tests` | All 153 handler and 76 effect annotation cases passed. | `handlers.log`, `effect_annotations.log` |
-| `make rule-check`, `git diff --check`, local document links and `rg` tab scan | Passed. The tab scan covered the files checked by the GNU find rule. | `rule-check.log`, `diff-check.log`, `documents.log`, `tabs.log` |
+| `python3 /private/tmp/smalllinks-met-guide.dOGSYd/check_guide.py` using `./links` | All 28 fenced blocks checked: 25 programs returned the documented values, two produced the expected type errors, and one supplied the import fixture. All 16 additional syntax, file and REPL checks passed. | `/private/tmp/smalllinks-met-guide.dOGSYd/summary.log` and per-example logs in that directory |
+| `python3 /private/tmp/smalllinks-met-guide-docs/check_docs.py` | Local links, headings, fences, tables and whitespace passed across the MET documents and documentation entry points. | `/private/tmp/smalllinks-met-guide-docs/documents.log` |
+| `make rule-check` and `git diff --check` | Passed. | `/private/tmp/smalllinks-met-guide-docs/rule-check.log`, `diff-check.log` |
 
-### Milestone 4 final review checks
+## Example ports
 
-The combined checks used `6c054ee5` with OCaml 5.4.0. Logs are in
-`/private/tmp/smalllinks-met-4-defects.DqKn6y/`. Independent review checked redundant
-annotations, changes to the type of a returned value, switch scope and
-pattern narrowing, and the difference between an incompatible type and
-an unresolved choice of modality. See `4.11-independent-review.log`,
-`4.12-independent-review.log` and `4.13-probes.log`.
+The [example README](../../examples/met/README.md) gives run commands.
+[EXAMPLE_ISSUES.md](EXAMPLE_ISSUES.md) records compiler issues and
+inference limits.
 
-| Command or check | Result | Log |
+### Sources
+
+- Wenhao Tang's thesis at `eabef130ffb744840fe8a52e0cbb4045fe2cc397`.
+  The tutorial is `chapters/overview.tex`.
+- The Fresco artefact at `333738dbe9da1dcd094a6b2c2c9dbb9eec701ea4`.
+  The source material is the README program, `tests/pass`, `tests/fail`
+  and the appendix tests in `tests/fresco/pass` and `tests/fresco/fail`.
+
+### Example source coverage
+
+The inventory covers 42 thesis listings and 83 Fresco programs, test
+files and README examples. Shared examples and related typing cases
+use the same SmallLinks file.
+
+#### Thesis tutorial
+
+The source is `chapters/overview.tex` in `phd-thesis` at
+`eabef130ffb744840fe8a52e0cbb4045fe2cc397`. The chapter has 42 listings
+and includes no separate source files.
+
+| Source lines | Example | Coverage |
 | --- | --- | --- |
-| `make` for each fix and `make all-ci` on the combined revision | Passed. | `4.1*-build.log`, `ci-build.log` |
-| `make tests` | 1,183 passed across 42 suites, with two existing ignored cases. All four scripts passed. | `all-tests.log` |
-| `./test-harness` on the affected suites | Passed, including 152 handler, 76 effect annotation, 70 polymorphism, 34 example and 30 typed IR cases. | `<suite>.log` |
-| `opam exec -- ./run-tests unit-tests` | All 105 passed. | `unit-tests.log` |
-| Handler and effect annotation tests with frontend rechecking and strict IR checks | 151 handler and 76 effect annotation cases passed. | `strict-handlers.log`, `strict-effect_annotations.log` |
-| Handler example runner with strict checking and a typecheck-only example | Passed. | `strict-examples.log`, `typecheck-only.log` |
-| `make rule-check`, `git diff --check` and the `rg` tabs check | Passed. GNU find was unavailable for the tabs rule. | `rule-check.log`, `diff-check.log`, `tabs.log` |
+| 62–65, 69–72, 76–79, 84–88, 92–96, 116–125 | [pure.links](../../examples/met/thesis/pure.links) | `pi`, `inc`, `pinc`, `map` and curried `iter`. Both placements of `forall` around the outer `[]` are checked for `map` and `iter`. Returns `((), [4, 2, 5, 2, 6, 10], 42, 43)`. |
+| 180–185 | [print_list.links](../../examples/met/thesis/print_list.links), [handlers.links](../../examples/met/thesis/handlers.links) | `IO`, `Gen`, `State` and `ND`. The `PolymorphicResult.ND` interface gives `Fail` the absolute polymorphic result `[] (forall a. a)`. The last result list is `[42]` after dropping the failing branch. |
+| 231–240, 262–265 | [handlers.links](../../examples/met/thesis/handlers.links) | Bare arrows for the three local increment functions share the context containing `Gen(Int)`, `State(Int)` and `ND`. The local run returns `(6, 64, [4, 2, 5, 2, 6, 10])`, giving the final state, number of possible lists and yielded values. |
+| 276–278 | [iter_pure_result.links](../../examples/met/thesis/rejected/iter_pure_result.links) | Rejects access to `f` under the empty context asserted by the returned function's `[]`. |
+| 288–291 | [print_list_without_io.links](../../examples/met/thesis/rejected/print_list_without_io.links) | Rejects `do Print` because `IO` is absent from the current context. |
+| 316–325, 385–390, 395–401, 406–412, 417–426 | [handlers.links](../../examples/met/thesis/handlers.links) | Increment functions with absolute contexts and three handlers with relative callbacks. `asList` returns `[4, 2, 5, 2, 6, 10]`. `all` produces 64 lists, from `[4, 2, 5, 2, 6, 10]` to `[3, 1, 4, 1, 5, 9]`. `state` returns `6`. |
+| 349–352 | [print_list.links](../../examples/met/thesis/print_list.links) | `printlist` uses a callback and `Print` in `[IO]`. A mock `Read` supplies the heading, and the handler collects `["digit 3", "digit 1", "digit 4"]`. |
+| 458–460 | [handlers.links](../../examples/met/thesis/handlers.links), [absolute_generator_callback.links](../../examples/met/thesis/rejected/absolute_generator_callback.links) | The absolute `asListAbsolute` callback yields `[42]`. The callback that also calls `Get` is rejected because its `[Gen(a)]` context excludes `State`. |
+| 514–517, 526–529 | [handlers.links](../../examples/met/thesis/handlers.links) | The inner `state` handler forwards `Yield` to `asList`. Returns prefix sums `[3, 4, 8, 9, 14, 23]`. |
+| 546–550, 555–558 | [handlers.links](../../examples/met/thesis/handlers.links) | The inner `state` handler forwards `Choose` to `all`. Returns 64 sums, starting with `[23, 14, 18]` and ending with `0`. |
+| 588–594, 625–627 | [find_unannotated_callback.links](../../examples/met/thesis/rejected/find_unannotated_callback.links), [find.links](../../examples/met/thesis/find.links) | Rejects calling the bare predicate under a new `Gen` handler. The relative predicate `<Gen(a)> (a -> Bool)` supports that call. The successful search, failed search and predicate that yields return `(Just(6), Nothing, Just(12))`. |
+| 649–655 | [find_mask_paper.links](../../examples/met/fresco-effects/find_mask_paper.links) | The term `mask<Gen>(p x)` needs term-level masks. The shared port handles `Test` and the local `Yield` together. Its `Test` clause calls the predicate in the enclosing context, so its yields reach the caller. The `observed` result is `(Just(2), [1, 2])`. |
+| 687–690 | [yield_state.links](../../examples/met/thesis/yield_state.links) | The original `yieldState` API needs a term mask to call `<Gen \|>` under a caller-installed `Gen`. The runnable version handles a new `RunCallback` operation together with the inner `Gen(Int)`. The callback updates the current `State` and yields to the outer `Gen(String)`. The resumption yields the updated state to the inner handler. Returns `([42], ["callback"])`. |
+| 721–723 | [processes.links](../../examples/met/thesis/processes.links) | A recursive variant `TutorialList` represents `Nil` and `Cons`. Summing the example list returns `42`. |
+| 732–741, 753–756 | [processes.links](../../examples/met/thesis/processes.links) | A `Proc` constructor stores a callback with an ambient arrow. `push` appends a process while `next` passes the remaining queue. Running two copies of `[State(Int)] Proc` increments state from `40` to `42`. |
+| 762–764, 774–780 | [processes.links](../../examples/met/thesis/processes.links) | First-order `UFork` and `Suspend` with a cooperative queue. Forwards `Note` across the scheduler and records `["start", "child", "parent", "child resumed", "parent resumed"]`. |
+| 813–815, 826–828 | [handler_results.links](../../examples/met/thesis/handler_results.links), [state_result_escape.links](../../examples/met/thesis/rejected/state_result_escape.links) | `state` requires `a::Abs`. The ambient closure `() -> ()` with `Get` and `Put` in its body cannot instantiate that argument. |
+| 888–894, 905–907 | [handler_results.links](../../examples/met/thesis/handler_results.links) | `state'` records `<State(s)>` in its result type. The returned closure runs in a second `State(Int)` handler and increases its state from `10` to `52`. |
+| 929–932, 948–950 | [state_payload_escape.links](../../examples/met/thesis/rejected/state_payload_escape.links), [handlers.links](../../examples/met/thesis/handlers.links) | `State(s::Abs)` enforces an absolute payload for `Get` and `Put`. Rejects storing an ambient closure which would call `Yield` after leaving its `Gen` handler. |
+| 993–995 | [higher_order_coop.links](../../examples/met/thesis/higher_order_coop.links) | `Fork` takes a child of type `[Coop] (() -> ())`. Parent, child and grandchild suspend once each, returning `3`. |
+| 1006–1008 | Deferred | `Coop e` needs an effect variable for the independently chosen context of a child. A bare arrow shares the current context but gives the operation a non-absolute payload. A fixed absolute annotation assumes one set of additional effects. |
+| 1044–1046, 1051–1053 | [handler_results.links](../../examples/met/thesis/handler_results.links) | `state` returns `List (forall a. [] (a -> a -> a))` without explicit type instantiation. Calling the returned functions at `Int`, `Bool` and `String` gives `(42, true, "second")`. |
+| 1076–1100 | [pure.links](../../examples/met/thesis/pure.links), [print_list.links](../../examples/met/thesis/print_list.links), [handlers.links](../../examples/met/thesis/handlers.links) | The cheat sheet repeats the interface, absolute function and relative handler examples. Its `Fail` puts `forall a::Abs` on the operation signature. `all` discards the failing branch and returns `[42]`. |
 
-That strict handler run excluded the negative variant alias
-`(-Tag as x)` probe. It passes with default settings. Strict IR
-checking reported the same mismatch at its narrowed binder on
-`5c6eab2a` and `6c054ee5` (`4.12-refining-pattern-strict.log`). Item 5.18
-fixes it and runs the full strict handler suite.
+#### Fresco effect and data examples
 
-### Milestone 2 final review checks
+Source paths are relative to the Fresco artefact at revision
+`333738dbe9da1dcd094a6b2c2c9dbb9eec701ea4`. SmallLinks paths are
+relative to `examples/met/fresco-effects/`.
 
-The checks used `66861cb0` with OCaml 5.4.0. Logs are in
-`/private/tmp/smalllinks-met-28.1zXgOH/`. Independent review checked
-alias scopes, the REPL and recursive expansions. Its findings led to
-tests for renamed binders, unused alias parameters and arguments that
-grow while unfolding. See [2.8](IMPL.md#28-shadowed-type-aliases) for
-the printing limits.
-
-| Command or check | Result | Log |
+| Fresco source | SmallLinks file | Result or reason for exclusion |
 | --- | --- | --- |
-| `make all-ci` | Passed. | `final-ci-build.log` |
-| `make tests` | 1,162 passed across 42 suites, with two existing ignored cases. All four scripts passed, including 32 print-and-reparse checks. | `final-all-tests.log` |
-| `./test-harness` on `handlers`, `effect_annotations`, `polymorphism`, `typecheck_examples`, `roundtrippable_types` and `modules` | 131, 76, 70, 34, 18 and 57 passed. | `<suite>.log` |
-| `opam exec -- ./run-tests unit-tests` | All 105 passed. | `unit-tests.log` |
-| Handler aggregate with frontend rechecking and strict IR checks | All nine assertions passed. | `strict-handlers.log` |
-| Temporary CI installation and `./tests/check-install.sh "$prefix/bin/linx"` | Passed. The installed interpreter also expanded a shadowed modal alias from outside the checkout. | `install.log`, `install-check.log` |
-| Both printers on the review probes and a REPL alias listing | Passed. The growing alias showed the out-of-scope marker and the unused parameter case printed a `mu` type. | `review-probes.log` |
-| `make rule-check`, `git diff --check` and the `rg` tabs check | Passed. GNU find was unavailable for the tabs rule. | `rule-check.log`, `diff-check.log`, `tabs.log` |
+| `README.md:74–105` | `find_mask_paper.links` | `collected` is `[1, 2, 3]` and `found` is `Just(3)`. Includes the collector, ambient iterator and first-match search. |
+| `tests/pass/effectful-empty-list.mle` | `effectful-empty-list.links` | `([], [])` at `(List Int, List Bool)`. The empty list has a polymorphic modal type. |
+| `tests/pass/effectful-list.mle` | `effectful-list.links` | `[1]`. A list with a fixed context stores a callback that invokes `Yield`. |
+| `tests/pass/effects-exchange.mle` | `effects-exchange.links` | `[1, 2, 3, 1, 2, 1, 2, 3, 1, 3]`. All four positive exchanges work with ordinary SmallLinks interfaces. The reference declares `e3` with `eff#`, whose row-head condition has no SmallLinks counterpart. |
+| `tests/pass/extend-absolute-mod.mle` | `extend-absolute-mod.links` | `42`. Converts an absolute pure callback to one typed under `Gen`. |
+| `tests/pass/find_mask_paper.mle` | `find_mask_paper.links` | `observed` is `(Just(2), [1, 2])`. The enclosing handler receives both predicate yields and the search stops at the first match. |
+| `tests/pass/fresco.mle` | `fresco.links` | `((42, true), (42, true), (42, true))`. Exercises a higher-rank parameter with an annotation, one supplied by an expected type, and a producer with quantification inside an absolute modality. |
+| `tests/pass/handle-do-mono.mle` | `handle-do-mono.links` | `()`. Handles a direct call of a monomorphic operation. |
+| `tests/pass/handle-do-param-mono.mle` | `handle-do-param-mono.links` | `()`. Infers the interface parameter `Int` from a direct operation call. |
+| `tests/pass/handle-fun-param.mle` | `handle-fun-param.links` | `()`. Handles a callback whose relative context supplies `Gen(Int)`. |
+| `tests/pass/higher-order-effects.mle` | `higher-order-effects.links` | `([1, 2, 3, 5, 4, 6, 4], [1, 2, 3, 4, 5])`. Runs both FIFO schedulers, with a Boolean fork and a fork that takes a task. The queue is passed to resumptions explicitly. The latter fork has a task payload fixed at `[Trace, Coop]` to satisfy `Abs`. |
+| `tests/pass/infer-lambda-do.mle` | `infer-lambda-do.links` | `()`. Infers the interface parameter from the operation in an unannotated thunk passed to a polymorphic callback. |
+| `tests/pass/list-map-fold.mle` | `list-map-fold.links` | `([2, 3, 4], 123, 321, [1, 2, 3])`. Shares the context between a list helper and its callback, including an iterator called with `Gen`. |
+| `tests/pass/single-yield.mle` | `single-yield.links` | `1`. A function with context `[Gen]` calls `Yield`. |
+| `tests/fail/effectful-list-non-value.mle` | `rejected/effectful-list-non-value.links` | `Modal introduction requires a value`. The function call inside the list is available in `Gen`; the resulting list cannot acquire a new absolute modality. |
+| `tests/fail/exchange-accidental.mle` | Excluded | Fresco's `eff#` checks that the occurrence is at the head of the remaining row during modality comparison. In SmallLinks distinct interface names commute, and the corresponding two-interface exchange is accepted. |
+| `tests/fail/extend-relative-mod.mle` | `rejected/extend-relative-mod.links` | `The modalities require different effect contexts`. An ambient callback cannot acquire a relative `Gen` requirement. |
+| `tests/fail/handle-do-param-mismatch.mle` | `rejected/handle-do-param-mismatch.links` | `Expected (), got Int`. The operation clause returns the `Yield` argument where the result must be unit. |
+| `tests/fail/handle-fun-mismatch.mle` | `rejected/handle-fun-mismatch.links` | `Expected (), got Int`. The operation clause must also agree with the unit result when the computation is a callback. |
+| `tests/fail/leak-effect-paper.mle` | `rejected/leak-effect-paper.links` | `Cannot call a value of type <Gen \|> (_)`. Calling the predicate across the handler lock would let its effects reach the inner handler. |
+| `tests/fail/limitation-infer-find-paper.mle` | Excluded | This tests inference for an unannotated callback called under a term mask. SmallLinks has no term mask. The predicate-operation translation invokes the callback in its original context and infers the unannotated definition successfully. |
+| `tests/fail/pure-id-fun.mle` | `rejected/pure-id-fun.links` | `must satisfy Abs`. The bare arrow inferred for the lambda does not satisfy the absolute type argument. |
+| `tests/fail/relative-to-absolute.mle` | `rejected/relative-to-absolute.links` | `Cannot access f across the change in effect context`. A relative `Gen` callback cannot be returned at the fixed absolute context. |
+| `tests/fail/two-do-mismatch.mle` | `rejected/two-do-mismatch.links` | `Expected (\|First\|), got (\|Second\|)`. Both calls must use the same `Gen` instance, so the two closed variant types are incompatible. |
 
-The printing and clause syntax documentation review used `87a9401a`.
-`./links -e` returned `42 : Int` for the clause annotation and showed
-the declaration number for the out-of-scope interface. The local link
-check, `make rule-check`, `git diff --check` and the `rg` tabs check
-passed. Logs are in `/private/tmp/smalllinks-met-printing-docs.I8ws2L/`.
+The search examples implement the effect of masking at the predicate
+call by requesting evaluation through a `Predicate(a)` operation. Its
+handler clause calls the predicate in the caller's context. The loop
+runs under both `Gen(a)` and `Predicate(a)`. It keeps the predicate's
+evaluation order and early termination, including when the caller
+handles a separate `Gen(a)` instance. This preserves shared ambient
+contexts without adding a general term mask.
 
-### Milestone 3 final review checks
+The source higher-order scheduler's `eff# state s` allows the state
+type `s` to contain ambient functions. SmallLinks requires absolute
+operation payloads and absolute handler state parameters. Passing the
+queue through the resumptions as an ordinary argument keeps those
+functions in their ambient context. The absolute `Fork` payload fixes
+the set of effects available to a child task.
 
-The polymorphic `do` fix (`67f8eded`) was checked before committing.
-Logs are in `/private/tmp/met-stage3-late.bXtyC2/`.
-`make` passed (`make.log`). `make tests` passed 1,138 tests in 42 suites
-and all four scripts, with two existing ignored tests (`all-tests.log`).
-The 105 IR unit tests passed (`unit-tests.log`). The probes confirmed
-the signed recursive example with a branch ascription, quantified
-record projection and the alias hole rejection (`spec-probes.log`).
-`make rule-check`, the `rg` tab scan, `git diff --check` and the
-document link check passed (`rule-check.log`, `tabs.log`,
-`diff-check.log`, `documents.log`).
+#### Larger Fresco programs
 
-The combined checks used `fadf5af7` and OCaml 5.4.0. Logs are in
-`/private/tmp/met-stage3-final.JGgUkp/`. Independent review checked
-fixed results, frozen fields, record extensions and updates, branch
-typing and the value restriction. Review caught a partial inference
-failure in argument blocks that have an annotated local binding.
-The fix leaves that case to full checking, and a regression covers it.
+Source paths are relative to the Fresco artefact. Each result below is
+one component of the corresponding SmallLinks program's output.
 
-| Command or check | Result | Log |
+| Source | SmallLinks file | Result |
 | --- | --- | --- |
-| `make` on `3a631692` and `fadf5af7`, then `make all-ci` on `fadf5af7` | Passed. | `3.13-confirm-build.log`, `3.14-build.log`, `final-ci-build.log` |
-| `make tests` | 1,153 passed across 42 suites. Two existing cases were ignored. All four scripts passed. | `final-all-tests.log` |
-| `./test-harness` on the affected suites in [Checks](#checks) | Passed. This includes 131 handler, 76 effect annotation, 70 polymorphism, 67 FreezeML and 34 example tests. | `final-<suite>.log` |
-| `opam exec -- ./run-tests unit-tests` | All 105 passed. | `final-unit-tests.log` |
-| Handler aggregate with frontend rechecking and strict IR checks | All nine assertions passed. | `final-strict-handlers.log` |
-| `./links -e`, file execution with an import and `--set=typecheck_only=true` | Passed. | `final-entry-points.log` |
-| `opam exec -- dune install --profile=ci --prefix="$prefix" links` and `./tests/check-install.sh "$prefix/bin/linx"` | Passed. The installed interpreter ran the modal handler and the signed recursive example outside the checkout. | `final-install.log`, `final-install-test.log`, `final-installed-examples.log` |
-| `make rule-check`, `git diff --check`, document links and the `rg` tab scan | Passed. The scan replaced the tabs rule on macOS because GNU find was unavailable. | `rule-check.log`, `diff-check.log`, `documents.log`, `tabs.log` |
+| `tests/pass/unix.mle:4–52` | [unix.links](../../examples/met/fresco-programs/unix.links) | `(1, "dead")`. The simulated descriptor `FD(1)` supplies the source's declaration of `stdout`. Exit discards the suffix after it. |
+| `tests/pass/unix.mle:54–91` | `unix.links` | Standalone lookup returns `"lucile"`. The session example returns `(0, "alice bob root ")`. A parameterised handler handles `AskUser` and `Su` together and passes the new user to the resumption. The source's `mask<ask>` syntax requires a deferred term mask. |
+| `tests/pass/unix.mle:93–121` | `unix.links` | Multi-shot `Fork` returns both statuses `[0, 0]` and collects all of Ritchie's output followed by Hamlet's. |
+| `tests/pass/unix.mle:123–152` | `unix.links` | The scheduler resumes two paused branches and returns `([2, 1], "")`. The finished list accumulates each result at the front. |
+| `tests/pass/unix.mle:154–167` | `unix.links` | Both statuses are `[0, 0]`. An interruption before each write makes the scheduler alternate the two outputs until Hamlet finishes. |
+| `tests/pass/unix.mle:169–184` | `unix.links` | The parameterised `State` interface and state-threading handler return `(40, 42)`. |
+| `tests/pass/faux-tt.mle:3–198` | [faux-tt.links](../../examples/met/fresco-programs/faux-tt.links) | Recursive syntax and terms, occurrence checking, a fresh ID supply, polymorphic errors, and a scoped store of metavariables. These support both elaboration demonstrations below. |
+| `tests/pass/faux-tt.mle:200–378` | `faux-tt.links` | Capture-avoiding substitution, normalisation and unification. In the hole demonstration unification solves the metavariable with `Type`. |
+| `tests/pass/faux-tt.mle:381–468` | `faux-tt.links` | The checked identity elaborates to `Lam(0, Type, Lam(2, Var(0), Var(2)))`. An ascription with a hole infers `(Type, Type)`, the elaborated term and its inferred type. [EXAMPLE_ISSUES.md](EXAMPLE_ISSUES.md) records a defect in the source application rule. |
 
-### Milestones 5–6 follow-up checks
+#### Fresco typing cases
 
-The combined source revision was `4b63194d` with OCaml 5.4.0.
-Logs are in `/private/tmp/smalllinks-met-56-follow-up/`.
-Independent review covered interface scopes, linear list splitting,
-REPL recovery, comparisons and comprehension lowering. The review
-fixes retain the usual precedence of a scoped comparison and preserve
-a modal generator's element type through frontend rechecking.
+Sources are relative to the artefact's `tests/fresco/`. SmallLinks
+programs are relative to `examples/met/fresco-types/`. The artefact
+tests 57 files at revision `333738dbe9da1dcd094a6b2c2c9dbb9eec701ea4`.
+The table tracks 75 accepted and 20 rejected source subcases, including
+the Church-list rejections tested in isolation. A runtime result in
+the table refers to the indicated component of the program's output.
 
-| Command or check | Result | Log |
+| Source and subcase | SmallLinks program and binding | SmallLinks result |
 | --- | --- | --- |
-| `make all-ci` with a fresh Dune build directory | Passed. The macOS build used `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk`. | `final-clean-ci-build.log` |
-| `make tests` | 1,136 passed across 42 suites. Two existing cases were ignored. All four scripts passed, including both REPL scripts, print and reparse, and example registration. | `final-all-tests.log` |
-| `opam exec -- ./run-tests unit-tests` | 105 passed. | `final-unit.log` |
-| `./test-harness tests/<suite>.tests` with frontend rechecking and strict IR checks | Passed for `records` (39), `collections` (61), `operators` (27), `handlers` (131), `effect_annotations` (63), `native` (76), `modules` (57) and `library` (7). | `final-strict-<suite>.log` |
-| `./test-harness tests/typed_ir.tests` and `./test-harness tests/recheck_frontend_transformations.tests` | 30 and 3 passed. Includes the matching and mismatched upcast arities. | `final-typed-ir.log`, `final-recheck.log` |
-| Guide code blocks and entry points, plus the handler aggregate under strict checks | All 18 runnable guide blocks and four entry point checks passed. All nine handler assertions passed. | `final-guide.log`, `final-strict-examples.log` |
-| `opam exec -- dune install --profile=ci --prefix="$prefix" links` and `./tests/check-install.sh "$prefix/bin/linx"` | Passed from the fresh build. Outside the checkout the installed interpreter ran the import, empty-prelude comprehension, modal handler and polymorphic examples. | `final-clean-install.log`, `final-clean-install-check.log`, `final-installed-examples.log` |
-| `make rule-check`, `git diff --check` and document links | Passed. An `rg` scan covered the tabs rule because GNU find was unavailable. | `final-rule-check.log`, `final-diff-check.log`, `final-tabs.log`, `final-documents.log` |
+| `pass/a1.mle` infer | `choice.links` `inferredSecond` | Inferred curried projection. Returns `42`. |
+| `pass/a1.mle` check | `choice.links` `checkedSecond` | Checks the signed projection. Returns `true`. |
+| `pass/a2.mle` infer | `choice.links` `inferredChoice` | The identity's type is instantiated. Applying the result returns `42`. |
+| `pass/a2.mle` check | `choice.links` `checkedChoice` | Checks at `Id -> Id`. Applying the result returns `true`. |
+| `pass/a3.mle` infer | `native-lists.links` `inferredChoice` | Returns a list of two polymorphic identities. |
+| `pass/a3.mle` check | `native-lists.links` `checkedChoice` | Checks at `List Id` and has length `2`. |
+| `pass/a4.mle` | `choice.links` `selfApply` | Inferred self-application of an annotated polymorphic argument. Applying the result returns `42`. |
+| `pass/a5.mle` infer | `choice.links` `inferredAuto` | Infers a function that takes and returns `Id`. Applying the result returns `42`. |
+| `pass/a5.mle` check | `choice.links` `checkedAuto` | Checks at `Id -> Id`. Applying the result returns `true`. |
+| `pass/a6.mle` | `choice.links` `specialisedAuto` | Infers the result with the outer type argument of `autoPrime` instantiated. Applying it returns `42`. |
+| `pass/a7.mle` infer | `choice.links` `inferredAutoChoice` | Infers the higher-rank function type from `auto`. Applying the result returns `42`. |
+| `pass/a7.mle` check | `choice.links` `checkedAutoChoice` | Checks at `Id -> Id`. Applying the result returns `true`. |
+| `pass/a9.mle` native | `native-list-results.links` `chosenFunction` | Returns a polymorphic identity. Applying it returns `42`. |
+| `pass/a9.mle` Church | `church-list-results.links` `chosenFunction` | Returns a polymorphic identity. Applying it returns `42`. |
+| `pass/a10.mle` A10a | `application.links` `named` | `(42, true)` from a named argument. |
+| `pass/a10.mle` A10b | `application.links` `lambda` | `(42, true)` from a lambda argument. |
+| `pass/a10.mle` A10c | `application.links` `viaIdent` | `(42, true)` after applying identity to a higher-rank consumer. |
+| `pass/a11.mle` native | `native-list-results.links` `sharedType` | The list supplies the lambda's parameter type. Returns `1`. |
+| `pass/a11.mle` Church | `church-list-results.links` `sharedType` | The fold supplies the lambda's parameter type. Returns `1`. |
+| `pass/a12.mle` A12a | `application.links` `forward` | `(42, true)` using application. |
+| `pass/a12.mle` A12b | `application.links` `backward` | `(42, true)` using reverse application. |
+| `pass/a13.mle` A13a | `rank-two.links` `forwardST` | `42` using `app` with a state-polymorphic value. |
+| `pass/a13.mle` A13b | `rank-two.links` `backwardST` | `42` using `revapp` with a state-polymorphic value. |
+| `pass/b1.mle` B1a native | `native-lists.links` `rest` | Tail retains type `List Id` and has length `1`. |
+| `pass/b1.mle` B1b native | `native-lists.links` `first` | Head has type `Id` and returns `42` and `true` at the two uses. |
+| `pass/b1.mle` B1c native | `native-lists.links` `one` | Singleton instantiates the identity. Calling its head returns `42`. |
+| `pass/b1.mle` B1a Church | `church-lists.links` `rest` | Tail retains type `Church(Id)` and has length `1`. |
+| `pass/b1.mle` B1b Church | `church-lists.links` `first` | Head has type `Id` and returns `42` and `true` at the two uses. |
+| `pass/b1.mle` B1c Church | `church-lists.links` `one` | Singleton instantiates the identity. Calling its head returns `42`. |
+| `pass/b2.mle` native | `native-lists.links` `withName` | Prepends a named identity at type `Id`. Length `3`. |
+| `pass/b2.mle` Church | `church-lists.links` `withName` | Prepends a named identity at type `Id`. Length `3`. |
+| `pass/b3.mle` native | `native-lists.links` `withLambda` | Prepends a lambda checked at `Id`. Length `3`. |
+| `pass/b3.mle` Church | `church-lists.links` `withLambda` | Prepends a lambda checked at `Id`. Length `3`. |
+| `pass/b4.mle` native | `native-lists.links` `ints` | Infers integer functions from two singleton calls. Applying them returns `[42, 41]`. |
+| `pass/b4.mle` Church | `church-lists.links` `ints` | Infers integer functions from two singleton calls. Applying them returns `[42, 41]`. |
+| `pass/b5.mle` native | `native-lists.links` `moreIds` | Appends a singleton at `List Id`. Length `3`. |
+| `pass/b5.mle` Church | `church-lists.links` `moreIds` | Appends a singleton at `Church(Id)`. Length `3`. |
+| `pass/b6.mle` native | `native-lists.links` `mappedSingleton` | `[(42, true)]` from mapping a higher-rank consumer over a singleton. |
+| `pass/b6.mle` Church | `church-lists.links` `mappedSingleton` | A Church singleton of `(42, true)`, converted to `[(42, true)]`. |
+| `pass/b8.mle` native | `native-lists.links` `appliedHead` | Calls the polymorphic head and returns `true`. |
+| `pass/b8.mle` Church | `church-lists.links` `appliedHead` | Calls the polymorphic head and returns `true`. |
+| `pass/beta1.mle` | `application.links` `returnedApp` | `(42, true)` via an application function returned by a lambda. |
+| `pass/beta3.mle` | `application.links` `returnedArgument` | `(42, true)` with a higher-rank argument returned by a lambda. |
+| `pass/c1b.mle` | `rank-two.links` `useBoth` | An annotated parameter can be used at both types. Returns `(42, true)`. |
+| `pass/c1c.mle` | `rank-two.links` `checkedLambda` | The expected type supplies the polymorphic parameter. Returns `()`. |
+| `pass/c2.mle` | `rank-two.links` `nestedQuantifiers` | Checks the lambda with a quantifier before each arrow. Returns `42`. |
+| `pass/e1b.mle` native | `native-list-results.links` `etaExpanded` | Checks the lambda against a type quantified before its `Int` argument. Applying it returns `true`. |
+| `pass/e1b.mle` Church | `church-list-results.links` `etaExpanded` | Checks the lambda against a type quantified before its `Int` argument. Applying it returns `true`. |
+| `pass/e2b.mle` | `rank-two.links` `consume` | The signature supplies the higher-rank parameter, returning `(42, true)`. |
+| `pass/e3a.mle` | `application.links` `forward` | Same expression as A12a. Returns `(42, true)`. |
+| `pass/e3b.mle` | `application.links` `frozenArgument` | Freezing supplies the polymorphic parameter to the lambda. Returns `(42, true)`. |
+| `pass/e4a.mle` native | `native-lists.links` `mappedName` | `[(42, true), (42, true)]` from mapping a named consumer. |
+| `pass/e4a.mle` Church | `church-lists.links` `mappedName` | Maps a named consumer. Converts to `[(42, true), (42, true)]`. |
+| `pass/e4b.mle` native | `native-lists.links` `mappedLambda` | `[(42, true), (42, true)]` from mapping a lambda. |
+| `pass/e4b.mle` Church | `church-lists.links` `mappedLambda` | Maps a lambda. Converts to `[(42, true), (42, true)]`. |
+| `pass/e6.mle` | `application.links` `returnedPartial` | `(42, true)` after returning a partial application from a lambda. |
+| `pass/e7.mle` | `application.links` `passedToLambda` | A frozen identity gives the lambda a polymorphic parameter. Returns `(42, true)`. |
+| `pass/f1.mle` native | `native-lists.links` `mappedTwice` | `[(true, 42), (true, 42)]` from mapping a lambda that calls each element at two types. |
+| `pass/f1.mle` Church | `church-lists.links` `mappedTwice` | Maps a lambda that calls each element at two types. Converts to `[(true, 42), (true, 42)]`. |
+| `pass/f2.mle` | `application.links` `viaApp` | Calls both instantiations via `app`. Returns `(true, 42)`. |
+| `pass/f4.mle` | `application.links` `direct` | Calls both instantiations via direct application. Returns `(42, true)`. |
+| `pass/f5.mle` | `application.links` `checkedPair` | Checks the function against the pair's expected type. Observed as `(42, 42)`. |
+| `pass/f6.mle` | `church-list-results.links` `chosenList` | Infers a fold with its accumulator type instantiated. Counting the elements returns `2`. |
+| `pass/f7.mle` Church | `church-list-results.links` `chosenHead` | Freezing retains the Church fold's quantifier. Applying the selected identity returns `42`. |
+| `pass/f7.mle` native | `native-list-results.links` `chosenHead` | The native list retains its polymorphic element type. Applying the selected identity returns `42`. |
+| `pass/f8.mle` native | `native-list-results.links` `fromIntCallback` | The callback returns `List Id`. Its consumer returns `(42, true)`. |
+| `pass/f8.mle` Church | `church-list-results.links` `fromIntCallback` | Returns a fold with an instantiated accumulator. Counting returns `2`. |
+| `pass/f9.mle` native | `native-list-results.links` `fromPairCallback` | The callback returns a pair with `List Id` in the second component. Its consumer returns `(42, true)`. |
+| `pass/f9.mle` Church | `church-list-results.links` `fromPairCallback` and `blocked/church-pair-result.links` | Folding the result at `Int` returns `2` in both modes. The standalone expression passes the default checker and fails frontend rechecking when the accumulator remains unconstrained. |
+| `pass/f10.mle` native | `native-list-results.links` `fromIdCallback` | A callback takes `Id` and returns `List Id`. Its consumer returns `(42, true)`. |
+| `pass/f10.mle` Church | `church-list-results.links` `fromIdCallback` | A callback takes `Id` and returns a fold with an instantiated accumulator. Counting returns `2`. |
+| `pass/f11a.mle` native | `native-list-results.links` `checkedCall` | The expected type of the singleton retains `Id`. Returns `(42, true)`. |
+| `pass/f11a.mle` Church | `church-list-results.links` `checkedCall` | The expected type of the singleton retains `Id`. Returns `(42, true)`. |
+| `pass/f11b.mle` native | `native-list-results.links` `frozenCall` | The frozen identity retains `Id` in the bound singleton. Returns `(42, true)`. |
+| `pass/f11b.mle` Church | `church-list-results.links` `frozenCall` | The frozen identity retains `Id` in the bound singleton. Returns `(42, true)`. |
+| `fail/a8.mle` | `rejected/choice-polymorphic-result.links` | Rejects the mismatch between a polymorphic result and an instantiated result of `autoPrime`. |
+| `fail/b7.mle` native | `inference-differences.links` `mappedHeads` | SmallLinks accepts the inferred list of polymorphic identities. Its consumer returns `(42, true)`. |
+| `fail/b7.mle` Church | `rejected/church-map-head.links` | Rejects the element type of the nested fold without the expected polymorphic identity type. |
+| `fail/c1a.mle` | `rejected/unannotated-polymorphic-parameter.links` | Rejects the `Bool` call after inferring an `Int` parameter. |
+| `fail/e1a.mle` native | `rejected/list-quantifier-placement.links` | Rejects the quantifier in `h`'s result against a type quantified before its argument. |
+| `fail/e1a.mle` Church | `rejected/church-quantifier-placement.links` | Rejects the quantifier in `h`'s result against a type quantified before its argument. |
+| `fail/e2a.mle` | `rejected/unannotated-poly-consumer.links` | Rejects the unknown parameter type where `poly` needs `Id`. |
+| `fail/e3b.mle` | `rejected/application-unfrozen-argument.links` | Rejects the inferred parameter because a quantified variable would escape its scope. |
+| `fail/e5a.mle` native | `inference-differences.links` `consumeHead` | SmallLinks infers that the composition takes `List Id`. Applying it returns `(42, true)`. |
+| `fail/e5a.mle` Church | `inference-differences.links` `consumeChurchHead` | SmallLinks infers that the composition takes `Church(Id)`. Applying it returns `(42, true)`. |
+| `fail/e5b.mle` native | `rejected/unannotated-list-parameter.links` | Rejects the unknown parameter type where `head` needs `List Id`. |
+| `fail/e5b.mle` Church | `rejected/unannotated-church-parameter.links` | Rejects the unknown parameter type where `churchHead` needs a polymorphic fold. |
+| `fail/e7.mle` | `rejected/lambda-unfrozen-argument.links` | Rejects the inferred parameter because a quantified variable would escape its scope. |
+| `fail/f2.mle` | `rejected/apply-unfrozen-identity.links` | Rejects the `Int` call after inferring a `Bool` parameter. |
+| `fail/f3.mle` native | `inference-differences.links` `mappedIds` | SmallLinks instantiates the mapping identity at `Id`. Its consumer returns `(42, true)`. |
+| `fail/f3.mle` Church | `inference-differences.links` `mappedChurchIds` | SmallLinks instantiates the mapping identity at `Id`. Its consumer returns `(42, true)`. |
+| `fail/f4.mle` | `rejected/call-unfrozen-identity.links` | Rejects the `Bool` call after inferring an `Int` parameter. |
+| `fail/f7.mle` | `inference-differences.links` `chosenHead` | SmallLinks accepts the unfrozen Church argument. The result is an identity called at `Int` and `Bool`, yielding `(42, true)`. |
+| `fail/f11b.mle` native | `rejected/bound-singleton.links` | Rejects the list of instantiated identities where a list of polymorphic identities is required. |
+| `fail/f11b.mle` Church | `rejected/bound-church-singleton.links` | Rejects the fold over instantiated identities where a fold over polymorphic identities is required. |
 
-### Milestone 6.5 checks
+The commented-out `check` proposals in `pass/a4.mle`, `pass/a6.mle`,
+`pass/a9.mle` and `fail/a8.mle` are inactive in the artefact. Standalone
+`val` declarations were supplied with definitions for the runnable
+examples. In A13 the `Test` constructor carries the result `a`, so
+`runST` can return that value while the unused state type `s` remains
+universally quantified.
 
-The combined checks used `66ee9476` with OCaml 5.4.0. Logs are
-in `/private/tmp/smalllinks-met-56-defects/`. The independent review
-found that a generated comprehension alias retained the full variant
-type after a negative pattern narrowed it. The fix removed the unused
-alias and added a strict regression for the source pattern. The CI
-build also caught constructor names that needed to be in scope in the
-REPL lowering helper. See `combined-repl-review.log` and
-`ci-build-before-review-fixes.log`.
+### Example verification
 
-| Command or check | Result | Log |
+The examples, registrations and documentation are complete. The
+standalone Church case in `blocked/` is a reproducer. See
+[EXAMPLE_ISSUES.md](EXAMPLE_ISSUES.md#frontend-rechecking-fails-for-a-callback-pair-with-an-unconstrained-result).
+The [thesis inventory](#thesis-tutorial) records the deferred generic
+`Coop e` interface and the two adaptations for term masks. The
+[Fresco inventory](#fresco-effect-and-data-examples) records the two
+excluded rejection cases.
+
+Combined checks used SmallLinks compiler revision
+`7b764a87e6414b46de8feb00c2de0c8c704dbca2` with OCaml 5.4.0.
+The logs and temporary configs below are under
+`/private/tmp/smalllinks-met-examples/` unless a path is given.
+
+| Command | Result | Log |
 | --- | --- | --- |
-| `make all-ci`, including a fresh Dune build directory | Passed. The macOS builds used `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk`. | `final-ci-build.log`, `final-clean-ci-build.log` |
-| `make tests` | 1,201 passed across 42 suites. Two existing cases were ignored. All four scripts passed. | `all-tests.log` |
-| `./test-harness tests/<suite>.tests` on affected suites | All passed, including 70 collection, 58 module, 34 example, 30 typed IR and three frontend recheck tests. | `default-<suite>.log` |
-| `./test-harness tests/<suite>.tests` with frontend rechecking and strict IR checks | Passed for handlers (152), effect annotations (76), collections (70), modules (58), records (43) and patterns (38). All ten handler REPL checks and all nine handler example assertions also passed under strict settings. | `strict-<suite>.log`, `strict-repl.log`, `strict-examples.log` |
-| `opam exec -- ./run-tests unit-tests` | All 105 passed. | `unit-tests.log` |
-| Guide examples and entry points | Passed for 18 runnable blocks, `-e`, file execution, typecheck-only execution and the REPL. | `guide.log` |
-| `opam exec -- dune install --profile=ci --prefix="$prefix" links` from the fresh build and `./tests/check-install.sh "$prefix/bin/linx"` | Passed. The installed interpreter also ran the modal handler, polymorphic identity and generator-shadowing examples outside the checkout. | `install.log`, `install-check.log`, `installed-examples.log` |
-| `make rule-check`, `git diff --check`, the tabs scan and document links | Passed. An `rg` scan covered the tabs rule because GNU find was unavailable. | `rule-check.log`, `diff-check.log`, `tabs.log`, `documents.log` |
-
-At that revision, strict IR rejected a list or variant subpattern when
-the value it matched was quantified. Both probes used a field of a
-quantified record and returned `(42, true)` with default settings. See
-`quantified-list-variant-probes.log` and follow-up item 5.19.
-
-### Milestone 6.6 checks
-
-The combined checks used `5e971724` with OCaml 5.4.0. Logs are
-in `/private/tmp/smalllinks-met-5-19/`. Independent review checked
-quantifier scope, case fallthrough, source linearity and captures in
-local functions. See `independent-review-probes.log`.
-
-| Command or check | Result | Log |
-| --- | --- | --- |
-| `make all-ci`, including a fresh Dune build directory | Passed with `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk`. | `final-ci-build.log`, `final-clean-ci-build.log` |
-| `make tests` | 1,209 passed across 42 suites. Two existing cases were ignored. All four scripts passed. | `all-tests.log` |
-| `./test-harness tests/<suite>.tests` on affected suites | All passed, including 51 records, 38 patterns, 28 variants and 30 typed IR tests. | `default-<suite>.log` |
-| Frontend rechecking and strict IR checks | Passed for handlers (152), effect annotations (76), collections (70), modules (58), records (51) and patterns (38). The strict handler REPL and example runner also passed. | `strict-<suite>.log`, `strict-repl.log`, `strict-examples.log` |
-| `opam exec -- ./run-tests unit-tests` | All 105 passed. | `unit-tests.log` |
-| Direct `./links -e` probes with default and strict settings | Both reported cases returned `(42, true)`. The additional fallback, quantified row and linearity probes passed. | `final-direct-probes.log`, `final-linearity-probes.log` |
-| Guide and temporary installation | All 18 runnable guide blocks and four entry points passed. `dune install` from the fresh CI build and `./tests/check-install.sh` passed. The installed interpreter passed both reported probes under default and strict settings. | `guide.log`, `install.log`, `install-check.log`, `installed-examples.log`, `installed-pattern-probes.log` |
-| `make rule-check`, `git diff --check`, tabs and document links | Passed. An `rg` scan covered the tabs rule because GNU find was unavailable. | `rule-check.log`, `diff-check.log`, `tabs.log`, `documents.log` |
-
-The review also reproduced a separate strict IR mismatch on the
-previous interpreter. When an alias names an enclosing variant, as in
-`(Some(-Skip) as outer)`, its type narrows the payload but lowering
-rebuilds it from the wider payload. An alias on the negative pattern
-itself passes under strict checking. See `alias-baseline.log` and
-`nested-alias-probes.log`. Follow-up item 5.20 covers the enclosing
-alias and related pattern forms.
-
-### Milestone 6.7 checks
-
-The combined checks used `f9d190ef` with OCaml 5.4.0. Logs are
-in `/private/tmp/smalllinks-met-5-20/`. Independent review checked
-alternative fallthrough, linear bindings, native evaluation order,
-quantified types and mixed handler operations. See
-`independent-review.log`, `independent-working-review.log` and
-`independent-working-edge.log`.
-
-| Command or check | Result | Log |
-| --- | --- | --- |
-| `make all-ci`, including a fresh Dune build directory | Passed with `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk`. | `final-ci-build.log`, `final-clean-ci-build.log` |
-| `make tests` | 1,226 passed across 42 suites. Two existing cases were ignored. All four scripts passed. | `all-tests.log` |
-| `./test-harness tests/<suite>.tests` on affected suites | All passed, including 54 pattern, 51 record, 28 variant and 30 typed IR tests. | `default-<suite>.log` |
-| Frontend rechecking and strict IR checks | Passed for handlers (153), effect annotations (76), collections (70), modules (58), records (51) and patterns (54). The strict handler REPL and example runner also passed. | `strict-<suite>.log`, `strict-repl.log`, `strict-examples.log` |
-| `opam exec -- ./run-tests unit-tests` | All 105 passed. | `unit-tests.log` |
-| Direct `./links -e` probes | All 24 cases passed with default settings and strict checking. These include `(Some(-Skip) as outer)`, annotated record rests, and linear payloads after fallthrough. | `final-direct-probes.log` |
-| Guide and temporary installation | All 18 runnable guide blocks and four entry points passed. `dune install` from the fresh CI build and `./tests/check-install.sh` passed. The installed interpreter passed the enclosing alias, quantified rest and linear fallthrough probes. | `guide.log`, `install.log`, `install-check.log`, `installed-examples.log`, `installed-pattern-probes.log` |
-| `make rule-check`, `git diff --check`, tabs and document links | Passed. An `rg` scan covered the tabs rule because GNU find was unavailable. | `rule-check.log`, `diff-check.log`, `tabs.log`, `documents.log` |
-
-### Milestone 4 follow-up checks
-
-The combined checks used `15849dea` with OCaml 5.4.0. Items 4.5–4.9
-share one compiler commit because interface inference, clause checking
-and branch results use the same handler types and regressions. Logs are
-in `/private/tmp/smalllinks-met-4-follow-up/`.
-
-Independent reviews covered interface scope under nested handlers and
-curried functions, argument evidence and expected types, result hints
-from aborting clauses, member quantifier scope, linear state and
-absolute results. The regressions cover the fixes for the issues found
-in review, including late constraints on branch results and rechecking
-distinct annotations across clauses for one member.
-
-| Command or check | Result | Log |
-| --- | --- | --- |
-| `make` and `make all-ci` | Passed. | `build.log`, `ci-build.log` |
-| `opam exec -- ./run-tests unit-tests` | 105 passed. | `unit.log` |
-| `make tests` | 1,092 passed across 42 suites, with two existing ignored cases. All four scripts passed. | `all-regressions.log` |
-| `./test-harness tests/<suite>.tests` | Passed for `handlers` (127), `effect_annotations` (61), `native` (73), `native_permissions` (13), `polymorphism` (66), `typecheck_examples` (34), `recheck_frontend_transformations` (3), `typed_ir` (30) and `modules` (49). | `<suite>.log` |
-| `./test-harness` with frontend rechecking and strict IR checking | All 201 handler, effect annotation and native permission cases passed. | `strict-<suite>.log` |
-| Handler and native specification examples with strict checking | 22 checks passed, including rejected examples and linear state variants. The handler example runner returned `() : ()`. | `spec-examples.log`, `strict-examples.log` |
-| `./tests/repl_handlers.testscript` | Passed. | `repl.log` |
-| `make rule-check` and `git diff --check` | Passed. GNU find was unavailable for the tabs rule. The same patterns passed with `rg`. | `rule-check.log`, `tabs.log`, `diff-check.log` |
-
-### Milestone 3 follow-up checks
-
-The combined checks used `d93cf72f` and OCaml 5.4.0. Logs are in
-`/private/tmp/smalllinks-met-3-follow-up.iTO12K/`. Independent review
-covered lock access, argument order, the value restriction, kind
-checks and quantified record lowering. Review fixes preserved the type
-of frozen arguments, the evaluation of the record base, and introduction
-within an eligible handler clause.
-
-| Command or check | Result | Log |
-| --- | --- | --- |
-| `make` for the intermediate commits `77d1ffee` and `3557f45d`, and `make all-ci` for `d93cf72f` | Passed. | `77d1ffee-build.log`, `3557f45d-build.log`, `reviewed-ci-build.log` |
-| `make tests` | 1,070 passed across 41 suites. Two existing pattern cases were ignored. All four scripts passed, covering the REPL, print and reparse, and example registration. | `reviewed-tests.log` |
-| `./test-harness` on the affected suites listed under [Checks](#checks) | Passed. `handlers` passed 118, `effect_annotations` 61, `polymorphism` 66, `freezeml` 67, `records` 39, `typed_ir` 30 and `typecheck_examples` 34. | `reviewed-<suite>.log` |
-| `opam exec -- ./run-tests unit-tests` | All 101 passed. | `reviewed-unit-tests.log` |
-| Handler aggregate with frontend rechecking and strict IR checks | All nine assertions passed. | `reviewed-strict-handlers.log` |
-| `./links -e`, file execution with an import and `--set=typecheck_only=true` | Passed. | `reviewed-entry-points.log` |
-| `opam exec -- dune install --profile=ci --prefix="$prefix" links` and `tests/check-install.sh "$prefix/bin/linx"` | Passed. The installed interpreter also ran a modal handler and an explicitly polymorphic function outside the checkout. | `reviewed-install.log`, `reviewed-install-check.log`, `reviewed-install-examples.log` |
-| `make rule-check`, `git diff --check`, the document check and the `rg` tab scan | Passed. The `rg` scan used the tabs rule's file patterns because GNU find was unavailable. | `reviewed-rule-check.log`, `reviewed-diff-check.log`, `reviewed-docs.log`, `verified-tabs.log` |
-
-### Milestone 2 follow-up checks
-
-Logs are in `/private/tmp/smalllinks-met-12.iA9tXw/`. The first checks
-used the 2.6 compiler changes in `a566ff95` and OCaml 5.4.0.
-
-| Command or check | Result | Log |
-| --- | --- | --- |
-| `make` | Passed. | `make-2.6.log` |
-| `./test-harness tests/modal_syntax.tests` and `./test-harness tests/roundtrippable_types.tests` | 33 and 9 passed. | `modal-syntax-2.6.log`, `2.6-roundtrippable_types.log` |
-| `./test-harness` on `handlers`, `effect_annotations`, `polymorphism` and `typecheck_examples` | 118, 40, 56 and 34 passed. | `2.6-<suite>.log` |
-| `tests/roundtrippable_types.testscript` from `010c0f87` | 12 passed. | `roundtrip-syntax-2.6.log` |
-| `./links -e` on the quantified handler annotation, with frontend rechecking and strict IR checks | Returned `42 : Int`. | `2.6-strict-handler.log` |
-| `opam exec -- menhir --table --dump --explain` on the old and new grammar | No conflicts in either grammar. | `/private/tmp/links-met-26-menhir.axHkzh/` |
-| `make rule-check` | Passed. GNU find was unavailable for the tabs rule. The same file patterns passed with `rg`. | `2.6-rule-check.log`, `2.6-tabs.log` |
-| `git diff --check` for the 2.6 files | Passed. | `2.6-diff-check.log` |
-
-The combined checks used the compiler changes in `9b9a1e10` and OCaml
-5.4.0. Independent review checked both printer paths, lexical scope
-in annotation and function diagnostics, and REPL recovery after a
-failed `@load` and `@withtype`. Review fixes made source name maps
-lazy, displayed the original modalities in a mismatch, and resolved
-the interface named in an arity error against the failing scope.
-
-| Command or check | Result | Log |
-| --- | --- | --- |
-| `make all-ci` | Passed. | `2.7-ci-build.log` |
-| `make tests` | 997 passed across 41 suites, with two existing ignored pattern tests. All four scripts passed. | `2.7-tests.log` |
-| `./test-harness` on `handlers` and `effect_annotations` | 118 and 40 passed. | `2.7-handlers.log`, `2.7-effect_annotations.log` |
-| `opam exec -- ./run-tests unit-tests` | All 101 passed. | `2.7-unit-tests.log` |
-| Handler aggregate with frontend rechecking and strict IR checks | All nine assertions passed. | `2.7-strict-handler-examples.log` |
-| `opam exec -- dune install --profile=ci --prefix="$prefix" links` and `tests/check-install.sh "$prefix/bin/linx"` | Passed. Installed `linx` also printed `[Effects.Reader]` on a function type outside the checkout. | `2.7-install.log`, `2.7-install-check.log` |
-| `make rule-check`, `git diff --check` and the `rg` tabs check | Passed. GNU find was unavailable. | `2.7-rule-check.log`, `2.7-diff-check.log`, `2.7-tabs.log` |
-| REPL `@load`, `@withtype` and scope review probes | Passed. | `/private/tmp/smalllinks-met-2.7-review.faExXe/` |
-
-### Follow-up review checks
-
-The combined documentation review used `25b07c25` with edits to the
-four MET documents. The review distinguished past checks from pending
-work, organised the implementation notes by plan item and added
-function upcast arity checks. The user confirmed that comprehensions
-must also work with empty or custom preludes that have no list helpers.
-
-| Command or check | Result | Log |
-| --- | --- | --- |
-| `python3 /private/tmp/smalllinks-met-doc-review/check_docs.py` | Passed. Checked 114 local links, fenced blocks, table columns and tabs in the MET documents and the SmallLinks guide. | `/private/tmp/smalllinks-met-doc-review/documents.log` |
-| `make rule-check` | Passed. GNU find was unavailable for the tabs rule on macOS. The document tab scan passed. | `/private/tmp/smalllinks-met-doc-review/rule-check.log` |
-| `git diff --check` | Passed. | `/private/tmp/smalllinks-met-doc-review/diff-check.log` |
-| Changed unary-arrow examples | Checked on the same compiler. | `/private/tmp/met-spec-unary-arrow.w445qi` |
-
-At `25b07c25`, `./links --set=typecheck_only=true -e` accepted an
-upcast from `Int -> Int` to `(Int, Int) -> Int`. Calling the
-upcast function with `./links -e` failed with
-`Invalid_argument("List.fold_right2")`, both by default and with
-`--set=typecheck_ir=true --set=fail_on_ir_type_error=true`.
-Items 3.11 and 5.7 track the fix. See
-`/private/tmp/smalllinks-met-function-upcast.cNAgNr`.
-
-The integration review draft at `a3e48a2d` passed `make rule-check`,
-`git diff --check` and checks of the edited document links. GNU find
-was unavailable, so an `rg` scan checked the edited files for tabs.
-Probes with `./links -e` confirmed the existing rejection of `Foo`,
-the incorrect rejection of a variant under `[]`, and the inconsistent
-type of a call to a custom comparison. Logs are under
-`/private/tmp/smalllinks-met-integration-review.TGt6f6/`.
-
-The review used compiler revision `98d39ac8`. Logs are under
-`/private/tmp/smalllinks-met-follow-up-review.CJ9Fkz/`.
-
-| Command or check | Result | Log |
-| --- | --- | --- |
-| `./links --set=show_quantifiers=true -e` on 12 examples | Confirmed behaviour at the tested revision. The signed recursive example returned `(42, true)`. Without the signature, the second call to `g` failed with `Expected Int, got Bool`. | `examples.log` |
-| Document links and code fences, and `./links -e` on the recursive example from the specification | Passed. | `documents.log` |
-| `make rule-check` | Passed. GNU find was unavailable for the tabs rule. The same file patterns passed with `rg`. | `rule-check.log`, `tabs.log` |
-| `git diff --check` | Passed. | `diff-check.log` |
-
-The recursive result and modal record examples were checked again at
-`a18e3c67` with `./links --set=show_quantifiers=true -e`. Separate
-calls to `f` used different types. Extending the open record outside
-`Reader` succeeded with `r::Row(Abs)`. Direct extension with an absolute
-presence failed, and explicitly converting the record first worked when
-the presence variable was in scope. `hd([1,2])` and `tl([1,2])` returned
-`1` and `[2]`. Document links, `make rule-check` with the same `rg` tabs
-check, and `git diff --check` passed. Logs are under
-`/private/tmp/smalllinks-met-list-review.Dwbgd0/`.
-
-At `a18e3c67`, `./links -e` on the modal record example in SPEC.md
-produced the expected type, and a handler supplied `42` to its `run`
-callback. Further probes reproduced the discarded linear row tail,
-the `Base` alias mismatch, the value restriction bypass, the
-argument-order mismatch, the guarded `mu` rejection and the extra
-quantifier from a signature hole. Logs are under
-`/private/tmp/smalllinks-met-record-example.GMczGr/`.
-
-### Milestone 3.12 checks
-
-The checks used `fa9dd1e3` with the `Presence(Abs)` working-tree fix
-and OCaml 5.4.0. Logs are under
-`/private/tmp/smalllinks-met-presence-fix.rdEH3E/`.
-
-| Command or check | Result | Log |
-| --- | --- | --- |
-| `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk make` | Passed. | `build-sdk.log` |
-| `./test-harness tests/<suite>.tests` for `records`, `effect_annotations`, `handlers`, `presence_type_arg`, `recheck_frontend_transformations` and `typed_ir` | 232 passed. The acceptance case ran with frontend rechecking, strict IR checks and optimisation. | `<suite>.log` |
-| `./links -e` on modal record extensions and updates | Passed for absent and present absolute fields, a mixed record with a callback, and open rows in both contexts. The rejection checks produced the expected type errors. | `probes.log` |
-| `make rule-check` and `git diff --check` | Passed. The tabs rule used `rg` with the same file patterns. | `rule-check.log`, `tabs.log`, `diff-check.log` |
-
-At `a3e48a2d` with the working-tree test change,
-`./test-harness tests/records.tests` passed all 35 tests with
-`--optimise` off. Logs are under
-`/private/tmp/smalllinks-met-default-checks.dWIhNT/`.
-
-### Milestones 5–6 checks
-
-The combined checks used `fcb1e97a` with OCaml 5.4.0. Logs are under
-`/private/tmp/smalllinks-met-56/`. Independent reviews covered Fresco,
-typed lowering and IR, and REPL recovery. That revision included the
-review fixes, regression tests and matching prelude.
-
-| Command or check | Result | Log |
-| --- | --- | --- |
-| `make`; `make all-ci`; `make all-ci` with a fresh Dune build directory | Passed. | `final-build.log`, `final-ci.log`, `final-clean-ci.log` |
-| `opam exec -- ./run-tests unit-tests` | 101 passed. | `final-unit.log` |
-| `./test-harness tests/<suite>.tests` for affected suites | Passed, including 118 handler, 40 effect annotation, 17 modal syntax, 56 polymorphism, 64 FreezeML, 26 typed IR and 34 example checks. | `final-focused.log`, `final-suite-<suite>.log` |
-| `make tests` | 967 passed in 41 suites. Two existing redundant-pattern cases were ignored. Four scripts passed, including the REPL, example registration and 12 print-and-reparse cases. | `final-all.log` |
-| `./links --set=recheck_frontend_transformations=true --set=typecheck_ir=true --set=fail_on_ir_type_error=true --optimise --path=examples/handlers examples/handlers/tests.links` | All nine aggregate assertions passed under strict checking and optimisation. | `final-strict-examples.log` |
-| Run the SmallLinks guide programs, including the import, `-e`, typecheck-only and REPL examples | Passed. | `final-guide.log`, `guide/*.log` |
-| `opam exec -- dune install --profile=ci --prefix="$prefix" links`, then `./tests/check-install.sh "$prefix/bin/linx"` and two installed modal programs | Passed outside the checkout, including a standard library import, an interface handler and mixed modal and quantified type application. | `final-install.log`, `final-install-prefix.txt` |
-| `make rule-check` and `git diff --check 4fd5fba4..HEAD` | Passed. GNU find was unavailable for the tabs rule. The same file patterns passed with `rg`. | `final-source.log`, `final-tabs.log`, `final-whitespace.log` |
-
-### Milestone 4 checks
-
-The checks used `0a9eaaa9`. Logs are under
-`/private/tmp/smalllinks-met-4/`. An independent review checked the
-handler rules against the thesis and Fresco, and checked the retained
-runtime fixtures. The source tests covered the fixes for rigid variables,
-state scope, and modal result and argument inference.
-
-| Command or check | Result | Log |
-| --- | --- | --- |
-| `make` and `make all-ci` | Passed. | `build.log`, `ci-build.log` |
-| `opam exec -- ./run-tests unit-tests` | All 101 passed, including 17 modal effect test groups. | `unit.log` |
-| `./test-harness tests/handlers.tests` and `./test-harness tests/effect_annotations.tests` | 115 and 18 passed. | `handlers.log`, `effect_annotations.log` |
-| `./test-harness tests/<suite>.tests` for `modal_syntax`, `native`, `polymorphism` and `typecheck_examples` | 16, 73, 56 and 35 passed. | `<suite>.log` |
-| `make tests` | 937 passed in 41 suites, with two existing ignored cases. All four scripts passed. | `all-regressions.log` |
-| `make rule-check` and `git diff --check aeb228c2..HEAD` | Passed. GNU find was unavailable for the tabs rule. The same file patterns passed with `rg`. | `rule-check.log`, `tabs.log`, `diff-check.log` |
-| `opam exec -- dune install --profile=ci --prefix="$prefix" links` and `./tests/check-install.sh "$prefix/bin/linx"` | Passed on the row-based native entry points. | `install.log`, `install-check.log` |
-
-### Milestone 3 checks
-
-The combined checks used `33b15eaa`. Logs are under
-`/private/tmp/smalllinks-met-3/`. Independent reviews covered the
-type solver, lock and modal checking, polymorphic application and
-generalisation, pattern typing and the range helper. The regression
-tests covered the fixes found in review.
-
-| Command or check | Result | Log |
-| --- | --- | --- |
-| `make` and `make all-ci` | Passed. | `build.log`, `ci-build.log` |
-| `opam exec -- ./run-tests unit-tests` | All 84 passed. Source checks cover accepted and rejected higher-rank, modal, data-row, presence and linear cases. | `unit.log` |
-| `./test-harness tests/handlers.tests` and `./test-harness tests/effect_annotations.tests` | 115 and 18 passed. The other affected suites passed separately, including the two new range tests in `native`. | `handlers.log`, `effect_annotations.log`, `<suite>.log` |
-| `make tests` | 937 passed in 41 suites, with two existing ignored cases. All four scripts passed. | `all-regressions.log` |
-| `./links -e '40 + 2'` and `./links --path=examples/handlers examples/handlers/tests.links` | Returned `42 : Int` and `() : ()`. | `expression.log`, `import.log` |
-| `./tests/repl_handlers.testscript` and `./links --set=typecheck_only=true examples/extensible-case.links` | Passed. | `repl.log`, `typecheck.log` |
-| `make rule-check` and `git diff --check ea12bfed..33b15eaa` | Passed. GNU find was unavailable for the tabs rule. The same file patterns passed with `rg`. | `rule-check.log`, `tabs.log`, `diff-check.log` |
-| `opam exec -- dune install --profile=ci --prefix="$prefix" links` and `./tests/check-install.sh "$prefix/bin/linx"` | Passed. | `install.log`, `install-check.log` |
-
-### Milestone 2 checks
-
-The combined checks used `9de77c76`. Logs are under
-`/private/tmp/smalllinks-met-1-2.WacKXl/`.
-
-| Command or check | Result | Log |
-| --- | --- | --- |
-| `make` and `make all-ci` | Passed. | `final-dev-build.log`, `final-ci-build.log` |
-| `make tests` | 935 passed across 41 suites, with two existing ignored pattern tests. All four scripts passed. | `final-tests.log` |
-| `./test-harness tests/handlers.tests` and `./test-harness tests/effect_annotations.tests` | 115 and 18 passed. Other affected suites passed separately. | `final-handlers.log`, `final-effect_annotations.log`, `final-<suite>.log` |
-| `opam exec -- ./run-tests unit-tests` | All 60 passed, including scoped contexts, modality algebra, kinds, registry lookup and modal print-and-reparse in both engines. | `final-ir.log` |
-| `make rule-check` and `git diff --check bcf3816c..9de77c76` | Passed. GNU find was unavailable for the tabs rule. The same file patterns passed with `rg`. | `final-rules.log`, `final-tabs.log`, `final-diff-check.log` |
-| `opam exec -- dune install --profile=ci --prefix="$prefix" links` and `./tests/check-install.sh "$prefix/bin/linx"` | Passed. Installed `linx` ran the list and import checks and accepted a qualified modal declaration. | `final-install.log`, `final-install-check.log` |
-| `./links` on the two updated guide examples | Returned `2` and `(true, false)`. | `final-guide.log` |
-
-The 2.1 and 2.2 commits also built and passed focused tests on their
-own. Their logs are under `/private/tmp/smalllinks-met-2-1.HYwjYW/`.
-
-### Implementation baseline
-
-Checks used `21348680` with OCaml 5.4.0 and Dune 3.20.2. Logs are under
-`/private/tmp/smalllinks-met-1-2.WacKXl/`. The handler baseline suite
-included the eight new cases in 1.4.
-
-| Command or check | Result | Log |
-| --- | --- | --- |
-| `make` | Passed. | `baseline-build.log` |
-| `make tests` | 928 cases across 40 suites and all three scripts passed. | `baseline-tests.log` |
-| `opam exec -- ./run-tests unit-tests` | 44 passed. | `baseline-ir.log` |
-| `./links -e '40 + 2'` | Returned `42 : Int`. | `baseline-expression.log` |
-| `./links examples/handlers/tests.links` | The imported handler examples passed. | `baseline-import.log` |
-| `./tests/repl_handlers.testscript` | The definition and call passed. | `baseline-repl.log` |
-| `./links --set=typecheck_only=true examples/extensible-case.links` | Passed. | `baseline-typecheck.log` |
-| `./test-harness tests/handlers.tests` with the eight new cases | 115 passed. | `/private/tmp/small-met-handler-baseline.log` |
-
-The individual suite logs use the `baseline-<suite>.log` names.
-The eight handler cases covered runtime scope, forwarding, resumption,
-state evaluation order and linear bindings. Milestones 3 and 4 added
-modal typing checks after this baseline.
-
-### Design approval and `unsafe_cast` removal
-
-Checks used `a557219f` with the approved design and removal changes.
-Logs are under `/private/tmp/smalllinks-unsafe-cast.QOdUZ6/`.
-
-| Command or check | Result | Log |
-| --- | --- | --- |
-| `make` | Passed. | `build.log` |
-| `./links -e 'unsafe_cast(42)'` | Rejected with `Unknown variable unsafe_cast.` | `removed.log` |
-| `./test-harness tests/native.tests` | 71 passed, including the removal regression. | `native.log` |
-| `./test-harness tests/handlers.tests` | 107 passed. | `handlers.log` |
-| `./test-harness tests/effect_annotations.tests` | 18 passed. | `effect-annotations.log` |
-| `./test-harness tests/typecheck_examples.tests` | 35 passed. | `typecheck-examples.log` |
-| `./links examples/extensible-case.links` | Returned `("A", "B", "C")`. | `extensible-case.log` |
-| `make rule-check` | Passed. GNU find was unavailable for the tabs rule. The same file patterns passed with `rg`. | `rule-check.log`, `tabs.log` |
-| `git diff --check` | Passed. | `diff-check.log` |
-
-### Initial design checks
-
-The initial draft received separate read-only reviews against the thesis,
-Fresco sources and SmallLinks implementation. The draft incorporated
-corrections to locks, generalisation, kind restrictions, syntax and
-native effects.
-
-Checks on 14 November 2026 used
-`e117db9da0bca9f45e9a12d2c3df808ec3880a6e` plus the initial draft.
-Logs and extracted snippets are under
-`/private/tmp/smalllinks-met-design.EcMuxo/`.
-
-| Command or check | Result | Log |
-| --- | --- | --- |
-| `make` | Passed on the unchanged compiler source. | `build.log` |
-| `make rule-check` | Passed. GNU find was unavailable for the tabs rule; the same file patterns passed with `rg`. | `rule-check.log`, `tabs.log` |
-| `git diff --check` and `git diff --no-index --check /dev/null` for each new document | No whitespace diagnostics. | `diff-check.log`, `documents.log` |
-| Check local document links, source-reference paths, code fences and document whitespace | Passed. | `documents.log` |
-
-### Initial draft examples run with the baseline compiler
-
-During the initial drafting, all 20 fenced Links snippets were extracted
-from SPEC.md into temporary files, with preceding definitions supplied
-where needed. These files preserve the examples before the subsequent
-syntax changes and deferral of `escape`. They were checked with
-`./links --set=typecheck_only=true` using
-the row-based compiler at the revision above. The accepted
-snippets were then run with `./links`.
-
-| Snippets | Result and cause | Log |
-| --- | --- | --- |
-| Seven using supported syntax | Accepted and returned the documented values: `(42, true)`, `42`, `1`, `42`, `[1, 2]`, `42`, `42`. | `example-02.log`, `example-03.log`, `example-08.log`, `example-12.log`, `example-14.log` through `example-16.log` |
-| One deliberately ill-typed example | Rejected as intended: `do Ask + 1` requires an `Int` result, while the handler resumes with `true`, requiring `Bool`. | `example-09.log` |
-| Twelve using proposed modal syntax | The baseline parser rejected unsupported forms such as `[Ask:() => Int]` and `a::Abs`. | `example-01.log`, `example-04.log` through `example-07.log`, `example-10.log`, `example-11.log`, `example-13.log`, `example-17.log` through `example-20.log` |
-
-`examples.json` lists every command result. The implementation baseline,
-modal acceptance tests and combined checks are recorded in the
-earlier sections of this plan.
-
-### Initial design follow-up checks
-
-These checks used the same source revision and existing baseline
-executable, with the revised documents. Logs are under
-`/private/tmp/smalllinks-met-review2-w4r6hp65/`.
-
-| Command or check | Result | Log |
-| --- | --- | --- |
-| `./links` on runtime counterparts of the revised conditional, native-call, list and variant examples, using baseline type annotations | All four passed: `42`, printed `hello` and returned `()`, `[20, 22]`, and `42`. | `runtime-checks.json`, `conditional.log`, `native.log`, `list.log`, `variant.log` |
-| `./links --set=typecheck_only=true` on the variant payload mismatch using the baseline variant syntax | Rejected as expected: `Just(true)` cannot have an `Int` payload. | `variant-rejection.log` |
-| `./links -e` with a replacement `intRange` that prints before returning `[42]`, followed by `[1..3]` | Printed `shadowed[42] : [Int]`. This reproduced the helper-lookup issue addressed in 3.2. | `range-shadowing.log` |
-| Check document links, code fences, table columns and whitespace; `git diff --check` | Passed. | `documents.log`, `diff-check.log` |
-
-### Effect-interface review checks
-
-R1–R6 decisions and the converted examples were reviewed against the
-thesis and Fresco sources. The checks used
-`e117db9da0bca9f45e9a12d2c3df808ec3880a6e` and the updated documents.
-Logs are under `/private/tmp/smalllinks-met-decisions-6z_udikx/`.
-
-| Command or check | Result | Log |
-| --- | --- | --- |
-| `./links` on the two new accepted handler bodies in example 15, without the proposed interface declarations | Both returned `42 : Int`. | `mixed-interfaces.log`, `explicit-forwarding.log` |
-| Check document links, reference paths, code fences, table columns and whitespace | Passed. | `documents.log` |
-| Check that modal contexts use interface names, and inspect the changes from the previous draft | Passed. | `documents.log`, `SPEC.md.diff`, `PLAN.md.diff` |
-| `git diff --check` | Passed. | `diff-check.log` |
-
-Milestones 2–4 later checked interface declarations, their typing
-rules and the rejection of incomplete handlers.
-
-### R7 syntax checks
-
-These checks used `e117db9da0bca9f45e9a12d2c3df808ec3880a6e` and
-the revised documents. Logs are under
-`/private/tmp/smalllinks-met-r7-i0m_lbp4/`.
-
-| Command or check | Result | Log |
-| --- | --- | --- |
-| `./links` on the annotated variant example with the baseline compiler's delimiters | Returned `42 : Int`. | `variant.log` |
-| `./links --set=typecheck_only=true` on its `Just(true)` variant | Rejected as expected because the declared payload is `Int`. | `variant-payload-rejection.log` |
-| Check the proposed delimiters against the existing variant-row grammar; check document links, fences, tables and whitespace | Passed. Milestone 2 later implemented the new delimiters and reserved `List` rule. | `documents.log` |
-| `git diff --check` | Passed. | `diff-check.log` |
+| `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk make all-ci` | Built the compiler and example installation files. | `ci-build.log` |
+| `make tests` | 1,327 passed across 43 suites, with two existing ignores. All six scripts passed. The example typecheck suite passed all 94 entries, including 60 new ones. | `all-tests.log` |
+| `./test-harness tests/met_examples.tests /private/tmp/smalllinks-met-examples/strict.config` | All 31 runnable examples gave the expected output with frontend rechecking and strict IR checking. | `strict-runtime.log` |
+| `./test-harness /private/tmp/smalllinks-met-examples/strict-rejections.tests /private/tmp/smalllinks-met-examples/strict-rejections.config` | All 28 negative examples produced their expected type errors with the strict flags enabled. | `strict-rejections.log` |
+| `./links` on `blocked/church-pair-result.links`, with default, IR-only and frontend-rechecking settings | Default and IR-only runs succeeded. Frontend rechecking reproduced `Type abstraction needs a type annotation`. | `known-frontend.log` |
+| `opam exec -- dune install --profile=ci --prefix="$prefix" links`, `./tests/check-install.sh "$prefix/bin/linx"` and `python3 /private/tmp/smalllinks-met-examples/installed.py` | Installed files matched the checkout. All 60 installed examples produced the expected result or rejection from outside the checkout. | `install.log`, `install-check.log`, `installed-examples.log` |
+| `./links --config=/private/tmp/smalllinks-met-examples/strict.config examples/met/fresco-effects/find_mask_paper.links` | The new guide reference produced the list, first match and outer predicate yields shown in the inventory. | `guide-search.log` |
+| `make rule-check`, `git diff --check` and `python3 /private/tmp/smalllinks-met-examples/check-docs.py` | Passed. The Python check covered whitespace, including tabs after the GNU find check was skipped, plus links, source coverage and registrations. | `rule-check.log`, `diff-check.log`, `documents.log` |
+| Fresco `./test.sh bin/met.exe tests/` and `./test.sh bin/met.exe tests/fresco` | The reference implementation reported zero failures in 25 effect and data tests and 57 typing tests. | `/tmp/met-fresco-effects-reference.log`, `/tmp/met-fresco-artifact-tests.log` |

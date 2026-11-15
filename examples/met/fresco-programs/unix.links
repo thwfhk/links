@@ -1,0 +1,201 @@
+# A simulated Unix interface from the Fresco artefact.
+# The handlers collect writes and interpret process exits as status codes.
+typename FileDescriptor = (| FD:Int |);
+var stdout = (FD(1) : FileDescriptor);
+
+effect BasicIO { Write : (FileDescriptor, String) => (); }
+effect Status { Exit : forall a::Abs. (Int) => a; }
+
+sig basicIO : forall a::Abs. (<BasicIO> (() -> a)) -> (a, String)
+fun basicIO(action) {
+  handle(action()) {
+    case result -> (result, "")
+    case <Write(_, chars) => k> ->
+      var (result, rest) = k(());
+      (result, chars ^^ rest)
+  }
+}
+
+sig echo : [BasicIO] (String -> ())
+fun echo(chars) { do Write(stdout, chars) }
+
+sig exitProcess : forall a::Abs. [Status] (Int -> a)
+fun exitProcess(status) { do Exit(status) }
+
+sig status : forall a::Abs. (<Status> (() -> a)) -> Int
+fun status(action) {
+  handle(action()) {
+    case _ -> 0
+    case <Exit(code)> -> code
+  }
+}
+
+var stopped = basicIO(fun() {
+  status(fun() { echo("dead"); exitProcess(1); echo("code") })
+});
+
+# Keep the current user in a handler parameter. Each Su changes the
+# parameter passed to the rest of the session.
+typename User = (| Alice | Bob | Lucile | Root |);
+effect UserEnv { AskUser : () => String; }
+effect SwitchUser { Su : (User) => (); }
+
+fun userName(user:User) {
+  switch (user) {
+    case Alice -> "alice"
+    case Bob -> "bob"
+    case Lucile -> "lucile"
+    case Root -> "root"
+  }
+}
+
+sig env : forall a::Abs. (User, <UserEnv> (() -> a)) -> a
+fun env(user, action) {
+  handle(action()) { case <AskUser => k> -> k(userName(user)) }
+}
+
+sig whoami : [UserEnv] (() -> String)
+fun whoami() { do AskUser }
+
+sig su : [SwitchUser] (User -> ())
+fun su(user) { do Su(user) }
+
+sig session : forall a::Abs. (User, <UserEnv, SwitchUser> (() -> a)) -> a
+fun session(user, action) {
+  handle(action())(current <- user) {
+    case <AskUser => k> -> k(userName(current), current)
+    case <Su(nextUser) => k> -> k((), nextUser)
+  }
+}
+
+var users = basicIO(fun() {
+  session(Root, fun() {
+    status(fun() {
+      su(Alice); echo(whoami()); echo(" ");
+      su(Bob); echo(whoami()); echo(" ");
+      su(Root); echo(whoami()); echo(" ")
+    })
+  })
+});
+
+# Resume a fork twice, once in each branch.
+effect ProcessFork { Fork : () => Bool; }
+
+sig nondet : forall a. (<ProcessFork> (() -> a)) -> List (<ProcessFork> a)
+fun nondet(action) {
+  handle(action()) {
+    case result -> [result]
+    case <Fork => k> -> k(true) ++ k(false)
+  }
+}
+
+sig ritchie : [BasicIO] (() -> ())
+fun ritchie() {
+  echo("UNIX is basically ");
+  echo("a simple operating system, ");
+  echo("but ");
+  echo("you have to be a genius  to understand the simplicity.")
+}
+
+sig hamlet : [BasicIO] (() -> ())
+fun hamlet() {
+  echo("To be, or not to be, ");
+  echo("that is the question:");
+  echo("Whether ’tis nobler in the mind to suffer")
+}
+
+sig twoProcesses : [BasicIO, ProcessFork] (() -> Int)
+fun twoProcesses() {
+  session(Root, fun() {
+    status(fun() {
+      if (do Fork) { su(Alice); ritchie() } else { su(Bob); hamlet() }
+    })
+  })
+}
+
+var forked = basicIO(fun() { nondet(twoProcesses) });
+
+# Reify each interruption as a saved resumption. The saved process
+# can still fork when the scheduler runs it.
+effect Interrupt { Interrupt : () => (); }
+
+typename Process(a) = mu p. (| Done:a | Paused:() -> p |);
+
+sig reifyProcess : forall a::Abs. (<Interrupt> (() -> a)) -> Process(a)
+fun reifyProcess(action) {
+  handle(action()) {
+    case result -> Done(result)
+    case <Interrupt => k> -> Paused(fun() { k(()) })
+  }
+}
+
+sig reifyBranches : forall a::Abs.
+  (<ProcessFork, Interrupt> (() -> a)) -> List (<ProcessFork> Process(a))
+fun reifyBranches(action) { nondet(fun() { reifyProcess(action) }) }
+
+sig schedule : forall a::Abs.
+  (List (<ProcessFork> Process(a)), List a) -> List a
+fun schedule(pending, finished) {
+  switch (pending) {
+    case [] -> finished
+    case Done(result) :: rest -> schedule(rest, result :: finished)
+    case Paused(resume) :: rest -> schedule(rest ++ nondet(resume), finished)
+  }
+}
+
+sig timeshare : forall a::Abs.
+  (<ProcessFork, Interrupt> (() -> a)) -> List a
+fun timeshare(action) {
+  schedule([Paused(fun() { reifyProcess(action) })], [])
+}
+
+sig interruptWrite : forall a::Abs. [Interrupt, BasicIO]
+  ((<BasicIO> (() -> a)) -> a)
+fun interruptWrite(action) {
+  handle(action()) {
+    case <Write(fd, chars) => k> ->
+      do Interrupt;
+      k(do Write(fd, chars))
+  }
+}
+
+var interleaved = basicIO(fun() {
+  timeshare(fun() { interruptWrite(twoProcesses) })
+});
+
+# Thread one state value through the resumption and return the final state.
+effect State(s::Abs) {
+  Get : () => s;
+  Put : (s) => ();
+}
+
+sig runState : forall a::Abs, s::Abs. (s, <State(s)> (() -> a)) -> (a, s)
+fun runState(initial, action) {
+  var run = handle(action()) {
+    case result -> fun(s) { (result, s) }
+    case <Get => k> -> fun(s) { k(s)(s) }
+    case <Put(next) => k> -> fun(_) { k(())(next) }
+  };
+  run(initial)
+}
+
+var state = runState(40, fun() {
+  var n = do Get;
+  do Put(n + 2);
+  n
+});
+
+# Reify a fork before either branch runs to its next interruption, then
+# drive the saved branches with the same scheduler.
+var resumed = basicIO(fun() {
+  schedule(reifyBranches(fun() {
+    var result = if (do Fork) 1 else 2;
+    do Interrupt;
+    result
+  }), [])
+});
+
+var results =
+  (stopped, env(Lucile, whoami), users, forked, resumed, interleaved, state);
+
+results

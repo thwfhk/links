@@ -1,0 +1,19 @@
+# h has its quantifier after the Int argument.
+
+sig k : forall a. a -> List a -> a
+fun k(x)(_) { x }
+
+typename Id = forall a. [] (a -> a);
+
+sig ident : forall a. [] (a -> a)
+fun ident(x) { x }
+
+sig h : Int -> Id
+fun h(_) { ~ident }
+
+typename H = forall a. [] (Int -> a -> a);
+
+sig lst : List H
+var lst = [fun(_)(x) { x }];
+
+k(h)(lst)

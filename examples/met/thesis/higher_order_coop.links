@@ -1,0 +1,18 @@
+effect Coop {
+  Fork : ([Coop] (() -> ())) => ();
+  Suspend : () => ();
+}
+
+sig countSuspensions : [] (([Coop] (() -> ())) -> Int)
+fun countSuspensions(task) {
+  handle(task()) {
+    case <Fork(child) => k> -> countSuspensions(child) + k(())
+    case <Suspend => k> -> 1 + k(())
+    case () -> 0
+  }
+}
+
+countSuspensions(fun() {
+  do Fork(fun() { do Suspend; do Fork(fun() { do Suspend }) });
+  do Suspend
+})

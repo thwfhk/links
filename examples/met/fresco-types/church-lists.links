@@ -1,0 +1,78 @@
+# The list operations encoded as polymorphic right folds.
+
+typename Church(a) = forall b. b -> (a -> b -> b) -> b;
+
+typename Id = forall a. [] (a -> a);
+
+sig ident : forall a. [] (a -> a)
+fun ident(x) { x }
+
+sig churchIds : Church(Id)
+var churchIds = fun(z)(step) { step(~ident)(step(~ident)(z)) };
+
+sig churchTail : forall a. Church(a) -> Church(a)
+fun churchTail(xs) {
+  fun(z)(step) {
+    xs((z, z))(fun(x)(acc) { (step(x)(acc.1), acc.1) }).2
+  }
+}
+
+sig churchHead : forall a. Church(a) -> a
+fun churchHead(xs) {
+  var Just(x) = xs(Nothing)(fun(x)(_) { Just(x) });
+  x
+}
+
+sig churchSingle : forall a. a -> Church(a)
+fun churchSingle(x) { fun(z)(step) { step(x)(z) } }
+
+sig churchCons : forall a. a -> Church(a) -> Church(a)
+fun churchCons(x)(xs) { fun(z)(step) { step(x)(xs(z)(step)) } }
+
+sig churchAppend : forall a. Church(a) -> Church(a) -> Church(a)
+fun churchAppend(xs)(ys) { fun(z)(step) { xs(ys(z)(step))(step) } }
+
+sig inc : Int -> Int
+fun inc(x) { x + 1 }
+
+sig churchMap : forall a, b. (a -> b) -> Church(a) -> Church(b)
+fun churchMap(f)(xs) {
+  fun(z)(step) { xs(z)(fun(x)(acc) { step(f(x))(acc) }) }
+}
+
+sig poly : Id -> (Int, Bool)
+fun poly(f) { (f(42), f(true)) }
+
+sig churchLength : forall a. Church(a) -> Int
+fun churchLength(xs) { xs(0)(fun(_)(n) { n + 1 }) }
+
+sig toList : forall a. Church(a) -> List a
+fun toList(xs) { xs([])(fun(x)(ys) { x :: ys }) }
+
+# B1: the fold used for tail carries two accumulators.
+var rest = churchTail(churchIds);
+var first = churchHead(churchIds);
+var one = churchSingle(ident);
+
+# B2 and B3: cons gets the element type from the second argument.
+var withName = churchCons(ident)(churchIds);
+var withLambda = churchCons(fun(x) { x })(churchIds);
+
+# B4 and B5: append two monomorphic or polymorphic element lists.
+var ints = churchAppend(churchSingle(inc))(churchSingle(ident));
+var moreIds = churchAppend(churchSingle(ident))(churchIds);
+
+# B6 and B8: map a higher-rank consumer or apply the selected identity.
+var mappedSingleton = churchMap(poly)(churchSingle(ident));
+var appliedHead = churchHead(churchIds)(true);
+
+# E4a, E4b and F1: the element type guides the mapping function.
+var mappedName = churchMap(poly)(churchIds);
+var mappedLambda = churchMap(fun(x) { poly(x) })(churchIds);
+var mappedTwice = churchMap(fun(f) { (f(true), f(42)) })(churchIds);
+
+((churchLength(rest), first(42), first(true), churchHead(one)(42)),
+ (churchLength(withName), churchLength(withLambda)),
+ (map(fun(f) { f(41) }, toList(ints)), churchLength(moreIds)),
+ toList(mappedSingleton), appliedHead, toList(mappedName),
+ toList(mappedLambda), toList(mappedTwice))

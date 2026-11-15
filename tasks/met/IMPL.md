@@ -17,8 +17,7 @@ decisions here as implementation proceeds.
 
 ## 1. Reviewed design and baseline
 
-The design review and [baseline checks](PLAN.md#implementation-baseline)
-are complete. See the [migration inventory](MIGRATION.md) for the
+The design review and baseline checks are complete. See the [migration inventory](MIGRATION.md) for the
 affected signatures, tests and examples.
 
 Removed `unsafe_cast` from the native primitive table in `core/lib.ml`.
@@ -64,7 +63,7 @@ symbolic term operators such as `<|>` and `><`.
 
 Milestone 3 exposed modal prefixes hidden by aliases, applied declared
 restrictions to explicit type arguments and bound range syntax to the
-standard pure helper. The [baseline and milestone checks](PLAN.md#status)
+standard pure helper. The [completion record](PLAN.md#status)
 and [migration inventory](MIGRATION.md) record the verified cases.
 
 ## 3. Modal inference and polymorphism
@@ -121,9 +120,7 @@ for source-level tests and preserved binding contexts across successive
 sentences. Those tests checked linearity within each program or sentence.
 [Milestone 5 integration](#5-compiler-and-library-integration) switched
 the native driver and typed transforms to Fresco and added tracking of
-linear uses across REPL sentences. The
-[milestone 3 checks and handover](PLAN.md#milestone-3-checks) describe
-the earlier state.
+linear uses across REPL sentences. The earlier checks are recorded in Git history.
 
 ## 4. Operations, handlers and native effects
 
@@ -152,7 +149,7 @@ The top-level context supplies `wild`. The primitive signatures
 are in [`core/lib.ml`](../../core/lib.ml). The lowering flag
 `ApplyPure` serves a separate purpose. See the
 [native rules](SPEC.md#native-effects) and
-[milestone 4 checks](PLAN.md#milestone-4-checks).
+[combined checks](PLAN.md#milestone-68-checks).
 
 ## 5. Compiler and library integration
 
@@ -195,9 +192,8 @@ the rigid parameters of an already checked operation. IR checking
 handles recursive data types, and the optimiser keeps handler-local
 bindings and exported prelude definitions live where they are needed.
 
-The [SmallLinks guide](../small/SPEC.md) describes the modal language.
-See the [latest combined checks](PLAN.md#milestone-68-checks) and the
-[historical integration checks](PLAN.md#milestones-56-checks). The
+The [SmallLinks guide](GUIDE.md) describes the modal language.
+See the [latest combined checks](PLAN.md#milestone-68-checks). The
 [migration inventory](MIGRATION.md) links to the deferred fixtures.
 
 ## Follow-up review
@@ -361,7 +357,7 @@ and lowering receives a record row. `Fresco.record_fields` still
 converts an open record as a whole.
 
 See the [extension rule](SPEC.md#modal-record-extension) and the
-[milestone checks](PLAN.md#milestone-312-checks). See
+[combined checks](PLAN.md#milestone-68-checks). See
 [3.11](#311-record-and-comprehension-typing) for quantified records.
 
 #### 3.13 Argument types before instantiation
@@ -385,8 +381,7 @@ type.
 
 ### Milestone 4 follow-up
 
-See the [follow-up checks](PLAN.md#milestone-4-follow-up-checks)
-and [design checks](PLAN.md#milestone-4-design-checks).
+See the [combined checks](PLAN.md#milestone-68-checks).
 
 #### 4.5 Shared interface arguments
 
@@ -485,7 +480,7 @@ for the checked record and comprehension types. `ListElements` carries
 the generator list's modality to its element type for frontend
 rechecking. Lowering erases it and keeps the original list value.
 The combined checks in
-[PLAN.md](PLAN.md#milestones-56-follow-up-checks) cover those types,
+[PLAN.md](PLAN.md#milestone-68-checks) cover those types,
 explicit instantiation before extension under `Presence(Abs)`, and
 function arity checks for upcasts.
 

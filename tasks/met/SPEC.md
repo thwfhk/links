@@ -3,7 +3,7 @@
 This specification describes the target design for modal effect types
 in SmallLinks, including the reviewed follow-up changes. The native
 compiler already uses modal effects and Fresco. The
-[SmallLinks language guide](../small/SPEC.md) describes the current
+[SmallLinks language guide](GUIDE.md) describes the current
 language. The [plan status](PLAN.md#status) records what the compiler
 implements and which checks have run. The
 [implementation notes](IMPL.md) record implementation decisions.
@@ -1516,8 +1516,10 @@ for the bound function across its uses. With an explicit `forall`,
 the tested Links checker accepted a hole solved
 in the body and rejected an unresolved hole with inconsistent
 quantifiers. The earlier SmallLinks checker generalised the unresolved
-hole alongside the written binders. See the
-[historical checks](PLAN.md#milestone-3-design-checks).
+hole alongside the written binders. The alias checks used Links
+`4e5c78c5` and SmallLinks `4407a649`; the signature checks used Links
+`1912d9b7` and SmallLinks `4407a649`. Their commands and logs are
+recorded in `PLAN.md` at commit `87a9401a`.
 
 ### Modal types and data rows
 
