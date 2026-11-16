@@ -12,17 +12,21 @@ const dist = fileURLToPath(new URL("../dist", import.meta.url));
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const host = "https://smalllinks.test";
 
+const factorial = "examples/factorial.links";
 const importExample = "examples/handlers/module_import.links";
 const stateModule = "examples/handlers/shallow_state.links";
 const slowExample = "examples/handlers/tests.links";
 const coinExample = "examples/handlers/coin_composition.links";
 const searchExample = "examples/met/fresco-effects/find_mask_paper.links";
+const singleYield = "examples/met/fresco-effects/single-yield.links";
+const rankTwo = "examples/met/fresco-types/rank-two.links";
 const rejectedExample = "examples/met/fresco-effects/rejected/effectful-list-non-value.links";
+const quickExamples = [factorial, rankTwo, singleYield, importExample];
 
 const expectedExamples = new Map([
   ["examples/church.links", "4"],
   ["examples/extensible-case.links", '("A", "B", "C")'],
-  ["examples/factorial.links", /\(f = 3628800, i = 10\)\]$/],
+  [factorial, /\(f = 3628800, i = 10\)\]$/],
   [coinExample, "()"],
   [importExample, "(0, [0, 1, 2, 3, 4])"],
   ["examples/handlers/toggle.links", "(true, true)"],
@@ -30,11 +34,11 @@ const expectedExamples = new Map([
   ["examples/met/fresco-effects/effectful-list.links", "[1]"],
   [searchExample, "([1, 2, 3], Just(3), (Just(2), [1, 2]))"],
   ["examples/met/fresco-effects/list-map-fold.links", "([2, 3, 4], 123, 321, [1, 2, 3])"],
-  ["examples/met/fresco-effects/single-yield.links", "1"],
+  [singleYield, "1"],
   ["examples/met/fresco-types/application.links",
     "(((42, true), (42, true), (42, true)), ((42, true), (42, true)), ((42, true), (42, true)), " +
     "((42, true), (42, true), (42, true)), ((true, 42), (42, true)), (42, 42))"],
-  ["examples/met/fresco-types/rank-two.links", "(42, 42, (42, true), (), 42, (42, true))"],
+  [rankTwo, "(42, 42, (42, true), (), 42, (42, true))"],
   ["examples/met/thesis/handler_results.links", '(52, (42, true, "second"))'],
   ["examples/met/thesis/print_list.links", '["digit 3", "digit 1", "digit 4"]'],
   ["examples/met/thesis/yield_state.links", '([42], ["callback"])'],
@@ -80,6 +84,9 @@ function openSite(basePath) {
     const { window } = new JSDOM(html, { url, virtualConsole, runScripts: "outside-only", pretendToBeVisual: true });
     pages.push(window);
 
+    // jsdom returns no layout boxes for elements and lacks the equivalent Range method.
+    window.Range.prototype.getClientRects ??= () => [];
+
     window.fetch = async (href, { signal } = {}) => {
       const path = assetPath(new URL(href, url));
       return new Response(await readFile(path, { signal }));
@@ -116,8 +123,7 @@ function openSite(basePath) {
   async function close() {
     await Promise.all([...workers].map(worker => worker.terminate()));
     for (const window of pages) {
-      const editor = window.document.querySelector(".cm-editor");
-      if (editor) EditorView.findFromDOM(editor).destroy();
+      editorView(window.document)?.destroy();
       window.close();
     }
     assert.deepEqual(errors, [], "Errors reported by the in-memory DOM");
@@ -142,16 +148,19 @@ function expectText(document, id, value) {
   return waitFor(() => element?.closest("[hidden]") ? null : element?.textContent, value, id);
 }
 
-function getSource(document) {
+function editorView(document) {
   const editor = document.querySelector(".cm-editor");
-  return editor ? EditorView.findFromDOM(editor).state.doc.toString() : document.getElementById("source").value;
+  return editor && EditorView.findFromDOM(editor);
+}
+
+function getSource(document) {
+  return editorView(document)?.state.doc.toString() ?? document.getElementById("source").value;
 }
 
 function editSource(window, source) {
   const document = window.document;
-  const editor = document.querySelector(".cm-editor");
-  if (editor) {
-    const view = EditorView.findFromDOM(editor);
+  const view = editorView(document);
+  if (view) {
     view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: source } });
   } else {
     const textarea = document.getElementById("source");
@@ -160,11 +169,24 @@ function editSource(window, source) {
   }
 }
 
-async function expectLoadedExample(window, id) {
-  const { document } = window;
+function unavailable(button) {
+  return button.disabled || Boolean(button.closest("[hidden]"));
+}
+
+async function expectEditable(document) {
+  await expectText(document, "editor-mode", "Editable");
+  await waitFor(() => unavailable(document.getElementById("check")), false, "Check is available");
+  assert.ok(!unavailable(document.getElementById("run")), "Run is available");
+  const view = editorView(document);
+  assert.ok(view, "The highlighted editor did not load");
+  assert.equal(view.state.readOnly, false);
+  assert.equal(view.contentDOM.getAttribute("contenteditable"), "true");
+}
+
+async function expectLoadedExample(document, id) {
   const source = await readFile(resolve(root, id), "utf8");
   await waitFor(() => getSource(document), source, id);
-  await waitFor(() => document.getElementById("check").disabled, false, `Loaded ${id}`);
+  await expectEditable(document);
 }
 
 function linksTo(element, page, parameter, id) {
@@ -182,16 +204,34 @@ function requireLink(element, page, parameter, id) {
   return link;
 }
 
-async function expectSourcePage(document, id) {
-  const { title, note } = sources.get(id);
+async function expectSourcePreview(document, id) {
+  const { note } = sources.get(id);
   const source = await readFile(resolve(root, id), "utf8");
-  await expectText(document, "source-title", title);
-  await expectText(document, "source-path", id);
-  if (note) await expectText(document, "source-note", note);
-  await expectText(document, "source-code", source);
-  const preview = document.getElementById("source-code").closest("pre");
-  assert.equal(preview.getAttribute("aria-label"), "Source code");
-  assert.ok(!preview.closest('[contenteditable]:not([contenteditable="false"])'), `${id} must be read-only`);
+  await waitFor(() => getSource(document), source, id);
+  await expectText(document, "editor-mode", "Read-only");
+  const context = document.getElementById("example-context");
+  assert.ok(!context.closest("[hidden]"), `Missing file context for ${id}`);
+  assert.equal(requireLink(context, "index.html", "file", id).id, "example-source");
+  if (note) await expectText(document, "example-note", note);
+  assert.equal(document.querySelectorAll(".cm-editor").length, 1, "Preview uses the shared editor");
+  const view = editorView(document);
+  assert.equal(view.state.readOnly, true);
+  assert.equal(view.contentDOM.getAttribute("contenteditable"), "false");
+  assert.ok(unavailable(document.getElementById("check")), "Check is unavailable during preview");
+  assert.ok(unavailable(document.getElementById("run")), "Run is unavailable during preview");
+  assert.ok(!unavailable(document.getElementById("load-source")), `Can load ${id} into the editor`);
+}
+
+function followPreview(element, id) {
+  const link = requireLink(element, "index.html", "file", id);
+  assert.ok(["", "_self"].includes(link.target), `Preview should open in place for ${id}`);
+  const directory = link.closest("details");
+  if (directory && !directory.open) {
+    directory.querySelector("summary").click();
+    assert.ok(directory.open, `Cannot open the directory for ${id}`);
+  }
+  link.click();
+  return link;
 }
 
 async function run(document, value) {
@@ -208,6 +248,9 @@ async function run(document, value) {
 }
 
 test("Package repository sources and their catalogue entries", async () => {
+  for (const oldPage of ["sources.html", "sources.js"]) {
+    await assert.rejects(readFile(resolve(dist, oldPage)), { code: "ENOENT" });
+  }
   assert.equal(sources.size, sourceCatalogue.length, "Duplicate source catalogue entries");
   const exampleIds = new Set(catalogue.map(({ id }) => id));
   assert.equal(exampleIds.size, catalogue.length, "Duplicate runnable catalogue entries");
@@ -252,19 +295,21 @@ test("Check and run source and the published examples at the site root", async (
     const check = document.getElementById("check");
     const runButton = document.getElementById("run");
     const stop = document.getElementById("stop");
-    const examples = document.getElementById("examples");
+    const examples = document.getElementById("example-list");
     const newProgram = document.getElementById("new-program");
     assert.equal(check.textContent.trim(), "Check");
     assert.equal(runButton.textContent.trim(), "Run");
     assert.equal(stop.textContent.trim(), "Stop");
     assert.equal(newProgram.textContent.trim(), "New program");
-    assert.equal(document.getElementById(examples.getAttribute("aria-labelledby"))?.textContent.trim(),
-      "Examples by topic");
     const buttons = () => [...examples.querySelectorAll("button[data-example-id]")];
-    await waitFor(() => buttons().length, catalogue.length, "Example count");
+    await waitFor(() => buttons().length, quickExamples.length, "Quick example count");
     const byId = new Map(buttons().map(button => [button.dataset.exampleId, button]));
-    assert.deepEqual([...byId.keys()], catalogue.map(({ id }) => id));
-    assert.ok(new Set(catalogue.map(({ group }) => group)).size > 1, "The examples need multiple topic groups");
+    assert.deepEqual([...byId.keys()].sort(), [...quickExamples].sort());
+
+    const files = document.getElementById("source-files");
+    await waitFor(() => linksTo(files, "index.html", "file").length, sources.size, "File browser");
+    await expectEditable(document);
+    const starter = getSource(document);
 
     editSource(window, '{ print("hello from SmallLinks"); 6 * 7 }');
     check.click();
@@ -274,18 +319,26 @@ test("Check and run source and the published examples at the site root", async (
     await run(document, "42");
     await expectText(document, "output", "hello from SmallLinks");
 
-    for (const { id, title, group } of catalogue) {
+    for (const id of quickExamples) {
       const button = byId.get(id);
-      assert.equal(button.textContent.trim(), title);
-      assert.equal(button.closest(".example-topic").querySelector("h3").textContent.trim(), group);
+      assert.ok(button.textContent.trim(), `Unnamed shortcut for ${id}`);
       button.click();
-      await expectLoadedExample(window, id);
-      assert.equal(button.getAttribute("aria-current"), "true", `Selected example ${id}`);
+      await expectLoadedExample(document, id);
+      await run(document, expectedExamples.get(id));
+    }
+
+    for (const { id } of catalogue) {
+      followPreview(files, id);
+      await expectSourcePreview(document, id);
+      document.getElementById("load-source").click();
+      await expectLoadedExample(document, id);
       await run(document, expectedExamples.get(id));
       if (id === coinExample) await expectText(document, "output", "[[Heads],[Tails],[]]\n[]\n");
     }
 
     newProgram.click();
+    await expectEditable(document);
+    assert.equal(getSource(document), starter);
 
     editSource(window, "{ var x = 1; x + true }");
     check.click();
@@ -359,46 +412,59 @@ for (const basePath of ["/", "/smalllinks/"]) {
   test(`Follow repository sources and retain the editor at ${basePath}`, async () => {
     const site = openSite(basePath);
     try {
-      const editorWindow = await site.loadPage(`${basePath}?example=${encodeURIComponent(importExample)}`);
-      const editor = editorWindow.document;
-      await expectLoadedExample(editorWindow, importExample);
+      const window = await site.loadPage(`${basePath}?example=${encodeURIComponent(importExample)}`);
+      const document = window.document;
+      await expectLoadedExample(document, importExample);
+      const original = getSource(document);
       const edited = "import Shallow_state;\nShallow_state.unitTest(3)";
-      editSource(editorWindow, edited);
+      editSource(window, edited);
+      const view = editorView(document);
+      const anchor = edited.lastIndexOf("Shallow_state");
+      const head = anchor + "Shallow_state".length;
+      view.dispatch({ selection: { anchor, head } });
+      await run(document, "(0, [0, 1, 2])");
+      const atFiles = new Promise(resolve => window.addEventListener("hashchange", resolve, { once: true }));
+      window.location.hash = "files";
+      await atFiles;
+      assert.equal(getSource(document), edited, "Jumping to Files keeps the edited program");
 
-      const context = editor.getElementById("example-context");
-      const sourceLink = requireLink(context, "sources.html", "file", importExample);
-      assert.ok(!context.hidden);
-      assert.equal(sourceLink.target, "_blank", "Opening the source must preserve the editor tab");
-      assert.match(sourceLink.getAttribute("aria-label") ?? sourceLink.textContent, /view/i);
-      const callerSource = (await site.loadPage(sourceLink.href)).document;
-      await expectSourcePage(callerSource, importExample);
-      assert.equal(getSource(editor), edited);
+      const context = document.getElementById("example-context");
+      const imports = document.getElementById("example-imports");
+      assert.equal(requireLink(imports, "index.html", "file", stateModule).textContent.trim(), "Shallow_state");
+      assert.ok(!context.closest("[hidden]"));
+      followPreview(context, importExample);
+      await expectSourcePreview(document, importExample);
+      window.history.back();
+      await expectEditable(document);
+      assert.equal(getSource(document), edited, "Back from a preview restores the draft");
+      window.history.forward();
+      await expectSourcePreview(document, importExample);
+      requireLink(imports, "index.html", "file", stateModule).focus();
+      followPreview(imports, stateModule);
+      await expectSourcePreview(document, stateModule);
+      assert.equal(document.activeElement, view.contentDOM, "Following an import moves focus into the preview");
+      assert.ok(!document.getElementById("example-caller-row").hidden);
+      followPreview(document.getElementById("example-callers"), importExample);
+      await expectSourcePreview(document, importExample);
+      assert.equal(editorView(document), view, "The app uses the same editor for each preview");
 
-      const imported = requireLink(callerSource.getElementById("source-imports"), "sources.html", "file", stateModule);
-      assert.equal(imported.textContent.trim(), "Shallow_state");
-      const editorImport = requireLink(context, "sources.html", "file", stateModule);
-      assert.equal(editorImport.href, imported.href);
-      assert.equal(editorImport.target, "_blank");
-      const module = (await site.loadPage(imported.href)).document;
-      await expectSourcePage(module, stateModule);
-      await expectText(module, "source-kind", "Source only");
-      assert.ok(module.getElementById("source-playground").hidden, "A support module cannot run by itself");
+      document.getElementById("return-to-editor").click();
+      await expectEditable(document);
+      assert.equal(getSource(document), edited);
+      assert.equal(view.state.selection.main.anchor, anchor);
+      assert.equal(view.state.selection.main.head, head);
+      await expectText(document, "value", "(0, [0, 1, 2])");
+      await run(document, "(0, [0, 1, 2])");
+      const mac = /Mac/.test(window.navigator.platform);
+      view.contentDOM.dispatchEvent(new window.KeyboardEvent("keydown", {
+        key: "z", code: "KeyZ", keyCode: 90, ctrlKey: !mac, metaKey: mac, bubbles: true, cancelable: true,
+      }));
+      assert.equal(getSource(document), original, "The restored editor retains its undo history");
 
-      const caller = requireLink(module.getElementById("source-callers"), "index.html", "example", importExample);
-      const callerWindow = await site.loadPage(caller.href);
-      await expectLoadedExample(callerWindow, importExample);
-      await run(callerWindow.document, expectedExamples.get(importExample));
-      assert.equal(getSource(editor), edited);
-      await run(editor, "(0, [0, 1, 2])");
-
-      const browseLink = requireLink(editor.querySelector("header"), "sources.html");
-      assert.equal(browseLink.target, "_blank");
-      const browse = (await site.loadPage(browseLink.href)).document;
-      const files = browse.getElementById("source-files");
-      await waitFor(() => files.hidden, false, "Source catalogue");
-      assert.equal(browse.getElementById(files.getAttribute("aria-labelledby"))?.textContent.trim(),
-        "Files by directory");
-      const fileLinks = linksTo(files, "sources.html", "file");
+      const files = document.getElementById("source-files");
+      assert.ok(files.closest(".site-sidebar"), "The file browser is in the sidebar");
+      assert.ok(!files.closest("[hidden]"), "The file browser is visible");
+      const fileLinks = linksTo(files, "index.html", "file");
       assert.deepEqual(fileLinks.map(link => new URL(link.href).searchParams.get("file")).sort(),
         [...sources.keys()].sort());
       for (const link of fileLinks) {
@@ -410,25 +476,27 @@ for (const basePath of ["/", "/smalllinks/"]) {
         assert.equal(link.textContent.trim(), posix.basename(id));
       }
 
-      const slowLink = requireLink(files, "sources.html", "file", slowExample);
-      const slow = (await site.loadPage(slowLink.href)).document;
-      await expectSourcePage(slow, slowExample);
-      await expectText(slow, "source-kind", "Source only");
-      await expectText(slow, "source-note", /time limit|timed out|timeout/i);
-      assert.ok(slow.getElementById("source-playground").hidden, "The slow example should only be browsable");
+      const selected = followPreview(files, slowExample);
+      await expectSourcePreview(document, slowExample);
+      assert.equal(selected.getAttribute("aria-current"), "page");
+      await expectText(document, "example-note", /time limit|timed out|timeout/i);
 
-      const rejectedLink = requireLink(files, "sources.html", "file", rejectedExample);
-      const rejected = (await site.loadPage(rejectedLink.href)).document;
-      await expectSourcePage(rejected, rejectedExample);
-      await expectText(rejected, "source-kind", "Expected type error");
-      const checkLink = requireLink(rejected.querySelector("article"), "index.html", "example", rejectedExample);
-      assert.match(checkLink.textContent, /check/i);
-      const rejectedWindow = await site.loadPage(checkLink.href);
-      await expectLoadedExample(rejectedWindow, rejectedExample);
-      await expectText(rejectedWindow.document, "example-diagnostic", /diagnostic/i);
-      rejectedWindow.document.getElementById("check").click();
-      await expectText(rejectedWindow.document, "diagnostic", /Modal introduction requires a value/);
-      assert.ok(rejectedWindow.document.getElementById("diagnostic").textContent.includes(rejectedExample));
+      followPreview(files, "prelude.links");
+      await expectSourcePreview(document, "prelude.links");
+      document.getElementById("load-source").click();
+      await expectLoadedExample(document, "prelude.links");
+      editSource(window, "length([1, 2, 3])");
+      await run(document, "3");
+
+      followPreview(files, rejectedExample);
+      await expectSourcePreview(document, rejectedExample);
+      document.getElementById("load-source").click();
+      await expectLoadedExample(document, rejectedExample);
+      await expectText(document, "example-diagnostic", /diagnostic/i);
+      document.getElementById("check").click();
+      await expectText(document, "diagnostic", /Modal introduction requires a value/);
+      assert.ok(document.getElementById("diagnostic").textContent.includes(rejectedExample));
+      assert.deepEqual(linksTo(document, "sources.html"), [], "No link to the standalone sources page");
     } finally {
       await site.close();
     }
@@ -443,6 +511,7 @@ for (const basePath of ["/", "/smalllinks/"]) {
       const guide = (await site.loadPage(guideLink.href)).document;
       assert.equal(guide.querySelector("h1").textContent, "SmallLinks language guide");
       const chapters = guide.querySelector('nav[aria-labelledby="chapter-nav-title"]');
+      assert.ok(chapters.closest(".site-sidebar"), "Guide chapters are in the sidebar");
       assert.equal(guide.getElementById(chapters.getAttribute("aria-labelledby")).textContent.trim(), "Chapters");
       const chapterLinks = [...chapters.querySelectorAll("a[href^='#']")];
       const headings = [...guide.querySelectorAll("main h2")];
@@ -456,13 +525,14 @@ for (const basePath of ["/", "/smalllinks/"]) {
       const home = (await site.loadPage(backLink.href)).document;
       assert.equal(home.querySelector("h1").textContent.trim(), "SmallLinks Playground");
 
-      const guideSources = linksTo(guide, "sources.html", "file");
+      assert.deepEqual(linksTo(guide, "sources.html"), [], "No link to the standalone sources page");
+      const guideSources = linksTo(guide, "index.html", "file");
       assert.ok(guideSources.some(link => new URL(link.href).searchParams.get("file") === stateModule),
         "The guide must link to the imported state module");
       for (const link of guideSources) {
         const id = new URL(link.href).searchParams.get("file");
-        const viewer = (await site.loadPage(link.href)).document;
-        await expectSourcePage(viewer, id);
+        const preview = (await site.loadPage(link.href)).document;
+        await expectSourcePreview(preview, id);
       }
 
       requireLink(guide, "index.html", "example", searchExample);
@@ -487,7 +557,7 @@ for (const basePath of ["/", "/smalllinks/"]) {
         const id = params.get("example");
         if (id) {
           assert.equal(sources.get(id)?.kind, "runnable", id);
-          await expectLoadedExample(linkedWindow, id);
+          await expectLoadedExample(linkedWindow.document, id);
           if (snippet) assert.equal(getSource(linkedWindow.document), snippet.code);
           const value = snippet?.value ?? expectedExamples.get(id);
           assert.ok(value, `Missing expected guide result for ${id}`);
@@ -496,6 +566,7 @@ for (const basePath of ["/", "/smalllinks/"]) {
         } else {
           assert.ok(snippet, `Missing Links code block for ${link.href}`);
           assert.equal(params.get("code"), snippet.code);
+          await expectEditable(linkedWindow.document);
           assert.equal(getSource(linkedWindow.document), snippet.code);
           await run(linkedWindow.document, snippet.value);
         }

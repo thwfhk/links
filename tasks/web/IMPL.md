@@ -138,16 +138,18 @@ deferred. Its [random π estimate](../../examples/handlers/pi.links)
 exceeded 60 seconds in the browser worker. The short module import
 example exercises its shallow state handler within the demo timeout.
 
-The [source viewer](../../web/playground/sources.html) groups files by
-repository directory. It opens a file from a `file` parameter in the
-URL and shows its imports and callers. Source links in the playground
-open in a new tab so they preserve the current editor text. Runnable
-and expected-error files can open in the editor with their original
-path and import context.
+The [playground](../../web/playground/index.html) groups files by
+repository directory in its sidebar, with shortcuts for common examples.
+The `file` parameter opens the source pane in read-only mode. Following
+imports and callers keeps the current draft available through **Return
+to editor**. **Load into playground** makes the displayed source editable
+and enables checking and running. Files under `examples/` keep their
+original path and import context. Bundled library files and the prelude
+load as editor text.
 
 The [guide renderer](../../web/build/guide.mjs) renders the concise
 [web guide](../../web/guide.md) at build time with Markdown-it. It
-generates chapter navigation and links to the full guide, repository
+generates a chapter sidebar and links to the full guide, repository
 examples and browsable sources. A standalone listing opens the editor
 with its exact source in the `code` parameter. A listing that imports
 a module uses the `example` parameter to retain the entry file and

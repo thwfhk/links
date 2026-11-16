@@ -43,7 +43,7 @@ async function guideLink(href, root, guideUrl, exampleIds, sourceIds) {
   }
   if (path === guidePath) return `guide.html${url.search}${url.hash}`;
   if (exampleIds.has(path)) return `index.html?example=${encodeURIComponent(path)}`;
-  if (sourceIds?.has(path)) return `sources.html?file=${encodeURIComponent(path)}`;
+  if (sourceIds?.has(path)) return `index.html?file=${encodeURIComponent(path)}`;
 
   const kind = (await stat(filename)).isDirectory() ? "tree" : "blob";
   const sourcePath = path.split("/").map(encodeURIComponent).join("/");
@@ -62,7 +62,6 @@ export async function renderGuide(root, output, examples) {
   const usedIds = new Set(["chapter-nav-title"]);
   const exampleIds = new Set(examples.map(({ id }) => id));
   const chapters = [];
-  let firstChapter = tokens.length;
 
   for (const [i, token] of tokens.entries()) {
     if (token.type === "heading_open") {
@@ -72,7 +71,6 @@ export async function renderGuide(root, output, examples) {
       const id = headingId(title, usedIds);
       token.attrSet("id", id);
       if (token.tag === "h2" && token.level === 0) {
-        firstChapter = Math.min(firstChapter, i);
         chapters.push({ id, title });
       }
     }
@@ -109,34 +107,39 @@ export async function renderGuide(root, output, examples) {
   markdown.renderer.rules.table_close = (tokens, i, options, env, renderer) =>
     `${renderer.renderToken(tokens, i, options)}</div>\n`;
 
-  const intro = markdown.renderer.render(tokens.slice(0, firstChapter), markdown.options, env);
-  const content = markdown.renderer.render(tokens.slice(firstChapter), markdown.options, env);
+  const content = markdown.renderer.render(tokens, markdown.options, env);
   const chapterLinks = chapters.map(({ id, title }) =>
     `        <li><a href="#${encodeURIComponent(id)}">${markdown.utils.escapeHtml(title)}</a></li>`);
-  const chapterNav = chapters.length ? `    <nav class="chapters" aria-labelledby="chapter-nav-title">
-      <p id="chapter-nav-title">Chapters</p>
+  const chapterNav = chapters.length ? `    <nav class="site-sidebar panel chapters" aria-labelledby="chapter-nav-title">
+      <p class="panel-title" id="chapter-nav-title">Chapters</p>
       <ul>
 ${chapterLinks.join("\n")}
       </ul>
     </nav>
 ` : "";
-  const sourcesLink = sourceIds ? '      <a href="sources.html">Sources</a>\n' : "";
   const page = `<!doctype html>
 <html lang="en-GB">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>SmallLinks language guide</title>
-  <link rel="stylesheet" href="guide.css">
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./guide.css">
 </head>
 <body>
-  <header>
-    <nav class="site-nav" aria-label="SmallLinks">
-      <a href="index.html">SmallLinks playground</a>
-${sourcesLink}    </nav>
+  <header class="site-header">
+    <a class="site-name" href="./index.html">SmallLinks</a>
+    <nav class="site-links" aria-label="SmallLinks">
+      <a href="./index.html">Playground</a>
+      <a href="./guide.html" aria-current="page">Language guide</a>
+    </nav>
   </header>
-  <main>
-${intro}${chapterNav}${content}  </main>
+  <main class="site-layout">
+${chapterNav}    <article class="site-content panel guide-content">
+      <div class="guide-prose">
+${content}      </div>
+    </article>
+  </main>
 </body>
 </html>
 `;

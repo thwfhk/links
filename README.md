@@ -9,7 +9,7 @@ Build from source with `make`. Run `./links` for the REPL, pass
 See [INSTALL.md](INSTALL.md) for dependencies and installation.
 
 [Build the web demo](tasks/web/IMPL.md#build-and-serve) to try SmallLinks
-with an editor, a grouped example catalogue, a source viewer and the
+with a file browser, an editor that previews and runs examples, and the
 language guide.
 
 Read the [language guide](tasks/met/GUIDE.md) for syntax and examples.

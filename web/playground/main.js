@@ -3,12 +3,24 @@ import { createEditor } from "./editor.js";
 const textarea = document.querySelector("#source");
 const exampleList = document.querySelector("#example-list");
 const exampleStatus = document.querySelector("#example-status");
+const files = document.querySelector("#source-files");
+const catalogueStatus = document.querySelector("#catalogue-status");
+const playgroundLink = document.querySelector("#playground-link");
 const newProgram = document.querySelector("#new-program");
 const exampleContext = document.querySelector("#example-context");
 const exampleSource = document.querySelector("#example-source");
 const importRow = document.querySelector("#example-import-row");
 const exampleImports = document.querySelector("#example-imports");
 const exampleDiagnostic = document.querySelector("#example-diagnostic");
+const exampleNote = document.querySelector("#example-note");
+const callerRow = document.querySelector("#example-caller-row");
+const exampleCallers = document.querySelector("#example-callers");
+const editorMode = document.querySelector("#editor-mode");
+const editActions = document.querySelector("#edit-actions");
+const previewActions = document.querySelector("#preview-actions");
+const loadButton = document.querySelector("#load-source");
+const returnButton = document.querySelector("#return-to-editor");
+const results = document.querySelector("#results");
 const checkButton = document.querySelector("#check");
 const runButton = document.querySelector("#run");
 const stopButton = document.querySelector("#stop");
@@ -29,183 +41,256 @@ const failureStatuses = {
 };
 
 const starterSource = textarea.defaultValue;
-const query = new URLSearchParams(window.location.search);
-const linkedExampleId = query.get("example");
-const linkedSource = query.get("code");
+const homeHref = new URL("./index.html", window.location.href).href;
+const commonExamples = [
+  "examples/factorial.links",
+  "examples/met/fresco-types/rank-two.links",
+  "examples/met/fresco-effects/single-yield.links",
+  "examples/handlers/module_import.links",
+];
+
 const sources = new Map();
-const exampleButtons = new Map([["", newProgram]]);
-let exampleId = "";
-let exampleLoad = null;
-let loadLinkedExample = Boolean(linkedExampleId) && textarea.value === starterSource;
+const fileLinks = new Map();
+const exampleButtons = new Map();
+let draftHref = homeHref;
+let draftEntry = null;
+let previewEntry = null;
+let sourceLoad = null;
 let activeRequest = null;
 let nextRequestId = 0;
 
 function updateControls() {
   const busy = activeRequest !== null;
-  const loadingExample = loadLinkedExample || exampleLoad !== null;
-  checkButton.disabled = runButton.disabled = busy || loadingExample;
-  stopButton.disabled = !busy;
+  const viewing = previewEntry !== null;
+  checkButton.disabled = runButton.disabled = busy || viewing || sourceLoad !== null;
+  stopButton.disabled = !busy || viewing;
+  newProgram.disabled = busy;
+  loadButton.disabled = busy || sourceLoad !== null;
   for (const button of exampleButtons.values()) button.disabled = busy;
 }
 
 async function fetchAsset(path, signal) {
-  const response = await fetch(`./${path}`, { signal });
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
-  }
+  const response = await fetch("./" + path, { signal });
+  if (!response.ok) throw new Error("HTTP " + response.status);
   return response;
 }
 
-function onSourceEdit() {
-  if (!loadLinkedExample && !exampleLoad) return;
-
-  loadLinkedExample = false;
-  exampleLoad?.abort();
-  exampleLoad = null;
+function cancelSourceLoad() {
+  sourceLoad?.abort();
+  sourceLoad = null;
   exampleStatus.textContent = "";
   updateControls();
 }
 
-function sourceLink(id) {
-  return `./sources.html?file=${encodeURIComponent(id)}`;
+function onSourceEdit() {
+  if (sourceLoad) cancelSourceLoad();
 }
 
-function updateExampleContext() {
-  exampleContext.hidden = exampleId === "";
-  if (!exampleId) return;
+function sourceHref(kind, id) {
+  const url = new URL(homeHref);
+  url.searchParams.set(kind, id);
+  return url.href;
+}
 
-  exampleSource.href = sourceLink(exampleId);
-  exampleSource.textContent = exampleId;
-  exampleSource.setAttribute("aria-label", `View ${exampleId} (opens in a new tab)`);
+function setLocation(href) {
+  if (window.location.href !== href) window.history.pushState(null, "", href);
+}
 
-  const entry = sources.get(exampleId);
-  exampleDiagnostic.hidden = entry?.kind !== "diagnostic";
-  const imports = entry?.imports ?? [];
-  importRow.hidden = imports.length === 0;
-  exampleImports.replaceChildren();
-  for (const { name, id } of imports) {
-    const link = document.createElement("a");
-    link.href = sourceLink(id);
-    link.target = "_blank";
-    link.rel = "noopener";
-    link.textContent = name;
-    link.setAttribute("aria-label", `${name} (opens in a new tab)`);
-    if (exampleImports.hasChildNodes()) exampleImports.append(", ");
-    exampleImports.append(link);
+function isPlainClick(event) {
+  return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+}
+
+function loadFileLink(event) {
+  if (!isPlainClick(event)) return;
+  event.preventDefault();
+  const link = event.currentTarget;
+  const id = new URL(link.href).searchParams.get("file");
+  void openSource(id, "file", link.href, link);
+}
+
+function createFileLink(id, text) {
+  const link = document.createElement("a");
+  link.href = sourceHref("file", id);
+  link.textContent = text;
+  link.addEventListener("click", loadFileLink);
+  return link;
+}
+
+function showRelatedFiles(row, container, entries) {
+  container.replaceChildren();
+  for (const { id, title } of entries) {
+    if (!sources.has(id)) continue;
+    if (container.hasChildNodes()) container.append(", ");
+    container.append(createFileLink(id, title));
   }
+  row.hidden = !container.hasChildNodes();
 }
 
-function showLoadedExample(id, source, button) {
-  editor.setSource(source);
+function updateWorkspace() {
+  const viewing = previewEntry !== null;
+  const entry = previewEntry ?? draftEntry;
+  const shownId = entry?.id;
+
+  editorMode.textContent = viewing ? "Read-only" : "Editable";
+  editActions.hidden = results.hidden = viewing;
+  previewActions.hidden = !viewing;
+  exampleContext.hidden = !entry;
+  if (entry) {
+    exampleSource.href = sourceHref("file", shownId);
+    exampleSource.textContent = shownId;
+    exampleNote.textContent = entry.note;
+    exampleNote.hidden = !entry.note;
+    exampleDiagnostic.hidden = viewing || entry.kind !== "diagnostic";
+    showRelatedFiles(importRow, exampleImports, entry.imports.map(({ id, name }) => ({ id, title: name })));
+    showRelatedFiles(callerRow, exampleCallers, entry.callers.map(id => sources.get(id)).filter(Boolean));
+  }
+  for (const [id, link] of fileLinks) {
+    if (id === shownId) {
+      link.setAttribute("aria-current", "page");
+      link.closest("details").open = true;
+    } else {
+      link.removeAttribute("aria-current");
+    }
+  }
+  for (const [id, button] of exampleButtons) {
+    if (!viewing && id === shownId) button.setAttribute("aria-current", "true");
+    else button.removeAttribute("aria-current");
+  }
+  updateControls();
+}
+
+function restoreDraft(href, trigger) {
+  const focusEditor = document.activeElement === trigger;
+  cancelSourceLoad();
+  editor.restoreDraft();
+  previewEntry = null;
+  updateWorkspace();
+  if (href) setLocation(href);
+  if (focusEditor) editor.focus();
+}
+
+function replaceDraft(entry, source, href) {
+  if (activeRequest) finishRequest(activeRequest, "Stopped.");
+  if (source === null) editor.editPreview();
+  else editor.setSource(source);
+  draftHref = href;
+  draftEntry = entry;
+  previewEntry = null;
   clearResults();
   requestStatus.textContent = "";
-  exampleButtons.get(exampleId)?.removeAttribute("aria-current");
-  exampleId = id;
-  exampleButtons.get(id)?.setAttribute("aria-current", "true");
-  updateExampleContext();
-  if (button && document.activeElement === button) editor.focus();
+  updateWorkspace();
 }
 
-async function loadExample(id, title, button) {
-  loadLinkedExample = false;
-  exampleLoad?.abort();
-  exampleLoad = null;
-  exampleStatus.textContent = "";
-
-  if (id === "") {
-    showLoadedExample("", starterSource, button);
-    updateControls();
-    return;
-  }
-
+async function openSource(id, kind, href, trigger) {
+  cancelSourceLoad();
   const controller = new AbortController();
-  exampleLoad = controller;
+  sourceLoad = controller;
   updateControls();
-  exampleStatus.textContent = `Loading ${title}…`;
+  exampleStatus.textContent = "Loading source…";
   try {
+    await sourceCatalogue;
+    if (controller.signal.aborted) return;
+    const entry = sources.get(id);
+    if (!entry) throw new Error("File is unavailable in the catalogue.");
     const path = id.split("/").map(encodeURIComponent).join("/");
     const response = await fetchAsset(path, controller.signal);
     const source = await response.text();
-    if (!controller.signal.aborted) {
-      showLoadedExample(id, source, button);
-      exampleStatus.textContent = "";
+    if (controller.signal.aborted) return;
+    const focusEditor = document.activeElement === trigger;
+    if (kind === "file") {
+      editor.showPreview(source);
+      previewEntry = entry;
+      updateWorkspace();
+    } else {
+      replaceDraft(entry, source, href);
     }
+    if (trigger) setLocation(href);
+    if (focusEditor) editor.focus();
+    exampleStatus.textContent = "";
   } catch (error) {
-    if (!controller.signal.aborted) {
-      exampleStatus.textContent = `Could not load ${title} (${error.message}).`;
-    }
+    if (!controller.signal.aborted) exampleStatus.textContent = "Could not load source. " + error.message;
   } finally {
-    if (exampleLoad === controller) {
-      exampleLoad = null;
+    if (sourceLoad === controller) {
+      sourceLoad = null;
       updateControls();
     }
   }
 }
 
-function showExamples(examples) {
-  const groups = new Map();
-  for (const { id, title, group = "SmallLinks" } of examples) {
-    if (!groups.has(group)) {
-      const topic = document.createElement("div");
-      topic.className = "example-topic";
-      const heading = document.createElement("h3");
-      heading.textContent = group;
-      const list = document.createElement("ul");
-      topic.append(heading, list);
-      exampleList.append(topic);
-      groups.set(group, list);
-    }
-
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = title;
-    button.dataset.exampleId = id;
-    button.addEventListener("click", () => loadExample(id, title, button));
-    exampleButtons.set(id, button);
-
-    const item = document.createElement("li");
-    item.append(button);
-    groups.get(group).append(item);
+function showFiles() {
+  const directories = new Map();
+  for (const { id } of sources.values()) {
+    const slash = id.lastIndexOf("/");
+    const directory = id.slice(0, Math.max(0, slash));
+    if (!directories.has(directory)) directories.set(directory, []);
+    directories.get(directory).push(id);
   }
-  updateControls();
+
+  for (const [directory, ids] of [...directories].sort(([a], [b]) => a.localeCompare(b))) {
+    const group = document.createElement("details");
+    group.className = "source-directory";
+    group.open = directory === "examples";
+    const summary = document.createElement("summary");
+    summary.textContent = directory ? directory + "/" : "Repository root";
+    const list = document.createElement("ul");
+    for (const id of ids) {
+      const item = document.createElement("li");
+      const link = createFileLink(id, id.slice(id.lastIndexOf("/") + 1));
+      fileLinks.set(id, link);
+      item.append(link);
+      list.append(item);
+    }
+    group.append(summary, list);
+    files.append(group);
+  }
 }
 
-async function loadSources() {
+function showCommonExamples() {
+  for (const id of commonExamples) {
+    const entry = sources.get(id);
+    if (!entry) continue;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = entry.title;
+    button.dataset.exampleId = id;
+    button.addEventListener("click", () => openSource(id, "example", sourceHref("example", id), button));
+    exampleButtons.set(id, button);
+    exampleList.append(button);
+  }
+}
+
+async function loadCatalogue() {
+  catalogueStatus.textContent = "Loading files…";
   try {
     const response = await fetchAsset("sources.json");
     for (const entry of await response.json()) sources.set(entry.id, entry);
-  } catch {
+  } catch (error) {
+    catalogueStatus.textContent = "Could not load files. " + error.message;
     return;
   }
-  updateExampleContext();
+  showFiles();
+  showCommonExamples();
+  catalogueStatus.textContent = "";
+  updateWorkspace();
 }
 
-async function loadCatalogue(sourceCatalogue) {
-  if (loadLinkedExample) exampleStatus.textContent = "Loading the linked example…";
-  let examples = [];
-  try {
-    const response = await fetchAsset("examples.json");
-    const catalogue = await response.json();
-    showExamples(catalogue);
-    examples = catalogue;
-  } catch (error) {
-    exampleStatus.textContent = `Could not load the example list (${error.message}).`;
+function openLocation() {
+  const url = new URL(window.location.href);
+  url.hash = "";
+  const href = url.href;
+  if (href === draftHref) {
+    restoreDraft();
+    return;
   }
-
-  if (!loadLinkedExample) return;
-  let linked = examples.find(({ id }) => id === linkedExampleId);
-  if (!linked) {
-    await sourceCatalogue;
-    if (!loadLinkedExample) return;
-    const entry = sources.get(linkedExampleId);
-    if (entry?.kind === "diagnostic" || entry?.kind === "runnable") linked = entry;
-  }
-  loadLinkedExample = false;
-  if (linked) {
-    await loadExample(linked.id, linked.title);
-  } else {
-    exampleStatus.textContent = "The linked example is unavailable.";
-    updateControls();
+  const query = url.searchParams;
+  const file = query.get("file");
+  const example = query.get("example");
+  if (file === previewEntry?.id) cancelSourceLoad();
+  else if (file) void openSource(file, "file", href);
+  else if (example) void openSource(example, "example", href);
+  else {
+    cancelSourceLoad();
+    replaceDraft(null, query.get("code") ?? starterSource, href);
   }
 }
 
@@ -283,10 +368,10 @@ function onWorkerMessage(request, submission, message) {
 }
 
 function startRequest(kind) {
-  if (activeRequest || loadLinkedExample || exampleLoad) return;
+  if (activeRequest || previewEntry || sourceLoad) return;
 
   const submission = { kind, id: ++nextRequestId, source: editor.getSource() };
-  if (exampleId) submission.exampleId = exampleId;
+  if (draftEntry?.id.startsWith("examples/")) submission.exampleId = draftEntry.id;
 
   const button = kind === "check" ? checkButton : runButton;
   const moveFocus = document.activeElement === button;
@@ -324,23 +409,69 @@ function initialiseEditor() {
   } catch (error) {
     console.warn("Could not start the highlighted editor.", error);
     textarea.addEventListener("input", onSourceEdit);
+    let draft = null;
+
+    function setEditingSource(source) {
+      draft = null;
+      textarea.readOnly = false;
+      textarea.value = source;
+    }
+
     return {
       getSource: () => textarea.value,
-      setSource: (source) => { textarea.value = source; },
+      setSource: setEditingSource,
+      showPreview(source) {
+        draft ??= { source: textarea.value, start: textarea.selectionStart, end: textarea.selectionEnd };
+        textarea.value = source;
+        textarea.readOnly = true;
+      },
+      restoreDraft() {
+        if (!draft) return;
+        const { source, start, end } = draft;
+        setEditingSource(source);
+        textarea.setSelectionRange(start, end);
+      },
+      editPreview: () => setEditingSource(textarea.value),
       focus: () => textarea.focus(),
     };
   }
 }
 
-if (!linkedExampleId && linkedSource !== null && textarea.value === starterSource) {
-  textarea.value = linkedSource;
-}
+const initialSource = textarea.value;
 const editor = initialiseEditor();
-newProgram.addEventListener("click", () => loadExample("", "New program", newProgram));
+playgroundLink.addEventListener("click", event => {
+  if (!isPlainClick(event)) return;
+  event.preventDefault();
+  restoreDraft(draftHref);
+});
+exampleSource.addEventListener("click", loadFileLink);
+newProgram.addEventListener("click", () => {
+  const focusEditor = document.activeElement === newProgram;
+  cancelSourceLoad();
+  replaceDraft(null, starterSource, homeHref);
+  setLocation(homeHref);
+  if (focusEditor) editor.focus();
+});
+loadButton.addEventListener("click", () => {
+  if (!previewEntry || sourceLoad || activeRequest) return;
+  const focusEditor = document.activeElement === loadButton;
+  const href = sourceHref("example", previewEntry.id);
+  replaceDraft(previewEntry, null, href);
+  setLocation(href);
+  if (focusEditor) editor.focus();
+});
+returnButton.addEventListener("click", () => restoreDraft(draftHref, returnButton));
 checkButton.addEventListener("click", () => startRequest("check"));
 runButton.addEventListener("click", () => startRequest("run"));
 stopButton.addEventListener("click", () => {
   if (activeRequest) finishRequest(activeRequest, "Stopped.");
 });
-updateControls();
-loadCatalogue(loadSources());
+window.addEventListener("popstate", openLocation);
+const sourceCatalogue = loadCatalogue();
+if (initialSource === starterSource) openLocation();
+else {
+  const url = new URL(window.location.href);
+  url.hash = "";
+  draftHref = url.href;
+}
+updateWorkspace();

@@ -9,37 +9,61 @@
   </head>
   <body>
     <header class="site-header">
-      <h1>SmallLinks Playground</h1>
+      <h1 class="site-name">SmallLinks Playground</h1>
       <nav class="site-links" aria-label="SmallLinks">
+        <a href="./index.html" id="playground-link" aria-current="page">Playground</a>
         <a href="./guide.html">Language guide</a>
-        <a href="./sources.html" target="_blank" rel="noopener">Browse sources (new tab)</a>
+        <a class="section-jump" href="#files">Files</a>
       </nav>
     </header>
 
-    <main class="playground">
-      <div class="panel editor">
-        <div class="editor-header">
-          <label class="panel-title" for="source">Source</label>
-          <a class="example-jump" href="#examples">Examples</a>
-        </div>
-        <div id="example-context" hidden>
-          <p><a id="example-source" target="_blank" rel="noopener"></a></p>
-          <p id="example-import-row" hidden>Imports <span id="example-imports"></span></p>
-          <p id="example-diagnostic" hidden>This example demonstrates a diagnostic. Use Check.</p>
-        </div>
-        <div class="editor-body">
-          <textarea id="source" spellcheck="false" autocapitalize="off"
-                    autocomplete="off">1 + 2</textarea>
-        </div>
-        <div class="actions">
-          <button id="check" type="button" disabled>Check</button>
-          <button id="run" type="button" disabled>Run</button>
-          <button id="stop" type="button" disabled>Stop</button>
-        </div>
-      </div>
+    <main class="site-layout playground">
+      <aside class="site-sidebar panel workspace-sidebar" aria-label="Programs and files">
+        <button id="new-program" type="button" disabled>New program</button>
+        <section id="examples" aria-labelledby="examples-heading">
+          <h2 class="panel-title" id="examples-heading">Common examples</h2>
+          <div id="example-list"></div>
+        </section>
+        <nav id="files" aria-labelledby="files-heading" tabindex="-1">
+          <div class="files-header">
+            <h2 class="panel-title" id="files-heading">Files</h2>
+            <a class="section-jump" href="#editor">Source</a>
+          </div>
+          <p class="status" id="catalogue-status" role="status"></p>
+          <div id="source-files"></div>
+        </nav>
+      </aside>
 
-      <div class="playground-sidebar">
-        <section class="panel results" aria-labelledby="results-heading">
+      <div class="site-content playground-content">
+        <section class="panel editor" id="editor" aria-labelledby="source-label" tabindex="-1">
+          <div class="editor-header">
+            <label class="panel-title" id="source-label" for="source">Source</label>
+            <span id="editor-mode">Editable</span>
+          </div>
+          <div id="example-context" hidden>
+            <p><a id="example-source"></a></p>
+            <p id="example-note" hidden></p>
+            <p id="example-diagnostic" hidden>This example demonstrates a diagnostic. Use Check.</p>
+            <p id="example-import-row" hidden>Imports <span id="example-imports"></span></p>
+            <p id="example-caller-row" hidden>Called by <span id="example-callers"></span></p>
+          </div>
+          <p class="status" id="example-status" role="status"></p>
+          <div class="editor-body">
+            <textarea id="source" spellcheck="false" autocapitalize="off"
+                      autocomplete="off">1 + 2</textarea>
+          </div>
+          <div class="actions" id="edit-actions">
+            <button id="check" type="button" disabled>Check</button>
+            <button id="run" type="button" disabled>Run</button>
+            <button id="stop" type="button" disabled>Stop</button>
+          </div>
+          <div class="actions" id="preview-actions" hidden>
+            <button id="load-source" type="button">Load into playground</button>
+            <button id="return-to-editor" type="button">Return to editor</button>
+          </div>
+        </section>
+
+        <section class="panel results" id="results" aria-labelledby="results-heading">
           <h2 class="panel-title" id="results-heading">Results</h2>
           <p class="status" id="request-status" role="status"></p>
           <noscript>
@@ -61,15 +85,6 @@
             <h3>Diagnostic</h3>
             <pre id="diagnostic" tabindex="0" aria-label="Diagnostic"></pre>
           </div>
-        </section>
-
-        <section class="panel examples" id="examples" aria-labelledby="examples-heading" tabindex="-1">
-          <div class="examples-header">
-            <h2 class="panel-title" id="examples-heading">Examples by topic</h2>
-            <button id="new-program" type="button" aria-current="true" disabled>New program</button>
-          </div>
-          <p class="status" id="example-status" role="status"></p>
-          <div id="example-list"></div>
         </section>
       </div>
     </main>

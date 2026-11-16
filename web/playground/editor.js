@@ -120,6 +120,21 @@ export function createEditor(textarea, onChange) {
     }),
   ];
   const view = new EditorView({ doc: textarea.value, extensions });
+  const previewExtensions = [
+    extensions,
+    EditorState.readOnly.of(true),
+    EditorView.editable.of(false),
+    EditorView.contentAttributes.of({ "aria-readonly": "true", tabindex: "0" }),
+  ];
+  let draft = null;
+
+  function replaceState(state, scrollTop = 0) {
+    view.setState(state);
+    view.scrollDOM.scrollTop = scrollTop;
+    textarea.value = state.doc.toString();
+    textarea.readOnly = state.readOnly;
+  }
+
   view.setTabFocusMode(true);
   const hadFocus = textarea.matches(":focus");
   textarea.after(view.dom);
@@ -137,9 +152,22 @@ export function createEditor(textarea, onChange) {
       return view.state.doc.toString();
     },
     setSource(text) {
-      view.setState(EditorState.create({ doc: text, extensions }));
-      view.scrollDOM.scrollTop = 0;
-      textarea.value = text;
+      draft = null;
+      replaceState(EditorState.create({ doc: text, extensions }));
+    },
+    showPreview(text) {
+      draft ??= { state: view.state, scrollTop: view.scrollDOM.scrollTop };
+      replaceState(EditorState.create({ doc: text, extensions: previewExtensions }));
+    },
+    restoreDraft() {
+      if (!draft) return;
+      replaceState(draft.state, draft.scrollTop);
+      draft = null;
+    },
+    editPreview() {
+      const { doc, selection } = view.state;
+      draft = null;
+      replaceState(EditorState.create({ doc, selection, extensions }), view.scrollDOM.scrollTop);
     },
     focus() {
       view.focus();
