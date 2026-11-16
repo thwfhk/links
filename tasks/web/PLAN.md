@@ -35,23 +35,24 @@ in progress. Assign bounded work to subagents and one writer per file.
 ## Tracking
 
 Commit each implementation item separately and keep each commit
-buildable. Mark it complete and record its commit ID after the checks
-pass. At each pause,
-record the next action, blockers, and latest checks under [Status](#status).
+buildable. Record the commit ID and mark the item complete after the
+checks pass. At each pause, record the next action, blockers and latest
+checks under [Status](#status).
 For builds and tests, record the command, revision, result, and log path.
 
 ## Milestones
 
 ### 1. Build the browser runtime
 
-- [x] **1.1** (`8dc038f3`) Check that the existing parser, Fresco type checker and
-  evaluator can link with `js_of_ocaml`. Establish how the browser build
-  loads the prelude and runs the evaluator without terminal startup.
-  Run the single-yield example to exercise a handler resumption.
-- [x] **1.2** (`7ed780ed`) Implement the worker interface. Reuse the existing pipeline,
-  route output and diagnostics to the page, and apply the browser
-  primitive and import policies in [IMPL.md](IMPL.md#runtime).
-- [x] **1.3** Compare native and browser runs on the supported cases.
+- [x] **1.1** (`8dc038f3`) Share the parser, Fresco type checker and
+  asynchronous evaluator with the browser build. Move terminal input
+  into the native executable.
+- [x] **1.2** (`7ed780ed`) Link the worker with `js_of_ocaml` and
+  implement the worker messages. Load the standard prelude and route
+  output and diagnostics to the page. Apply the browser primitive and
+  import policies in [IMPL.md](IMPL.md#runtime).
+- [x] **1.3** (`9313ad14`) Compare native and worker runs on supported
+  cases. Run the single-yield example to exercise a handler resumption.
   Check a rejected program, printed output, early exit, an unavailable
   primitive, and imports of bundled and missing modules. Resolve or
   record browser-specific behaviour found by the checks.
@@ -63,15 +64,15 @@ report errors. The native interpreter still passes its affected checks.
 
 Can proceed alongside milestone 1 using the mock worker.
 
-- [ ] **2.1** Build the editor, example selector, Check, Run and Stop
+- [x] **2.1** (`a1fa3afc`) Build the editor, example selector, Check, Run and Stop
   controls, and output and diagnostics panel. Keep the editor usable
   with a keyboard and on narrow screens.
-- [ ] **2.2** Connect the page to the worker interface. Handle startup,
+- [x] **2.2** (`c69df0d9`) Connect the page to the worker interface. Handle startup,
   running, stopping, and worker failure. Keep source edits when a
   request fails or is stopped.
-- [ ] **2.3** If the core page works, try the
-  [highlighting option](IMPL.md#editor-and-highlighting). Track it as
-  deferred if it is left out of the first release.
+- [x] **2.3** (`872be65a`) Add
+  [CodeMirror highlighting](IMPL.md#editor-and-highlighting) for
+  SmallLinks tokens.
 
 Completion check — a visitor can edit, check, run and stop a program
 with either the mock worker or the browser build.
@@ -81,11 +82,11 @@ with either the mock worker or the browser build.
 Can start while milestones 1 and 2 are in progress. Completion checks
 use the real worker.
 
-- [ ] **3.1** Package selected repository examples and their imports at
+- [x] **3.1** (`16ab6afe`) Package selected repository examples and their imports at
   build time. Record the included paths and any candidates deferred
   because they need host facilities or fail in the browser. Verify the
   published entries against the repository sources.
-- [ ] **3.2** Render the current language guide as static HTML. Connect
+- [x] **3.2** (`ddef3506`) Render the current language guide as static HTML. Connect
   the guide and editor, preserve heading links and Links code blocks,
   and check links to examples and other repository files.
 
@@ -96,13 +97,13 @@ documented. The guide ships with the playground and its links work.
 
 Depends on milestones 1–3.
 
-- [ ] **4.1** Add a repeatable build for the static output directory and
+- [x] **4.1** (`ec52b280`) Add a repeatable build for the static output directory and
   document how to serve it over HTTP. Verify it at the site root and
   under a path prefix, with every required asset served from the build.
-- [ ] **4.2** Test the page with typed code, an edited example, an
+- [x] **4.2** (`25352686`) Test the page with typed code, an edited example, an
   imported example, a type error, a runtime error and a stopped run.
   Check that the next request starts cleanly after a timeout.
-- [ ] **4.3** Run the native checks below, record the combined results,
+- [x] **4.3** Run the native checks below, record the combined results,
   and mark the plan complete when the required checks pass.
 
 ## Checks
@@ -113,10 +114,11 @@ Depends on milestones 1–3.
    only its inferred type. Run it and verify that output emitted before
    an error is still visible. Include a long run that crosses an
    evaluator pause and consecutive requests that start from fresh state.
-2. Serve the static directory on a local HTTP server. Check the demo
-   in an available browser, including keyboard use and a narrow view,
-   and verify that the page needs only the files in the static build.
-   Testing a second browser is optional.
+2. Load the static build in Node using a simulated DOM. Verify that
+   the page resolves its assets at the site root and under a path
+   prefix, that its controls have accessible names, and that it
+   communicates with the compiled worker. Use Node checks for this
+   milestone.
 3. Rebuild native SmallLinks with `make` after changing shared code.
    Run the affected regression suites, including `handlers`,
    `effect_annotations`, `native`, `modules` and `typecheck_examples`
@@ -128,22 +130,20 @@ Depends on milestones 1–3.
 
 ## Status
 
-The plan was committed on `small-web` at `bbd04ac3`. Milestone 1
-passed on that revision with the browser runtime changes in the
-working tree. The separate webpage chat owns milestone 2. It can
-connect directly to the [worker script](IMPL.md#runtime) using the
-[implemented messages](IMPL.md#worker-interface). The next
-coordination step is packaging the public example catalogue and the
-HTML guide in milestone 3.
+The demo is complete on `small-web`. The
+[static build](IMPL.md#build-and-serve) is in `web/dist`.
+It includes the CodeMirror editor, five runnable examples and the
+language guide. The [examples and guide notes](IMPL.md#examples-and-guide)
+record the deferred handler test driver.
 
-Runtime verification logs are in `/private/tmp/smalllinks-web.1oRIDH/`.
-The worker build used OCaml 5.4.0 and `js_of_ocaml` 6.2.0.
+Final checks used the source in `25352686`. Logs are in
+`/private/tmp/smalllinks-web.1oRIDH/final/`. The worker used OCaml
+5.4.0 and `js_of_ocaml` 6.2.0. Web checks ran in Node and jsdom.
 
 | Check | Result and log |
 | --- | --- |
-| `make test-web-runtime` | All 15 worker checks passed. The linker reports unavailable native Unix and bcrypt primitives. The worker guards those calls. `worker-tests.log`. |
-| `node /private/tmp/smalllinks-web.1oRIDH/chrome-smoke.cjs` | Chrome loaded the worker under a path prefix, checked and ran source, reported a type error, stopped a loop, and ran a new request. `chrome-smoke.log`. |
-| `make all-ci` and `make tests` | Passed. All 43 native suites and six scripts passed, with two existing ignored cases. `native-ci-build.log`, `native-tests.log`. |
+| `make test-web-demo test-web-runtime` | Both site suites and all 15 worker checks passed. The site suites cover the root and a path prefix, all five examples, the guide link, highlighting, diagnostics, Stop and timeout recovery. `web-tests.log`. |
+| `make all-ci` and `make tests` | Passed. 1,335 tests passed across 43 suites, with two existing ignored cases. All six scripts passed. `native-build.log`, `native-tests.log`. |
 | `opam exec -- ./run-tests unit-tests` | All 105 tests passed. `unit-tests.log`. |
-| Temporary `dune install` and `./tests/check-install.sh` | Three checks passed with the installed interpreter. `native-install.log`, `native-install-check.log`. |
-| `make rule-check` and `git diff --check` | Passed. A separate scan checked tabs in the changed Markdown and source files because GNU find was unavailable. `rule-check.log`, `source-check.log`. |
+| Temporary `dune install`, `./tests/check-install.sh` and the installed module-import example | All three installation checks passed. The installed example returned `(0, [0, 1, 2, 3, 4])`. `install.log`, `install-check.log`. |
+| `make rule-check` and `git diff --check 59ef2511` | Passed. A direct scan covered tabs and local documentation links because GNU find was unavailable. `rule-check.log`, `source-check.log`. |

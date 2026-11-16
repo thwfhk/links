@@ -2,8 +2,7 @@
 
 The [plan](PLAN.md) records scope, milestones and checks. Record
 significant decisions here as they are made, with links to the
-corresponding checks. The design below is the starting point for the
-browser build.
+corresponding checks.
 
 ## Build and serve
 
