@@ -22,6 +22,9 @@ in `web/dist`. Serve that directory over HTTP for local use or copy
 its contents to a static host. All assets use paths relative to the
 site, so it can also be served under a path prefix.
 
+`make test-web-demo` builds the site and exercises it in Node with a
+simulated DOM and the compiled SmallLinks worker.
+
 ## Runtime
 
 The [native CLI](../../bin/driver.ml) and
@@ -100,14 +103,13 @@ the editor and any output already received.
 
 ## Editor and highlighting
 
-Use a labelled text area for the first working page.
-CodeMirror 6 is a candidate for optional highlighting. Its
-`StreamLanguage` extension supports a small tokenizer. Use SmallLinks
+The [playground](../../web/playground/index.html) starts with a
+labelled text area. [The editor module](../../web/playground/editor.js)
+upgrades it to CodeMirror 6 and uses its `StreamLanguage` extension for
+highlighting. Its tokeniser follows the SmallLinks
 [lexer conventions](../../core/lexer.mll) for keywords, `#` comments,
-literals and operators, and check effect declarations, handler clauses
-and modality delimiters on repository examples. Test escaped strings
-and comments. Bundle the editor dependencies locally if this option
-is used.
+literals and operators. The build bundles the editor dependencies
+locally.
 [CodeMirror language package example](https://codemirror.net/examples/lang-package/).
 
 TryLinks combines an editor with Links tutorials. The OCaml Playground
