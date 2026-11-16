@@ -1,0 +1,21 @@
+(executable
+ (name worker)
+ (modes byte)
+ (libraries links.core lwt js_of_ocaml js_of_ocaml-lwt))
+
+(rule
+ (target worker.js)
+ (deps
+  (glob_files ../../lib/stdlib/*.links)
+  (glob_files ../../examples/handlers/*.links))
+ (action
+  (run %{bin:js_of_ocaml} compile
+   --file %{dep:../../prelude.links}:/static/smalllinks/lib/prelude.links
+   --file %{dep:../../lib/comprehension.links}:/static/smalllinks/lib/comprehension.links
+   --file ../../lib/stdlib=links:/static/smalllinks/lib/stdlib
+   --file ../../examples/handlers=links:/static/smalllinks/examples/handlers
+   --file %{dep:../../examples/factorial.links}:/static/smalllinks/examples/factorial.links
+   --file %{dep:../../examples/met/fresco-effects/single-yield.links}:/static/smalllinks/examples/met/fresco-effects/single-yield.links
+   --file %{dep:../../examples/met/fresco-effects/find_mask_paper.links}:/static/smalllinks/examples/met/fresco-effects/find_mask_paper.links
+   --file %{dep:../../examples/met/fresco-types/rank-two.links}:/static/smalllinks/examples/met/fresco-types/rank-two.links
+   -o %{target} %{dep:worker.bc})))

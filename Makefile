@@ -45,6 +45,10 @@ rule-check: tools/rule-check
 	@echo "Applying rule check"
 	@tools/rule-check
 
+.PHONY: web-runtime
+web-runtime:
+	$(BUILD) web/runtime/worker.js
+
 doc/_build/html:
 	make -C doc html
 
