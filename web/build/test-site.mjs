@@ -46,8 +46,13 @@ const expectedExamples = new Map([
 ]);
 
 const guideSnippetValues = [
-  '(42, "yes")', "25", "42", "42", "[12, 22]", "(42, true)", "42",
-  expectedExamples.get(importExample), "[1, 2]", "43", "42",
+  '(42, "yes")', "25",
+  "42", "42", '(43, "start")', '["Ali", "Kim"]',
+  "[12, 22]", "(120, true)", "(42, true)", '(1, "one")',
+  "42", expectedExamples.get(importExample),
+  "[1, 2]", "1",
+  "42", "42", "42", "()", "43", "42", "42",
+  "42",
 ];
 
 const catalogue = JSON.parse(await readFile(resolve(dist, "examples.json"), "utf8"));
@@ -510,12 +515,15 @@ for (const basePath of ["/", "/smalllinks/"]) {
       assert.equal(guideLink.textContent.trim(), "Language guide");
       const guide = (await site.loadPage(guideLink.href)).document;
       assert.equal(guide.querySelector("h1").textContent, "SmallLinks language guide");
+      assert.equal(guide.querySelector('link[rel="stylesheet"]').href,
+        document.querySelector('link[rel="stylesheet"]').href, "Playground and guide share their layout stylesheet");
       const chapters = guide.querySelector('nav[aria-labelledby="chapter-nav-title"]');
       assert.ok(chapters.closest(".site-sidebar"), "Guide chapters are in the sidebar");
       assert.equal(guide.getElementById(chapters.getAttribute("aria-labelledby")).textContent.trim(), "Chapters");
       const chapterLinks = [...chapters.querySelectorAll("a[href^='#']")];
       const headings = [...guide.querySelectorAll("main h2")];
-      assert.ok(headings.length > 1, "The guide needs multiple chapters");
+      assert.ok(headings.some(heading => heading.id === "modal-effect-types"), "Missing modal effect types chapter");
+      assert.ok(headings.some(heading => heading.id === "linear-types"), "Missing linear types chapter");
       assert.deepEqual(chapterLinks.map(link => decodeURIComponent(link.hash.slice(1))), headings.map(h => h.id));
       assert.deepEqual(chapterLinks.map(link => link.textContent.trim()), headings.map(h => h.textContent.trim()));
       for (const anchor of guide.querySelectorAll("a[href^='#']")) {
