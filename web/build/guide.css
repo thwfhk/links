@@ -1,11 +1,12 @@
 :root {
-  color: #222722;
-  background: #fafaf7;
+  color: #192823;
+  background: #fff;
   font-family: Inter, system-ui, sans-serif;
   line-height: 1.65;
-  --accent: #245b4b;
-  --border: #d9ded7;
-  --code: #eeefea;
+  --accent: #175c43;
+  --border: #d5ded9;
+  --surface: #f2f5f3;
+  --code: #f8faf9;
 }
 
 body {
@@ -13,24 +14,48 @@ body {
 }
 
 header {
-  background: #fff;
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
 
-nav, main {
+.site-nav, main {
   box-sizing: border-box;
   max-width: 51rem;
   padding-inline: clamp(1rem, 4vw, 2rem);
   margin-inline: auto;
 }
 
-nav {
+.site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.5rem;
   padding-block: 0.85rem;
   font-weight: 600;
 }
 
 main {
   padding-block: 2.5rem 4rem;
+}
+
+.chapters {
+  margin-block: 1.5rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: var(--surface);
+}
+
+.chapters p {
+  margin: 0 0 0.4rem;
+  font-weight: 600;
+}
+
+.chapters ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  gap: 0.35rem 1.5rem;
+  margin: 0;
+  padding-inline-start: 1.25rem;
 }
 
 a {
@@ -70,6 +95,10 @@ li + li {
   margin-top: 0.25em;
 }
 
+.chapters li {
+  margin: 0;
+}
+
 code {
   font-family: "IBM Plex Mono", ui-monospace, monospace;
   font-size: 0.9em;
@@ -89,6 +118,19 @@ pre {
   border-radius: 0.4rem;
   background: var(--code);
   line-height: 1.5;
+}
+
+.listing {
+  margin-block: 1rem;
+}
+
+.listing pre {
+  margin: 0 0 0.4rem;
+}
+
+.listing a {
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 
 .table-scroll {

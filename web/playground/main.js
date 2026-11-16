@@ -29,7 +29,9 @@ const failureStatuses = {
 };
 
 const starterSource = textarea.defaultValue;
-const linkedExampleId = new URLSearchParams(window.location.search).get("example");
+const query = new URLSearchParams(window.location.search);
+const linkedExampleId = query.get("example");
+const linkedSource = query.get("code");
 const sources = new Map();
 const exampleButtons = new Map([["", newProgram]]);
 let exampleId = "";
@@ -330,6 +332,9 @@ function initialiseEditor() {
   }
 }
 
+if (!linkedExampleId && linkedSource !== null && textarea.value === starterSource) {
+  textarea.value = linkedSource;
+}
 const editor = initialiseEditor();
 newProgram.addEventListener("click", () => loadExample("", "New program", newProgram));
 checkButton.addEventListener("click", () => startRequest("check"));
