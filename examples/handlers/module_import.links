@@ -1,0 +1,4 @@
+import Shallow_state;
+
+# Count down from five and collect the new state after each step.
+Shallow_state.unitTest(5)

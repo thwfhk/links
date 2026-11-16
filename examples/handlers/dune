@@ -15,6 +15,7 @@
   (fringe.links as examples/handlers/fringe.links)
   (identity.links as examples/handlers/identity.links)
   (light_switch.links as examples/handlers/light_switch.links)
+  (module_import.links as examples/handlers/module_import.links)
   (monadic_reflection.links as examples/handlers/monadic_reflection.links)
   (nim.links as examples/handlers/nim.links)
   (number_games.links as examples/handlers/number_games.links)

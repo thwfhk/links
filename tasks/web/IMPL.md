@@ -101,15 +101,22 @@ result panel. Use these as references for the page interaction.
 
 ## Examples and guide
 
-Generate a small example catalogue from repository paths. Begin with
-[factorial](../../examples/factorial.links),
-[single yield](../../examples/met/fresco-effects/single-yield.links),
-[rank-two polymorphism](../../examples/met/fresco-types/rank-two.links)
-and [handler search](../../examples/met/fresco-effects/find_mask_paper.links).
-Exercise packaged module lookup with the
-[handler test driver](../../examples/handlers/tests.links) and its
-sibling modules. Carry each example's source and dependencies through
-the build from their original files.
+The [example catalogue](../../web/build/examples.mjs) uses these source files.
+
+- [Factorials](../../examples/factorial.links)
+- [Single yield](../../examples/met/fresco-effects/single-yield.links)
+- [Rank-two polymorphism](../../examples/met/fresco-types/rank-two.links)
+- [Search with effect handlers](../../examples/met/fresco-effects/find_mask_paper.links)
+- [Import a state handler](../../examples/handlers/module_import.links)
+
+The build copies each source and the
+[imported state handler](../../examples/handlers/shallow_state.links)
+byte for byte. The runtime embeds their module sources.
+
+The [handler test driver](../../examples/handlers/tests.links) is
+deferred. Its [random π estimate](../../examples/handlers/pi.links)
+exceeded 60 seconds in the browser worker. The short module import
+example exercises its shallow state handler within the demo timeout.
 
 Render [the guide](../met/GUIDE.md) at build time. Preserve its table
 of contents, heading anchors, tables and fenced code blocks. Map

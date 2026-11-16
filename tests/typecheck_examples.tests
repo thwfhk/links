@@ -66,6 +66,11 @@ Typecheck example file examples/handlers/light_switch.links
 examples/handlers/light_switch.links
 filemode : true
 
+Typecheck example file examples/handlers/module_import.links
+examples/handlers/module_import.links
+filemode : true
+args : --path=examples/handlers
+
 Typecheck example file examples/handlers/monadic_reflection.links
 examples/handlers/monadic_reflection.links
 filemode : true
