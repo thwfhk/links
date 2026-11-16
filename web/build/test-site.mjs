@@ -429,6 +429,17 @@ function checkHighlighting(window) {
   const literal = String.raw`"say \"hello\" #"`;
   editSource(window, `{ print(${literal}); 42 }`);
   assert.ok(highlightTokens().includes(literal), "The escaped string has no highlight class");
+
+  editSource(window, [
+    "effect Tick { Tick : () => (); }",
+    "sig hold : [] ((<> (() -> Int)) -> (() -> Int))",
+    "fun hold(f) { handle({ do Tick; (f : <Tick |> (() -> Int)) }) { case <Tick => k> -> k(()) } }",
+    "var xs = [] : List ([Tick] Int);",
+    "switch([]) { case xs : List Int -> [] };",
+    "(1 < 2, 1 <> 2, Left < Right > End)",
+  ].join("\n"));
+  const modalities = [...editor.querySelectorAll(".cm-smalllinks-modality")];
+  assert.deepEqual(modalities.map(token => token.textContent), ["[]", "<>", "<Tick |>", "[Tick]"]);
 }
 
 for (const basePath of ["/", "/smalllinks/"]) {

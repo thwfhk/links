@@ -1,7 +1,7 @@
 import { HighlightStyle, StreamLanguage, syntaxHighlighting } from "@codemirror/language";
 import { EditorState } from "@codemirror/state";
 import { EditorView, lineNumbers } from "@codemirror/view";
-import { tags } from "@lezer/highlight";
+import { Tag, tags } from "@lezer/highlight";
 import { minimalSetup } from "codemirror";
 
 const keywords = new Set([
@@ -25,51 +25,141 @@ function readString(stream, state) {
   return "string";
 }
 
-// The token forms follow core/lexer.mll. Angle delimiters share the operator
-// style because the lexer also uses these tokens in comparisons and expressions.
+const modalityTag = Tag.define();
+
+// The ordinary token forms follow core/lexer.mll.
+function readToken(stream, state, group) {
+  if (state.inString) return readString(stream, state);
+  if (stream.eatSpace()) return null;
+  if (stream.eat("#")) {
+    stream.skipToEnd();
+    return "lineComment";
+  }
+  if (stream.eat('"')) {
+    state.inString = true;
+    return readString(stream, state);
+  }
+  if (stream.match(/^'(?:[^"\\]|\\(?:["\\nrtb]|[0-3][0-7]{2}|[xX][0-9a-fA-F]{2}))'/)) {
+    return "character";
+  }
+  if (stream.match(/^(?:0|[1-9][0-9]*)(?:\.[0-9]+(?:e-?(?:0|[1-9][0-9]*))?)?/)) {
+    return "number";
+  }
+  if (stream.match(/^~(?:fun|linfun)/)) return "keyword";
+  if (stream.match(/^[\x07@$][a-zA-Z][a-zA-Z_0-9']*/)) return "meta";
+  if (stream.match(/^%[a-zA-Z][a-zA-Z_0-9']*/)) return "name";
+  const name = stream.match(/^[a-zA-Z][a-zA-Z_0-9']*/);
+  if (name) {
+    const word = name[0];
+    if (keywords.has(word)) return "keyword";
+    if (word === "true" || word === "false") return "bool";
+    if (/^[A-Z]/.test(word)) return "name";
+    return null;
+  }
+  if (stream.match(/^(?:\|\)|[()[\]{}])/)) return "bracket";
+  // Like core/parse.ml, split runs of angle brackets at modality boundaries.
+  if (group.close === ">" && stream.match(/^(?:\|>|>)/)) {
+    return "operator";
+  }
+  if (group.inType && stream.match(/^(?:<>|<(?!-))/)) return "operator";
+  if (stream.match(/^(?:<-t-|<-v-|=~|::|`[a-z][a-zA-Z_0-9']*`|[!$&*+/<=>@\\^|-][.!$&*+/<=>@\\^|-]*)/)) {
+    return "operator";
+  }
+  if (stream.match(/^[.,:;?~%]/)) return "punctuation";
+  stream.next();
+  return null;
+}
+
+function groupFor(close, inType = false, modality = false, kind = null) {
+  return { close, inType, typeGroup: inType, modality, kind, beforeGeneratorArrow: kind === "generators" };
+}
+
+// Track datatype contexts and their brackets. The same characters can be
+// modalities in a datatype, and lists or operators in an expression.
+function trackToken(groups, group, token, style) {
+  const previous = group.previous;
+  group.previous = token;
+  const couldApplyType = group.couldApplyType;
+  const literal = ["string", "character", "number", "bool"].includes(style);
+  group.couldApplyType = literal || style === null && /^[a-z]/.test(token);
+  if (literal) return group.modality;
+
+  if (token === group.close || (token === "|)" && group.close === ")") ||
+      (token === "|>" && group.close === ">" && group.modality)) {
+    groups.pop();
+    const outer = groups[groups.length - 1];
+    outer.couldApplyType = (!group.typeGroup && !group.kind) || group.kind === "typeArguments";
+    if (group.kind === "handle") outer.previous = "handleArguments";
+    return group.modality;
+  }
+  if (group.inType && (token === "[" || token === "<")) {
+    groups.push(groupFor(token === "[" ? "]" : ">", true, true));
+    return true;
+  }
+  if (group.inType && token === "<>") return true;
+
+  if (token === "(" || token === "{" || token === "[") {
+    const close = { "(": ")", "{": "}", "[": "]" }[token];
+    let kind = null;
+    if (!group.inType && token === "(") {
+      if (previous === "for" || previous === "handleArguments") kind = "generators";
+      if (previous === "handle") kind = "handle";
+      if (previous === "if" || previous === "where" || previous === "orderby") kind = "control";
+    }
+    if (token === "[" && couldApplyType) kind = "typeArguments";
+    groups.push(groupFor(close, group.inType || kind === "typeArguments", group.modality, kind));
+  } else if (previous === "case" && token === "<") {
+    groups.push(groupFor(">", false, false, "operation"));
+  } else if (token === ":" || (token === "=" && group.typeAlias)) {
+    group.inType = true;
+    group.typeAlias = false;
+  } else if ((token === "forall" || token === "mu") && group.inType) {
+    group.inQuantifier = true;
+  } else if (token === "." && group.inQuantifier) {
+    group.inQuantifier = false;
+  } else if ((token === "," && !group.inQuantifier) || token === ";" ||
+             (token === "<-" && group.beforeGeneratorArrow) || (token === "->" && group.casePattern)) {
+    group.inType = group.typeGroup;
+    group.casePattern = false;
+    group.beforeGeneratorArrow = token === "," && group.kind === "generators";
+    group.typeAlias = false;
+    group.inQuantifier = false;
+  } else if (style === "keyword" && token !== "forall" && token !== "mu") {
+    group.inType = group.typeGroup;
+    group.typeAlias = token === "typename";
+    if (token !== "as") group.casePattern = token === "case";
+    group.inQuantifier = false;
+  }
+
+  return group.modality;
+}
+
 const smallLinks = StreamLanguage.define({
   name: "SmallLinks",
   languageData: { commentTokens: { line: "#" } },
-  startState: () => ({ inString: false }),
+  tokenTable: { modality: modalityTag },
+  startState: () => ({ inString: false, groups: [groupFor(null)] }),
+  copyState: state => ({ ...state, groups: state.groups.map(group => ({ ...group })) }),
   token(stream, state) {
-    if (state.inString) return readString(stream, state);
-    if (stream.eatSpace()) return null;
-    if (stream.eat("#")) {
-      stream.skipToEnd();
-      return "lineComment";
+    let group = state.groups[state.groups.length - 1];
+    const style = readToken(stream, state, group);
+    if (style === "lineComment") return style;
+    const token = stream.current();
+    // Leave an unfinished modality when the next declaration or expression starts.
+    if ((token === ";" && style === "punctuation") ||
+        (style === "keyword" && token !== "forall" && token !== "mu")) {
+      while (group.modality) {
+        state.groups.pop();
+        group = state.groups[state.groups.length - 1];
+      }
     }
-    if (stream.eat('"')) {
-      state.inString = true;
-      return readString(stream, state);
-    }
-    if (stream.match(/^'(?:[^"\\]|\\(?:["\\nrtb]|[0-3][0-7]{2}|[xX][0-9a-fA-F]{2}))'/)) {
-      return "character";
-    }
-    if (stream.match(/^(?:0|[1-9][0-9]*)(?:\.[0-9]+(?:e-?(?:0|[1-9][0-9]*))?)?/)) {
-      return "number";
-    }
-    if (stream.match(/^~(?:fun|linfun)/)) return "keyword";
-    if (stream.match(/^[\x07@$][a-zA-Z][a-zA-Z_0-9']*/)) return "meta";
-    if (stream.match(/^%[a-zA-Z][a-zA-Z_0-9']*/)) return "name";
-    const name = stream.match(/^[a-zA-Z][a-zA-Z_0-9']*/);
-    if (name) {
-      const word = name[0];
-      if (keywords.has(word)) return "keyword";
-      if (word === "true" || word === "false") return "bool";
-      if (/^[A-Z]/.test(word)) return "name";
-      return null;
-    }
-    if (stream.match(/^(?:\|\)|[()[\]{}])/)) return "bracket";
-    if (stream.match(/^(?:<-t-|<-v-|=~|::|`[a-z][a-zA-Z_0-9']*`|[!$&*+/<=>@\\^|-][.!$&*+/<=>@\\^|-]*)/)) {
-      return "operator";
-    }
-    if (stream.match(/^[.,:;?~%]/)) return "punctuation";
-    stream.next();
-    return null;
+    const modality = /\S/.test(token) ? trackToken(state.groups, group, token, style) : group.modality;
+    return modality ? "modality" : style;
   },
 });
 
 const highlights = syntaxHighlighting(HighlightStyle.define([
+  { tag: modalityTag, class: "cm-smalllinks-modality" },
   { tag: tags.keyword, color: "#81244c", fontWeight: "600" },
   { tag: tags.name, color: "#19596e" },
   { tag: [tags.string, tags.character], color: "#31623e" },
@@ -82,6 +172,7 @@ const theme = EditorView.theme({
   "&": { height: "var(--source-height, clamp(18rem, 57vh, 39rem))", minWidth: "0" },
   "&.cm-focused": { outline: "2px solid var(--accent, #175c43)", outlineOffset: "-2px" },
   ".cm-scroller": { fontFamily: "var(--code-font, ui-monospace, monospace)", lineHeight: "1.6" },
+  ".cm-smalllinks-modality": { color: "#173f92" },
   ".cm-content": { padding: "0.75rem 0" },
   ".cm-line": { padding: "0 0.875rem" },
   ".cm-gutters": {
