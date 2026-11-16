@@ -229,12 +229,20 @@ async function expectSourcePreview(document, id) {
   assert.ok(!unavailable(document.getElementById("load-source")), `Can load ${id} into the editor`);
 }
 
+function containingDirectories(link) {
+  const directories = [];
+  for (let directory = link.closest("details"); directory;
+    directory = directory.parentElement.closest("details")) {
+    directories.push(directory);
+  }
+  return directories.reverse();
+}
+
 function followPreview(element, id) {
   const link = requireLink(element, "index.html", "file", id);
   assert.ok(["", "_self"].includes(link.target), `Preview should open in place for ${id}`);
-  const directory = link.closest("details");
-  if (directory && !directory.open) {
-    directory.querySelector("summary").click();
+  for (const directory of containingDirectories(link)) {
+    if (!directory.open) directory.querySelector(":scope > summary").click();
     assert.ok(directory.open, `Cannot open the directory for ${id}`);
   }
   link.click();
@@ -316,6 +324,7 @@ test("Check and run source and the published examples at the site root", async (
 
     const files = document.getElementById("source-files");
     await waitFor(() => linksTo(files, "index.html", "file").length, sources.size, "File browser");
+    assert.equal(files.querySelectorAll("details[open]").length, 0, "File folders start collapsed");
     await expectEditable(document);
     const starter = getSource(document);
 
@@ -478,10 +487,9 @@ for (const basePath of ["/", "/smalllinks/"]) {
         [...sources.keys()].sort());
       for (const link of fileLinks) {
         const id = new URL(link.href).searchParams.get("file");
-        const directory = posix.dirname(id);
-        const group = link.closest("details");
-        assert.equal(group?.querySelector("summary")?.textContent.trim(),
-          directory === "." ? "Repository root" : `${directory}/`);
+        const expected = id === "prelude.links" ? ["prelude"] : id.split("/").slice(0, -1);
+        assert.deepEqual(containingDirectories(link).map(directory =>
+          directory.querySelector(":scope > summary").textContent.trim()), expected, id);
         assert.equal(link.textContent.trim(), posix.basename(id));
       }
 
@@ -497,7 +505,7 @@ for (const basePath of ["/", "/smalllinks/"]) {
       editSource(window, "length([1, 2, 3])");
       await run(document, "3");
 
-      followPreview(files, rejectedExample);
+      const rejectedLink = followPreview(files, rejectedExample);
       await expectSourcePreview(document, rejectedExample);
       document.getElementById("load-source").click();
       await expectLoadedExample(document, rejectedExample);
@@ -506,6 +514,12 @@ for (const basePath of ["/", "/smalllinks/"]) {
       await expectText(document, "diagnostic", /Modal introduction requires a value/);
       assert.ok(document.getElementById("diagnostic").textContent.includes(rejectedExample));
       assert.deepEqual(linksTo(document, "sources.html"), [], "No link to the standalone sources page");
+
+      const direct = (await site.loadPage(rejectedLink.href)).document;
+      await expectSourcePreview(direct, rejectedExample);
+      const directLink = requireLink(direct.getElementById("source-files"), "index.html", "file", rejectedExample);
+      assert.equal(directLink.getAttribute("aria-current"), "page");
+      assert.equal(directLink.closest("details:not([open])"), null, "A direct preview opens every containing folder");
     } finally {
       await site.close();
     }
@@ -519,6 +533,13 @@ for (const basePath of ["/", "/smalllinks/"]) {
       assert.equal(guideLink.textContent.trim(), "Language guide");
       const guide = (await site.loadPage(guideLink.href)).document;
       assert.equal(guide.querySelector("h1").textContent, "SmallLinks language guide");
+      for (const page of [document, guide]) {
+        assert.ok(page.querySelector('header a[href="https://github.com/thwfhk/links/tree/small-met"]'),
+          "Missing SmallLinks GitHub link");
+      }
+      assert.ok(guide.querySelector('main a[href="https://links-lang.org/"]'), "Missing Links website link");
+      assert.ok(guide.querySelector('main a[href="https://dl.acm.org/doi/10.1145/3720476"]'),
+        "Missing modal effect types paper link");
       assert.equal(guide.querySelector('link[rel="stylesheet"]').href,
         document.querySelector('link[rel="stylesheet"]').href, "Playground and guide share their layout stylesheet");
       const chapters = guide.querySelector('nav[aria-labelledby="chapter-nav-title"]');
@@ -535,7 +556,8 @@ for (const basePath of ["/", "/smalllinks/"]) {
       }
       const backLink = requireLink(guide.querySelector("header"), "index.html");
       const home = (await site.loadPage(backLink.href)).document;
-      assert.equal(home.querySelector("h1").textContent.trim(), "SmallLinks Playground");
+      assert.equal(home.querySelector("h1").textContent.trim(), "SmallLinks");
+      assert.equal(home.title, "SmallLinks");
 
       assert.deepEqual(linksTo(guide, "sources.html"), [], "No link to the standalone sources page");
       const guideSources = linksTo(guide, "index.html", "file");

@@ -132,6 +132,7 @@ ${chapterLinks.join("\n")}
     <nav class="site-links" aria-label="SmallLinks">
       <a href="./index.html">Playground</a>
       <a href="./guide.html" aria-current="page">Language guide</a>
+      <a href="${repository}/tree/${sourceRef}">GitHub</a>
     </nav>
   </header>
   <main class="site-layout">

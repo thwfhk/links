@@ -1,11 +1,10 @@
 # SmallLinks language guide
 
-SmallLinks is a call-by-value functional language with type inference,
-algebraic effects and handlers. Open a listing in the playground.
+SmallLinks is a core version of [Links](https://links-lang.org/) with
+[modal effect types](https://dl.acm.org/doi/10.1145/3720476).
+Open a listing in the playground.
 **Check** shows the inferred type. **Run** also shows the result and any
 printed output. Each run starts with the standard prelude.
-[Modal effect types](#modal-effect-types) describe what effects a
-function or a callback can use.
 [Full guide and command-line usage](../tasks/met/GUIDE.md).
 
 ## Basics

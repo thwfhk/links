@@ -150,7 +150,10 @@ function updateWorkspace() {
   for (const [id, link] of fileLinks) {
     if (id === shownId) {
       link.setAttribute("aria-current", "page");
-      link.closest("details").open = true;
+      for (let directory = link.closest(".source-directory"); directory;
+           directory = directory.parentElement.closest(".source-directory")) {
+        directory.open = true;
+      }
     } else {
       link.removeAttribute("aria-current");
     }
@@ -220,32 +223,51 @@ async function openSource(id, kind, href, trigger) {
   }
 }
 
-function showFiles() {
-  const directories = new Map();
-  for (const { id } of sources.values()) {
-    const slash = id.lastIndexOf("/");
-    const directory = id.slice(0, Math.max(0, slash));
-    if (!directories.has(directory)) directories.set(directory, []);
-    directories.get(directory).push(id);
+function createSourceList({ directories, fileIds }) {
+  const list = document.createElement("ul");
+  list.setAttribute("role", "list");
+  for (const [name, directory] of [...directories].sort(([a], [b]) => a.localeCompare(b))) {
+    list.append(createDirectoryItem(name, directory));
   }
+  for (const id of fileIds) {
+    const item = document.createElement("li");
+    const link = createFileLink(id, id.slice(id.lastIndexOf("/") + 1));
+    fileLinks.set(id, link);
+    item.append(link);
+    list.append(item);
+  }
+  return list;
+}
 
-  for (const [directory, ids] of [...directories].sort(([a], [b]) => a.localeCompare(b))) {
-    const group = document.createElement("details");
-    group.className = "source-directory";
-    group.open = directory === "examples";
-    const summary = document.createElement("summary");
-    summary.textContent = directory ? directory + "/" : "Repository root";
-    const list = document.createElement("ul");
-    for (const id of ids) {
-      const item = document.createElement("li");
-      const link = createFileLink(id, id.slice(id.lastIndexOf("/") + 1));
-      fileLinks.set(id, link);
-      item.append(link);
-      list.append(item);
+function createDirectoryItem(name, directory) {
+  const item = document.createElement("li");
+  const group = document.createElement("details");
+  group.className = "source-directory";
+  const summary = document.createElement("summary");
+  summary.textContent = name;
+  group.append(summary, createSourceList(directory));
+  item.append(group);
+  return item;
+}
+
+function showFiles() {
+  const root = { directories: new Map(), fileIds: [] };
+  const prelude = { directories: new Map(), fileIds: [] };
+  for (const { id } of sources.values()) {
+    const names = id.split("/");
+    names.pop();
+    let directory = names.length ? root : prelude;
+    for (const name of names) {
+      if (!directory.directories.has(name)) {
+        directory.directories.set(name, { directories: new Map(), fileIds: [] });
+      }
+      directory = directory.directories.get(name);
     }
-    group.append(summary, list);
-    files.append(group);
+    directory.fileIds.push(id);
   }
+  const list = createSourceList(root);
+  if (prelude.fileIds.length) list.prepend(createDirectoryItem("prelude", prelude));
+  if (list.hasChildNodes()) files.append(list);
 }
 
 function showCommonExamples() {
