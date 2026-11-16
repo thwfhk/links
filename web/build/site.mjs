@@ -13,13 +13,16 @@ const compiled = join(root, "_build");
 await mkdir(compiled, { recursive: true });
 const staging = await mkdtemp(join(compiled, "web-demo-"));
 try {
-  for (const file of ["index.html", "styles.css"]) {
+  for (const file of ["index.html", "sources.html", "styles.css"]) {
     await copyFile(join(playground, file), join(staging, file));
   }
   await copyFile(join(compiled, "default", "web", "runtime", "worker.js"), join(staging, "worker.js"));
   await build({
-    entryPoints: [join(playground, "main.js")],
-    outfile: join(staging, "app.js"),
+    entryPoints: {
+      app: join(playground, "main.js"),
+      sources: join(playground, "sources.js"),
+    },
+    outdir: staging,
     bundle: true,
     format: "esm",
     target: "es2020",
