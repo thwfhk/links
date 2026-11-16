@@ -128,7 +128,10 @@ ${chapterLinks.join("\n")}
 </head>
 <body>
   <header class="site-header">
-    <a class="site-name" href="./index.html">SmallLinks</a>
+    <div class="site-brand">
+      <a class="site-name" href="./index.html">SmallLinks</a>
+      <p class="site-tagline">A core subset of Links with modal effect types</p>
+    </div>
     <nav class="site-links" aria-label="SmallLinks">
       <a href="./index.html">Playground</a>
       <a href="./guide.html" aria-current="page">Language guide</a>

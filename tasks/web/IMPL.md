@@ -151,8 +151,8 @@ load as editor text.
 
 The [guide renderer](../../web/build/guide.mjs) renders the concise
 [web guide](../../web/guide.md) at build time with Markdown-it. It
-generates a chapter sidebar and links to the full guide, repository
-examples and browsable sources. A standalone listing opens the editor
+generates a chapter sidebar and links to repository examples and
+browsable sources. A standalone listing opens the editor
 with its exact source in the `code` parameter. A listing that imports
 a module uses the `example` parameter to retain the entry file and
 its imports.
