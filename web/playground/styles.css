@@ -76,6 +76,11 @@ button, textarea {
   font-size: 0.8125rem;
 }
 
+.site-tagline a {
+  color: inherit;
+  text-decoration: none;
+}
+
 a.site-name:hover {
   text-decoration: underline;
 }

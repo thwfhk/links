@@ -14,11 +14,12 @@
 }
 
 .guide-content {
+  box-sizing: content-box;
+  max-inline-size: 82ch;
   padding: 0.75rem 0.75rem 2rem;
 }
 
 .guide-prose {
-  max-inline-size: 82ch;
   line-height: 1.65;
 }
 

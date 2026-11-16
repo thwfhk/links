@@ -173,7 +173,7 @@ const theme = EditorView.theme({
   "&": { height: "var(--source-height, clamp(18rem, 57vh, 39rem))", minWidth: "0" },
   "&.cm-focused": { outline: "2px solid var(--accent, #175c43)", outlineOffset: "-2px" },
   ".cm-scroller": { fontFamily: "var(--code-font, ui-monospace, monospace)", lineHeight: "1.6" },
-  ".cm-smalllinks-modality": { color: "#173f92" },
+  ".cm-smalllinks-modality": { color: "#245bd6" },
   ".cm-content": { padding: "0.75rem 0" },
   ".cm-line": { padding: "0 0.875rem" },
   ".cm-gutters": {

@@ -130,7 +130,8 @@ ${chapterLinks.join("\n")}
   <header class="site-header">
     <div class="site-brand">
       <a class="site-name" href="./index.html">SmallLinks</a>
-      <p class="site-tagline">A core subset of Links with modal effect types</p>
+      <p class="site-tagline">A core subset of <a href="https://links-lang.org/">Links</a> with
+        <a href="https://dl.acm.org/doi/10.1145/3720476">modal effect types</a></p>
     </div>
     <nav class="site-links" aria-label="SmallLinks">
       <a href="./index.html">Playground</a>

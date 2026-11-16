@@ -8,7 +8,7 @@ Open a listing in the playground.
 **Check** shows the inferred type. **Run** also shows the result and any
 printed output. Each run starts with the standard prelude.
 
-This project is fully vibe-coded.
+AI Disclosure: This project is fully vibe-coded.
 
 ## Basics
 
