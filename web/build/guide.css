@@ -1,0 +1,120 @@
+:root {
+  color: #222722;
+  background: #fafaf7;
+  font-family: Inter, system-ui, sans-serif;
+  line-height: 1.65;
+  --accent: #245b4b;
+  --border: #d9ded7;
+  --code: #eeefea;
+}
+
+body {
+  margin: 0;
+}
+
+header {
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+}
+
+nav, main {
+  box-sizing: border-box;
+  max-width: 51rem;
+  padding-inline: clamp(1rem, 4vw, 2rem);
+  margin-inline: auto;
+}
+
+nav {
+  padding-block: 0.85rem;
+  font-weight: 600;
+}
+
+main {
+  padding-block: 2.5rem 4rem;
+}
+
+a {
+  color: var(--accent);
+  text-underline-offset: 0.18em;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+h1, h2, h3 {
+  line-height: 1.2;
+  text-wrap: balance;
+  scroll-margin-top: 1rem;
+}
+
+h1 {
+  margin: 0 0 1rem;
+  font-size: clamp(1.9rem, 5vw, 2.65rem);
+}
+
+h2 {
+  margin-top: 2.25em;
+  padding-bottom: 0.35em;
+  border-bottom: 1px solid var(--border);
+  font-size: 1.55rem;
+}
+
+h3 {
+  margin-top: 1.8em;
+  font-size: 1.2rem;
+}
+
+li + li {
+  margin-top: 0.25em;
+}
+
+code {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.9em;
+}
+
+:not(pre) > code {
+  padding: 0.1em 0.25em;
+  border-radius: 0.2em;
+  background: var(--code);
+  overflow-wrap: anywhere;
+}
+
+pre {
+  overflow-x: auto;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: var(--code);
+  line-height: 1.5;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+}
+
+table {
+  width: 100%;
+  min-width: 30rem;
+  border-collapse: collapse;
+  background: #fff;
+  font-size: 0.94rem;
+}
+
+th, td {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  background: var(--code);
+}
+
+td {
+  border-top: 1px solid var(--border);
+}

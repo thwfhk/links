@@ -48,6 +48,8 @@ doc/*.toc
 
 # build artefacts
 _build
+/web/dist/
+/web/node_modules/
 links.opt
 links.byte
 links.native

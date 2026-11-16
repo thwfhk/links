@@ -118,10 +118,8 @@ deferred. Its [random π estimate](../../examples/handlers/pi.links)
 exceeded 60 seconds in the browser worker. The short module import
 example exercises its shallow state handler within the demo timeout.
 
-Render [the guide](../met/GUIDE.md) at build time. Preserve its table
-of contents, heading anchors, tables and fenced code blocks. Map
-links to bundled examples to the corresponding playground entry and
-resolve other repository links to their source pages. Put any
-browser-specific instructions alongside the guide in the web build.
-The guide's [two-file import example](../met/GUIDE.md#modules-and-imports)
-needs both snippets if it is offered as a runnable example.
+[The guide renderer](../../web/build/guide.mjs) renders
+[the guide](../met/GUIDE.md) at build time with Markdown-it. It
+preserves the table of contents, heading anchors, tables and fenced
+code blocks. The search example opens in the editor. Other repository
+links point to the corresponding `small-met` source pages.
