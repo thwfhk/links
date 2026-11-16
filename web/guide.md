@@ -31,7 +31,7 @@ its final expression. Here `n` is local to the block, which returns `25`.
 
 The factorials example uses `product([1..i])` to multiply the integers
 from `1` to `i`. It returns the factorials of `1` to `10` as records, ending
-with `(f = 3628800, i = 10)`. [Run factorials](../examples/factorial.links).
+with `(f = 3628800, i = 10)`. [Try factorials](../examples/factorial.links).
 
 ## Data and patterns
 
@@ -64,7 +64,7 @@ switch (Just([42, 99])) {
 The list example uses `[]` and `x :: rest` cases to map and fold over
 `[1, 2, 3]`. The result `([2, 3, 4], 123, 321, [1, 2, 3])` contains the
 mapped list, the left and right folds, and the values collected by a handler.
-[Run map and folds](../examples/met/fresco-effects/list-map-fold.links).
+[Try map and folds](../examples/met/fresco-effects/list-map-fold.links).
 
 ## Functions and types
 
@@ -94,11 +94,11 @@ fun identity(x) { x }
 A function that takes a polymorphic argument can use `forall` in the
 argument type. The rank-two example calls such an argument at `Int`
 and `Bool` and returns `(42, 42, (42, true), (), 42, (42, true))`.
-[Run rank-two polymorphism](../examples/met/fresco-types/rank-two.links).
+[Try rank-two polymorphism](../examples/met/fresco-types/rank-two.links).
 
 The Church numerals example uses `typename` to name a polymorphic
 function type `Nat`. It adds two Church numerals and converts the
-result to the integer `4`. [Run Church numerals](../examples/church.links).
+result to the integer `4`. [Try Church numerals](../examples/church.links).
 
 ## Modules and imports
 
@@ -115,10 +115,13 @@ Double.apply(21)
 ```
 
 Use `import Name;` to load another file as a module. Lower-case the
-first letter to get the file name. The caller below imports
-`shallow_state.links` and returns `(0, [0, 1, 2, 3, 4])`. The first
-component is the final counter value, and the list records the state changes
-in reverse order.
+first letter of `Name` and append `.links` to get the file name.
+When an example is loaded, the playground searches the bundled standard
+library first, then the example's directory.
+
+The caller below imports `shallow_state.links` and returns
+`(0, [0, 1, 2, 3, 4])`. The first component is the final counter value,
+and the list records the state changes in reverse order.
 
 ```links example=examples/handlers/module_import.links
 import Shallow_state;
@@ -127,7 +130,7 @@ import Shallow_state;
 Shallow_state.unitTest(5)
 ```
 
-[Run the caller](../examples/handlers/module_import.links) or
+[Open the caller](../examples/handlers/module_import.links) or
 [read the imported module](../examples/handlers/shallow_state.links).
 
 ## Effects and handlers
@@ -147,17 +150,19 @@ handle(if (do Choose) 1 else 2) {
 }
 ```
 
-The return clause `case n -> [n]` turns each completed computation's
-result into a list. A deep handler, written `handle`, reinstalls
-itself when `k` resumes. A shallow handler, written `shallowhandle`,
-resumes in the enclosing effect context. The state module uses recursive
-calls to install another shallow handler around each resumption.
+A handler needs a clause for every operation in each interface it
+handles. The return clause `case n -> [n]` turns each completed
+computation's result into a list. A deep handler, written `handle`,
+reinstalls itself when `k` resumes. A shallow handler, written
+`shallowhandle`, resumes in the enclosing effect context. The state
+module uses recursive calls to install another shallow handler around
+each resumption.
 See [Modules and imports](#modules-and-imports).
 
 An operation clause can omit the resumption. In the single-yield
 example, `case <Yield(n)> -> n` ends the handled computation at its
 first `Yield` and returns `1`.
-[Run single yield](../examples/met/fresco-effects/single-yield.links).
+[Try single yield](../examples/met/fresco-effects/single-yield.links).
 
 ## Modal types and linearity
 
@@ -186,13 +191,13 @@ Operation clauses run in the enclosing context. In the search example,
 the `Test` clause calls the predicate there, so the predicate's own
 `Yield` operations reach the caller's handler. The program returns
 `([1, 2, 3], Just(3), (Just(2), [1, 2]))`.
-[Run the search example](../examples/met/fresco-effects/find_mask_paper.links).
+[Open the search example](../examples/met/fresco-effects/find_mask_paper.links).
 
 A function returned from a handler keeps its effect requirements.
 The handler results example runs a delayed state update under a
 second handler. It returns `(52, (42, true, "second"))`, with `52`
 as the new state and the remaining values chosen by returned functions.
-[Run handler results](../examples/met/thesis/handler_results.links).
+[Try handler results](../examples/met/thesis/handler_results.links).
 
 Use `linfun` to create a linear function. Its type uses `-@`. A linear
 local binding or parameter must be used once on each branch of its
@@ -207,4 +212,4 @@ scope. This block returns `42`.
 
 The linear list example takes apart a recursive variant, consumes
 each element by wrapping it in a new linear function and returns
-`LinCons(fun, LinNil)`. [Run linear map](../examples/linearList.links).
+`LinCons(fun, LinNil)`. [Try linear map](../examples/linearList.links).
