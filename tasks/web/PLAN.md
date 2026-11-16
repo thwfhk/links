@@ -34,8 +34,9 @@ in progress. Assign bounded work to subagents and one writer per file.
 
 ## Tracking
 
-Keep each implementation item buildable. Mark it complete after its
-checks pass and record its commit ID when committed. At each pause,
+Commit each implementation item separately and keep each commit
+buildable. Mark it complete and record its commit ID after the checks
+pass. At each pause,
 record the next action, blockers, and latest checks under [Status](#status).
 For builds and tests, record the command, revision, result, and log path.
 
@@ -43,14 +44,14 @@ For builds and tests, record the command, revision, result, and log path.
 
 ### 1. Build the browser runtime
 
-- [ ] **1.1** Check that the existing parser, Fresco type checker and
+- [x] **1.1** (`8dc038f3`) Check that the existing parser, Fresco type checker and
   evaluator can link with `js_of_ocaml`. Establish how the browser build
   loads the prelude and runs the evaluator without terminal startup.
   Run the single-yield example to exercise a handler resumption.
-- [ ] **1.2** Implement the worker interface. Reuse the existing pipeline,
+- [x] **1.2** (`7ed780ed`) Implement the worker interface. Reuse the existing pipeline,
   route output and diagnostics to the page, and apply the browser
   primitive and import policies in [IMPL.md](IMPL.md#runtime).
-- [ ] **1.3** Compare native and browser runs on the supported cases.
+- [x] **1.3** Compare native and browser runs on the supported cases.
   Check a rejected program, printed output, early exit, an unavailable
   primitive, and imports of bundled and missing modules. Resolve or
   record browser-specific behaviour found by the checks.
@@ -127,15 +128,22 @@ Depends on milestones 1–3.
 
 ## Status
 
-The planning draft is on `small-web`. The next implementation step is
-the browser link test and handler probe in 1.1, alongside the webpage
-work in 2.1. See [review questions](IMPL.md#questions-for-review) for
-browser behaviours to settle with the results of the link test.
+The plan was committed on `small-web` at `bbd04ac3`. Milestone 1
+passed on that revision with the browser runtime changes in the
+working tree. The separate webpage chat owns milestone 2. It can
+connect directly to the [worker script](IMPL.md#runtime) using the
+[implemented messages](IMPL.md#worker-interface). The next
+coordination step is packaging the public example catalogue and the
+HTML guide in milestone 3.
 
-Planning checks used `59ef2511` with the two Markdown drafts.
-Logs are in `/private/tmp/smalllinks-web-plan.5pqf2hah/`.
+Runtime verification logs are in `/private/tmp/smalllinks-web.1oRIDH/`.
+The worker build used OCaml 5.4.0 and `js_of_ocaml` 6.2.0.
 
 | Check | Result and log |
 | --- | --- |
-| `make rule-check` | Passed. The tab rule skipped its scan because GNU find was unavailable. `rule-check.log`. |
-| `git diff --check`, per-file whitespace and tab scans, and local Markdown link checks | Passed. `documents.log`. |
+| `make test-web-runtime` | All 15 worker checks passed. The linker reports unavailable native Unix and bcrypt primitives. The worker guards those calls. `worker-tests.log`. |
+| `node /private/tmp/smalllinks-web.1oRIDH/chrome-smoke.cjs` | Chrome loaded the worker under a path prefix, checked and ran source, reported a type error, stopped a loop, and ran a new request. `chrome-smoke.log`. |
+| `make all-ci` and `make tests` | Passed. All 43 native suites and six scripts passed, with two existing ignored cases. `native-ci-build.log`, `native-tests.log`. |
+| `opam exec -- ./run-tests unit-tests` | All 105 tests passed. `unit-tests.log`. |
+| Temporary `dune install` and `./tests/check-install.sh` | Three checks passed with the installed interpreter. `native-install.log`, `native-install-check.log`. |
+| `make rule-check` and `git diff --check` | Passed. A separate scan checked tabs in the changed Markdown and source files because GNU find was unavailable. `rule-check.log`, `source-check.log`. |

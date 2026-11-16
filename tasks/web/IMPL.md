@@ -7,65 +7,79 @@ browser build.
 
 ## Runtime
 
-Add a browser build of the OCaml checker and interpreter using a Dune
-JavaScript target. Reuse the [driver phases](../../bin/driver.ml#L156)
-to initialise the primitive environment, load the comprehension helpers
-and prelude, and process a submission. The checker returns its result
-after [the frontend](../../core/frontend.ml#L196). Run lowers the checked
-program to IR, applies the existing IR passes and invokes the
-interpreter. [Dune's JavaScript compilation guide](https://dune.readthedocs.io/en/stable/jsoo.html)
-describes the build target.
+The [native CLI](../../bin/driver.ml) and
+[browser worker](../../web/runtime/worker.ml) share
+[the driver phases](../../core/driverRuntime.ml). Both load the
+comprehension helpers and prelude. Check returns the inferred type from
+the frontend. Run continues through IR compilation and evaluation.
 
-The [core library](../../core/dune) currently depends on Linenoise,
-`lwt.unix` and Safepass. Keep terminal input, native configuration
-and executable-relative asset discovery with the native entry point.
-Reuse the evaluator's `Lwt.t` computation and its stack breaks in the
-worker. Keep `Lwt_main.run` on the native side and preserve the
-evaluator's cleanup and early-exit handling. [Evaluator](../../core/evalir.ml#L304)
+The native executable owns Linenoise and `Lwt_main.run`. The worker
+uses the same evaluator with `js_of_ocaml-lwt` to schedule its
+periodic pauses. Each evaluation keeps its move observations and pause
+counter in its Lwt context. The native driver cancels a pending
+evaluation after an interrupt so it can account for reads before it
+recovers the prompt. [Evaluator](../../core/evalir.ml)
 · [Lwt browser integration](https://ocsigen.org/js_of_ocaml/latest/js_of_ocaml/lwt.html).
 
-The browser link test should also exercise type printing and diagnostics,
-which use [domain-local storage for effect names](../../core/modalEffects.ml#L63).
+The [Dune rule](../../web/runtime/dune) uses `js_of_ocaml --file` to
+embed the prelude, comprehension helpers, standard library and example
+sources in its virtual filesystem. The existing module loader searches
+the embedded standard library and the selected example's directory.
+For an edited example, the worker updates the virtual entry file before
+checking. [Module lookup](../../core/moduleUtils.ml#L29).
 
-Bundle `prelude.links`, `lib/comprehension.links`, the importable
-standard library and the dependencies of published examples. Resolve
-imports from this bundle using the existing module loader with browser
-paths or a source resolver. Report a missing module by name. A virtual
-path in a request or diagnostic refers to a packaged source or the
-submitted program. [Module lookup](../../core/moduleUtils.ml#L28).
+Run these commands from the repository root with OCaml 5.3 or later.
+The worker checks also use Node.js.
 
-Send `print` output to the page. Use a browser diagnostic when a program
-calls a primitive that requires an unavailable host facility, such as
-access to the local filesystem or raw TCP. Preserve user-defined effects,
-handlers and the language-level `exit(v)` behaviour. Give `sysexit(n)`
-a browser implementation that ends the request with status `n` and
-preserves output. The prelude calls it on assertion failure. Reuse the
-current type and value printers and plain-text error formatting.
+```sh
+opam install js_of_ocaml-lwt
+make web-runtime
+make test-web-runtime
+```
+
+The standalone script is `_build/default/web/runtime/worker.js`.
+
+### Browser limits
+
+- Output comes from `print` and is capped at 64 KiB or 1,000 nonempty
+  chunks per request. The worker sends a truncation notice if it
+  discards output.
+- `exit(v)` returns the supplied value. `sysexit(n)` ends the request
+  with status `n` and preserves preceding output. The prelude uses
+  `sysexit` for failed assertions.
+- The browser uses 32-bit `Int` values. `serverTimeMilliseconds()`
+  reports an unsupported operation because the current epoch time in
+  milliseconds exceeds that range.
+- Raw TCP and native bcrypt report unsupported operations. The
+  `js_of_ocaml` linker warns about native Unix and bcrypt primitives.
+  The worker guards the corresponding SmallLinks calls and skips native
+  startup and configuration.
+
 [Primitives](../../core/lib.ml) · [Prelude](../../prelude.links#L741)
-· [Diagnostics](../../core/errors.mli).
+· [js_of_ocaml integer representation](https://ocsigen.org/js_of_ocaml/latest/js_of_ocaml/runtime-representation.html#integers).
 
 ## Worker interface
 
-| Direction | Message | Contents |
+| Direction | `kind` | Other fields |
 | --- | --- | --- |
-| Worker to page | Ready | The worker can accept source. |
-| Page to worker | Check or Run | Request ID, current editor text, and optional example ID to select bundled imports and the source name. |
-| Worker to page | Output | Request ID and a chunk of printed text, in order. |
-| Worker to page | Success | Request ID and the inferred type for Check. For Run, the printed result and type on normal return, or the value passed to `exit(v)` on early exit. |
-| Worker to page | Failure | Request ID, stage (parsing, checking or running), plain-text diagnostic, and source location or exit status when available. |
+| Worker to page | `ready` | The worker can accept source. |
+| Page to worker | `check` or `run` | `id`, `source` (the current editor text) and optional `exampleId` (a bundled repository-relative source path). |
+| Worker to page | `output` | `id`, `text`. Chunks are sent in order. |
+| Worker to page | `success` | `id` and `inferredType` for Check. Run also includes `value`. Early exit includes only `id` and the printed `value`. |
+| Worker to page | `failure` | `id`, `stage` (`startup`, `parsing`, `checking` or `running`), plain-text `diagnostic` with its location when available, and optional `exitStatus`. |
 
 A new buffer uses a fixed name for diagnostics. An example uses its
 repository path, and the editor text replaces that example's entry
-file for the request. Resolve an example ID through the packaged
-catalogue. The page renders output and diagnostics as text. It handles
-worker startup errors and timeouts using the active request ID.
+file for the request. The page renders output and diagnostics as text.
+It handles worker startup errors and timeouts using the active request
+ID.
 
-Start with a fresh dedicated worker for each request so that definitions
+Start a fresh dedicated worker for each request so that definitions
 and mutable compiler state cannot leak across submissions. Allow one
 active request and terminate its worker on Stop or timeout. The page
-timer also covers worker startup and synchronous type checking. Bound
-the amount of printed output presented by the page. Keep the editor
-and any output already received. [Worker termination](https://html.spec.whatwg.org/multipage/workers.html#dom-worker-terminate-dev).
+timer also covers worker startup and synchronous type checking. Keep
+the editor and any output already received.
+[Worker termination](https://html.spec.whatwg.org/multipage/workers.html#dom-worker-terminate-dev).
 
 ## Editor and highlighting
 
@@ -104,16 +118,3 @@ resolve other repository links to their source pages. Put any
 browser-specific instructions alongside the guide in the web build.
 The guide's [two-file import example](../met/GUIDE.md#modules-and-imports)
 needs both snippets if it is offered as a runnable example.
-
-## Questions for review
-
-1. SmallLinks uses OCaml `int`, which `js_of_ocaml` represents as
-   32-bit integers. Check the range, arithmetic at its boundaries and
-   the result of `serverTimeMilliseconds()`, whose current epoch
-   millisecond value exceeds that range. Decide which browser differences
-   to document and which primitives need adaptation before inclusion.
-   [Runtime representation](https://ocsigen.org/js_of_ocaml/latest/js_of_ocaml/runtime-representation.html#integers)
-   · [Time primitives](../../core/lib.ml#L424).
-2. Check Safepass's bcrypt dependency in the browser build. Decide
-   whether it can be bundled directly or needs an unsupported-primitive
-   diagnostic for this release. [Cryptography primitives](../../core/lib.ml#L742).
