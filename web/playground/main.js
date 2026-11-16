@@ -1,3 +1,5 @@
+import { createEditor } from "./editor.js";
+
 const textarea = document.querySelector("#source");
 const exampleSelect = document.querySelector("#example");
 const exampleStatus = document.querySelector("#example-status");
@@ -63,7 +65,7 @@ async function loadExample(id) {
 
   if (id === "") {
     exampleId = "";
-    textarea.value = starterSource;
+    editor.setSource(starterSource);
     updateControls();
     return;
   }
@@ -77,7 +79,7 @@ async function loadExample(id) {
     const response = await fetchAsset(path, controller.signal);
     const source = await response.text();
     if (!controller.signal.aborted) {
-      textarea.value = source;
+      editor.setSource(source);
       exampleId = id;
       exampleStatus.textContent = "";
     }
@@ -190,7 +192,7 @@ function onWorkerMessage(request, submission, message) {
 function startRequest(kind) {
   if (activeRequest || loadLinkedExample || exampleLoad) return;
 
-  const submission = { kind, id: ++nextRequestId, source: textarea.value };
+  const submission = { kind, id: ++nextRequestId, source: editor.getSource() };
   if (exampleId) submission.exampleId = exampleId;
 
   const button = kind === "check" ? checkButton : runButton;
@@ -225,7 +227,20 @@ function startRequest(kind) {
   }
 }
 
-textarea.addEventListener("input", onSourceEdit);
+function initialiseEditor() {
+  try {
+    return createEditor(textarea, onSourceEdit);
+  } catch (error) {
+    console.warn("Could not start the highlighted editor.", error);
+    textarea.addEventListener("input", onSourceEdit);
+    return {
+      getSource: () => textarea.value,
+      setSource: (source) => { textarea.value = source; },
+    };
+  }
+}
+
+const editor = initialiseEditor();
 exampleSelect.addEventListener("change", () => loadExample(exampleSelect.value));
 checkButton.addEventListener("click", () => startRequest("check"));
 runButton.addEventListener("click", () => startRequest("run"));
