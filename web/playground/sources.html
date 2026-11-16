@@ -79,7 +79,7 @@
 
       .source-path code { font-family: var(--code-font); }
 
-      .source-action {
+      .source-action:not([hidden]) {
         display: inline-block;
         margin-block-start: 0.5rem;
         font-weight: 600;
@@ -139,7 +139,7 @@
             <ul id="source-callers"></ul>
           </section>
           <p id="source-preview-status" class="status" role="status"></p>
-          <pre class="source-preview" tabindex="0" aria-label="Source code" hidden><code id="source-code"></code></pre>
+          <pre class="source-preview" tabindex="0" role="region" aria-label="Source code" hidden><code id="source-code"></code></pre>
         </article>
 
         <nav class="panel source-list" id="source-files" aria-labelledby="source-files-title" hidden>

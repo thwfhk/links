@@ -10,21 +10,23 @@
   <body>
     <header class="site-header">
       <h1>SmallLinks Playground</h1>
-      <a href="./guide.html">Language guide</a>
+      <nav class="site-links" aria-label="SmallLinks">
+        <a href="./guide.html">Language guide</a>
+        <a href="./sources.html" target="_blank" rel="noopener">Browse sources (new tab)</a>
+      </nav>
     </header>
 
     <main class="playground">
       <div class="panel editor">
         <div class="editor-header">
           <label class="panel-title" for="source">Source</label>
-          <div class="example-field">
-            <label for="example">Example</label>
-            <select id="example">
-              <option value="">New program</option>
-            </select>
-          </div>
+          <a class="example-jump" href="#examples">Examples</a>
         </div>
-        <p class="status" id="example-status" role="status"></p>
+        <div id="example-context" hidden>
+          <p><a id="example-source" target="_blank" rel="noopener"></a></p>
+          <p id="example-import-row" hidden>Imports <span id="example-imports"></span></p>
+          <p id="example-diagnostic" hidden>This example demonstrates a diagnostic. Use Check.</p>
+        </div>
         <div class="editor-body">
           <textarea id="source" spellcheck="false" autocapitalize="off"
                     autocomplete="off">1 + 2</textarea>
@@ -36,29 +38,40 @@
         </div>
       </div>
 
-      <section class="panel results">
-        <h2 class="panel-title">Results</h2>
-        <p class="status" id="request-status" role="status"></p>
-        <noscript>
-          <p class="status">Enable JavaScript to check or run programs.</p>
-        </noscript>
-        <div class="result" hidden>
-          <h3>Inferred type</h3>
-          <pre id="inferred-type"></pre>
-        </div>
-        <div class="result" hidden>
-          <h3>Value</h3>
-          <pre id="value"></pre>
-        </div>
-        <div class="result" hidden>
-          <h3>Output</h3>
-          <pre id="output" tabindex="0" aria-label="Output"></pre>
-        </div>
-        <div class="result diagnostic" hidden>
-          <h3>Diagnostic</h3>
-          <pre id="diagnostic" tabindex="0" aria-label="Diagnostic"></pre>
-        </div>
-      </section>
+      <div class="playground-sidebar">
+        <section class="panel results" aria-labelledby="results-heading">
+          <h2 class="panel-title" id="results-heading">Results</h2>
+          <p class="status" id="request-status" role="status"></p>
+          <noscript>
+            <p class="status">Enable JavaScript to check or run programs.</p>
+          </noscript>
+          <div class="result" hidden>
+            <h3>Inferred type</h3>
+            <pre id="inferred-type"></pre>
+          </div>
+          <div class="result" hidden>
+            <h3>Value</h3>
+            <pre id="value"></pre>
+          </div>
+          <div class="result" hidden>
+            <h3>Output</h3>
+            <pre id="output" tabindex="0" aria-label="Output"></pre>
+          </div>
+          <div class="result diagnostic" hidden>
+            <h3>Diagnostic</h3>
+            <pre id="diagnostic" tabindex="0" aria-label="Diagnostic"></pre>
+          </div>
+        </section>
+
+        <section class="panel examples" id="examples" aria-labelledby="examples-heading" tabindex="-1">
+          <div class="examples-header">
+            <h2 class="panel-title" id="examples-heading">Examples by topic</h2>
+            <button id="new-program" type="button" aria-current="true" disabled>New program</button>
+          </div>
+          <p class="status" id="example-status" role="status"></p>
+          <div id="example-list"></div>
+        </section>
+      </div>
     </main>
   </body>
 </html>

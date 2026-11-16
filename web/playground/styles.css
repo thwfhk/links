@@ -22,7 +22,7 @@ body {
   margin: 0;
 }
 
-button, select, textarea {
+button, textarea {
   font: inherit;
 }
 
@@ -53,7 +53,13 @@ button, select, textarea {
   letter-spacing: -0.025em;
 }
 
-.site-header a {
+.site-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
+.site-header a, .example-jump, #example-context a {
   color: var(--accent);
   font-size: 0.875rem;
   font-weight: 600;
@@ -95,31 +101,28 @@ button, select, textarea {
   font-weight: 650;
 }
 
-.example-field {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-inline-size: 0;
-  max-inline-size: 100%;
-}
-
-.example-field label {
+#example-context {
+  padding: 0 1rem 0.75rem;
   color: var(--muted);
   font-size: 0.875rem;
+  overflow-wrap: anywhere;
 }
 
-select, button {
+#example-context p {
+  margin: 0;
+}
+
+#example-context p + p {
+  margin-block-start: 0.25rem;
+}
+
+button {
   min-block-size: 2.75rem;
   padding: 0.4rem 0.75rem;
   border: 1px solid var(--control-border);
   border-radius: 0.375rem;
   background: var(--surface);
   color: inherit;
-}
-
-select {
-  min-inline-size: 0;
-  max-inline-size: min(18rem, 100%);
 }
 
 .status {
@@ -130,7 +133,7 @@ select {
 }
 
 #example-status:not(:empty) {
-  padding: 0 1rem 0.75rem;
+  margin-block-start: 0.75rem;
 }
 
 .editor-body {
@@ -188,8 +191,54 @@ button:disabled {
   color: var(--muted);
 }
 
-.results {
+.playground-sidebar {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  min-inline-size: 0;
+}
+
+.results, .examples {
   padding: 1rem;
+}
+
+.examples-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
+.examples button {
+  font-size: 0.875rem;
+}
+
+.example-topic {
+  margin-block-start: 0.875rem;
+  padding-block-start: 0.75rem;
+  border-block-start: 1px solid var(--border);
+}
+
+.example-topic h3 {
+  margin: 0 0 0.375rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.example-topic ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.examples button[aria-current="true"] {
+  background: var(--code-surface);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 #request-status:not(:empty), noscript .status {
@@ -230,22 +279,5 @@ button:disabled {
 @media (max-width: 48rem) {
   .playground {
     grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-@media (max-width: 30rem) {
-  .editor-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.75rem;
-  }
-
-  .example-field {
-    order: -1;
-  }
-
-  .example-field select {
-    flex-grow: 1;
-    max-inline-size: none;
   }
 }

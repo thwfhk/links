@@ -141,5 +141,8 @@ export function createEditor(textarea, onChange) {
       view.scrollDOM.scrollTop = 0;
       textarea.value = text;
     },
+    focus() {
+      view.focus();
+    },
   };
 }
