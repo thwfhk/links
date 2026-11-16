@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SmallLinks Playground</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script src="./app.js" type="module"></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <h1>SmallLinks Playground</h1>
+      <a href="./guide.html">Language guide</a>
+    </header>
+
+    <main class="playground">
+      <div class="panel editor">
+        <div class="editor-header">
+          <label class="panel-title" for="source">Source</label>
+          <div class="example-field">
+            <label for="example">Example</label>
+            <select id="example">
+              <option value="">New program</option>
+            </select>
+          </div>
+        </div>
+        <p class="status" id="example-status" role="status"></p>
+        <div class="editor-body">
+          <textarea id="source" spellcheck="false" autocapitalize="off"
+                    autocomplete="off">1 + 2</textarea>
+        </div>
+        <div class="actions">
+          <button id="check" type="button" disabled>Check</button>
+          <button id="run" type="button" disabled>Run</button>
+          <button id="stop" type="button" disabled>Stop</button>
+        </div>
+      </div>
+
+      <section class="panel results">
+        <h2 class="panel-title">Results</h2>
+        <p class="status" id="request-status" role="status"></p>
+        <noscript>
+          <p class="status">Enable JavaScript to check or run programs.</p>
+        </noscript>
+        <div class="result" hidden>
+          <h3>Inferred type</h3>
+          <pre id="inferred-type"></pre>
+        </div>
+        <div class="result" hidden>
+          <h3>Value</h3>
+          <pre id="value"></pre>
+        </div>
+        <div class="result" hidden>
+          <h3>Output</h3>
+          <pre id="output" tabindex="0" aria-label="Output"></pre>
+        </div>
+        <div class="result diagnostic" hidden>
+          <h3>Diagnostic</h3>
+          <pre id="diagnostic" tabindex="0" aria-label="Diagnostic"></pre>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
