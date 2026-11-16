@@ -159,9 +159,9 @@ use the catalogue from 5.1.
   they illustrate the topic. Preserve the source name and import
   context for multi-file examples. Give short syntax fragments the
   context needed to understand them.
-- [x] **6.3** Verify the generated documentation, source viewer and
-  runnable links together. Use Node and a simulated DOM at the site
-  root and under a path prefix. Check that each runnable link loads
+- [x] **6.3** (`343a1723`) Verify the generated documentation, source
+  viewer and runnable links together. Use Node and a simulated DOM at
+  the site root and under a path prefix. Check that each runnable link loads
   the code shown or referenced by the chapter and runs with the
   expected result. Check chapter anchors and links to source files.
 
