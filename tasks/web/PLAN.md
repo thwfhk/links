@@ -168,6 +168,23 @@ use the catalogue from 5.1.
 Completion check — visitors can find a language topic, read a
 short explanation and open its complete examples in the playground.
 
+### 7. Combine source browsing and editing
+
+- [x] **7.1** Put the complete directory list and common example
+  shortcuts on the left of the playground. Show a file in read-only
+  mode in the source pane and let visitors load it for editing and
+  running. Keep the current draft available while browsing files or
+  following imports and callers within the playground.
+- [x] **7.2** Use the same header, compact typography and sidebar
+  layout on the guide and playground. Put the guide's chapter list
+  on the left. Route source links to the playground.
+- [x] **7.3** Verify preview, loading, draft recovery, imports,
+  guide links and worker requests in Node at the root and under a
+  path prefix.
+
+Completion check — visitors can browse and run sources in the
+playground and navigate the guide from its chapter sidebar.
+
 ## Checks
 
 1. Compare browser and CLI results for arithmetic, prelude and list
@@ -191,6 +208,18 @@ short explanation and open its complete examples in the playground.
    and `git diff --check` on the final changes.
 
 ## Status
+
+Milestone 7 is complete on `small-web`. The playground includes file
+previews in the editor pane and the guide uses the same layout with a
+chapter sidebar. The checks used the source committed at `bbd33731`.
+Logs are in `/private/tmp/smalllinks-workspace.dkHuTq/`.
+
+| Check | Result and log |
+| --- | --- |
+| `make test-web-demo test-web-runtime` | Six Node/jsdom site checks and 15 worker checks passed. The checks cover all 17 runnable examples, all 99 file links, draft text and undo recovery, keyboard focus and Back navigation, and guide links at the root and under a path prefix. `web-tests-final.log`. |
+| `make rule-check` and `git diff --check` | Passed. A direct scan covered changed files for tabs because GNU find was unavailable. `rule-check.log` and `source-check.log`. |
+
+### Expanded catalogue and guide verification
 
 Milestones 5 and 6 are complete on `small-web`. The
 [static build](IMPL.md#build-and-serve) in `web/dist` has 17
