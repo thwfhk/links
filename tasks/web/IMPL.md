@@ -42,10 +42,13 @@ recovers the prompt. [Evaluator](../../core/evalir.ml)
 
 The [Dune rule](../../web/runtime/dune) uses `js_of_ocaml --file` to
 embed the prelude, comprehension helpers, standard library and example
-sources in its virtual filesystem. The existing module loader searches
-the embedded standard library and the selected example's directory.
-For an edited example, the worker updates the virtual entry file before
-checking. [Module lookup](../../core/moduleUtils.ml#L29).
+sources in its virtual filesystem. The worker and public source
+catalogues obtain the example paths from
+[`tests/typecheck_examples.tests`](../../tests/typecheck_examples.tests).
+The existing module loader searches the embedded standard library and
+the selected example's directory. For an edited example, the worker
+updates the virtual entry file before checking.
+[Module lookup](../../core/moduleUtils.ml#L29).
 
 Run these commands from the repository root with OCaml 5.3 or later.
 The worker checks also use Node.js.
@@ -119,17 +122,16 @@ result panel. Use these as references for the page interaction.
 
 ## Examples and guide
 
-The [example catalogue](../../web/build/examples.mjs) uses these source files.
-
-- [Factorials](../../examples/factorial.links)
-- [Single yield](../../examples/met/fresco-effects/single-yield.links)
-- [Rank-two polymorphism](../../examples/met/fresco-types/rank-two.links)
-- [Search with effect handlers](../../examples/met/fresco-effects/find_mask_paper.links)
-- [Import a state handler](../../examples/handlers/module_import.links)
-
-The build copies each source and the
-[imported state handler](../../examples/handlers/shallow_state.links)
-byte for byte. The runtime embeds their module sources.
+The [example catalogue](../../web/build/examples.mjs) groups 17
+runnable examples by topic and writes them to `examples.json`.
+`sources.json` indexes the registered examples and bundled library
+files for the source viewer. The build copies the indexed files
+byte for byte. The source metadata records import names and file
+paths, including
+[`module_import.links`](../../examples/handlers/module_import.links)
+and its [`Shallow_state` module](../../examples/handlers/shallow_state.links).
+Record any new cross-file example imports in the catalogue so the
+viewer can link both the dependency and its caller.
 
 The [handler test driver](../../examples/handlers/tests.links) is
 deferred. Its [random π estimate](../../examples/handlers/pi.links)

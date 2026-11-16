@@ -3,19 +3,24 @@
  (modes byte)
  (libraries links.core lwt js_of_ocaml js_of_ocaml-lwt))
 
+; Use the same registered example paths as the public source catalogue.
+(rule
+ (target example-file-args)
+ (action
+  (with-stdout-to %{target}
+   (run sed -En
+    "s|^(examples/([-[:alnum:]_]+/)*[-[:alnum:]_]+\\.links)$|--file=../../\\1:/static/smalllinks/\\1|p"
+    %{dep:../../tests/typecheck_examples.tests}))))
+
 (rule
  (target worker.js)
  (deps
-  (glob_files ../../lib/stdlib/*.links)
-  (glob_files ../../examples/handlers/*.links))
+  (source_tree ../../lib/stdlib)
+  (source_tree ../../examples))
  (action
   (run %{bin:js_of_ocaml} compile
    --file %{dep:../../prelude.links}:/static/smalllinks/lib/prelude.links
    --file %{dep:../../lib/comprehension.links}:/static/smalllinks/lib/comprehension.links
    --file ../../lib/stdlib=links:/static/smalllinks/lib/stdlib
-   --file ../../examples/handlers=links:/static/smalllinks/examples/handlers
-   --file %{dep:../../examples/factorial.links}:/static/smalllinks/examples/factorial.links
-   --file %{dep:../../examples/met/fresco-effects/single-yield.links}:/static/smalllinks/examples/met/fresco-effects/single-yield.links
-   --file %{dep:../../examples/met/fresco-effects/find_mask_paper.links}:/static/smalllinks/examples/met/fresco-effects/find_mask_paper.links
-   --file %{dep:../../examples/met/fresco-types/rank-two.links}:/static/smalllinks/examples/met/fresco-types/rank-two.links
+   %{read-lines:example-file-args}
    -o %{target} %{dep:worker.bc})))
