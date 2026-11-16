@@ -122,8 +122,8 @@ result panel. Use these as references for the page interaction.
 
 ## Examples and guide
 
-The [example catalogue](../../web/build/examples.mjs) groups 17
-runnable examples by topic and writes them to `examples.json`.
+The [example catalogue](../../web/build/examples.mjs) groups runnable
+examples by topic and writes them to `examples.json`.
 `sources.json` indexes the registered examples and bundled library
 files for the source viewer. The build copies the indexed files
 byte for byte. The source metadata records import names and file
@@ -138,8 +138,10 @@ deferred. Its [random π estimate](../../examples/handlers/pi.links)
 exceeded 60 seconds in the browser worker. The short module import
 example exercises its shallow state handler within the demo timeout.
 
-The [playground](../../web/playground/index.html) groups files by
-repository directory in its sidebar, with shortcuts for common examples.
+The [playground](../../web/playground/index.html) shows a directory tree
+and example shortcuts in its sidebar. It shows the directories under
+`examples/met` directly under `examples`, with `thesis` labelled
+`met-thesis`.
 The `file` parameter opens the source pane in read-only mode. Following
 imports and callers keeps the current draft available through **Return
 to editor**. **Load into playground** makes the displayed source editable

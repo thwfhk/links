@@ -3,6 +3,7 @@
  (section share)
  (files
   (TicTacToe-Console.links as examples/TicTacToe-Console.links)
+  (basics.links as examples/basics.links)
   (church.links as examples/church.links)
   (extensible-case.links as examples/extensible-case.links)
   (factorial.links as examples/factorial.links)

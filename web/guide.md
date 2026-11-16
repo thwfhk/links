@@ -1,7 +1,9 @@
 # SmallLinks language guide
 
 SmallLinks is a core version of [Links](https://links-lang.org/) with
-[modal effect types](https://dl.acm.org/doi/10.1145/3720476).
+[modal effect types](https://dl.acm.org/doi/10.1145/3720476) and
+[Fresco type inference](https://arxiv.org/abs/2607.16061).
+
 Open a listing in the playground.
 **Check** shows the inferred type. **Run** also shows the result and any
 printed output. Each run starts with the standard prelude.

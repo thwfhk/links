@@ -3,6 +3,7 @@ import { dirname, join, posix } from "node:path";
 
 const groups = {
   "Functions and data": {
+    "examples/basics.links": "Bindings and functions",
     "examples/factorial.links": "Factorials",
     "examples/church.links": "Church numerals",
     "examples/extensible-case.links": "Extensible pattern matching",
@@ -23,6 +24,7 @@ const groups = {
   "Effects and handlers": {
     "examples/met/fresco-effects/single-yield.links": "Single yield",
     "examples/handlers/toggle.links": "Toggle state",
+    "examples/handlers/count.links": "Count down with state",
     "examples/met/thesis/print_list.links": "Collect printed values",
     "examples/handlers/coin_composition.links": "Compose coin toss handlers",
     "examples/met/fresco-effects/find_mask_paper.links": "Search with effect handlers",

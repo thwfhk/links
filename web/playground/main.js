@@ -43,13 +43,12 @@ const failureStatuses = {
 const starterSource = textarea.defaultValue;
 const homeHref = new URL("./index.html", window.location.href).href;
 const commonExamples = [
-  { id: "examples/factorial.links" },
-  { id: "examples/met/fresco-types/rank-two.links" },
-  { id: "examples/met/fresco-effects/single-yield.links" },
-  { id: "examples/handlers/module_import.links" },
-  { id: "examples/met/fresco-effects/effectful-list.links" },
-  { id: "examples/met/fresco-effects/find_mask_paper.links", label: "Search with effectful callbacks" },
-  { id: "examples/met/thesis/handler_results.links", label: "Return effectful functions" },
+  "examples/basics.links",
+  "examples/met/fresco-types/application.links",
+  "examples/handlers/toggle.links",
+  "examples/handlers/count.links",
+  "examples/handlers/coin_composition.links",
+  "examples/handlers/module_import.links",
 ];
 
 const sources = new Map();
@@ -256,6 +255,10 @@ function showFiles() {
   for (const { id } of sources.values()) {
     const names = id.split("/");
     names.pop();
+    if (names[0] === "examples" && names[1] === "met") {
+      names.splice(1, 1);
+      if (names[1] === "thesis") names[1] = "met-thesis";
+    }
     let directory = names.length ? root : prelude;
     for (const name of names) {
       if (!directory.directories.has(name)) {
@@ -271,13 +274,13 @@ function showFiles() {
 }
 
 function showCommonExamples() {
-  for (const { id, label } of commonExamples) {
+  for (const id of commonExamples) {
     const entry = sources.get(id);
     if (!entry) continue;
     const item = document.createElement("li");
     const button = document.createElement("button");
     button.type = "button";
-    button.textContent = label ?? entry.title;
+    button.textContent = entry.title;
     button.dataset.exampleId = id;
     button.addEventListener("click", () => openSource(id, "example", sourceHref("example", id), button));
     exampleButtons.set(id, button);

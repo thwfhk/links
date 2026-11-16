@@ -92,7 +92,7 @@ a.site-name:hover {
 
 .site-layout {
   display: grid;
-  grid-template-columns: clamp(13rem, 23vw, 18rem) minmax(0, 1fr);
+  grid-template-columns: clamp(14rem, 24vw, 19rem) minmax(0, 1fr);
   align-items: start;
   gap: 0.75rem;
   padding-block-end: 1.5rem;
@@ -156,17 +156,22 @@ a.site-name:hover {
   margin-block-start: 0.25rem;
 }
 
-.source-directory {
+#source-files {
   overflow-wrap: anywhere;
 }
 
-.source-directory > summary, .source-directory a {
-  padding: 0.25rem;
-  font: var(--code-size)/1.4 var(--code-font);
+.source-directory > summary, #source-files a {
+  padding: 0.125rem 0.25rem;
+  font: 0.75rem/1.4 var(--code-font);
 }
 
 .source-directory > summary {
   cursor: pointer;
+}
+
+.source-directory > summary::marker {
+  color: var(--muted);
+  font-size: 0.75em;
 }
 
 .source-directory > summary:hover {
@@ -181,16 +186,16 @@ a.site-name:hover {
 
 .source-directory > ul {
   margin-block-end: 0.125rem;
-  margin-inline-start: 0.625rem;
-  padding-inline-start: 0.375rem;
+  margin-inline-start: 0.375rem;
+  padding-inline-start: 0.25rem;
   border-inline-start: 1px solid var(--border);
 }
 
-.source-directory a {
+#source-files a {
   display: block;
 }
 
-.source-directory a[aria-current="page"] {
+#source-files a[aria-current="page"] {
   border-radius: 0.25rem;
   background: var(--selected);
   font-weight: 700;
@@ -383,5 +388,9 @@ button:disabled {
     max-block-size: 12rem;
     overflow: auto;
     padding-inline: 0.125rem;
+  }
+
+  .source-directory > summary, #source-files a {
+    min-block-size: 1.5rem;
   }
 }

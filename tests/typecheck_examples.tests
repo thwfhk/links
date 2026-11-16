@@ -2,6 +2,10 @@
 config: tests/examples_default.config
 ---
 
+Typecheck example file examples/basics.links
+examples/basics.links
+filemode : true
+
 Typecheck example file examples/church.links
 examples/church.links
 filemode : true

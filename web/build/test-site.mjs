@@ -12,32 +12,38 @@ const dist = fileURLToPath(new URL("../dist", import.meta.url));
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const host = "https://smalllinks.test";
 
+const basics = "examples/basics.links";
 const factorial = "examples/factorial.links";
+const application = "examples/met/fresco-types/application.links";
 const importExample = "examples/handlers/module_import.links";
 const stateModule = "examples/handlers/shallow_state.links";
 const slowExample = "examples/handlers/tests.links";
 const coinExample = "examples/handlers/coin_composition.links";
+const countdown = "examples/handlers/count.links";
+const toggle = "examples/handlers/toggle.links";
 const effectfulList = "examples/met/fresco-effects/effectful-list.links";
 const searchExample = "examples/met/fresco-effects/find_mask_paper.links";
 const handlerResults = "examples/met/thesis/handler_results.links";
 const singleYield = "examples/met/fresco-effects/single-yield.links";
 const rankTwo = "examples/met/fresco-types/rank-two.links";
 const rejectedExample = "examples/met/fresco-effects/rejected/effectful-list-non-value.links";
-const quickExamples = [factorial, rankTwo, singleYield, importExample, effectfulList, searchExample, handlerResults];
+const quickExamples = [basics, application, toggle, countdown, coinExample, importExample];
 
 const expectedExamples = new Map([
+  [basics, "42"],
   ["examples/church.links", "4"],
   ["examples/extensible-case.links", '("A", "B", "C")'],
   [factorial, /\(f = 3628800, i = 10\)\]$/],
   [coinExample, "()"],
+  [countdown, "0"],
   [importExample, "(0, [0, 1, 2, 3, 4])"],
-  ["examples/handlers/toggle.links", "(true, true)"],
+  [toggle, "(true, true)"],
   ["examples/linearList.links", "LinCons(fun, LinNil)"],
   [effectfulList, "[1]"],
   [searchExample, "([1, 2, 3], Just(3), (Just(2), [1, 2]))"],
   ["examples/met/fresco-effects/list-map-fold.links", "([2, 3, 4], 123, 321, [1, 2, 3])"],
   [singleYield, "1"],
-  ["examples/met/fresco-types/application.links",
+  [application,
     "(((42, true), (42, true), (42, true)), ((42, true), (42, true)), ((42, true), (42, true)), " +
     "((42, true), (42, true), (42, true)), ((true, 42), (42, true)), (42, 42))"],
   [rankTwo, "(42, 42, (42, true), (), 42, (42, true))"],
@@ -487,7 +493,10 @@ for (const basePath of ["/", "/smalllinks/"]) {
         [...sources.keys()].sort());
       for (const link of fileLinks) {
         const id = new URL(link.href).searchParams.get("file");
-        const expected = id === "prelude.links" ? ["prelude"] : id.split("/").slice(0, -1);
+        const folder = posix.dirname(id)
+          .replace(/^examples\/met\/thesis(?=\/|$)/, "examples/met-thesis")
+          .replace(/^examples\/met(?=\/|$)/, "examples");
+        const expected = id === "prelude.links" ? ["prelude"] : folder.split("/");
         assert.deepEqual(containingDirectories(link).map(directory =>
           directory.querySelector(":scope > summary").textContent.trim()), expected, id);
         assert.equal(link.textContent.trim(), posix.basename(id));

@@ -18,11 +18,12 @@
 }
 
 .guide-prose {
+  max-inline-size: 82ch;
   line-height: 1.65;
 }
 
-.guide-prose p, .guide-prose ul, .guide-prose ol {
-  max-inline-size: 76ch;
+.guide-prose p {
+  text-wrap: pretty;
 }
 
 h1, h2, h3 {
