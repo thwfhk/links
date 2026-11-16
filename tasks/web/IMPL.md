@@ -5,6 +5,23 @@ significant decisions here as they are made, with links to the
 corresponding checks. The design below is the starting point for the
 browser build.
 
+## Build and serve
+
+Install the [native build dependencies](../../INSTALL.md) and Node.js
+18 or later. Run these commands from the repository root.
+
+```sh
+opam install js_of_ocaml-lwt
+npm --prefix web ci
+make web-demo
+python3 -m http.server 8000 --bind 127.0.0.1 --directory web/dist
+```
+
+Open `http://127.0.0.1:8000/`. The build puts the complete static site
+in `web/dist`. Serve that directory over HTTP for local use or copy
+its contents to a static host. All assets use paths relative to the
+site, so it can also be served under a path prefix.
+
 ## Runtime
 
 The [native CLI](../../bin/driver.ml) and

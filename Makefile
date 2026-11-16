@@ -45,12 +45,15 @@ rule-check: tools/rule-check
 	@echo "Applying rule check"
 	@tools/rule-check
 
-.PHONY: web-runtime test-web-runtime
+.PHONY: web-runtime test-web-runtime web-demo
 web-runtime:
 	$(BUILD) web/runtime/worker.js
 
 test-web-runtime: web-runtime
 	node web/runtime/test-worker.cjs _build/default/web/runtime/worker.js
+
+web-demo: web-runtime
+	node web/build/site.mjs
 
 doc/_build/html:
 	make -C doc html
