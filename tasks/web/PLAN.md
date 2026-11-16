@@ -190,6 +190,19 @@ short explanation and open its complete examples in the playground.
 Completion check — visitors can browse and run sources in the
 playground and navigate the guide from its chapter sidebar.
 
+### 8. Expand the guide and revise the example shortcuts
+
+- [x] **8.1** (`23b521dd`) Expand the chapters from the full SmallLinks
+  guide. Give modal effect types their own chapter with worked examples.
+  Align the guide's content column and code listings with the playground
+  layout.
+- [x] **8.2** (`7e6fb46e`) Make the example shortcuts a compact list
+  and include examples of modal effect types. Remove the generic import
+  note while keeping links to callers.
+
+Completion check — readers can open and run the guide's listings and
+find modal effect examples directly in the playground sidebar.
+
 ## Checks
 
 1. Compare browser and CLI results for arithmetic, prelude and list
@@ -213,6 +226,19 @@ playground and navigate the guide from its chapter sidebar.
    and `git diff --check` on the final changes.
 
 ## Status
+
+Milestone 8 is complete on `small-web`. The guide has 22 runnable
+listings and the playground has seven example shortcuts. Site checks
+used the source committed at `7e6fb46e`. Logs are in
+`/private/tmp/smalllinks-modal-guide.qkXLEM/`.
+
+| Check | Result and log |
+| --- | --- |
+| `make test-web-demo test-web-runtime` | Six Node/jsdom site checks and 15 worker checks passed. Checked example shortcuts, module links and all guide listings at the root and under a path prefix. `web-tests.log`. |
+| `./links` | All 22 listings, nine linked examples and three expected type errors passed using the guide at `23b521dd`. `/private/tmp/smalllinks-web-guide-native.log`. |
+| `make rule-check` and `git diff --check d1127f8d` | Passed. A direct scan covered tabs in the changed files because GNU find was unavailable. `rule-check.log` and `source-check.log`. |
+
+### Shared source pane verification
 
 Milestone 7 is complete on `small-web`. The playground includes file
 previews in the editor pane and the guide uses the same layout with a
