@@ -348,7 +348,7 @@ let interact : Context.t -> unit
   Settings.set BS.System.interactive_mode true;
   Printf.printf "%s%!" (val_of (Settings.get welcome_note));
   let rec loop context =
-    Parse.Readline.prepare_prompt ps1;
+    ParseReadline.prepare_prompt ps1;
     match Driver.Phases.recover_linear_bindings context (fun on_variable linear_variables ->
       I.readline ~on_variable ~linear_variables ps1 context) with
     | Error (Evalir.Exceptions.Early_exit (_, value), context) ->

@@ -108,114 +108,22 @@ let default_preprocessor () = from_option "" (Settings.get pp)
     intercept and retain the code that has been read (in order to give
     better error messages).
 **)
-let parse_string ?(pp=default_preprocessor ()) ?in_context:context grammar string =
-  let pp = normalize_pp pp
-  and context = LinksParser.normalize_context context in
-    LinksParser.read ?nlhook:None ~parse:grammar
-      ~infun:(reader_of_string ?pp string) ~name:"<string>" ~context ()
-
-let parse_channel ?interactive ?in_context:context grammar (channel, name) =
+let parse_reader ?interactive ?in_context:context grammar (reader, name) =
   let context = LinksParser.normalize_context context in
-    LinksParser.read ?nlhook:interactive ~parse:grammar
-      ~infun:(reader_of_channel channel) ~name:name ~context ()
+  LinksParser.read ?nlhook:interactive ~parse:grammar ~infun:reader ~name ~context ()
 
-let parse_file ?(pp=default_preprocessor ()) ?in_context:context grammar filename =
+let parse_string ?(pp=default_preprocessor ()) ?(filename="<string>") ?in_context grammar string =
+  let pp = normalize_pp pp in
+  parse_reader ?in_context grammar (reader_of_string ?pp string, filename)
+
+let parse_channel ?interactive ?in_context grammar (channel, name) =
+  parse_reader ?interactive ?in_context grammar (reader_of_channel channel, name)
+
+let parse_file ?(pp=default_preprocessor ()) ?in_context grammar filename =
   match normalize_pp pp with
-    | None -> parse_channel ?in_context:context grammar (open_in filename, filename)
+    | None -> parse_channel ?in_context grammar (open_in filename, filename)
     | Some pp ->
         Utility.call_with_open_infile filename
           (fun channel ->
-             let context = LinksParser.normalize_context context in
-             LinksParser.read ~nlhook:ignore
-               ~parse:grammar
-               ~infun:(reader_of_string ~pp (String.concat "\n" (lines channel)))
-               ~name:filename
-               ~context ())
-
-module Readline = struct
-  (** Readline settings. **)
-  (* Path for readline history file *)
-  let readline_history_path
-    = Settings.(option "readline_history_path"
-                |> to_string from_string_option
-                |> convert Utility.(Sys.expand ->- some)
-                |> sync)
-
-  let readline_history_path () =
-    match Settings.get readline_history_path with
-    | None -> Filename.concat (Unix.getenv "HOME") ".links_history"
-    | Some settings_path -> settings_path
-
-  (* Enable native readline? *)
-  let history_loaded = ref false
-  let load_history on =
-    if on then
-      (* Ensure we retain history *)
-      let _ = LNoise.history_load ~filename:(readline_history_path ()) in
-      let _ = LNoise.history_set ~max_length:100 in
-      history_loaded := true
-    else history_loaded := false
-
-  let native_readline
-    = Settings.(flag ~default:true "native_readline"
-                |> synopsis "Selects whether to use the native readline support in REPL mode"
-                |> convert parse_bool
-                |> action load_history
-                |> CLI.(add (short 'r' <&> long "rlwrap"))
-                |> sync)
-
-
-  let reader_of_readline ps1 =
-    let current_pos = ref 0 in
-    let buf = Buffer.create 30 in
-    let dots = String.make (String.length ps1 - 1) '.' ^ " " in
-    (* Gets an input from the command line, with a newline at the end, *)
-    let get_input prompt =
-      match LNoise.linenoise prompt with
-      | None -> ""
-      | Some inp ->
-         ignore (LNoise.history_add inp);
-         ignore (LNoise.history_save ~filename:(readline_history_path ())); (* FIXME todo: probably sub-optimal to save the history on every time. *)
-         inp ^ "\n" in
-
-    let initial_string = get_input ps1 in
-    Buffer.add_string buf initial_string;
-    (* Function to access the buffer (passed to Lexing.from_function) *)
-    let accessor_fun =
-      fun dst_buf nchars ->
-      let nchars = min nchars (Buffer.length buf - !current_pos) in
-      Buffer.blit buf !current_pos dst_buf 0 nchars;
-      current_pos := !current_pos + nchars;
-      nchars in
-    (* Function to populate the buffer (passed as newline callback) *)
-    let populate_fun =
-      fun _ ->
-      let input_str = get_input dots in
-      Buffer.add_string buf input_str in
-    (accessor_fun, populate_fun)
-
-  (* Reads lines in and parses them, given an initial prompt *)
-  let parse_readline ps1 ?in_context:context grammar =
-    let context = LinksParser.normalize_context context in
-    let (accessor_fun, populate_fun) = reader_of_readline ps1 in
-    LinksParser.read ?nlhook:(Some populate_fun) ~parse:grammar
-      ~infun:accessor_fun ~name:"<stdin>" ~context ()
-
-  let prepare_prompt : string -> unit
-    = fun ps1 ->
-    if not (Settings.get native_readline)
-    then (print_string ps1; flush stdout)
-
-  let parse : string -> (Sugartypes.sentence * position_context)
-    = fun ps1 ->
-    if Settings.get native_readline
-    then let () =
-           if not !history_loaded
-           then load_history true
-         in parse_readline ps1 interactive
-    else let make_dotter ps1 =
-           let dots = String.make (String.length ps1 - 1) '.' ^ " " in
-           fun _ -> print_string dots; flush stdout
-         in
-         parse_channel ~interactive:(make_dotter ps1) interactive (stdin, "<stdin>")
-end
+             let reader = reader_of_string ~pp (String.concat "\n" (lines channel)) in
+             parse_reader ?in_context grammar (reader, filename))

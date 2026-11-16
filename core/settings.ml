@@ -1130,9 +1130,11 @@ let config_loaded = ref false
 let config =
   (* Path to the default config file. *)
   let default_config_file =
-    match Utility.getenv "LINKS_CONFIG" with
-    | Some path -> Some (Filename.concat path "config")
-    | None -> Linkspath.config
+    if Linkspath.in_browser then None
+    else
+      match Utility.getenv "LINKS_CONFIG" with
+      | Some path -> Some (Filename.concat path "config")
+      | None -> Linkspath.config
   in
   (* Load default is the action attached to the [config] setting. If
      [config_loaded] is false it will try to load whatever argument it
@@ -1183,7 +1185,7 @@ let synchronise_defined : unit -> unit
 (* Parses CLI arguments. It handles `--config=file` argument specially
    as whatever key-value pairs are produced by parsing [file] need to
    be inserted into the command stream directly following [--config]. *)
-let () =
+let initialise_cli () =
   (* Parses a config file, the resulting key-value pairs are given
      time relative to [time]. Also this function shifts the global
      [Clock]. *)
@@ -1225,4 +1227,6 @@ let () =
   let arguments = List.map (fun x -> make_unhandled x `System) result.CLI.Parser.arguments in
   handle_all (preprocess arguments);
   (* Force load the default config, if no other config has been loaded. *)
-  ignore (sync config |> trigger `System);
+  ignore (sync config |> trigger `System)
+
+let () = if not Linkspath.in_browser then initialise_cli ()

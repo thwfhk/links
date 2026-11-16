@@ -2,7 +2,8 @@ open Utility
 
 (* Paths to look for .links files in chasing pass *)
 let links_file_paths
-  = Settings.(multi_option ~default:["."] "links_file_paths"
+  = let default = if Linkspath.in_browser then [] else ["."] in
+    Settings.(multi_option ~default "links_file_paths"
               |> synopsis "Search paths for Links modules"
               |> hint "<dir[,dir']...>"
               |> keep_default
@@ -40,7 +41,10 @@ let try_parse_file filename =
 
   let poss_dirs =
     let paths = Settings.get links_file_paths in
-    "" :: poss_stdlib_dir @ (List.map (check_n_chop) paths)
+    let dirs = poss_stdlib_dir @ List.map check_n_chop paths in
+    if not Linkspath.in_browser then "" :: dirs
+    else if Filename.is_relative filename then dirs
+    else [""]
   in
 
   (* Loop through, trying to open the module with each path *)

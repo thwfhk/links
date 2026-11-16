@@ -22,7 +22,7 @@ module type EVALUATOR = sig
   val apply : Value.continuation -> Value.env -> v * v list -> result
   val apply_cont : Value.continuation -> Value.env -> v -> result
   val run_program : ?on_variable:(Ir.var -> unit) -> ?move_observations:Ir.move_observations ->
-    Value.env -> Ir.program -> (Value.env * v)
+    Value.env -> Ir.program -> result
 end
 
 module Exceptions = struct
@@ -73,10 +73,26 @@ struct
     checkpoint : Ir.var -> bool;
   }
 
-  let observer = ref { read = ignore; capture = ignore; checkpoint = (fun _ -> false) }
+  (* Each evaluation keeps its observer and pause counter across Lwt callbacks. *)
+  let steps_between_pauses = 100
+
+  type evaluation = {
+    observer : move_observer;
+    mutable steps_until_pause : int;
+  }
+
+  let evaluation_key = Lwt.new_key ()
+
+  let default_evaluation = {
+    observer = { read = ignore; capture = ignore; checkpoint = (fun _ -> false) };
+    steps_until_pause = steps_between_pauses;
+  }
+
+  let current_evaluation () =
+    Option.value ~default:default_evaluation (Lwt.get evaluation_key)
 
   let lookup_var var env =
-    !observer.read var;
+    (current_evaluation ()).observer.read var;
     if Lib.is_primitive_var var then Lib.primitive_stub_by_code var
     else
       match lookup_fun_def var with
@@ -85,13 +101,11 @@ struct
       | Some v -> v
 
   (* Break the OCaml call stack during long evaluations. *)
-  let steps_between_pauses = 100
-  let steps_until_pause = ref steps_between_pauses
-
   let yield next =
-    decr steps_until_pause;
-    if !steps_until_pause = 0 then begin
-      steps_until_pause := steps_between_pauses;
+    let evaluation = current_evaluation () in
+    evaluation.steps_until_pause <- evaluation.steps_until_pause - 1;
+    if evaluation.steps_until_pause = 0 then begin
+      evaluation.steps_until_pause <- steps_between_pauses;
       Lwt.pause () >>= next
     end else
       next ()
@@ -110,7 +124,7 @@ struct
     | Constant c -> Lwt.return (constant c)
     | Variable var ->
         let value = lookup_var var env in
-        !observer.capture var;
+        (current_evaluation ()).observer.capture var;
         Lwt.return value
     | Extend (fields, r) ->
         begin
@@ -161,7 +175,7 @@ struct
       apply K.empty env (f, args) >|= snd
     | Closure (f, _, v) ->
       value env v >>= fun v ->
-      !observer.capture f;
+      (current_evaluation ()).observer.capture f;
       Lwt.return (`FunctionPtr (f, Some v))
     | Coerce (v, _) -> value env v
   and apply (cont : continuation) env : Value.t * Value.t list -> result = function
@@ -208,7 +222,7 @@ struct
          match b with
          | Let (b, (_, tc)) ->
             let var = Var.var_of_binder b in
-            if !observer.checkpoint var then computation env cont (bs, tailcomp)
+            if (current_evaluation ()).observer.checkpoint var then computation env cont (bs, tailcomp)
             else
               let locals = Value.Env.localise env var in
               let cont' =
@@ -305,7 +319,6 @@ struct
     fun env -> computation env K.empty
 
   let run_program ?(on_variable = ignore) ?(move_observations = Ir.empty_move_observations) env program =
-    let previous = !observer in
     (* A later binding may exit or abandon its continuation before the
        residual values run. Its pending reads count on interruption. A
        normal return reaches Forget before the ordinary reads resume. *)
@@ -325,18 +338,19 @@ struct
           true in
     let capture var =
       Option.iter (IntSet.iter on_variable) (IntMap.lookup var move_observations.captures) in
-    observer := { read = on_variable; checkpoint; capture };
-    Fun.protect ~finally:(fun () -> observer := previous) (fun () ->
-      try
-        steps_until_pause := steps_between_pauses;
-        Lwt_main.run (eval env program)
-      with exn ->
-        let backtrace = Printexc.get_raw_backtrace () in
+    let evaluation = {
+      observer = { read = on_variable; checkpoint; capture };
+      steps_until_pause = steps_between_pauses;
+    } in
+    Lwt.catch
+      (fun () -> Lwt.with_value evaluation_key (Some evaluation) (fun () -> eval env program))
+      (fun exn ->
         IntMap.iter (fun _ -> IntSet.iter on_variable) !pending;
-        match exn with
-        | NotFound s -> raise (internal_error ("NotFound " ^ s ^ " while interpreting."))
-        | Not_found -> raise (internal_error "Not_found while interpreting.")
-        | _ -> Printexc.raise_with_backtrace exn backtrace)
+        let exn = match exn with
+          | NotFound s -> internal_error ("NotFound " ^ s ^ " while interpreting.")
+          | Not_found -> internal_error "Not_found while interpreting."
+          | _ -> exn in
+        Lwt.fail exn)
 end
 
 module rec Eval : EVALUATOR = Evaluator (Value.Continuation.Evaluation (Eval))

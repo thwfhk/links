@@ -10,6 +10,5 @@
   (name links_core)
   (public_name links.core)
   (synopsis "Links compiler library")
-  (modes native)
-  (libraries str linenoise safepass unix lwt lwt.unix menhirLib calendar)
+  (libraries str unix safepass lwt menhirLib calendar)
   (preprocess (pps ppx_deriving.std)))

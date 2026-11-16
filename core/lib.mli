@@ -3,6 +3,12 @@ val equal : Value.t -> Value.t -> bool
 val less : Value.t -> Value.t -> bool
 val less_or_equal : Value.t -> Value.t -> bool
 
+exception Browser_exit of int
+
+(** Capture [print] output in a browser worker. The [sysexit] primitive
+    raises [Browser_exit], and native-only primitives raise runtime errors. *)
+val set_browser_output : (string -> unit) -> unit
+
 type primitive
 
 val primitive_names : string list

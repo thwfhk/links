@@ -15,6 +15,7 @@ val program : (Sugartypes.binding list * Sugartypes.phrase option)
                 LinksLexer.grammar
 
 val parse_string  : ?pp:string
+                  -> ?filename:string
                   -> ?in_context:LinksLexer.lexer_context
                   -> 'a LinksLexer.grammar
                   -> string
@@ -30,7 +31,9 @@ val parse_channel : ?interactive:(unit -> unit)
                   -> (in_channel * string)
                   -> 'a * position_context
 
-module Readline: sig
-  val prepare_prompt : string -> unit
-  val parse : string -> (Sugartypes.sentence * position_context)
-end
+(* Read source with a Lexing.from_function reader and a source name. *)
+val parse_reader  : ?interactive:(unit -> unit)
+                  -> ?in_context:LinksLexer.lexer_context
+                  -> 'a LinksLexer.grammar
+                  -> ((bytes -> int -> int) * string)
+                  -> 'a * position_context

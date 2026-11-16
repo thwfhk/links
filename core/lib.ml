@@ -14,6 +14,22 @@ let runtime_type_error error =
      "This should not happen if the type system / checker is correct. " ^
      "Please file a bug report.")
 
+exception Browser_exit of int
+
+let browser_output = ref None
+
+let set_browser_output write = browser_output := Some write
+
+let print message =
+  match !browser_output with
+  | Some write -> write message
+  | None -> print_string message; flush stdout
+
+let system_exit status =
+  match !browser_output with
+  | Some _ -> raise (Browser_exit status)
+  | None -> exit status
+
 (* Alias environment *)
 module AliasEnv = Env.String
 
@@ -35,6 +51,14 @@ type primitive =
 type pure = PURE | IMPURE
 
 let pure_pfun fn = `PFun(fun xs -> Lwt.return (fn xs))
+
+let native_primitive name (`PFun apply, datatype, purity) =
+  let run args =
+    match !browser_output with
+    | Some _ -> runtime_error (name ^ " is unavailable in the browser.")
+    | None -> apply args
+  in
+  name, (`PFun run, datatype, purity)
 
 let mk_binop_fn impl unbox_fn constr = function
     | [x; y] -> Lwt.return (constr (impl (unbox_fn x) (unbox_fn y)))
@@ -274,7 +298,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
                                  "[] ((String) -> Float)" IMPURE;
 
   "sysexit",
-  (p1 (fun ret -> exit (Value.unbox_int ret)),
+  (p1 (fun ret -> system_exit (Value.unbox_int ret)),
    datatype "[wild] ((Int) -> a)",
    IMPURE);
 
@@ -387,7 +411,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
   IMPURE);
 
   "print",
-  (p1 (fun msg -> print_string (Value.unbox_string msg); flush stdout; `Record []),
+  (p1 (fun msg -> print (Value.unbox_string msg); `Record []),
    datatype "[wild] ((String) -> ())",
   IMPURE);
 
@@ -427,7 +451,8 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
    datatype "[wild] (() -> Int)",
    IMPURE);
 
-  "serverTimeMilliseconds",
+  (* The current epoch time in milliseconds exceeds a browser Int. *)
+  native_primitive "serverTimeMilliseconds"
   (pure_pfun (fun _ ->
                Value.box_int(time_milliseconds())),
    datatype "[wild] (() -> Int)",
@@ -694,7 +719,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
       datatype "[wild] (() -> Int)",
       IMPURE);
 
-    "connectSocket",
+    native_primitive "connectSocket"
     (p2 (fun serverv portv ->
                   try
                     let server = Value.unbox_string serverv in
@@ -712,7 +737,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
                   with _ -> `Variant ("Nothing", `Record [])),
      datatype "[wild] ((String, Int) -> (|Nothing|Just:Socket|))",
      IMPURE);
-    "writeToSocket",
+    native_primitive "writeToSocket"
     (p2 (fun messagev socketv ->
                   let message = Value.unbox_string messagev in
                   let (_, outc) = Value.unbox_socket socketv in
@@ -721,7 +746,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
                   `Record []),
      datatype "[wild] ((String, Socket) -> ())",
      IMPURE);
-    "readFromSocket",
+    native_primitive "readFromSocket"
     (p1 (fun socketv ->
                   let (inc, _) = Value.unbox_socket socketv in
                   try
@@ -732,7 +757,7 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
                     `Variant ("Nothing", `Record [])),
      datatype "[wild] ((Socket) -> (|Nothing|Just:String|))",
      IMPURE);
-    "closeSocket",
+    native_primitive "closeSocket"
     (p1 (fun socketv ->
                   let (inc, _) = Value.unbox_socket socketv in
                   Unix.shutdown (Unix.descr_of_in_channel inc) Unix.SHUTDOWN_SEND;
@@ -741,12 +766,12 @@ let env : (string * (primitive * Types.datatype * pure)) list = [
      IMPURE);
     (* Crypt API *)
 
-    "crypt",
+    native_primitive "crypt"
     (p1 (Value.box_string -<- Bcrypt.string_of_hash -<- (fun s -> Bcrypt.hash ?count:None ?seed:None s) -<- Value.unbox_string),
     datatype "[wild] ((String) -> String)",
     PURE);
 
-    "verify",
+    native_primitive "verify"
     (p2 (fun str -> Value.box_bool -<- (Bcrypt.verify (Value.unbox_string str)) -<- Bcrypt.hash_of_string -<- Value.unbox_string),
     datatype "[] ((String, String) -> Bool)",
     PURE);
