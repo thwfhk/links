@@ -38,10 +38,13 @@ in progress. Assign bounded work to subagents and one writer per file.
 
 ## Tracking
 
-Commit each implementation item separately and keep each commit
-buildable. Record the commit ID and mark the item complete after the
-checks pass. At each pause, record the next action, blockers and latest
-checks under [Status](#status).
+Track each implementation item and follow-up in this plan and commit
+each separately. Keep each commit buildable. Record the commit ID and
+mark the item complete after the checks pass. Put follow-up changes to
+the playground or guide interface under
+[Web design updates](#web-design-updates).
+At each pause, record the next action, blockers and latest checks under
+[Status](#status).
 For builds and tests, record the command, revision, result, and log path.
 
 ## Milestones
@@ -167,6 +170,8 @@ use the catalogue from 5.1.
 
 Completion check — visitors can find a language topic, read a
 short explanation and open its complete examples in the playground.
+
+## Web design updates
 
 ### 7. Combine source browsing and editing
 
