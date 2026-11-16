@@ -17,11 +17,13 @@ const importExample = "examples/handlers/module_import.links";
 const stateModule = "examples/handlers/shallow_state.links";
 const slowExample = "examples/handlers/tests.links";
 const coinExample = "examples/handlers/coin_composition.links";
+const effectfulList = "examples/met/fresco-effects/effectful-list.links";
 const searchExample = "examples/met/fresco-effects/find_mask_paper.links";
+const handlerResults = "examples/met/thesis/handler_results.links";
 const singleYield = "examples/met/fresco-effects/single-yield.links";
 const rankTwo = "examples/met/fresco-types/rank-two.links";
 const rejectedExample = "examples/met/fresco-effects/rejected/effectful-list-non-value.links";
-const quickExamples = [factorial, rankTwo, singleYield, importExample];
+const quickExamples = [factorial, rankTwo, singleYield, importExample, effectfulList, searchExample, handlerResults];
 
 const expectedExamples = new Map([
   ["examples/church.links", "4"],
@@ -31,7 +33,7 @@ const expectedExamples = new Map([
   [importExample, "(0, [0, 1, 2, 3, 4])"],
   ["examples/handlers/toggle.links", "(true, true)"],
   ["examples/linearList.links", "LinCons(fun, LinNil)"],
-  ["examples/met/fresco-effects/effectful-list.links", "[1]"],
+  [effectfulList, "[1]"],
   [searchExample, "([1, 2, 3], Just(3), (Just(2), [1, 2]))"],
   ["examples/met/fresco-effects/list-map-fold.links", "([2, 3, 4], 123, 321, [1, 2, 3])"],
   [singleYield, "1"],
@@ -39,7 +41,7 @@ const expectedExamples = new Map([
     "(((42, true), (42, true), (42, true)), ((42, true), (42, true)), ((42, true), (42, true)), " +
     "((42, true), (42, true), (42, true)), ((true, 42), (42, true)), (42, 42))"],
   [rankTwo, "(42, 42, (42, true), (), 42, (42, true))"],
-  ["examples/met/thesis/handler_results.links", '(52, (42, true, "second"))'],
+  [handlerResults, '(52, (42, true, "second"))'],
   ["examples/met/thesis/print_list.links", '["digit 3", "digit 1", "digit 4"]'],
   ["examples/met/thesis/yield_state.links", '([42], ["callback"])'],
   ["examples/paginate.links", '[(meaning = "a round fruit", word = "apple"), (meaning = "a stone fruit", word = "apricot")]'],
@@ -306,10 +308,11 @@ test("Check and run source and the published examples at the site root", async (
     assert.equal(runButton.textContent.trim(), "Run");
     assert.equal(stop.textContent.trim(), "Stop");
     assert.equal(newProgram.textContent.trim(), "New program");
+    assert.equal(document.getElementById("examples-heading").textContent.trim(), "Examples");
     const buttons = () => [...examples.querySelectorAll("button[data-example-id]")];
     await waitFor(() => buttons().length, quickExamples.length, "Quick example count");
     const byId = new Map(buttons().map(button => [button.dataset.exampleId, button]));
-    assert.deepEqual([...byId.keys()].sort(), [...quickExamples].sort());
+    assert.deepEqual([...byId.keys()], quickExamples);
 
     const files = document.getElementById("source-files");
     await waitFor(() => linksTo(files, "index.html", "file").length, sources.size, "File browser");
@@ -448,6 +451,7 @@ for (const basePath of ["/", "/smalllinks/"]) {
       followPreview(imports, stateModule);
       await expectSourcePreview(document, stateModule);
       assert.equal(document.activeElement, view.contentDOM, "Following an import moves focus into the preview");
+      assert.ok(document.getElementById("example-note").hidden, "No generic note for the imported module");
       assert.ok(!document.getElementById("example-caller-row").hidden);
       followPreview(document.getElementById("example-callers"), importExample);
       await expectSourcePreview(document, importExample);

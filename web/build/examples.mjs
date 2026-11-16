@@ -99,7 +99,6 @@ async function catalogue(root) {
       if (!dependency) throw new Error(path + " is missing from the source catalogue");
       source.imports.push({ name, id: path });
       dependency.callers.push(id);
-      dependency.note ||= "Import this file from a caller to use its definitions.";
     }
   }
   return [...sources.values()];

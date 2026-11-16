@@ -43,10 +43,13 @@ const failureStatuses = {
 const starterSource = textarea.defaultValue;
 const homeHref = new URL("./index.html", window.location.href).href;
 const commonExamples = [
-  "examples/factorial.links",
-  "examples/met/fresco-types/rank-two.links",
-  "examples/met/fresco-effects/single-yield.links",
-  "examples/handlers/module_import.links",
+  { id: "examples/factorial.links" },
+  { id: "examples/met/fresco-types/rank-two.links" },
+  { id: "examples/met/fresco-effects/single-yield.links" },
+  { id: "examples/handlers/module_import.links" },
+  { id: "examples/met/fresco-effects/effectful-list.links" },
+  { id: "examples/met/fresco-effects/find_mask_paper.links", label: "Search with effectful callbacks" },
+  { id: "examples/met/thesis/handler_results.links", label: "Return effectful functions" },
 ];
 
 const sources = new Map();
@@ -246,16 +249,18 @@ function showFiles() {
 }
 
 function showCommonExamples() {
-  for (const id of commonExamples) {
+  for (const { id, label } of commonExamples) {
     const entry = sources.get(id);
     if (!entry) continue;
+    const item = document.createElement("li");
     const button = document.createElement("button");
     button.type = "button";
-    button.textContent = entry.title;
+    button.textContent = label ?? entry.title;
     button.dataset.exampleId = id;
     button.addEventListener("click", () => openSource(id, "example", sourceHref("example", id), button));
     exampleButtons.set(id, button);
-    exampleList.append(button);
+    item.append(button);
+    exampleList.append(item);
   }
 }
 
