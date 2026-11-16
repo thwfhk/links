@@ -103,8 +103,8 @@ Depends on milestones 1–3.
 - [x] **4.2** (`25352686`) Test the page with typed code, an edited example, an
   imported example, a type error, a runtime error and a stopped run.
   Check that the next request starts cleanly after a timeout.
-- [x] **4.3** Run the native checks below, record the combined results,
-  and mark the plan complete when the required checks pass.
+- [x] **4.3** (`82cf4685`) Run the native checks below, record the
+  combined results and mark the plan complete when the checks pass.
 
 ## Checks
 
