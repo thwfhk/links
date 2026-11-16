@@ -26,6 +26,7 @@ function readString(stream, state) {
 }
 
 const modalityTag = Tag.define();
+const afterHandleArguments = Symbol();
 
 // The ordinary token forms follow core/lexer.mll.
 function readToken(stream, state, group) {
@@ -89,7 +90,7 @@ function trackToken(groups, group, token, style) {
     groups.pop();
     const outer = groups[groups.length - 1];
     outer.couldApplyType = (!group.typeGroup && !group.kind) || group.kind === "typeArguments";
-    if (group.kind === "handle") outer.previous = "handleArguments";
+    if (group.kind === "handle") outer.previous = afterHandleArguments;
     return group.modality;
   }
   if (group.inType && (token === "[" || token === "<")) {
@@ -102,7 +103,7 @@ function trackToken(groups, group, token, style) {
     const close = { "(": ")", "{": "}", "[": "]" }[token];
     let kind = null;
     if (!group.inType && token === "(") {
-      if (previous === "for" || previous === "handleArguments") kind = "generators";
+      if (previous === "for" || previous === afterHandleArguments) kind = "generators";
       if (previous === "handle") kind = "handle";
       if (previous === "if" || previous === "where" || previous === "orderby") kind = "control";
     }
