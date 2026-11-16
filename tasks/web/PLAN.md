@@ -14,19 +14,23 @@ Work stays on `small-web`, based on `small-met` at `59ef2511`.
    **Run** also shows the result and printed output. Each submission
    starts from the standard prelude. **Stop** ends the current request.
 2. Let visitors load and edit existing repository examples. Include
-   examples of functions, polymorphism and effect handlers. Run examples
-   with imports when their dependencies are bundled with the site.
+   examples of functions, polymorphism and effect handlers. Group the
+   runnable choices by topic in the playground. Run examples with
+   imports when their dependencies are bundled with the site.
    Access to local files, raw TCP sockets and other host facilities is
    outside the initial scope.
-3. Include a browsable copy of the language guide in the static build.
-   Syntax highlighting is optional.
+3. Provide a source viewer for repository examples and the demo's
+   bundled modules. Let visitors inspect the files an example imports
+   and open runnable examples in the playground.
+4. Include concise language documentation based on the existing guide.
+   Link complete examples from the documentation to the playground.
 
 ## Chat ownership
 
 | Codex chat | Work | Chat ID |
 | --- | --- | --- |
-| SmallLinks web demo | Coordination, browser runtime, example and guide packaging, integration and final checks. | `01a1e515-5976-7681-af81-ca86443c6718` |
-| SmallLinks playground page design | Milestone 2, including the editor, example selector, controls, results, guide navigation and optional CodeMirror highlighting. | `01a1e532-55bf-77d0-ac7e-b09c2f5119e0` |
+| SmallLinks web demo | Coordination, example catalogue and worker packaging, static build integration and final checks. | `01a1e515-5976-7681-af81-ca86443c6718` |
+| SmallLinks playground page design | Editor and controls, source viewer, and the structure and presentation of the web language documentation. | `01a1e532-55bf-77d0-ac7e-b09c2f5119e0` |
 
 The [worker interface](IMPL.md#worker-interface) is shared across both
 chats. The webpage can use a mock worker while the runtime build is
@@ -106,6 +110,64 @@ Depends on milestones 1–3.
 - [x] **4.3** (`82cf4685`) Run the native checks below, record the
   combined results and mark the plan complete when the checks pass.
 
+### 5. Expand the example catalogue and add a source viewer
+
+- [x] **5.1** (`be970847`) Index the tracked `.links` files under
+  `examples/` and the prelude and library sources used by the demo.
+  Expand the runnable selection with existing examples of functions,
+  lists, linear types and handlers. Start with `church.links`, `linearList.links`,
+  `list-map-fold.links` and `handler_results.links`. Verify each
+  advertised runnable example with the worker under the playground's
+  timeout. Include its import dependencies.
+- [x] **5.2** (`476fe5a9`) Add a read-only source viewer grouped by
+  repository directory. Show the file path and let visitors follow
+  imports.
+  Provide a link that loads a runnable file in the playground for
+  editing, checking and running. Show which files require a caller,
+  rely on unavailable host features, exceed the timeout or illustrate
+  an expected type error. Link support modules to a runnable caller
+  where one exists.
+- [x] **5.3** (`49d892af`) Replace the example dropdown with a
+  catalogue organised by topic. Let visitors load an example or
+  inspect its source from the catalogue. From
+  [the shallow-handler example](../../examples/handlers/module_import.links),
+  follow `Shallow_state` to
+  [`shallow_state.links`](../../examples/handlers/shallow_state.links).
+  The current build already copies that file. Confirm that opening it
+  in the viewer preserves the editor contents and that the calling
+  example still runs with its import.
+
+Completion check — visitors can browse the example and module sources,
+follow imports and load an expanded selection of verified programs.
+
+### 6. Reorganise the web language documentation
+
+The chapter outline can proceed alongside milestone 5. Runnable links
+use the catalogue from 5.1.
+
+- [x] **6.1** (`161a62fc`) Write a concise set of web chapters based on
+  [the existing guide](../met/GUIDE.md). Start with basics, data and
+  patterns, then cover functions and types, modules and imports,
+  effects and handlers, and modal types and linearity. Give each
+  chapter a short explanation of the syntax and a few examples with
+  their results. Use the
+  [OCaml Manual's core-language chapter](https://ocaml.org/manual/5.5/coreexamples.html)
+  as a model for topic navigation and worked examples. Link to the
+  full SmallLinks guide for detailed rules.
+- [x] **6.2** (`27f15ea3`) Add chapter navigation and links to load complete
+  examples in the playground. Reuse repository examples where
+  they illustrate the topic. Preserve the source name and import
+  context for multi-file examples. Give short syntax fragments the
+  context needed to understand them.
+- [x] **6.3** Verify the generated documentation, source viewer and
+  runnable links together. Use Node and a simulated DOM at the site
+  root and under a path prefix. Check that each runnable link loads
+  the code shown or referenced by the chapter and runs with the
+  expected result. Check chapter anchors and links to source files.
+
+Completion check — visitors can find a language topic, read a
+short explanation and open its complete examples in the playground.
+
 ## Checks
 
 1. Compare browser and CLI results for arithmetic, prelude and list
@@ -117,8 +179,8 @@ Depends on milestones 1–3.
 2. Load the static build in Node using a simulated DOM. Verify that
    the page resolves its assets at the site root and under a path
    prefix, that its controls have accessible names, and that it
-   communicates with the compiled worker. Use Node checks for this
-   milestone.
+   communicates with the compiled worker. Exercise the source viewer,
+   imported files and documentation links in the same checks.
 3. Rebuild native SmallLinks with `make` after changing shared code.
    Run the affected regression suites, including `handlers`,
    `effect_annotations`, `native`, `modules` and `typecheck_examples`
@@ -130,13 +192,26 @@ Depends on milestones 1–3.
 
 ## Status
 
-The demo is complete on `small-web`. The
-[static build](IMPL.md#build-and-serve) is in `web/dist`.
-It includes the CodeMirror editor, five runnable examples and the
-language guide. The [examples and guide notes](IMPL.md#examples-and-guide)
-record the deferred handler test driver.
+Milestones 5 and 6 are complete on `small-web`. The
+[static build](IMPL.md#build-and-serve) in `web/dist` has 17
+runnable examples in five groups, 99 browsable source files and a
+six-chapter guide with 11 listings that open in the playground.
+The [examples and guide notes](IMPL.md#examples-and-guide) record
+the source-only handler test driver.
 
-Final checks used the source in `25352686`. Logs are in
+Follow-up checks used `bf98bf32` and the integration tests and
+documentation from 6.3. That revision includes the corrections from
+the guide review. Logs are in `/private/tmp/smalllinks-web-followup/`.
+
+| Check | Result and log |
+| --- | --- |
+| `make test-web-demo test-web-runtime` | All six Node/jsdom site checks and 15 worker checks passed. Verified all 17 runnable examples, the imported module and caller links, and every guide listing and runnable link at the root and under a path prefix. `web-tests-final.log`. |
+| `./links -e` on each guide listing | All 11 values matched the guide. The import listing used `--path=examples/handlers`. `guide-snippets-final.log`. |
+| `make rule-check` and `git diff --check b77c8b5f` | Passed. The GNU find tab rule was skipped, and a direct whitespace and local link scan passed. `rule-check.log`, `source-check.log`. |
+
+### Initial demo verification
+
+The milestone 4 checks used the source in `25352686`. Logs are in
 `/private/tmp/smalllinks-web.1oRIDH/final/`. The worker used OCaml
 5.4.0 and `js_of_ocaml` 6.2.0. Web checks ran in Node and jsdom.
 

@@ -138,8 +138,17 @@ deferred. Its [random π estimate](../../examples/handlers/pi.links)
 exceeded 60 seconds in the browser worker. The short module import
 example exercises its shallow state handler within the demo timeout.
 
-[The guide renderer](../../web/build/guide.mjs) renders
-[the guide](../met/GUIDE.md) at build time with Markdown-it. It
-preserves the table of contents, heading anchors, tables and fenced
-code blocks. The search example opens in the editor. Other repository
-links point to the corresponding `small-met` source pages.
+The [source viewer](../../web/playground/sources.html) groups files by
+repository directory. It opens a file from a `file` parameter in the
+URL and shows its imports and callers. Source links in the playground
+open in a new tab so they preserve the current editor text. Runnable
+and expected-error files can open in the editor with their original
+path and import context.
+
+The [guide renderer](../../web/build/guide.mjs) renders the concise
+[web guide](../../web/guide.md) at build time with Markdown-it. It
+generates chapter navigation and links to the full guide, repository
+examples and browsable sources. A standalone listing opens the editor
+with its exact source in the `code` parameter. A listing that imports
+a module uses the `example` parameter to retain the entry file and
+its imports.

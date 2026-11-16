@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { resolve, sep } from "node:path";
+import { posix, resolve, sep } from "node:path";
 import { test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
@@ -12,13 +12,43 @@ const dist = fileURLToPath(new URL("../dist", import.meta.url));
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const host = "https://smalllinks.test";
 
+const importExample = "examples/handlers/module_import.links";
+const stateModule = "examples/handlers/shallow_state.links";
+const slowExample = "examples/handlers/tests.links";
+const coinExample = "examples/handlers/coin_composition.links";
+const searchExample = "examples/met/fresco-effects/find_mask_paper.links";
+const rejectedExample = "examples/met/fresco-effects/rejected/effectful-list-non-value.links";
+
 const expectedExamples = new Map([
+  ["examples/church.links", "4"],
+  ["examples/extensible-case.links", '("A", "B", "C")'],
   ["examples/factorial.links", /\(f = 3628800, i = 10\)\]$/],
+  [coinExample, "()"],
+  [importExample, "(0, [0, 1, 2, 3, 4])"],
+  ["examples/handlers/toggle.links", "(true, true)"],
+  ["examples/linearList.links", "LinCons(fun, LinNil)"],
+  ["examples/met/fresco-effects/effectful-list.links", "[1]"],
+  [searchExample, "([1, 2, 3], Just(3), (Just(2), [1, 2]))"],
+  ["examples/met/fresco-effects/list-map-fold.links", "([2, 3, 4], 123, 321, [1, 2, 3])"],
   ["examples/met/fresco-effects/single-yield.links", "1"],
+  ["examples/met/fresco-types/application.links",
+    "(((42, true), (42, true), (42, true)), ((42, true), (42, true)), ((42, true), (42, true)), " +
+    "((42, true), (42, true), (42, true)), ((true, 42), (42, true)), (42, 42))"],
   ["examples/met/fresco-types/rank-two.links", "(42, 42, (42, true), (), 42, (42, true))"],
-  ["examples/met/fresco-effects/find_mask_paper.links", "([1, 2, 3], Just(3), (Just(2), [1, 2]))"],
-  ["examples/handlers/module_import.links", "(0, [0, 1, 2, 3, 4])"],
+  ["examples/met/thesis/handler_results.links", '(52, (42, true, "second"))'],
+  ["examples/met/thesis/print_list.links", '["digit 3", "digit 1", "digit 4"]'],
+  ["examples/met/thesis/yield_state.links", '([42], ["callback"])'],
+  ["examples/paginate.links", '[(meaning = "a round fruit", word = "apple"), (meaning = "a stone fruit", word = "apricot")]'],
 ]);
+
+const guideSnippetValues = [
+  '(42, "yes")', "25", "42", "42", "[12, 22]", "(42, true)", "42",
+  expectedExamples.get(importExample), "[1, 2]", "43", "42",
+];
+
+const catalogue = JSON.parse(await readFile(resolve(dist, "examples.json"), "utf8"));
+const sourceCatalogue = JSON.parse(await readFile(resolve(dist, "sources.json"), "utf8"));
+const sources = new Map(sourceCatalogue.map(source => [source.id, source]));
 
 // Adapt the browser message API while running the unmodified worker bundle.
 const workerBootstrap = `
@@ -130,17 +160,89 @@ function editSource(window, source) {
   }
 }
 
-function selectExample(window, id) {
-  const menu = window.document.getElementById("example");
-  menu.value = id;
-  assert.equal(menu.value, id);
-  menu.dispatchEvent(new window.Event("change", { bubbles: true }));
+async function expectLoadedExample(window, id) {
+  const { document } = window;
+  const source = await readFile(resolve(root, id), "utf8");
+  await waitFor(() => getSource(document), source, id);
+  await waitFor(() => document.getElementById("check").disabled, false, `Loaded ${id}`);
+}
+
+function linksTo(element, page, parameter, id) {
+  return [...element.querySelectorAll("a[href]")].filter(link => {
+    const url = new URL(link.href);
+    return url.pathname.endsWith(`/${page}`) &&
+      (!parameter || (id ? url.searchParams.get(parameter) === id : url.searchParams.has(parameter)));
+  });
+}
+
+function requireLink(element, page, parameter, id) {
+  const link = linksTo(element, page, parameter, id)[0];
+  assert.ok(link, `Missing link to ${page}${id ? ` for ${id}` : ""}`);
+  assert.ok(link.getAttribute("aria-label")?.trim() || link.textContent.trim(), `Unnamed link to ${link.href}`);
+  return link;
+}
+
+async function expectSourcePage(document, id) {
+  const { title, note } = sources.get(id);
+  const source = await readFile(resolve(root, id), "utf8");
+  await expectText(document, "source-title", title);
+  await expectText(document, "source-path", id);
+  if (note) await expectText(document, "source-note", note);
+  await expectText(document, "source-code", source);
+  const preview = document.getElementById("source-code").closest("pre");
+  assert.equal(preview.getAttribute("aria-label"), "Source code");
+  assert.ok(!preview.closest('[contenteditable]:not([contenteditable="false"])'), `${id} must be read-only`);
 }
 
 async function run(document, value) {
-  document.getElementById("run").click();
-  await expectText(document, "value", value);
+  const button = document.getElementById("run");
+  assert.ok(!button.disabled, "Run is disabled");
+  button.click();
+  await waitFor(() => button.disabled, false, "Run finished");
+  const diagnostic = document.getElementById("diagnostic").textContent;
+  assert.equal(document.getElementById("request-status").textContent, "Run complete.", diagnostic);
+  const result = document.getElementById("value");
+  assert.ok(!result.closest("[hidden]"), "Run returned no value");
+  if (value instanceof RegExp) assert.match(result.textContent, value);
+  else assert.equal(result.textContent, value);
 }
+
+test("Package repository sources and their catalogue entries", async () => {
+  assert.equal(sources.size, sourceCatalogue.length, "Duplicate source catalogue entries");
+  const exampleIds = new Set(catalogue.map(({ id }) => id));
+  assert.equal(exampleIds.size, catalogue.length, "Duplicate runnable catalogue entries");
+  assert.deepEqual([...exampleIds].sort(), [...expectedExamples.keys()].sort());
+  for (const { id, title, group } of catalogue) {
+    assert.equal(sources.get(id)?.kind, "runnable", id);
+    assert.ok(title?.trim(), `Missing title for ${id}`);
+    assert.ok(group?.trim(), `Missing group for ${id}`);
+  }
+  for (const { id, title, kind, note, imports, callers } of sourceCatalogue) {
+    assert.match(id, /^(?:(?:examples|lib)\/.+|prelude)\.links$/);
+    assert.ok(title?.trim(), `Missing title for ${id}`);
+    assert.ok(["runnable", "source", "diagnostic"].includes(kind), `Unknown source kind ${kind} for ${id}`);
+    assert.equal(typeof note, "string", `Missing note field for ${id}`);
+    if (kind === "runnable") {
+      assert.ok(exampleIds.has(id), `Missing runnable catalogue entry for ${id}`);
+    }
+    for (const { name, id: target } of imports) {
+      assert.ok(name?.trim(), `Missing import name in ${id}`);
+      assert.ok(sources.has(target), `Missing import ${target} from ${id}`);
+    }
+    for (const caller of callers) {
+      assert.ok(sources.has(caller), `Missing caller ${caller} of ${id}`);
+    }
+    assert.deepEqual(await readFile(resolve(dist, id)), await readFile(resolve(root, id)), id);
+  }
+  assert.ok(sources.has("prelude.links"), "Missing prelude");
+  assert.ok(sources.has("lib/comprehension.links"), "Missing comprehension helpers");
+  assert.ok(sources.has("lib/stdlib/binaryTree.links"), "Missing standard library module");
+  assert.deepEqual(sources.get(importExample).imports, [{ name: "Shallow_state", id: stateModule }]);
+  assert.ok(sources.get(stateModule)?.callers.includes(importExample), "Missing caller of Shallow_state");
+  assert.equal(sources.get(stateModule).kind, "source");
+  assert.equal(sources.get(slowExample)?.kind, "source");
+  assert.equal(sources.get(rejectedExample)?.kind, "diagnostic");
+});
 
 test("Check and run source and the published examples at the site root", async () => {
   const site = openSite("/");
@@ -150,17 +252,19 @@ test("Check and run source and the published examples at the site root", async (
     const check = document.getElementById("check");
     const runButton = document.getElementById("run");
     const stop = document.getElementById("stop");
-    const menu = document.getElementById("example");
+    const examples = document.getElementById("examples");
+    const newProgram = document.getElementById("new-program");
     assert.equal(check.textContent.trim(), "Check");
     assert.equal(runButton.textContent.trim(), "Run");
     assert.equal(stop.textContent.trim(), "Stop");
-    assert.ok(menu.labels[0]?.textContent.trim(), "The example selector needs a label");
-    const exampleIds = () => [...menu.options].map(option => option.value).filter(Boolean);
-
-    const catalogue = JSON.parse(await readFile(resolve(dist, "examples.json"), "utf8"));
-    assert.deepEqual(catalogue.map(({ id }) => id).sort(), [...expectedExamples.keys()].sort());
-    await waitFor(() => exampleIds().length, catalogue.length, "Example count");
-    assert.deepEqual(exampleIds(), catalogue.map(({ id }) => id));
+    assert.equal(newProgram.textContent.trim(), "New program");
+    assert.equal(document.getElementById(examples.getAttribute("aria-labelledby"))?.textContent.trim(),
+      "Examples by topic");
+    const buttons = () => [...examples.querySelectorAll("button[data-example-id]")];
+    await waitFor(() => buttons().length, catalogue.length, "Example count");
+    const byId = new Map(buttons().map(button => [button.dataset.exampleId, button]));
+    assert.deepEqual([...byId.keys()], catalogue.map(({ id }) => id));
+    assert.ok(new Set(catalogue.map(({ group }) => group)).size > 1, "The examples need multiple topic groups");
 
     editSource(window, '{ print("hello from SmallLinks"); 6 * 7 }');
     check.click();
@@ -170,24 +274,18 @@ test("Check and run source and the published examples at the site root", async (
     await run(document, "42");
     await expectText(document, "output", "hello from SmallLinks");
 
-    const sibling = "examples/handlers/shallow_state.links";
-    assert.equal(await readFile(resolve(dist, sibling), "utf8"), await readFile(resolve(root, sibling), "utf8"));
-    for (const { id } of catalogue) {
-      const source = await readFile(resolve(root, id), "utf8");
-      selectExample(window, id);
-      await waitFor(() => getSource(document), source, id);
+    for (const { id, title, group } of catalogue) {
+      const button = byId.get(id);
+      assert.equal(button.textContent.trim(), title);
+      assert.equal(button.closest(".example-topic").querySelector("h3").textContent.trim(), group);
+      button.click();
+      await expectLoadedExample(window, id);
+      assert.equal(button.getAttribute("aria-current"), "true", `Selected example ${id}`);
       await run(document, expectedExamples.get(id));
+      if (id === coinExample) await expectText(document, "output", "[[Heads],[Tails],[]]\n[]\n");
     }
 
-    // The edited program still needs the example's sibling-module search path.
-    const importExample = "examples/handlers/module_import.links";
-    selectExample(window, importExample);
-    const importSource = await readFile(resolve(root, importExample), "utf8");
-    await waitFor(() => runButton.disabled, false, "Import example loaded");
-    await waitFor(() => getSource(document), importSource, importExample);
-    editSource(window, "import Shallow_state;\nShallow_state.unitTest(3)");
-    await run(document, "(0, [0, 1, 2])");
-    selectExample(window, "");
+    newProgram.click();
 
     editSource(window, "{ var x = 1; x + true }");
     check.click();
@@ -244,42 +342,166 @@ test("Check and run source and the published examples at the site root", async (
   }
 });
 
-test("Follow the guide and run its linked example beneath a path prefix", async () => {
-  const site = openSite("/smalllinks/");
-  try {
-    const { document } = await site.loadPage();
-    const guideLink = [...document.links].find(link => link.textContent.trim() === "Language guide");
-    const guide = (await site.loadPage(guideLink.href)).document;
-    assert.equal(guide.querySelector("h1").textContent, "SmallLinks language guide");
-    for (const anchor of guide.querySelectorAll("a[href^='#']")) {
-      assert.ok(guide.getElementById(decodeURIComponent(anchor.hash.slice(1))), `Missing ${anchor.hash}`);
+function checkHighlighting(window) {
+  const editor = window.document.querySelector(".cm-content");
+  assert.ok(editor, "The highlighted editor did not load");
+  assert.equal(editor.getAttribute("aria-label"), "Source");
+  const highlightTokens = () => [...editor.querySelectorAll(".cm-line span[class]")].map(token => token.textContent);
+  assert.ok(highlightTokens().includes("effect"), "The effect keyword has no highlight class");
+  assert.ok(highlightTokens().some(token => token.startsWith("# Use a second operation")),
+    "The comment has no highlight class");
+  const literal = String.raw`"say \"hello\" #"`;
+  editSource(window, `{ print(${literal}); 42 }`);
+  assert.ok(highlightTokens().includes(literal), "The escaped string has no highlight class");
+}
+
+for (const basePath of ["/", "/smalllinks/"]) {
+  test(`Follow repository sources and retain the editor at ${basePath}`, async () => {
+    const site = openSite(basePath);
+    try {
+      const editorWindow = await site.loadPage(`${basePath}?example=${encodeURIComponent(importExample)}`);
+      const editor = editorWindow.document;
+      await expectLoadedExample(editorWindow, importExample);
+      const edited = "import Shallow_state;\nShallow_state.unitTest(3)";
+      editSource(editorWindow, edited);
+
+      const context = editor.getElementById("example-context");
+      const sourceLink = requireLink(context, "sources.html", "file", importExample);
+      assert.ok(!context.hidden);
+      assert.equal(sourceLink.target, "_blank", "Opening the source must preserve the editor tab");
+      assert.match(sourceLink.getAttribute("aria-label") ?? sourceLink.textContent, /view/i);
+      const callerSource = (await site.loadPage(sourceLink.href)).document;
+      await expectSourcePage(callerSource, importExample);
+      assert.equal(getSource(editor), edited);
+
+      const imported = requireLink(callerSource.getElementById("source-imports"), "sources.html", "file", stateModule);
+      assert.equal(imported.textContent.trim(), "Shallow_state");
+      const editorImport = requireLink(context, "sources.html", "file", stateModule);
+      assert.equal(editorImport.href, imported.href);
+      assert.equal(editorImport.target, "_blank");
+      const module = (await site.loadPage(imported.href)).document;
+      await expectSourcePage(module, stateModule);
+      await expectText(module, "source-kind", "Source only");
+      assert.ok(module.getElementById("source-playground").hidden, "A support module cannot run by itself");
+
+      const caller = requireLink(module.getElementById("source-callers"), "index.html", "example", importExample);
+      const callerWindow = await site.loadPage(caller.href);
+      await expectLoadedExample(callerWindow, importExample);
+      await run(callerWindow.document, expectedExamples.get(importExample));
+      assert.equal(getSource(editor), edited);
+      await run(editor, "(0, [0, 1, 2])");
+
+      const browseLink = requireLink(editor.querySelector("header"), "sources.html");
+      assert.equal(browseLink.target, "_blank");
+      const browse = (await site.loadPage(browseLink.href)).document;
+      const files = browse.getElementById("source-files");
+      await waitFor(() => files.hidden, false, "Source catalogue");
+      assert.equal(browse.getElementById(files.getAttribute("aria-labelledby"))?.textContent.trim(),
+        "Files by directory");
+      const fileLinks = linksTo(files, "sources.html", "file");
+      assert.deepEqual(fileLinks.map(link => new URL(link.href).searchParams.get("file")).sort(),
+        [...sources.keys()].sort());
+      for (const link of fileLinks) {
+        const id = new URL(link.href).searchParams.get("file");
+        const directory = posix.dirname(id);
+        const group = link.closest("details");
+        assert.equal(group?.querySelector("summary")?.textContent.trim(),
+          directory === "." ? "Repository root" : `${directory}/`);
+        assert.equal(link.textContent.trim(), posix.basename(id));
+      }
+
+      const slowLink = requireLink(files, "sources.html", "file", slowExample);
+      const slow = (await site.loadPage(slowLink.href)).document;
+      await expectSourcePage(slow, slowExample);
+      await expectText(slow, "source-kind", "Source only");
+      await expectText(slow, "source-note", /time limit|timed out|timeout/i);
+      assert.ok(slow.getElementById("source-playground").hidden, "The slow example should only be browsable");
+
+      const rejectedLink = requireLink(files, "sources.html", "file", rejectedExample);
+      const rejected = (await site.loadPage(rejectedLink.href)).document;
+      await expectSourcePage(rejected, rejectedExample);
+      await expectText(rejected, "source-kind", "Expected type error");
+      const checkLink = requireLink(rejected.querySelector("article"), "index.html", "example", rejectedExample);
+      assert.match(checkLink.textContent, /check/i);
+      const rejectedWindow = await site.loadPage(checkLink.href);
+      await expectLoadedExample(rejectedWindow, rejectedExample);
+      await expectText(rejectedWindow.document, "example-diagnostic", /diagnostic/i);
+      rejectedWindow.document.getElementById("check").click();
+      await expectText(rejectedWindow.document, "diagnostic", /Modal introduction requires a value/);
+      assert.ok(rejectedWindow.document.getElementById("diagnostic").textContent.includes(rejectedExample));
+    } finally {
+      await site.close();
     }
-    assert.ok(guide.querySelector("pre > code.language-links"), "The guide has no Links code blocks");
-    const backLink = guide.querySelector("header a[href]");
-    const home = (await site.loadPage(backLink.href)).document;
-    assert.equal(home.querySelector("h1").textContent.trim(), "SmallLinks Playground");
+  });
 
-    const searchId = "examples/met/fresco-effects/find_mask_paper.links";
-    const searchLink = [...guide.links].find(link => link.textContent === "search example");
-    assert.equal(new URL(searchLink.href).searchParams.get("example"), searchId);
-    const linkedWindow = await site.loadPage(searchLink.href);
-    const linked = linkedWindow.document;
-    const source = await readFile(resolve(root, searchId), "utf8");
-    await waitFor(() => getSource(linked), source, searchId);
-    assert.equal(linked.getElementById("example").value, searchId);
-    await run(linked, expectedExamples.get(searchId));
+  test(`Follow chapter navigation and run the guide's examples at ${basePath}`, async () => {
+    const site = openSite(basePath);
+    try {
+      const { document } = await site.loadPage();
+      const guideLink = requireLink(document, "guide.html");
+      assert.equal(guideLink.textContent.trim(), "Language guide");
+      const guide = (await site.loadPage(guideLink.href)).document;
+      assert.equal(guide.querySelector("h1").textContent, "SmallLinks language guide");
+      const chapters = guide.querySelector('nav[aria-labelledby="chapter-nav-title"]');
+      assert.equal(guide.getElementById(chapters.getAttribute("aria-labelledby")).textContent.trim(), "Chapters");
+      const chapterLinks = [...chapters.querySelectorAll("a[href^='#']")];
+      const headings = [...guide.querySelectorAll("main h2")];
+      assert.ok(headings.length > 1, "The guide needs multiple chapters");
+      assert.deepEqual(chapterLinks.map(link => decodeURIComponent(link.hash.slice(1))), headings.map(h => h.id));
+      assert.deepEqual(chapterLinks.map(link => link.textContent.trim()), headings.map(h => h.textContent.trim()));
+      for (const anchor of guide.querySelectorAll("a[href^='#']")) {
+        assert.ok(guide.getElementById(decodeURIComponent(anchor.hash.slice(1))), `Missing ${anchor.hash}`);
+      }
+      const backLink = requireLink(guide.querySelector("header"), "index.html");
+      const home = (await site.loadPage(backLink.href)).document;
+      assert.equal(home.querySelector("h1").textContent.trim(), "SmallLinks Playground");
 
-    const editor = linked.querySelector(".cm-content");
-    assert.ok(editor, "The highlighted editor did not load");
-    assert.equal(editor.getAttribute("aria-label"), "Source");
-    const highlightTokens = () => [...editor.querySelectorAll(".cm-line span[class]")].map(token => token.textContent);
-    assert.ok(highlightTokens().includes("effect"), "The effect keyword has no highlight class");
-    assert.ok(highlightTokens().some(token => token.startsWith("# Use a second operation")),
-      "The comment has no highlight class");
-    const literal = String.raw`"say \"hello\" #"`;
-    editSource(linkedWindow, `{ print(${literal}); 42 }`);
-    assert.ok(highlightTokens().includes(literal), "The escaped string has no highlight class");
-  } finally {
-    await site.close();
-  }
-});
+      const guideSources = linksTo(guide, "sources.html", "file");
+      assert.ok(guideSources.some(link => new URL(link.href).searchParams.get("file") === stateModule),
+        "The guide must link to the imported state module");
+      for (const link of guideSources) {
+        const id = new URL(link.href).searchParams.get("file");
+        const viewer = (await site.loadPage(link.href)).document;
+        await expectSourcePage(viewer, id);
+      }
+
+      requireLink(guide, "index.html", "example", searchExample);
+      requireLink(guide, "index.html", "example", importExample);
+      const blocks = [...guide.querySelectorAll("pre > code.language-links")];
+      assert.equal(blocks.length, guideSnippetValues.length, "Guide snippet count");
+      const snippets = new Map(blocks.map((block, i) => {
+        const link = requireLink(block.closest(".listing"), "index.html");
+        return [link, { code: block.textContent, value: guideSnippetValues[i] }];
+      }));
+      const runnableLinks = [
+        ...linksTo(guide, "index.html", "example"),
+        ...linksTo(guide, "index.html", "code"),
+      ];
+      for (const link of snippets.keys()) {
+        assert.ok(runnableLinks.includes(link), `Missing runnable code listing link ${link.href}`);
+      }
+      for (const link of runnableLinks) {
+        const params = new URL(link.href).searchParams;
+        const linkedWindow = await site.loadPage(link.href);
+        const snippet = snippets.get(link);
+        const id = params.get("example");
+        if (id) {
+          assert.equal(sources.get(id)?.kind, "runnable", id);
+          await expectLoadedExample(linkedWindow, id);
+          if (snippet) assert.equal(getSource(linkedWindow.document), snippet.code);
+          const value = snippet?.value ?? expectedExamples.get(id);
+          assert.ok(value, `Missing expected guide result for ${id}`);
+          await run(linkedWindow.document, value);
+          if (id === searchExample) checkHighlighting(linkedWindow);
+        } else {
+          assert.ok(snippet, `Missing Links code block for ${link.href}`);
+          assert.equal(params.get("code"), snippet.code);
+          assert.equal(getSource(linkedWindow.document), snippet.code);
+          await run(linkedWindow.document, snippet.value);
+        }
+      }
+    } finally {
+      await site.close();
+    }
+  });
+}
