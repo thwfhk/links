@@ -30,12 +30,18 @@
  (targets worker-wasm.js worker-wasm.assets)
  (deps
   (source_tree ../../lib/stdlib)
-  (source_tree ../../examples))
+  (source_tree ../../examples)
+  wasm-startup.js)
  (action
-  (run %{bin:wasm_of_ocaml} compile
-   --effects=disabled
-   --file %{dep:../../prelude.links}:/static/smalllinks/lib/prelude.links
-   --file %{dep:../../lib/comprehension.links}:/static/smalllinks/lib/comprehension.links
-   --file ../../lib/stdlib=links:/static/smalllinks/lib/stdlib
-   %{read-lines:example-file-args}
-   -o worker-wasm.js %{dep:worker.bc})))
+  (progn
+   (run %{bin:wasm_of_ocaml} compile
+    --effects=disabled
+    --file %{dep:../../prelude.links}:/static/smalllinks/lib/prelude.links
+    --file %{dep:../../lib/comprehension.links}:/static/smalllinks/lib/comprehension.links
+    --file ../../lib/stdlib=links:/static/smalllinks/lib/stdlib
+    %{read-lines:example-file-args}
+    -o worker-wasm.js %{dep:worker.bc})
+   (no-infer
+    (with-stdout-to worker-wasm-startup.js
+     (run cat wasm-startup.js worker-wasm.js)))
+   (run mv worker-wasm-startup.js worker-wasm.js))))
