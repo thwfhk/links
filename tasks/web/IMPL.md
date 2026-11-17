@@ -6,11 +6,12 @@ corresponding checks.
 
 ## Build and serve
 
-Install the [native build dependencies](../../INSTALL.md) and Node.js
-18 or later. Run these commands from the repository root.
+Install the [native build dependencies](../../INSTALL.md), Binaryen
+119 or later and Node.js 22 or later. Run these commands from the
+repository root.
 
 ```sh
-opam install js_of_ocaml-lwt
+opam install js_of_ocaml-lwt.6.5.0 wasm_of_ocaml-compiler.6.5.0
 npm --prefix web ci
 make web-demo
 python3 -m http.server 8000 --bind 127.0.0.1 --directory web/dist
@@ -25,6 +26,30 @@ site, so it can also be served under a path prefix.
 simulated DOM and the compiled SmallLinks worker.
 
 ## Runtime
+
+### WebAssembly toolchain
+
+Use matching 6.5.0 versions of the JavaScript compiler, WebAssembly
+compiler and `js_of_ocaml` libraries. This release supports embedded
+browser files through `--file` and resolves Wasm assets relative to
+the generated loader when loaded from Node. Version 6.2.0, used for
+the initial JavaScript demo, has no Wasm browser filesystem.
+[Wasm_of_ocaml](https://ocsigen.org/js_of_ocaml/latest/js_of_ocaml/wasm_overview.html)
+and [6.5.0 release](https://github.com/ocsigen/js_of_ocaml/releases/tag/6.5.0).
+
+The toolchain check used OCaml 5.4.0, Dune 3.20.2, Binaryen 123 and
+Node.js 26.0.0. The deployment workflow uses Node.js 22. Compiler
+dependencies are installed by opam. The temporary local toolchain
+also used Cmdliner 2.0.0 and Sedlex 3.8.1. Version and build logs are
+in `/private/tmp/smalllinks-wasm/logs/`.
+
+Use `--effects=disabled` for the Wasm worker. Its OCaml dependencies
+use Lwt promises, and the SmallLinks evaluator implements SmallLinks
+handlers. The dependency audit found no use of OCaml's effect API.
+The generated Wasm requires GC, tail calls and exception handling.
+[Upstream engine requirements](https://github.com/ocsigen/js_of_ocaml/blob/6.5.0/README_wasm_of_ocaml.md).
+
+### Shared evaluator
 
 The [native CLI](../../bin/driver.ml) and
 [browser worker](../../web/runtime/worker.ml) share

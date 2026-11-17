@@ -211,7 +211,7 @@ find modal effect examples directly in the playground sidebar.
 ### 9. Add a WebAssembly build with wasm_of_ocaml
 
 Depends on the runtime, static packaging and checks from milestones
-1–6. Implementation is paused until the user asks to begin.
+1–6. The user authorised implementation on 17 November 2026.
 
 Keep the existing JavaScript runtime and its build target. Add a
 WebAssembly runtime target. Package both in `web/dist` and publish one
@@ -320,9 +320,12 @@ the final browser check.
 
 ## Status
 
-Milestone 9 is planned. Implementation is paused at the user's request.
-The next action, after the user asks to begin, is the compatibility
-audit in 9.1. The user accepted each target's integer behaviour.
+Milestone 9 is in progress. The toolchain audit in 9.1 selected matching
+6.5.0 compiler and library versions, with Binaryen 123 locally. Version
+checks passed using OCaml 5.4.0, Dune 3.20.2 and Node.js 26.0.0.
+Logs are in `/private/tmp/smalllinks-wasm/logs/`. The next action is
+building and checking the Wasm worker in 9.2 alongside the selector
+work in 9.3. The user accepted each target's integer behaviour.
 Runtime and build coordination stays in this chat with subagents.
 The existing playground-design chat owns the runtime selector in 9.3.
 Existing milestones and verification results remain recorded below.
