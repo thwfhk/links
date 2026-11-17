@@ -1,5 +1,5 @@
 import { build } from "esbuild";
-import { copyFile, mkdir, mkdtemp, rename, rm } from "node:fs/promises";
+import { copyFile, cp, mkdir, mkdtemp, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { packageExamples } from "./examples.mjs";
@@ -16,7 +16,14 @@ try {
   for (const file of ["index.html", "styles.css"]) {
     await copyFile(join(playground, file), join(staging, file));
   }
-  await copyFile(join(compiled, "default", "web", "runtime", "worker.js"), join(staging, "worker.js"));
+  const runtime = join(compiled, "default", "web", "runtime");
+  for (const file of ["worker.js", "worker-wasm.js"]) {
+    await copyFile(join(runtime, file), join(staging, file));
+  }
+  await cp(join(runtime, "worker-wasm.assets"), join(staging, "worker-wasm.assets"), {
+    recursive: true,
+    dereference: true,
+  });
   await build({
     entryPoints: [join(playground, "main.js")],
     outfile: join(staging, "app.js"),

@@ -45,14 +45,21 @@ rule-check: tools/rule-check
 	@echo "Applying rule check"
 	@tools/rule-check
 
-.PHONY: web-runtime test-web-runtime web-demo test-web-demo
+.PHONY: web-runtime web-runtime-wasm test-web-runtime test-web-runtime-wasm web-demo test-web-demo
 web-runtime:
 	$(BUILD) web/runtime/worker.js
+
+web-runtime-wasm:
+	$(BUILD) web/runtime/worker-wasm.js
 
 test-web-runtime: web-runtime
 	node web/runtime/test-worker.cjs _build/default/web/runtime/worker.js
 
-web-demo: web-runtime
+test-web-runtime-wasm: web-runtime-wasm
+	node web/runtime/test-worker.cjs _build/default/web/runtime/worker-wasm.js wasm
+
+web-demo:
+	$(BUILD) web/runtime/worker.js web/runtime/worker-wasm.js
 	node web/build/site.mjs
 
 test-web-demo: web-demo
