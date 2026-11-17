@@ -25,6 +25,7 @@ const groups = {
     "examples/met/fresco-effects/single-yield.links": "Single yield",
     "examples/handlers/toggle.links": "Toggle state",
     "examples/handlers/count.links": "Count down with state",
+    "examples/handlers/ehop2022.links": "Effect Handler Oriented Programming (2022)",
     "examples/met/thesis/print_list.links": "Collect printed values",
     "examples/handlers/coin_composition.links": "Compose coin toss handlers",
     "examples/met/fresco-effects/find_mask_paper.links": "Search with effect handlers",

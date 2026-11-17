@@ -16,6 +16,7 @@ const basics = "examples/basics.links";
 const factorial = "examples/factorial.links";
 const application = "examples/met/fresco-types/application.links";
 const importExample = "examples/handlers/module_import.links";
+const ehop2022 = "examples/handlers/ehop2022.links";
 const stateModule = "examples/handlers/shallow_state.links";
 const slowExample = "examples/handlers/tests.links";
 const coinExample = "examples/handlers/coin_composition.links";
@@ -27,7 +28,7 @@ const handlerResults = "examples/met/thesis/handler_results.links";
 const singleYield = "examples/met/fresco-effects/single-yield.links";
 const rankTwo = "examples/met/fresco-types/rank-two.links";
 const rejectedExample = "examples/met/fresco-effects/rejected/effectful-list-non-value.links";
-const quickExamples = [basics, application, toggle, countdown, coinExample, importExample];
+const quickExamples = [basics, application, toggle, countdown, coinExample, importExample, ehop2022];
 
 const expectedExamples = new Map([
   [basics, "42"],
@@ -36,6 +37,13 @@ const expectedExamples = new Map([
   [factorial, /\(f = 3628800, i = 10\)\]$/],
   [coinExample, "()"],
   [countdown, "0"],
+  [ehop2022,
+    '([0, 0], (dir = [("act3", 3), ("hamlet", 2), ("ritchie.txt", 1), ("stdout", 0)], dregion = ' +
+    '[(3, "To be, or not to be,\nthat is the question:\nWhether \'tis nobler in the mind to suffer\n"), ' +
+    '(2, "To be, or not to be,\nthat is the question:\nWhether \'tis nobler in the mind to suffer\n"), ' +
+    '(1, "UNIX is basically a simple operating system, but you have to be a genius to understand the simplicity.\n"), ' +
+    '(0, "")], inext = 4, inodes = [(3, (lno = 1, loc = 3)), (2, (lno = 1, loc = 2)), ' +
+    '(1, (lno = 1, loc = 1)), (0, (lno = 1, loc = 0))], lnext = 4))'],
   [importExample, "(0, [0, 1, 2, 3, 4])"],
   [toggle, "(true, true)"],
   ["examples/linearList.links", "LinCons(fun, LinNil)"],

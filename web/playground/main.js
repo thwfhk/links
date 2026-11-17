@@ -49,6 +49,7 @@ const commonExamples = [
   "examples/handlers/count.links",
   "examples/handlers/coin_composition.links",
   "examples/handlers/module_import.links",
+  "examples/handlers/ehop2022.links",
 ];
 
 const sources = new Map();
