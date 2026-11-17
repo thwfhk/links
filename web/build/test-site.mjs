@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { posix, resolve, sep } from "node:path";
 import { test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
@@ -11,6 +11,14 @@ import { JSDOM, VirtualConsole } from "jsdom";
 const dist = fileURLToPath(new URL("../dist", import.meta.url));
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const host = "https://smalllinks.test";
+const runtimeScripts = new Map([
+  ["javascript", "worker.js"],
+  ["webassembly", "worker-wasm.js"],
+]);
+const basePaths = ["/", "/smalllinks/"];
+const runtimeSites = [...runtimeScripts.keys()].flatMap(runtime =>
+  basePaths.map(basePath => ({ runtime, basePath })));
+const runtimeStorageKey = "smalllinks-runtime";
 
 const basics = "examples/basics.links";
 const factorial = "examples/factorial.links";
@@ -75,19 +83,82 @@ const catalogue = JSON.parse(await readFile(resolve(dist, "examples.json"), "utf
 const sourceCatalogue = JSON.parse(await readFile(resolve(dist, "sources.json"), "utf8"));
 const sources = new Map(sourceCatalogue.map(source => [source.id, source]));
 
-// Adapt the browser message API while running the unmodified worker bundle.
+// Run unmodified classic workers with browser globals and local HTTP asset paths.
 const workerBootstrap = `
+  const assert = require("node:assert/strict");
+  const { readFileSync } = require("node:fs");
+  const { readFile } = require("node:fs/promises");
+  const { resolve, sep } = require("node:path");
+  const { createContext, runInContext } = require("node:vm");
   const { parentPort, workerData } = require("node:worker_threads");
-  globalThis.onmessage = null;
-  globalThis.postMessage = message => parentPort.postMessage(message);
-  parentPort.on("message", data => globalThis.onmessage({ data }));
-  require(workerData);
+  const base = new URL(workerData.baseUrl);
+  const listeners = new Map();
+  function dispatchEvent(event) {
+    const handler = context["on" + event.type];
+    if (typeof handler === "function") handler.call(context, event);
+    for (const listener of listeners.get(event.type) ?? []) listener.call(context, event);
+    return !event.defaultPrevented;
+  }
+  function assetPath(href) {
+    const url = new URL(href, workerData.url);
+    assert.equal(url.origin, base.origin, "Worker asset origin");
+    assert.ok(url.pathname.startsWith(base.pathname), "Worker asset base path: " + url.href);
+    const path = resolve(workerData.dist, decodeURIComponent(url.pathname.slice(base.pathname.length)));
+    assert.ok(path.startsWith(workerData.dist + sep), "Worker asset stays in the static build");
+    return { path, url };
+  }
+  const context = createContext({
+    console, URL, TextDecoder, TextEncoder, Response, Blob, atob, btoa, performance, crypto,
+    setTimeout, clearTimeout, setInterval, clearInterval, queueMicrotask,
+    location: new URL(workerData.url),
+    navigator: { userAgent: "SmallLinks Node site tests" },
+    onmessage: null,
+    addEventListener: (type, listener) => {
+      if (!listeners.has(type)) listeners.set(type, new Set());
+      listeners.get(type).add(listener);
+    },
+    removeEventListener: (type, listener) => listeners.get(type)?.delete(listener),
+    dispatchEvent,
+    postMessage: message => parentPort.postMessage(message),
+    fetch: async href => {
+      const { path, url } = assetPath(href);
+      parentPort.postMessage({ kind: "test-asset-request", url: url.href });
+      if (workerData.failure?.kind === "missing-asset") {
+        return new Response("Missing runtime asset", { status: 404 });
+      }
+      return new Response(await readFile(path), { headers: { "Content-Type": "application/wasm" } });
+    },
+  });
+  context.self = context;
+  context.importScripts = (...hrefs) => {
+    for (const href of hrefs) {
+      const { path, url } = assetPath(href);
+      parentPort.postMessage({ kind: "test-asset-request", url: url.href });
+      runInContext(readFileSync(path, "utf8"), context, { filename: url.href });
+    }
+  };
+  if (workerData.failure?.kind === "unsupported-webassembly") {
+    runInContext("globalThis.WebAssembly = undefined", context);
+  }
+  parentPort.on("message", data => dispatchEvent({ type: "message", data }));
+  // Browsers dispatch unhandledrejection without turning it into Worker.onerror.
+  process.on("unhandledRejection", (reason, promise) => dispatchEvent({
+    type: "unhandledrejection", reason, promise, cancelable: true, defaultPrevented: false,
+    preventDefault() { this.defaultPrevented = true; },
+  }));
+  if (workerData.failure?.kind === "missing-worker") {
+    throw new Error("HTTP 404 loading " + workerData.url);
+  }
+  runInContext(readFileSync(assetPath(workerData.url).path, "utf8"), context, { filename: workerData.url });
 `;
 
-function openSite(basePath) {
+function openSite(basePath, { runtime = null, storageFailure = false } = {}) {
   const workers = new Set();
+  const workerRequests = [];
+  const workerFailures = [];
   const pages = [];
   const errors = [];
+  let sessionStorage;
   const virtualConsole = new VirtualConsole();
   virtualConsole.on("jsdomError", error => errors.push(error));
 
@@ -105,6 +176,19 @@ function openSite(basePath) {
     const { window } = new JSDOM(html, { url, virtualConsole, runScripts: "outside-only", pretendToBeVisual: true });
     pages.push(window);
 
+    // Page loads share one browsing session, including visits to the guide.
+    if (storageFailure) {
+      Object.defineProperty(window, "sessionStorage", {
+        get() { throw new window.DOMException("Storage is unavailable.", "SecurityError"); },
+      });
+    } else {
+      if (!sessionStorage) {
+        sessionStorage = window.sessionStorage;
+        if (runtime !== null) sessionStorage.setItem(runtimeStorageKey, runtime);
+      }
+      Object.defineProperty(window, "sessionStorage", { value: sessionStorage });
+    }
+
     // jsdom returns no layout boxes for elements and lacks the equivalent Range method.
     window.Range.prototype.getClientRects ??= () => [];
 
@@ -113,21 +197,58 @@ function openSite(basePath) {
       return new Response(await readFile(path, { signal }));
     };
     window.Worker = class extends window.EventTarget {
-      constructor(href) {
+      constructor(href, options) {
         super();
-        const workerData = assetPath(new URL(href, url));
-        this.worker = new Worker(workerBootstrap, { eval: true, workerData });
+        const workerUrl = new URL(href, url);
+        assetPath(workerUrl);
+        assert.equal(workerUrl.href, new URL(runtimeScripts.get(window.document.getElementById("runtime").value),
+          host + basePath).href, "The selected runtime uses its local worker");
+        assert.ok(!options?.type || options.type === "classic", "Both runtimes use classic workers");
+        this.request = { url: workerUrl.href, messages: [], assets: [], terminated: false };
+        workerRequests.push(this.request);
+        const failure = workerFailures.shift();
+        if (failure?.kind === "constructor") throw new Error(failure.diagnostic);
+        if (failure && ["error", "startup", "messageerror"].includes(failure.kind)) {
+          queueMicrotask(() => {
+            if (this.request.terminated) return;
+            if (failure.kind === "startup") {
+              this.dispatchEvent(new window.MessageEvent("message", {
+                data: { kind: "failure", stage: "startup", diagnostic: failure.diagnostic },
+              }));
+            } else if (failure.kind === "messageerror") {
+              this.dispatchEvent(new window.MessageEvent("messageerror"));
+            } else {
+              this.dispatchEvent(new window.ErrorEvent("error", {
+                message: failure.diagnostic, cancelable: true,
+              }));
+            }
+          });
+          return;
+        }
+        this.worker = new Worker(workerBootstrap, {
+          eval: true,
+          workerData: { dist, baseUrl: host + basePath, url: workerUrl.href, failure },
+        });
         workers.add(this.worker);
         this.worker.once("exit", () => workers.delete(this.worker));
-        this.worker.on("message", data => this.dispatchEvent(new window.MessageEvent("message", { data })));
+        this.worker.on("message", data => {
+          if (data.kind === "test-asset-request") this.request.assets.push(data.url);
+          else this.dispatchEvent(new window.MessageEvent("message", { data }));
+        });
         this.worker.on("error", error => this.dispatchEvent(new window.ErrorEvent("error", {
           message: error.message,
           cancelable: true,
         })));
       }
 
-      postMessage(message) { this.worker.postMessage(message); }
-      terminate() { void this.worker.terminate(); }
+      postMessage(message) {
+        this.request.messages.push(message);
+        this.worker?.postMessage(message);
+      }
+      terminate() {
+        this.request.terminated = true;
+        void this.worker?.terminate();
+      }
     };
 
     const document = window.document;
@@ -150,7 +271,11 @@ function openSite(basePath) {
     assert.deepEqual(errors, [], "Errors reported by the in-memory DOM");
   }
 
-  return { loadPage, close, activeWorkers: () => workers.size };
+  return {
+    loadPage, close, workerRequests,
+    activeWorkers: () => workers.size,
+    failNextWorker: failure => workerFailures.push(failure),
+  };
 }
 
 async function waitFor(read, expected, label) {
@@ -190,6 +315,14 @@ function editSource(window, source) {
   }
 }
 
+function chooseRuntime(window, runtime) {
+  const select = window.document.getElementById("runtime");
+  assert.equal(select.disabled, false, "Runtime is available");
+  select.value = runtime;
+  select.dispatchEvent(new window.Event("change", { bubbles: true }));
+  assert.equal(select.value, runtime);
+}
+
 function unavailable(button) {
   return button.disabled || Boolean(button.closest("[hidden]"));
 }
@@ -202,6 +335,7 @@ async function expectEditable(document) {
   assert.ok(view, "The highlighted editor did not load");
   assert.equal(view.state.readOnly, false);
   assert.equal(view.contentDOM.getAttribute("contenteditable"), "true");
+  assert.equal(document.getElementById("runtime").disabled, false, "Runtime is available while editing");
 }
 
 async function expectLoadedExample(document, id) {
@@ -241,6 +375,7 @@ async function expectSourcePreview(document, id) {
   assert.ok(unavailable(document.getElementById("check")), "Check is unavailable during preview");
   assert.ok(unavailable(document.getElementById("run")), "Run is unavailable during preview");
   assert.ok(!unavailable(document.getElementById("load-source")), `Can load ${id} into the editor`);
+  assert.equal(document.getElementById("runtime").disabled, false, "Runtime is available in source previews");
 }
 
 function containingDirectories(link) {
@@ -267,6 +402,7 @@ async function run(document, value) {
   const button = document.getElementById("run");
   assert.ok(!button.disabled, "Run is disabled");
   button.click();
+  assert.equal(document.getElementById("runtime").disabled, true, "Runtime is disabled during Run");
   await waitFor(() => button.disabled, false, "Run finished");
   const diagnostic = document.getElementById("diagnostic").textContent;
   assert.equal(document.getElementById("request-status").textContent, "Run complete.", diagnostic);
@@ -274,9 +410,15 @@ async function run(document, value) {
   assert.ok(!result.closest("[hidden]"), "Run returned no value");
   if (value instanceof RegExp) assert.match(result.textContent, value);
   else assert.equal(result.textContent, value);
+  assert.equal(document.getElementById("runtime").disabled, false, "Runtime is available after Run");
 }
 
 test("Package repository sources and their catalogue entries", async () => {
+  for (const script of runtimeScripts.values()) {
+    assert.ok((await readFile(resolve(dist, script))).length > 0, `Missing runtime worker ${script}`);
+  }
+  const wasmAssets = await readdir(resolve(dist, "worker-wasm.assets"), { recursive: true });
+  assert.ok(wasmAssets.some(path => path.endsWith(".wasm")), "Missing WebAssembly modules");
   for (const oldPage of ["sources.html", "sources.js"]) {
     await assert.rejects(readFile(resolve(dist, oldPage)), { code: "ENOENT" });
   }
@@ -316,115 +458,293 @@ test("Package repository sources and their catalogue entries", async () => {
   assert.equal(sources.get(rejectedExample)?.kind, "diagnostic");
 });
 
-test("Check and run source and the published examples at the site root", async () => {
-  const site = openSite("/");
-  try {
-    const window = await site.loadPage();
-    const document = window.document;
-    const check = document.getElementById("check");
-    const runButton = document.getElementById("run");
-    const stop = document.getElementById("stop");
-    const examples = document.getElementById("example-list");
-    const newProgram = document.getElementById("new-program");
-    assert.equal(check.textContent.trim(), "Check");
-    assert.equal(runButton.textContent.trim(), "Run");
-    assert.equal(stop.textContent.trim(), "Stop");
-    assert.equal(newProgram.textContent.trim(), "New program");
-    assert.equal(document.getElementById("examples-heading").textContent.trim(), "Examples");
-    const buttons = () => [...examples.querySelectorAll("button[data-example-id]")];
-    await waitFor(() => buttons().length, quickExamples.length, "Quick example count");
-    const byId = new Map(buttons().map(button => [button.dataset.exampleId, button]));
-    assert.deepEqual([...byId.keys()], quickExamples);
-
-    const files = document.getElementById("source-files");
-    await waitFor(() => linksTo(files, "index.html", "file").length, sources.size, "File browser");
-    assert.equal(files.querySelectorAll("details[open]").length, 0, "File folders start collapsed");
-    await expectEditable(document);
-    const starter = getSource(document);
-
-    editSource(window, '{ print("hello from SmallLinks"); 6 * 7 }');
-    check.click();
-    await expectText(document, "inferred-type", "Int");
-    assert.ok(document.getElementById("value").closest("[hidden]"));
-    assert.ok(document.getElementById("output").closest("[hidden]"));
-    await run(document, "42");
-    await expectText(document, "output", "hello from SmallLinks");
-
-    for (const id of quickExamples) {
-      const button = byId.get(id);
-      assert.ok(button.textContent.trim(), `Unnamed shortcut for ${id}`);
-      button.click();
-      await expectLoadedExample(document, id);
-      await run(document, expectedExamples.get(id));
-    }
-
-    for (const { id } of catalogue) {
-      followPreview(files, id);
-      await expectSourcePreview(document, id);
-      document.getElementById("load-source").click();
-      await expectLoadedExample(document, id);
-      await run(document, expectedExamples.get(id));
-      if (id === coinExample) await expectText(document, "output", "[[Heads],[Tails],[]]\n[]\n");
-    }
-
-    newProgram.click();
-    await expectEditable(document);
-    assert.equal(getSource(document), starter);
-
-    editSource(window, "{ var x = 1; x + true }");
-    check.click();
-    await expectText(document, "diagnostic", /Type error: Expected Int, got Bool/);
-
-    editSource(window, '{ print("before the error"); connectSocket("localhost", 80) }');
-    runButton.click();
-    await expectText(document, "diagnostic", /connectSocket is unavailable in the browser/);
-    await expectText(document, "output", "before the error");
-
-    // The evaluator pauses and resumes before this sum completes.
-    editSource(window, "fun sum(n, acc) { if (n == 0) acc else sum(n - 1, acc + n) } sum(10000, 0)");
-    await run(document, "50005000");
-
-    const loop = 'fun loop(n) { loop(n + 1) } { print("loop started"); loop(0) }';
-    editSource(window, loop);
-    runButton.click();
-    await expectText(document, "output", "loop started");
-    assert.ok(runButton.disabled);
-    stop.click();
-    await expectText(document, "request-status", /stopped/i);
-    await waitFor(site.activeWorkers, 0, "Stopped worker terminated");
-    await expectText(document, "output", "loop started");
-    assert.equal(getSource(document), loop);
-
-    // Advance the page's timer once the real worker starts the loop.
-    const schedule = window.setTimeout;
-    let expire;
-    window.setTimeout = (callback, milliseconds) => {
-      expire = callback;
-      return schedule(callback, milliseconds);
-    };
+for (const basePath of basePaths) {
+  test(`Change runtime while retaining source, results and navigation at ${basePath}`, async () => {
+    const site = openSite(basePath);
     try {
-      runButton.click();
-    } finally {
-      window.setTimeout = schedule;
-    }
-    await expectText(document, "output", "loop started");
-    expire();
-    await expectText(document, "request-status", /timed out/i);
-    await waitFor(site.activeWorkers, 0, "Timed-out worker terminated");
-    await expectText(document, "output", "loop started");
-    assert.equal(getSource(document), loop);
+      const window = await site.loadPage(`${basePath}?example=${encodeURIComponent(importExample)}`);
+      const document = window.document;
+      await expectLoadedExample(document, importExample);
+      const runtimeSelect = document.getElementById("runtime");
+      assert.equal(document.querySelector('label[for="runtime"]').textContent.trim(), "Runtime");
+      assert.deepEqual([...runtimeSelect.options].map(option => [option.value, option.textContent.trim()]),
+        [["javascript", "JavaScript"], ["webassembly", "WebAssembly"]]);
+      assert.equal(runtimeSelect.value, "javascript", "JavaScript is initially selected");
 
-    editSource(window, "loop(0)");
-    check.click();
-    await expectText(document, "diagnostic", /loop/);
-    editSource(window, "length([1, 2, 3])");
-    await run(document, "3");
-    assert.ok(document.getElementById("output").closest("[hidden]"));
-    assert.ok(document.getElementById("diagnostic").closest("[hidden]"));
-  } finally {
-    await site.close();
-  }
-});
+      const edited = 'import Shallow_state;\n{ print("retained output"); Shallow_state.unitTest(3) }';
+      editSource(window, edited);
+      const view = editorView(document);
+      const anchor = edited.lastIndexOf("Shallow_state");
+      const head = anchor + "Shallow_state".length;
+      view.dispatch({ selection: { anchor, head } });
+      await run(document, "(0, [0, 1, 2])");
+      const results = document.getElementById("results").innerHTML;
+      const context = document.getElementById("example-context").innerHTML;
+      const href = window.location.href;
+      const workerCount = site.workerRequests.length;
+      chooseRuntime(window, "webassembly");
+      assert.equal(window.sessionStorage.getItem(runtimeStorageKey), "webassembly");
+      assert.equal(getSource(document), edited);
+      assert.equal(view.state.selection.main.anchor, anchor);
+      assert.equal(view.state.selection.main.head, head);
+      assert.equal(document.getElementById("example-context").innerHTML, context);
+      assert.equal(document.getElementById("results").innerHTML, results);
+      assert.equal(window.location.href, href);
+      assert.equal(site.workerRequests.length, workerCount, "Choosing a runtime starts no worker");
+      await run(document, "(0, [0, 1, 2])");
+      assert.equal(site.workerRequests.at(-1).url, host + basePath + "worker-wasm.js");
+      assert.equal(site.workerRequests.at(-1).messages[0].exampleId, importExample);
+
+      // The selector stays available while a source is loading and in a preview.
+      const fetch = window.fetch;
+      let releaseSource;
+      const sourceGate = new Promise(resolve => { releaseSource = resolve; });
+      window.fetch = async (href, options) => {
+        if (new URL(href, window.location.href).pathname.endsWith(stateModule)) await sourceGate;
+        return fetch(href, options);
+      };
+      followPreview(document.getElementById("example-imports"), stateModule);
+      assert.equal(runtimeSelect.disabled, false, "Runtime is available while loading source");
+      releaseSource();
+      await expectSourcePreview(document, stateModule);
+      chooseRuntime(window, "javascript");
+      await expectSourcePreview(document, stateModule);
+      document.getElementById("return-to-editor").click();
+      await expectEditable(document);
+      assert.equal(getSource(document), edited);
+      assert.equal(view.state.selection.main.anchor, anchor);
+      assert.equal(view.state.selection.main.head, head);
+      await expectText(document, "output", "retained output");
+      await run(document, "(0, [0, 1, 2])");
+      assert.equal(site.workerRequests.at(-1).url, host + basePath + "worker.js");
+      assert.equal(site.workerRequests.at(-1).messages[0].exampleId, importExample);
+
+      chooseRuntime(window, "webassembly");
+      document.querySelector(`button[data-example-id="${basics}"]`).click();
+      await expectLoadedExample(document, basics);
+      assert.equal(runtimeSelect.value, "webassembly", "Examples retain the chosen runtime");
+      const guide = (await site.loadPage(requireLink(document, "guide.html").href)).document;
+      const home = (await site.loadPage(requireLink(guide.querySelector("header"), "index.html").href)).document;
+      await expectEditable(home);
+      assert.equal(home.getElementById("runtime").value, "webassembly");
+      await run(home, "3");
+      assert.equal(site.workerRequests.at(-1).url, host + basePath + "worker-wasm.js");
+    } finally {
+      await site.close();
+    }
+  });
+
+  test(`Use the runtime selector when session storage is unavailable at ${basePath}`, async () => {
+    const site = openSite(basePath, { storageFailure: true });
+    try {
+      const window = await site.loadPage();
+      await expectEditable(window.document);
+      assert.equal(window.document.getElementById("runtime").value, "javascript");
+      chooseRuntime(window, "webassembly");
+      await run(window.document, "3");
+      chooseRuntime(window, "javascript");
+      await run(window.document, "3");
+    } finally {
+      await site.close();
+    }
+  });
+}
+
+for (const { runtime, basePath } of runtimeSites) {
+  test(`Recover from worker startup failures with ${runtime} at ${basePath}`, async () => {
+    const site = openSite(basePath, { runtime });
+    try {
+      const window = await site.loadPage(`${basePath}?example=${encodeURIComponent(importExample)}`);
+      const document = window.document;
+      await expectLoadedExample(document, importExample);
+      const source = "import Shallow_state; Shallow_state.unitTest(2)";
+      editSource(window, source);
+      const failures = [
+        { kind: "constructor", diagnostic: "Could not construct the runtime worker." },
+        { kind: "error", diagnostic: "The runtime worker script could not be loaded." },
+        { kind: "missing-worker", diagnostic: new RegExp(`HTTP 404 loading ${host}${basePath}`) },
+        { kind: "startup", diagnostic: "The runtime loader could not load its module." },
+        { kind: "messageerror", diagnostic: /could not communicate with the worker/ },
+      ];
+      if (runtime === "webassembly") {
+        failures.push(
+          { kind: "missing-asset", diagnostic: /404|Missing runtime asset|response.*status|MIME type/i },
+          { kind: "unsupported-webassembly", diagnostic: /WebAssembly|undefined|unavailable|unsupported/i },
+        );
+      }
+      for (const failure of failures) {
+        site.failNextWorker(failure);
+        document.getElementById("run").click();
+        await waitFor(() => document.getElementById("request-status").textContent,
+          "Worker startup failed.", `${failure.kind} startup status`);
+        await expectText(document, "diagnostic", failure.diagnostic);
+        assert.equal(getSource(document), source);
+        assert.equal(document.getElementById("runtime").disabled, false);
+        assert.equal(document.getElementById("runtime").value, runtime);
+        assert.equal(site.workerRequests.at(-1).messages.length, 0,
+          "No source is sent to a worker that failed before ready");
+        if (failure.kind === "missing-asset") {
+          assert.ok(site.workerRequests.at(-1).assets.some(href =>
+            href.startsWith(host + basePath + "worker-wasm.assets/") && href.endsWith(".wasm")),
+          "The actual loader requested the missing Wasm module");
+        }
+        if (["missing-asset", "unsupported-webassembly"].includes(failure.kind)) {
+          chooseRuntime(window, "javascript");
+          await run(document, "(0, [0, 1])");
+          chooseRuntime(window, runtime);
+        }
+        await run(document, "(0, [0, 1])");
+        assert.equal(site.workerRequests.at(-1).messages[0].exampleId, importExample);
+        assert.equal(site.workerRequests.at(-1).messages[0].source, source);
+        assert.equal(site.workerRequests.at(-1).terminated, true);
+      }
+    } finally {
+      await site.close();
+    }
+  });
+}
+
+for (const { runtime, basePath } of runtimeSites) {
+  test(`Check and run source and the published examples with ${runtime} at ${basePath}`, async () => {
+    const site = openSite(basePath, { runtime });
+    try {
+      const window = await site.loadPage();
+      const document = window.document;
+      const check = document.getElementById("check");
+      const runButton = document.getElementById("run");
+      const stop = document.getElementById("stop");
+      const examples = document.getElementById("example-list");
+      const newProgram = document.getElementById("new-program");
+      const runtimeSelect = document.getElementById("runtime");
+      assert.equal(runtimeSelect.value, runtime);
+      assert.equal(check.textContent.trim(), "Check");
+      assert.equal(runButton.textContent.trim(), "Run");
+      assert.equal(stop.textContent.trim(), "Stop");
+      assert.equal(newProgram.textContent.trim(), "New program");
+      assert.equal(document.getElementById("examples-heading").textContent.trim(), "Examples");
+      const buttons = () => [...examples.querySelectorAll("button[data-example-id]")];
+      await waitFor(() => buttons().length, quickExamples.length, "Quick example count");
+      const byId = new Map(buttons().map(button => [button.dataset.exampleId, button]));
+      assert.deepEqual([...byId.keys()], quickExamples);
+
+      const files = document.getElementById("source-files");
+      await waitFor(() => linksTo(files, "index.html", "file").length, sources.size, "File browser");
+      assert.equal(files.querySelectorAll("details[open]").length, 0, "File folders start collapsed");
+      await expectEditable(document);
+      const starter = getSource(document);
+
+      editSource(window, '{ print("hello from SmallLinks"); 6 * 7 }');
+      check.click();
+      assert.equal(runtimeSelect.disabled, true, "Runtime is disabled during Check");
+      await expectText(document, "inferred-type", "Int");
+      assert.equal(runtimeSelect.disabled, false, "Runtime is available after Check");
+      assert.ok(document.getElementById("value").closest("[hidden]"));
+      assert.ok(document.getElementById("output").closest("[hidden]"));
+      await run(document, "42");
+      await expectText(document, "output", "hello from SmallLinks");
+      editSource(window, '{ print("café λ"); exit(42) }');
+      await run(document, "42");
+      await expectText(document, "output", "café λ");
+      editSource(window, "1073741823 + 1");
+      await run(document, runtime === "webassembly" ? "-1073741824" : "1073741824");
+
+      for (const id of quickExamples) {
+        const button = byId.get(id);
+        assert.ok(button.textContent.trim(), `Unnamed shortcut for ${id}`);
+        button.click();
+        await expectLoadedExample(document, id);
+        await run(document, expectedExamples.get(id));
+      }
+
+      for (const { id } of catalogue) {
+        followPreview(files, id);
+        await expectSourcePreview(document, id);
+        document.getElementById("load-source").click();
+        await expectLoadedExample(document, id);
+        await run(document, expectedExamples.get(id));
+        if (id === coinExample) await expectText(document, "output", "[[Heads],[Tails],[]]\n[]\n");
+      }
+
+      newProgram.click();
+      await expectEditable(document);
+      assert.equal(getSource(document), starter);
+
+      editSource(window, "{ var x = 1; x + true }");
+      check.click();
+      await expectText(document, "diagnostic", /Type error: Expected Int, got Bool/);
+      assert.equal(runtimeSelect.disabled, false, "Runtime is available after a type error");
+
+      editSource(window, '{ print("before the error"); connectSocket("localhost", 80) }');
+      runButton.click();
+      await expectText(document, "diagnostic", /connectSocket is unavailable in the browser/);
+      await expectText(document, "output", "before the error");
+      assert.equal(runtimeSelect.disabled, false, "Runtime is available after a runtime error");
+
+      // The evaluator pauses and resumes before this sum completes.
+      editSource(window, "fun sum(n, acc) { if (n == 0) acc else sum(n - 1, acc + n) } sum(10000, 0)");
+      await run(document, "50005000");
+
+      const loop = 'fun loop(n) { loop(n + 1) } { print("loop started"); loop(0) }';
+      editSource(window, loop);
+      runButton.click();
+      await expectText(document, "output", "loop started");
+      assert.ok(runButton.disabled);
+      stop.click();
+      await expectText(document, "request-status", /stopped/i);
+      await waitFor(site.activeWorkers, 0, "Stopped worker terminated");
+      await expectText(document, "output", "loop started");
+      assert.equal(getSource(document), loop);
+      assert.equal(runtimeSelect.disabled, false, "Runtime is available after Stop");
+      editSource(window, "loop(0)");
+      check.click();
+      await expectText(document, "diagnostic", /loop/);
+      editSource(window, loop);
+
+      // Advance the page's timer once the real worker starts the loop.
+      const schedule = window.setTimeout;
+      let expire;
+      window.setTimeout = (callback, milliseconds) => {
+        expire = callback;
+        return schedule(callback, milliseconds);
+      };
+      try {
+        runButton.click();
+      } finally {
+        window.setTimeout = schedule;
+      }
+      await expectText(document, "output", "loop started");
+      expire();
+      await expectText(document, "request-status", /timed out/i);
+      await waitFor(site.activeWorkers, 0, "Timed-out worker terminated");
+      await expectText(document, "output", "loop started");
+      assert.equal(getSource(document), loop);
+      assert.equal(runtimeSelect.disabled, false, "Runtime is available after timeout");
+
+      editSource(window, "loop(0)");
+      check.click();
+      await expectText(document, "diagnostic", /loop/);
+      editSource(window, "length([1, 2, 3])");
+      await run(document, "3");
+      assert.ok(document.getElementById("output").closest("[hidden]"));
+      assert.ok(document.getElementById("diagnostic").closest("[hidden]"));
+      assert.ok(site.workerRequests.length > 0);
+      for (const request of site.workerRequests) {
+        assert.equal(request.url, host + basePath + runtimeScripts.get(runtime));
+        assert.equal(request.messages.length, 1, "Each fresh worker receives one request");
+        assert.equal(request.terminated, true, "Each finished worker is terminated");
+        if (runtime === "webassembly") {
+          assert.ok(request.assets.some(href => href.endsWith(".wasm")), "The worker loaded its Wasm module");
+          for (const href of request.assets) {
+            assert.ok(href.startsWith(host + basePath + "worker-wasm.assets/"),
+              `Runtime asset uses the site's origin and base path: ${href}`);
+          }
+        }
+      }
+    } finally {
+      await site.close();
+    }
+  });
+}
 
 function checkHighlighting(window) {
   const editor = window.document.querySelector(".cm-content");
@@ -450,13 +770,14 @@ function checkHighlighting(window) {
   assert.deepEqual(modalities.map(token => token.textContent), ["[]", "<>", "<Tick |>", "[Tick]"]);
 }
 
-for (const basePath of ["/", "/smalllinks/"]) {
-  test(`Follow repository sources and retain the editor at ${basePath}`, async () => {
-    const site = openSite(basePath);
+for (const { runtime, basePath } of runtimeSites) {
+  test(`Follow repository sources and retain the editor with ${runtime} at ${basePath}`, async () => {
+    const site = openSite(basePath, { runtime });
     try {
       const window = await site.loadPage(`${basePath}?example=${encodeURIComponent(importExample)}`);
       const document = window.document;
       await expectLoadedExample(document, importExample);
+      assert.equal(document.getElementById("runtime").value, runtime);
       const original = getSource(document);
       const edited = "import Shallow_state;\nShallow_state.unitTest(3)";
       editSource(window, edited);
@@ -545,6 +866,7 @@ for (const basePath of ["/", "/smalllinks/"]) {
 
       const direct = (await site.loadPage(rejectedLink.href)).document;
       await expectSourcePreview(direct, rejectedExample);
+      assert.equal(direct.getElementById("runtime").value, runtime, "Direct source links retain the runtime");
       const directLink = requireLink(direct.getElementById("source-files"), "index.html", "file", rejectedExample);
       assert.equal(directLink.getAttribute("aria-current"), "page");
       assert.equal(directLink.closest("details:not([open])"), null, "A direct preview opens every containing folder");
@@ -553,8 +875,8 @@ for (const basePath of ["/", "/smalllinks/"]) {
     }
   });
 
-  test(`Follow chapter navigation and run the guide's examples at ${basePath}`, async () => {
-    const site = openSite(basePath);
+  test(`Follow chapter navigation and run the guide's examples with ${runtime} at ${basePath}`, async () => {
+    const site = openSite(basePath, { runtime });
     try {
       const { document } = await site.loadPage();
       const guideLink = requireLink(document, "guide.html");
@@ -584,6 +906,7 @@ for (const basePath of ["/", "/smalllinks/"]) {
       }
       const backLink = requireLink(guide.querySelector("header"), "index.html");
       const home = (await site.loadPage(backLink.href)).document;
+      assert.equal(home.getElementById("runtime").value, runtime, "The guide's Playground link retains the runtime");
       assert.equal(home.querySelector("h1").textContent.trim(), "SmallLinks");
       assert.equal(home.title, "SmallLinks");
 
@@ -615,6 +938,8 @@ for (const basePath of ["/", "/smalllinks/"]) {
       for (const link of runnableLinks) {
         const params = new URL(link.href).searchParams;
         const linkedWindow = await site.loadPage(link.href);
+        assert.equal(linkedWindow.document.getElementById("runtime").value, runtime,
+          "Guide listings retain the runtime");
         const snippet = snippets.get(link);
         const id = params.get("example");
         if (id) {
