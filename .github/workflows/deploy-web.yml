@@ -22,10 +22,20 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
+      - name: Install Binaryen 123
+        run: |
+          cd "$RUNNER_TEMP"
+          binaryen_archive=binaryen-version_123-x86_64-linux.tar.gz
+          binaryen_release=https://github.com/WebAssembly/binaryen/releases/download/version_123
+          curl --fail --location --output "$binaryen_archive" "$binaryen_release/$binaryen_archive"
+          curl --fail --location --output "$binaryen_archive.sha256" "$binaryen_release/$binaryen_archive.sha256"
+          sha256sum --check "$binaryen_archive.sha256"
+          tar -xzf "$binaryen_archive"
+          echo "$RUNNER_TEMP/binaryen-version_123/bin" >> "$GITHUB_PATH"
       - run: opam install -y ./links.opam --deps-only
-      - run: opam install -y js_of_ocaml-lwt.6.2.0
+      - run: opam install -y js_of_ocaml-lwt.6.5.0 wasm_of_ocaml-compiler.6.5.0
       - run: npm --prefix web ci
-      - run: make web-demo
+      - run: make test-web-runtime test-web-runtime-wasm test-web-demo
       - uses: actions/upload-pages-artifact@v4
         with:
           path: web/dist
