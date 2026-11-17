@@ -24,9 +24,9 @@ Work stays on `small-web`, based on `small-met` at `59ef2511`.
    and open runnable examples in the playground.
 4. Include concise language documentation based on the existing guide.
    Link complete examples from the documentation to the playground.
-5. Add a `wasm_of_ocaml` version of the runtime and static demo alongside
-   the existing `js_of_ocaml` version. Share the playground, guide,
-   example catalogue and worker messages between the two builds.
+5. Add a `wasm_of_ocaml` runtime alongside the existing `js_of_ocaml`
+   runtime. Let visitors choose either runtime in the shared playground.
+   Both use the same guide, example catalogue and worker messages.
 
 ## Chat ownership
 
@@ -213,16 +213,24 @@ find modal effect examples directly in the playground sidebar.
 Depends on the runtime, static packaging and checks from milestones
 1–6. Implementation is paused until the user asks to begin.
 
-Keep the existing JavaScript build targets and `web/dist` output.
-Add explicit WebAssembly build targets and a `web/dist-wasm` output
-using the same page sources. The proposed Pages layout keeps the
-JavaScript demo at the site root and adds the WebAssembly demo under
-`wasm/`. Each version includes its guide, catalogue and runtime assets.
+Keep the existing JavaScript runtime and its build target. Add a
+WebAssembly runtime target. Package both in `web/dist` and publish one
+playground with a **Runtime** selector offering **JavaScript** and
+**WebAssembly**. JavaScript is initially selected. The Pages artifact
+includes both workers, the WebAssembly assets and the shared guide
+and catalogue.
+
+Continue coordination in this chat. Assign the runtime and build work,
+the selector and page interaction, and verification to bounded
+subagent tasks. The coordinator integrates the changes and records
+the final checks.
 
 - [ ] **9.1** Establish the toolchain and compatibility requirements.
   Select compatible OCaml, `wasm_of_ocaml-compiler`, `js_of_ocaml`
-  libraries, Binaryen, Dune and Node versions. Audit the worker's
-  dependencies, native primitives, JavaScript conversions and browser
+  libraries, Binaryen, Dune and Node versions. Reuse `js_of_ocaml`
+  browser bindings and `js_of_ocaml-lwt` scheduling with the Wasm
+  compiler. Audit dependencies, native primitives, JavaScript
+  conversions and browser
   detection in `core/linkspath.ml`. Choose a build rule compatible with
   the project's Dune configuration and an explicit OCaml effect
   compilation mode compatible with the selected Node version. Record
@@ -234,35 +242,48 @@ JavaScript demo at the site root and adds the WebAssembly demo under
   output limits and a fresh worker for each request. Resolve required
   primitive bindings and path handling, and check startup, one program
   and an imported example in Node.
-- [ ] **9.3** Package the WebAssembly demo. Add repeatable runtime and
-  site build targets. Copy the generated JavaScript loader and its
-  complete asset directory, including the Wasm modules. Resolve assets
-  relative to the selected demo so both versions work at the root and
-  under a hosting prefix. Report loading and unsupported-engine errors
-  through the existing startup diagnostics. Document installation,
-  building and serving both outputs in [IMPL.md](IMPL.md).
-- [ ] **9.4** Check both versions. Reuse the Node worker loader where
+- [ ] **9.3** Add the runtime selector to the shared playground. Use
+  the selected worker for the next Check or Run request. Disable the
+  selector while a request is active. Preserve the editor text, source
+  and import context, and displayed output when the selection changes.
+  Keep the selection through example and guide navigation. Report an
+  unsupported WebAssembly engine or a loader failure in the existing
+  startup diagnostics so the visitor can select JavaScript.
+- [ ] **9.4** Package the shared demo with both runtimes. Add repeatable
+  runtime and site build targets. Copy the generated JavaScript loader
+  and its complete asset directory, including the Wasm modules. Resolve
+  assets relative to the shared site at the root and under a hosting
+  prefix. Document installation, building and serving the shared output
+  in [IMPL.md](IMPL.md).
+- [ ] **9.5** Check both runtimes. Reuse the Node worker loader where
   compatible and extend the site tests to exercise the WebAssembly
-  assets. Run both builds through the worker and Node/jsdom suites,
+  assets. Run both runtimes through the worker and Node/jsdom suites,
   covering every runnable example and guide listing. Compare types,
-  values, output,
-  diagnostics, imports, Unicode, handler resumptions and early exits.
+  values, output, diagnostics, imports, Unicode, handler resumptions
+  and early exits. Check the selector, retained editor state and
+  navigation with each runtime.
   Check Stop, timeout recovery and failed or missing runtime assets.
   Test integer boundaries and overflow for each target. Run native
   checks for any shared code changes and record revisions and logs.
-- [ ] **9.5** Extend Pages packaging to include both demos. Build and
-  check both outputs in the deployment workflow, assemble one static
-  artifact with the proposed directory layout, and verify every loader
-  and asset path over HTTP using Node. Document the two entry URLs and
+- [ ] **9.6** Extend Pages packaging to include both runtimes. Build and
+  check both runtime outputs in the deployment workflow, assemble one
+  static artifact with the selector and both workers, and verify every
+  loader and asset path over HTTP using Node. Document runtime selection and
   the required Pages environment branch rule. Record each implementation
   commit and mark the milestone complete after its checks pass.
 
-**Decision for review.** Confirm the chosen toolchain's integer range
-in 9.1. The OCaml target documentation describes 31-bit integers for
-`wasm_of_ocaml`, while the current JavaScript demo uses 32-bit `Int`.
-Agree the WebAssembly demo's integer range and overflow behaviour with
-the user before implementing a change to SmallLinks behaviour.
-[OCaml WebAssembly target](https://ocaml.org/tools/wasm-target).
+**Decision for review.** SmallLinks represents `Int` with OCaml `int`.
+The Wasm compiler uses signed 31-bit integers, with range
+−1,073,741,824 to 1,073,741,823. The JavaScript compiler uses signed
+32-bit integers, with range −2,147,483,648 to 2,147,483,647. For
+example, `1073741823 + 1` wraps to `-1073741824` in Wasm and produces
+`1073741824` in JavaScript. The proposed choice is to use each target's
+ordinary integer behaviour and document and test the differences.
+Giving both runtimes the same range would require changes to the
+SmallLinks integer representation or arithmetic. Review this choice
+with the user before implementing it.
+[Upstream integer configuration](https://github.com/ocsigen/js_of_ocaml/blob/6.2.0/compiler/lib/config.ml)
+and [OCaml WebAssembly target](https://ocaml.org/tools/wasm-target).
 
 The compiler produces a JavaScript loader and an asset directory and
 supports embedded files with `--file`. Use its JavaScript bindings and
@@ -271,10 +292,12 @@ mode after checking the runtime and its dependencies.
 [Wasm_of_ocaml manual](https://ocsigen.org/js_of_ocaml/latest/js_of_ocaml/wasm_overview.html)
 and [Dune Wasm builds](https://dune.readthedocs.io/en/stable/wasmoo.html).
 
-Completion check — both static demos build independently and coexist
-in the Pages artifact. The WebAssembly worker passes the runtime and
-site checks, and target-specific behaviour is documented. Automated
-checks use Node and jsdom. The user performs the final browser check.
+Completion check — both runtime targets build independently and coexist
+in the Pages artifact. A visitor can select either runtime in the
+shared playground and check and run the same editor contents. Both
+workers pass the runtime and site checks, and target-specific behaviour
+is documented. Automated checks use Node and jsdom. The user performs
+the final browser check.
 
 ## Checks
 
@@ -303,17 +326,20 @@ checks use Node and jsdom. The user performs the final browser check.
 Milestone 9 is planned. Implementation is paused at the user's request.
 The next action, after the user asks to begin, is the compatibility
 audit in 9.1 and review of the integer-range decision. The proposed
-deployment layout above is part of this plan. Existing milestones and
-verification results remain recorded below.
+integer behaviour above needs the user's review. The plan now includes
+a runtime selector and one shared Pages playground. Existing
+milestones and verification results remain recorded below.
 
-The planning update used source revision `c7f17124`. It reviewed the
-runtime, build scripts, existing checks, Pages workflow and the primary
-WebAssembly documentation linked above. Planning checks are recorded
-in `/private/tmp/smalllinks-wasm-plan/`. `git diff --check` and the
-local documentation link check passed. `make rule-check` passed with
-the GNU find tab check skipped. A direct scan checked the plan for
-tabs and trailing whitespace. Implementation checks for milestone 9
-are pending.
+The initial milestone plan was committed as `332338ab`. The runtime
+selector refinement used source revision `d5ef5303`. Planning reviewed
+the runtime, build scripts, existing checks, Pages workflow and primary
+WebAssembly documentation, including upstream integer representation.
+Latest planning checks are recorded in
+`/private/tmp/smalllinks-wasm-plan-selector/`. `git diff --check` and
+the local documentation link check passed. `make rule-check` passed
+with the GNU find tab check skipped. A direct scan checked the plan
+for tabs and trailing whitespace. Implementation checks for milestone
+9 are pending.
 
 Milestone 8 is complete on `small-web`. The guide has 22 runnable
 listings and the playground has seven example shortcuts. Site checks
