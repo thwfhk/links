@@ -1,4 +1,7 @@
-let in_browser = Sys.backend_type = Sys.Other "js_of_ocaml"
+let in_browser =
+  match Sys.backend_type with
+  | Sys.Other ("js_of_ocaml" | "wasm_of_ocaml") -> true
+  | _ -> false
 
 let prefix =
   if in_browser then "/static/smalllinks"

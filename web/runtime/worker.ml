@@ -24,7 +24,9 @@ let source_name request source =
               && List.for_all valid_part (String.split_on_char '/' name)
               && Sys.file_exists path)
       then raise (Errors.module_error ("Unknown packaged example " ^ name));
-      Sys_js.update_file ~name:path ~content:source;
+      (match Sys.backend_type with
+       | Sys.Other "wasm_of_ocaml" -> Sys_js.create_file ~name:path ~content:source
+       | _ -> Sys_js.update_file ~name:path ~content:source);
       Settings.set ModuleUtils.links_file_paths [Filename.dirname path];
       name
 
