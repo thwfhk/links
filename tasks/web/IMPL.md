@@ -23,7 +23,20 @@ its contents to a static host. All assets use paths relative to the
 site, so it can also be served under a path prefix.
 
 `make test-web-demo` builds the site and exercises it in Node with a
-simulated DOM and the compiled SmallLinks worker.
+simulated DOM and both compiled SmallLinks workers. The **Runtime**
+selector chooses JavaScript or WebAssembly for the next Check or Run.
+JavaScript is selected initially. The selection is stored for the
+current browser tab and survives navigation through the guide and
+examples. Selecting a runtime preserves the editor contents, import
+context and displayed results.
+
+The [Pages workflow](../../.github/workflows/deploy-web.yml) installs
+Binaryen 123 and the matching 6.5.0 compiler packages, checks both
+runtimes and uploads the complete `web/dist` directory. In the fork's
+`github-pages` environment, allow the `small-web` branch under
+**Deployment branches and tags**. The published playground includes
+both runtimes at the same URL. Wasm modules are served with the
+`application/wasm` content type.
 
 ## Runtime
 
@@ -65,9 +78,9 @@ evaluation after an interrupt so it can account for reads before it
 recovers the prompt. [Evaluator](../../core/evalir.ml)
 · [Lwt browser integration](https://ocsigen.org/js_of_ocaml/latest/js_of_ocaml/lwt.html).
 
-The [Dune rule](../../web/runtime/dune) uses `js_of_ocaml --file` to
-embed the prelude, comprehension helpers, standard library and example
-sources in its virtual filesystem. The worker and public source
+The [Dune rules](../../web/runtime/dune) use each compiler's `--file`
+option to embed the prelude, comprehension helpers, standard library
+and example sources in its virtual filesystem. The worker and public source
 catalogues obtain the example paths from
 [`tests/typecheck_examples.tests`](../../tests/typecheck_examples.tests).
 The existing module loader searches the embedded standard library and
@@ -75,16 +88,33 @@ the selected example's directory. For an edited example, the worker
 updates the virtual entry file before checking.
 [Module lookup](../../core/moduleUtils.ml#L29).
 
+JavaScript updates the embedded entry with `Sys_js.update_file`.
+The Wasm virtual filesystem supports read-only descriptors, so its
+worker replaces the entry by registering it with `Sys_js.create_file`.
+Both use the same original source path and import search directories.
+
 Run these commands from the repository root with OCaml 5.3 or later.
 The worker checks also use Node.js.
 
 ```sh
-opam install js_of_ocaml-lwt
+opam install js_of_ocaml-lwt.6.5.0 wasm_of_ocaml-compiler.6.5.0
 make web-runtime
+make web-runtime-wasm
 make test-web-runtime
+make test-web-runtime-wasm
 ```
 
-The standalone script is `_build/default/web/runtime/worker.js`.
+The standalone scripts are `_build/default/web/runtime/worker.js` and
+`_build/default/web/runtime/worker-wasm.js`. Keep the generated
+`worker-wasm.assets` directory beside the Wasm loader. `make web-demo`
+builds both workers and copies the loaders and complete asset directory
+into the static site.
+
+The [Wasm startup handler](../../web/runtime/wasm-startup.js) is placed
+before the generated loader. It forwards asynchronous loading
+rejections as startup diagnostics. OCaml sends `ready` after the Wasm
+module and embedded files have loaded. The page's Stop and timeout
+controls cover this loading phase.
 
 ### Browser limits
 
@@ -94,11 +124,13 @@ The standalone script is `_build/default/web/runtime/worker.js`.
 - `exit(v)` returns the supplied value. `sysexit(n)` ends the request
   with status `n` and preserves preceding output. The prelude uses
   `sysexit` for failed assertions.
-- The browser uses 32-bit `Int` values. `serverTimeMilliseconds()`
-  reports an unsupported operation because the current epoch time in
-  milliseconds exceeds that range.
+- JavaScript uses signed 32-bit `Int` values. WebAssembly uses signed
+  31-bit `Int` values. Arithmetic follows the selected target's range
+  and overflow behaviour. `serverTimeMilliseconds()` reports an
+  unsupported operation because the current epoch time in milliseconds
+  exceeds both ranges.
 - Raw TCP and native bcrypt report unsupported operations. The
-  `js_of_ocaml` linker warns about native Unix and bcrypt primitives.
+  compilers warn about native Unix and bcrypt primitives.
   The worker guards the corresponding SmallLinks calls and skips native
   startup and configuration.
 
@@ -113,7 +145,7 @@ The standalone script is `_build/default/web/runtime/worker.js`.
 | Page to worker | `check` or `run` | `id`, `source` (the current editor text) and optional `exampleId` (a bundled repository-relative source path). |
 | Worker to page | `output` | `id`, `text`. Chunks are sent in order. |
 | Worker to page | `success` | `id` and `inferredType` for Check. Run also includes `value`. Early exit includes only `id` and the printed `value`. |
-| Worker to page | `failure` | `id`, `stage` (`startup`, `parsing`, `checking` or `running`), plain-text `diagnostic` with its location when available, and optional `exitStatus`. |
+| Worker to page | `failure` | `id` for an active submission, `stage` (`startup`, `parsing`, `checking` or `running`), plain-text `diagnostic` with its location when available, and optional `exitStatus`. Loading failures before `ready` omit `id`. |
 
 A new buffer uses a fixed name for diagnostics. An example uses its
 repository path, and the editor text replaces that example's entry

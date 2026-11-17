@@ -47,6 +47,13 @@ local to the block, which returns `25`.
 | `String` | `"hello"` and `"line\n"`. Use `s ^^ t` to join strings. |
 | `DateTime` | `intToDate(0)` converts the Unix epoch. Use `showUTC(d)` to format a date in UTC. |
 
+The playground's **Runtime** selector chooses JavaScript or WebAssembly.
+JavaScript integers range from −2,147,483,648 to 2,147,483,647.
+WebAssembly integers range from −1,073,741,824 to 1,073,741,823.
+`min_int` and `max_int` give the selected runtime's bounds. Arithmetic
+wraps at those bounds, so `1073741823 + 1` gives `1073741824` in
+JavaScript and `-1073741824` in WebAssembly.
+
 Use `==` and `<>` for equality and inequality, and `<`, `<=`, `>` and
 `>=` for ordering. Put a function name in backticks to call it as an
 infix operator, as in ``3 `elem` [1, 2, 3]``. Test a string against a
