@@ -225,7 +225,8 @@ the runtime, build and verification. The existing playground-design
 chat owns the runtime selector and its page interaction checks in 9.3.
 The coordinator integrates the changes and records the final checks.
 
-- [ ] **9.1** Establish the toolchain and compatibility requirements.
+- [x] **9.1** (`bab0edd8`) Establish the toolchain and compatibility
+  requirements.
   Select compatible OCaml, `wasm_of_ocaml-compiler`, `js_of_ocaml`
   libraries, Binaryen, Dune and Node versions. Reuse `js_of_ocaml`
   browser bindings and `js_of_ocaml-lwt` scheduling with the Wasm
@@ -235,29 +236,31 @@ The coordinator integrates the changes and records the final checks.
   the project's Dune configuration and an explicit OCaml effect
   compilation mode compatible with the selected Node version. Record
   the engine requirements and decisions in [IMPL.md](IMPL.md).
-- [ ] **9.2** Build the WebAssembly worker from the shared OCaml
-  runtime. Reuse the existing worker messages, prelude, embedded
-  standard library and example imports. Handle asynchronous module
+- [x] **9.2** (`add29f2e`, `a1820b4a`) Build the WebAssembly worker from
+  the shared OCaml runtime. Reuse the existing worker messages,
+  prelude, embedded standard library and example imports. Handle asynchronous module
   loading before sending `ready`. Keep browser primitive restrictions,
   output limits and a fresh worker for each request. Resolve required
   primitive bindings and path handling, and check startup, one program
   and an imported example in Node.
-- [ ] **9.3** Add the runtime selector to the shared playground. Use
-  the selected worker for the next Check or Run request. Disable the
-  selector while a request is active. Preserve the editor text, source
+- [x] **9.3** (`774da697`) Add the runtime selector to the shared
+  playground. Use the selected worker for the next Check or Run.
+  Disable the selector while a request is active. Preserve the editor text, source
   and import context, and displayed output when the selection changes.
   Keep the selection through example and guide navigation. Report an
   unsupported WebAssembly engine or a loader failure in the existing
   startup diagnostics so the visitor can select JavaScript.
-- [ ] **9.4** Package the shared demo with both runtimes. Add repeatable
-  runtime and site build targets. Copy the generated JavaScript loader
-  and its complete asset directory, including the Wasm modules. Resolve
+- [x] **9.4** (`61a7a4b0`, `17fe5476`) Package the shared demo with both
+  runtimes. Add repeatable runtime and site build targets. Copy the
+  generated JavaScript loader and its complete asset directory,
+  including the Wasm modules. Resolve
   assets relative to the shared site at the root and under a hosting
   prefix. Document installation, building and serving the shared output
   in [IMPL.md](IMPL.md).
-- [ ] **9.5** Check both runtimes. Reuse the Node worker loader where
-  compatible and extend the site tests to exercise the WebAssembly
-  assets. Run both runtimes through the worker and Node/jsdom suites,
+- [x] **9.5** (`66d12b1e`, `1a93d5dd`) Check both runtimes. Reuse the
+  Node worker loader where compatible and extend the site tests to
+  exercise the WebAssembly assets. Run both runtimes through the worker
+  and Node/jsdom suites,
   covering every runnable example and guide listing. Compare types,
   values, output, diagnostics, imports, Unicode, handler resumptions
   and early exits. Check the selector, retained editor state and
@@ -265,9 +268,10 @@ The coordinator integrates the changes and records the final checks.
   Check Stop, timeout recovery and failed or missing runtime assets.
   Test integer boundaries and overflow for each target. Run native
   checks for any shared code changes and record revisions and logs.
-- [ ] **9.6** Extend Pages packaging to include both runtimes. Build and
-  check both runtime outputs in the deployment workflow, assemble one
-  static artifact with the selector and both workers, and verify every
+- [x] **9.6** (`2d4c143d`) Extend Pages packaging to include both
+  runtimes. Build and check both runtime outputs in the deployment
+  workflow, assemble one static artifact with the selector and both
+  workers, and verify every
   loader and asset path over HTTP using Node. Document runtime selection and
   the required Pages environment branch rule. Record each implementation
   commit and mark the milestone complete after its checks pass.
@@ -320,27 +324,59 @@ the final browser check.
 
 ## Status
 
-Milestone 9 is in progress. The toolchain audit in 9.1 selected matching
-6.5.0 compiler and library versions, with Binaryen 123 locally. Version
-checks passed using OCaml 5.4.0, Dune 3.20.2 and Node.js 26.0.0.
-Logs are in `/private/tmp/smalllinks-wasm/logs/`. The next action is
-building and checking the Wasm worker in 9.2 alongside the selector
-work in 9.3. The user accepted each target's integer behaviour.
-Runtime and build coordination stays in this chat with subagents.
-The existing playground-design chat owns the runtime selector in 9.3.
-Existing milestones and verification results remain recorded below.
+Milestone 9 implementation and automated checks are complete on
+`small-web`. The shared static site in `web/dist` contains both
+runtimes, 20 runnable examples, 101 browsable source files and 22
+runnable guide listings. The next action is the user's final browser
+check. Runtime and build work used subagents in this chat, and the
+existing playground-design chat implemented the selector and site
+checks.
 
-The initial milestone plan was committed as `332338ab`, and the runtime
-selector refinement as `65f1e661`. The integer decision and chat
-assignment update used source revision `75956bbf`. Planning reviewed
-the runtime, build scripts, existing checks, Pages workflow and primary
-WebAssembly documentation, including upstream integer representation.
-Latest planning checks are recorded in
-`/private/tmp/smalllinks-wasm-plan-decisions/`. `git diff --check` and
-the local documentation link check passed. `make rule-check` passed
-with the GNU find tab check skipped. A direct scan checked the plan
-for tabs and trailing whitespace. Implementation checks for milestone
-9 are pending.
+### WebAssembly verification
+
+The final combined web checks used source revision `17fe5476`, OCaml
+5.4.0, Dune 3.20.2, matching compiler libraries 6.5.0, Binaryen 123 and
+Node.js 22.23.5. The same worker and site checks also passed on Node.js
+26.0.0. The [toolchain notes](IMPL.md#webassembly-toolchain) record the
+dependencies and browser requirements.
+
+Native checks used the shared compiler sources from `add29f2e`.
+Subsequent changes affected web loading, packaging, tests and
+documentation. Full integration logs are in
+`/private/tmp/smalllinks-wasm/logs/`.
+
+| Check | Result and log |
+| --- | --- |
+| `make test-web-runtime test-web-runtime-wasm test-web-demo` | Passed on Node 22. JavaScript passed 18 worker cases with one Wasm-only skip. Wasm passed all 19 worker cases. All 21 site checks passed with both runtimes at `/` and `/smalllinks/`, including every advertised example and guide listing, selector state, imports, Stop, timeout and startup failure recovery. `final-web-node22.log`. |
+| `node /private/tmp/smalllinks-wasm/check-http.mjs` | Passed on Node 22. Thirty HTTP requests verified both loaders, Wasm MIME type and assets at `/` and `/links/`. Browser-style workers evaluated integer overflow and an imported handler example through both routes. `final-http-node22.log`. |
+| `make all-ci` | Passed. `native-build.log`. |
+| `./test-harness tests/handlers.tests` | All 165 cases passed. `native-handlers.log`. |
+| `./test-harness tests/effect_annotations.tests` | All 76 cases passed. `native-effect_annotations.log`. |
+| `./test-harness tests/native.tests` | All 76 cases passed. `native-native.log`. |
+| `./test-harness tests/modules.tests` | All 67 cases passed. `native-modules.log`. |
+| `./test-harness tests/typecheck_examples.tests` | All 97 cases passed. `native-typecheck_examples.log`. |
+| Temporary `dune install --profile=ci` and `./tests/check-install.sh` | Passed all three installed-interpreter checks from another directory. `install.log`, `install-check.log` and `install-prefix.txt`. |
+| `make rule-check`, `git diff --check 86dc2603` and documentation checks | Passed. GNU find was unavailable, so a direct scan checked tabs in changed source files. All 49 local documentation links passed. `final-rule-check.log`, `final-diff-check.log` and `final-doc-source-check.log`. |
+
+Independent review identified a browser startup rejection that Node's
+default worker error handling concealed. `a1820b4a` installs the
+rejection handler before the Wasm loader. The final browser-style site
+checks verify missing modules and unsupported WebAssembly, report a
+startup diagnostic and recover through JavaScript. Review found no
+remaining issues. Review logs are in
+`/private/tmp/smalllinks-wasm-review/`.
+
+The Node 26 site check log is
+`/private/tmp/smalllinks-wasm-selector/site-tests-final.log`. The
+individual runtime build and worker checks are recorded in
+`/private/tmp/smalllinks-wasm-runtime/`. Packaging, workflow syntax and
+asset-copy checks are recorded in
+`/private/tmp/smalllinks-wasm-packaging/`.
+
+The planning commits were `332338ab`, `65f1e661` and `86dc2603`.
+Planning checks are in `/private/tmp/smalllinks-wasm-plan-decisions/`.
+
+### Expanded guide verification
 
 Milestone 8 is complete on `small-web`. The guide has 22 runnable
 listings and the playground has seven example shortcuts. Site checks
