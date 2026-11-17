@@ -21,6 +21,7 @@ const previewActions = document.querySelector("#preview-actions");
 const loadButton = document.querySelector("#load-source");
 const returnButton = document.querySelector("#return-to-editor");
 const results = document.querySelector("#results");
+const runtimeSelect = document.querySelector("#runtime");
 const checkButton = document.querySelector("#check");
 const runButton = document.querySelector("#run");
 const stopButton = document.querySelector("#stop");
@@ -31,6 +32,11 @@ const output = document.querySelector("#output");
 const diagnostic = document.querySelector("#diagnostic");
 
 const timeoutSeconds = 10;
+const runtimeStorageKey = "smalllinks-runtime";
+const workerScripts = new Map([
+  ["javascript", "./worker.js"],
+  ["webassembly", "./worker-wasm.js"],
+]);
 // Allow the worker's output limit and room for its truncation notice.
 const outputLimit = 64 * 1024 + 64;
 const failureStatuses = {
@@ -67,6 +73,7 @@ function updateControls() {
   const viewing = previewEntry !== null;
   checkButton.disabled = runButton.disabled = busy || viewing || sourceLoad !== null;
   stopButton.disabled = !busy || viewing;
+  runtimeSelect.disabled = busy;
   newProgram.disabled = busy;
   loadButton.disabled = busy || sourceLoad !== null;
   for (const button of exampleButtons.values()) button.disabled = busy;
@@ -370,6 +377,12 @@ function onWorkerError(request, message) {
 function onWorkerMessage(request, submission, message) {
   if (request !== activeRequest || !message) return;
 
+  if (!request.started && message.kind === "failure" && message.stage === "startup" &&
+      (message.id === undefined || message.id === submission.id)) {
+    onWorkerError(request, message.diagnostic);
+    return;
+  }
+
   if (message.kind === "ready" && !request.started) {
     request.started = true;
     requestStatus.textContent = submission.kind === "check" ? "Checking…" : "Running…";
@@ -420,7 +433,7 @@ function startRequest(kind) {
   }, timeoutSeconds * 1000);
 
   try {
-    request.worker = new Worker("./worker.js");
+    request.worker = new Worker(workerScripts.get(runtimeSelect.value));
     request.worker.addEventListener("message", ({ data }) => {
       onWorkerMessage(request, submission, data);
     });
@@ -469,6 +482,19 @@ function initialiseEditor() {
 }
 
 const initialSource = textarea.value;
+try {
+  const savedRuntime = sessionStorage.getItem(runtimeStorageKey);
+  if (workerScripts.has(savedRuntime)) runtimeSelect.value = savedRuntime;
+} catch {
+  // Runtime switching also works when the browser disables session storage.
+}
+runtimeSelect.addEventListener("change", () => {
+  try {
+    sessionStorage.setItem(runtimeStorageKey, runtimeSelect.value);
+  } catch {
+    // The current page keeps the selected runtime until it is closed.
+  }
+});
 const editor = initialiseEditor();
 playgroundLink.addEventListener("click", event => {
   if (!isPlainClick(event)) return;
