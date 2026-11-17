@@ -33,7 +33,7 @@ Work stays on `small-web`, based on `small-met` at `59ef2511`.
 | Codex chat | Work | Chat ID |
 | --- | --- | --- |
 | SmallLinks web demo | Coordination, example catalogue and worker packaging, static build integration and final checks. | `01a1e515-5976-7681-af81-ca86443c6718` |
-| SmallLinks playground page design | Editor and controls, source viewer, and the structure and presentation of the web language documentation. | `01a1e532-55bf-77d0-ac7e-b09c2f5119e0` |
+| SmallLinks playground page design | Editor and controls, runtime selector, source viewer, and the structure and presentation of the web language documentation. | `01a1e532-55bf-77d0-ac7e-b09c2f5119e0` |
 
 The [worker interface](IMPL.md#worker-interface) is shared across both
 chats. The webpage can use a mock worker while the runtime build is
@@ -220,10 +220,10 @@ playground with a **Runtime** selector offering **JavaScript** and
 includes both workers, the WebAssembly assets and the shared guide
 and catalogue.
 
-Continue coordination in this chat. Assign the runtime and build work,
-the selector and page interaction, and verification to bounded
-subagent tasks. The coordinator integrates the changes and records
-the final checks.
+Continue coordination in this chat with bounded subagent tasks for
+the runtime, build and verification. The existing playground-design
+chat owns the runtime selector and its page interaction checks in 9.3.
+The coordinator integrates the changes and records the final checks.
 
 - [ ] **9.1** Establish the toolchain and compatibility requirements.
   Select compatible OCaml, `wasm_of_ocaml-compiler`, `js_of_ocaml`
@@ -272,16 +272,13 @@ the final checks.
   the required Pages environment branch rule. Record each implementation
   commit and mark the milestone complete after its checks pass.
 
-**Decision for review.** SmallLinks represents `Int` with OCaml `int`.
+SmallLinks `Int` uses each target's ordinary OCaml integer behaviour.
+Document the target's range and test arithmetic at its boundaries.
 The Wasm compiler uses signed 31-bit integers, with range
 −1,073,741,824 to 1,073,741,823. The JavaScript compiler uses signed
 32-bit integers, with range −2,147,483,648 to 2,147,483,647. For
 example, `1073741823 + 1` wraps to `-1073741824` in Wasm and produces
-`1073741824` in JavaScript. The proposed choice is to use each target's
-ordinary integer behaviour and document and test the differences.
-Giving both runtimes the same range would require changes to the
-SmallLinks integer representation or arithmetic. Review this choice
-with the user before implementing it.
+`1073741824` in JavaScript.
 [Upstream integer configuration](https://github.com/ocsigen/js_of_ocaml/blob/6.2.0/compiler/lib/config.ml)
 and [OCaml WebAssembly target](https://ocaml.org/tools/wasm-target).
 
@@ -325,17 +322,18 @@ the final browser check.
 
 Milestone 9 is planned. Implementation is paused at the user's request.
 The next action, after the user asks to begin, is the compatibility
-audit in 9.1 and review of the integer-range decision. The proposed
-integer behaviour above needs the user's review. The plan now includes
-a runtime selector and one shared Pages playground. Existing
-milestones and verification results remain recorded below.
+audit in 9.1. The user accepted each target's integer behaviour.
+Runtime and build coordination stays in this chat with subagents.
+The existing playground-design chat owns the runtime selector in 9.3.
+Existing milestones and verification results remain recorded below.
 
-The initial milestone plan was committed as `332338ab`. The runtime
-selector refinement used source revision `d5ef5303`. Planning reviewed
+The initial milestone plan was committed as `332338ab`, and the runtime
+selector refinement as `65f1e661`. The integer decision and chat
+assignment update used source revision `75956bbf`. Planning reviewed
 the runtime, build scripts, existing checks, Pages workflow and primary
 WebAssembly documentation, including upstream integer representation.
 Latest planning checks are recorded in
-`/private/tmp/smalllinks-wasm-plan-selector/`. `git diff --check` and
+`/private/tmp/smalllinks-wasm-plan-decisions/`. `git diff --check` and
 the local documentation link check passed. `make rule-check` passed
 with the GNU find tab check skipped. A direct scan checked the plan
 for tabs and trailing whitespace. Implementation checks for milestone
