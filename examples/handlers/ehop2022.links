@@ -1,0 +1,430 @@
+# Effect Handler Oriented Programming, Daniel Hillerström, 2022.
+# Adapted from https://github.com/dhil/phd-dissertation/blob/master/code/ehop2022.links
+# Run this file for the file-system example, or import Ehop2022 and call
+# example0() through example7() to follow the successive handlers.
+
+typename Option(a) = (| None | Some:a |);
+typename File = String;
+typename FileDescr = Int;
+
+effect Failure { Fail : () => Zero; }
+effect FileWrite { Write : (FileDescr, String) => (); }
+effect FileRead { Read : (FileDescr) => Option(String); }
+effect FileOpen {
+  Open : (String) => Option(FileDescr);
+  Create : (String) => Option(FileDescr);
+}
+effect ProcessExit { Exit : (Int) => Zero; }
+
+sig fail : forall a. [Failure] (() -> a)
+fun fail() { switch (do Fail) { } }
+
+sig lookup : forall a::Abs, b::Abs. [Failure] ((a, List (a, b)) -> b)
+fun lookup(key, entries) {
+  switch (entries) {
+    case [] -> fail()
+    case (other, value) :: rest ->
+      if (key == other) value else lookup(key, rest)
+  }
+}
+
+sig modify : forall a, b. (a, b, List (a, b)) -> List (a, b)
+fun modify(key, value, entries) {
+  switch (entries) {
+    case [] -> []
+    case (other, previous) :: rest ->
+      if (key == other) (key, value) :: rest
+      else (other, previous) :: modify(key, value, rest)
+  }
+}
+
+sig remove : forall a, b. (a, List (a, b)) -> List (a, b)
+fun remove(key, entries) {
+  switch (entries) {
+    case [] -> []
+    case (other, value) :: rest ->
+      if (key == other) rest else (other, value) :: remove(key, rest)
+  }
+}
+
+sig has : forall a, b. (a, List (a, b)) -> Bool
+fun has(key, entries) {
+  switch (entries) {
+    case [] -> false
+    case (other, _) :: rest -> key == other || has(key, rest)
+  }
+}
+
+# Collect each write in order. The descriptor is ignored by this handler.
+# Descriptors are inode indices, and the initial stdout inode is 0.
+var stdout = (0 : FileDescr);
+
+sig echo : [FileWrite] (String -> ())
+fun echo(chars) { do Write(stdout, chars) }
+
+sig basicIO : forall a::Abs. (<FileWrite> (() -> a)) -> (a, File)
+fun basicIO(action) {
+  handle(action()) {
+    case result -> (result, "")
+    case <Write(_, chars) => resume> ->
+      var (result, file) = resume(());
+      (result, chars ^^ file)
+  }
+}
+
+fun example0() { basicIO(fun() { echo("Hello"); echo("World") }) }
+
+# Exit abandons the resumption. Reversing these two handlers also
+# discards the collected output when the process exits.
+sig exit : forall a. [ProcessExit] (Int -> a)
+fun exit(code) { switch (do Exit(code)) { } }
+
+sig status : forall a::Abs. (<ProcessExit> (() -> a)) -> Int
+fun status(action) {
+  handle(action()) {
+    case _ -> 0
+    case <Exit(code)> -> code
+  }
+}
+
+fun example1() {
+  basicIO(fun() { status(fun() { echo("Hello"); exit(1); echo("World") }) })
+}
+
+fun example1'() {
+  status(fun() { basicIO(fun() { echo("dead"); exit(1); echo("code") }) })
+}
+
+# Each process carries its current user through its resumptions.
+typename User = (| Alice | Bob | Root |);
+effect UserEnv { Ask : () => String; }
+effect SwitchUser { Su : (User) => (); }
+
+fun userName(user:User) {
+  switch (user) {
+    case Alice -> "alice"
+    case Bob -> "bob"
+    case Root -> "root"
+  }
+}
+
+sig whoami : [UserEnv] (() -> String)
+fun whoami() { do Ask }
+
+sig env : forall a::Abs. (User, <UserEnv> (() -> a)) -> a
+fun env(user, action) {
+  handle(action()) { case <Ask => resume> -> resume(userName(user)) }
+}
+
+fun example2() { env(Root, whoami) }
+
+sig su : [SwitchUser] (User -> ())
+fun su(user) { do Su(user) }
+
+sig sessionmgr : forall a::Abs. (User, <UserEnv, SwitchUser> (() -> a)) -> a
+fun sessionmgr(user, action) {
+  handle(action())(current <- user) {
+    case <Ask => resume> -> resume(userName(current), current)
+    case <Su(next) => resume> -> resume((), next)
+  }
+}
+
+fun example3() {
+  basicIO(fun() {
+    sessionmgr(Root, fun() {
+      status(fun() {
+        su(Alice); echo(whoami()); echo(" ");
+        su(Bob); echo(whoami()); echo(" ");
+        su(Root); echo(whoami())
+      })
+    })
+  })
+}
+
+# A fork resumes the same computation as parent and child.
+effect ForkProcess { Fork : () => Bool; }
+
+sig fork : [ForkProcess] (() -> Bool)
+fun fork() { do Fork }
+
+sig nondet : forall a. (<ForkProcess> (() -> a)) -> List (<ForkProcess> a)
+fun nondet(action) {
+  handle(action()) {
+    case result -> [result]
+    case <Fork => resume> -> resume(true) ++ resume(false)
+  }
+}
+
+sig ritchie : [FileWrite] (() -> ())
+fun ritchie() {
+  echo("UNIX is basically ");
+  echo("a simple operating system, ");
+  echo("but ");
+  echo("you have to be a genius to understand the simplicity.\n")
+}
+
+sig hamlet : [FileWrite] (() -> ())
+fun hamlet() {
+  echo("To be, or not to be,\n");
+  echo("that is the question:\n");
+  echo("Whether 'tis nobler in the mind to suffer\n")
+}
+
+fun example4() {
+  basicIO(fun() {
+    nondet(fun() {
+      sessionmgr(Root, fun() {
+        status(fun() {
+          if (fork()) { su(Alice); ritchie() }
+          else { su(Bob); hamlet() }
+        })
+      })
+    })
+  })
+}
+
+# Reify an interruption as a paused process. Its callback retains the
+# caller's context, including any fork operation it may perform.
+effect Interrupt { Interrupt : () => (); }
+typename Pstate(a) = mu p. (| Done:a | Paused:() -> p |);
+
+sig interrupt : [Interrupt] (() -> ())
+fun interrupt() { do Interrupt }
+
+sig reifyProcess : forall a::Abs. (<Interrupt> (() -> a)) -> Pstate(a)
+fun reifyProcess(action) {
+  handle(action()) {
+    case result -> Done(result)
+    case <Interrupt => resume> -> Paused(fun() { resume(()) })
+  }
+}
+
+sig schedule : forall a::Abs. (List (<ForkProcess> Pstate(a))) -> List a
+fun schedule(processes) {
+  sig loop : forall a::Abs. (List (<ForkProcess> Pstate(a)), List a) -> List a
+  fun loop(pending, finished) {
+    switch (pending) {
+      case [] -> finished
+      case Done(result) :: rest -> loop(rest, result :: finished)
+      case Paused(resume) :: rest -> loop(rest ++ nondet(resume), finished)
+    }
+  }
+  loop(processes, [])
+}
+
+sig timeshare : forall a::Abs. (<ForkProcess, Interrupt> (() -> a)) -> List a
+fun timeshare(action) {
+  schedule([Paused(fun() { reifyProcess(action) })])
+}
+
+# Interrupt before each write to give the next process a turn.
+sig echo' : [Interrupt, FileWrite] ((FileDescr, String) -> ())
+fun echo'(fd, chars) { interrupt(); do Write(fd, chars) }
+
+sig interruptWrite : forall a::Abs. [Interrupt, FileWrite]
+  ((<FileWrite> (() -> a)) -> a)
+fun interruptWrite(action) {
+  handle(action()) {
+    case <Write(fd, chars) => resume> ->
+      interrupt(); resume(do Write(fd, chars))
+  }
+}
+
+fun example5() {
+  basicIO(fun() {
+    timeshare(fun() {
+      interruptWrite(fun() {
+        sessionmgr(Root, fun() {
+          status(fun() {
+            if (fork()) { su(Alice); ritchie() }
+            else { su(Bob); hamlet() }
+          })
+        })
+      })
+    })
+  })
+}
+
+# State is shared by the processes when its handler surrounds the scheduler.
+effect State(s::Abs) {
+  Get : () => s;
+  Put : (s) => ();
+}
+
+sig get : forall s::Abs. [State(s)] (() -> s)
+fun get() { do Get }
+
+sig put : forall s::Abs. [State(s)] (s -> ())
+fun put(value) { do Put(value) }
+
+sig runState : forall s::Abs, a::Abs. (s, <State(s)> (() -> a)) -> (a, s)
+fun runState(initial, action) {
+  var run = handle(action()) {
+    case result -> fun(state) { (result, state) }
+    case <Get => resume> -> fun(state) { resume(state)(state) }
+    case <Put(next) => resume> -> fun(_) { resume(())(next) }
+  };
+  run(initial)
+}
+
+sig incr : [State(Int)] (() -> ())
+fun incr() { put(get() + 1) }
+
+fun example6() { runState(41, incr) }
+
+# Basic Serial File System (BSFS).
+# Reads and writes operate directly on inode pointers and run serially.
+typename INode = (loc:Int, lno:Int);
+typename IList = List (Int, INode);
+typename Directory = List (String, Int);
+typename DataRegion = List (Int, File);
+typename FileSystem =
+  (dir:Directory, dregion:DataRegion, inodes:IList, lnext:Int, inext:Int);
+
+sig fsys0 : FileSystem
+var fsys0 =
+  (dir=[("stdout", 0)], inodes=[(0, (loc=0, lno=1))],
+   dregion=[(0, "")], lnext=1, inext=1);
+
+sig withDefault : forall a::Abs. [] ((a, <Failure> (() -> a)) -> a)
+fun withDefault(fallback, m) {
+  handle(m()) {
+    case answer -> answer
+    case <Fail> -> fallback
+  }
+}
+
+sig fwrite : [Failure] ((FileDescr, String, FileSystem) -> FileSystem)
+fun fwrite(ino, cs, fsys) {
+  var inode = lookup(ino, fsys.inodes);
+  var file = lookup(inode.loc, fsys.dregion);
+  var file' = file ^^ cs;
+  (fsys with dregion=modify(inode.loc, file', fsys.dregion))
+}
+
+sig fread : [Failure] ((FileDescr, FileSystem) -> String)
+fun fread(ino, fsys) {
+  var inode = lookup(ino, fsys.inodes);
+  lookup(inode.loc, fsys.dregion)
+}
+
+sig fileRW : forall a::Abs.
+  [State(FileSystem)] ((<FileRead, FileWrite> (() -> a)) -> a)
+fun fileRW(m) {
+  handle(m()) {
+    case answer -> answer
+    case <Read(fd) => resume> ->
+      var cs = withDefault(None, fun() {
+        Some(fread(fd, get()))
+      });
+      resume(cs)
+    case <Write(fd, cs) => resume> ->
+      withDefault((), fun() {
+        var fsys = fwrite(fd, cs, get());
+        put(fsys)
+      });
+      resume(())
+  }
+}
+
+sig fopen : [Failure] ((String, FileSystem) -> FileDescr)
+fun fopen(fname, fsys) { lookup(fname, fsys.dir) }
+
+sig fcreate : [Failure] ((String, FileSystem) -> (FileDescr, FileSystem))
+fun fcreate(fname, fsys) {
+  if (has(fname, fsys.dir)) {
+    var ino = fopen(fname, fsys);
+    var inode = lookup(ino, fsys.inodes);
+    var dregion = modify(inode.loc, "", fsys.dregion);
+    (ino, (fsys with dregion=dregion))
+  } else {
+    var loc = fsys.lnext;
+    var dregion = (loc, "") :: fsys.dregion;
+    var ino = fsys.inext;
+    var inode = (loc=loc, lno=1);
+    var inodes = (ino, inode) :: fsys.inodes;
+    var dir = (fname, ino) :: fsys.dir;
+    (ino, (dir=dir, dregion=dregion, inodes=inodes,
+           lnext=loc+1, inext=ino+1))
+  }
+}
+
+sig fileOC : forall a::Abs.
+  [State(FileSystem)] ((<FileOpen> (() -> a)) -> a)
+fun fileOC(m) {
+  handle(m()) {
+    case answer -> answer
+    case <Open(fname) => resume> ->
+      var fd = withDefault(None, fun() {
+        Some(fopen(fname, get()))
+      });
+      resume(fd)
+    case <Create(fname) => resume> ->
+      var fd = withDefault(None, fun() {
+        var (fd, fsys) = fcreate(fname, get());
+        put(fsys);
+        Some(fd)
+      });
+      resume(fd)
+  }
+}
+
+sig bsfs0 : forall a::Abs.
+  [State(FileSystem)] ((<FileOpen, FileRead, FileWrite> (() -> a)) -> a)
+fun bsfs0(m) {
+  fileOC(fun() { fileRW(m) })
+}
+
+# Redirect writes to a newly created or truncated file.
+infixl 4 >-;
+sig >- : forall a::Abs.
+  [FileOpen, ProcessExit, FileWrite] ((<FileWrite> (() -> a), String) -> a)
+op f >- fname {
+  var fd = switch (do Create(fname)) {
+    case None -> exit(-1)
+    case Some(fd) -> fd
+  };
+  handle(f()) {
+    case answer -> answer
+    case <Write(_, cs) => resume> -> resume(do Write(fd, cs))
+  }
+}
+
+sig ccp : [FileOpen, FileRead, FileWrite, ProcessExit]
+  ((String, String) -> ())
+fun ccp(src, dst) {
+  var srcfd = switch (do Open(src)) {
+    case None -> exit(-1)
+    case Some(fd) -> fd
+  };
+  switch (do Read(srcfd)) {
+    case None -> exit(-1)
+    case Some(cs) -> fun() { echo(cs) } >- dst
+  }
+}
+
+sig example7 : [] (() -> (List Int, FileSystem))
+fun example7() {
+  runState(fsys0, fun() {
+    bsfs0(fun() {
+      timeshare(fun() {
+        interruptWrite(fun() {
+          sessionmgr(Root, fun() {
+            status(fun() {
+              if (fork()) {
+                su(Alice);
+                ritchie >- "ritchie.txt"
+              } else {
+                su(Bob);
+                hamlet >- "hamlet";
+                ccp("hamlet", "act3")
+              }
+            })
+          })
+        })
+      })
+    })
+  })
+}
+
+example7()

@@ -11,6 +11,7 @@
   (coop.links as examples/handlers/coop.links)
   (count.links as examples/handlers/count.links)
   (deep_state.links as examples/handlers/deep_state.links)
+  (ehop2022.links as examples/handlers/ehop2022.links)
   (exceptions.links as examples/handlers/exceptions.links)
   (fringe.links as examples/handlers/fringe.links)
   (identity.links as examples/handlers/identity.links)

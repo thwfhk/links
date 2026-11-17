@@ -54,6 +54,10 @@ Typecheck example file examples/handlers/deep_state.links
 examples/handlers/deep_state.links
 filemode : true
 
+Typecheck example file examples/handlers/ehop2022.links
+examples/handlers/ehop2022.links
+filemode : true
+
 Typecheck example file examples/handlers/exceptions.links
 examples/handlers/exceptions.links
 filemode : true

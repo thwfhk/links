@@ -660,3 +660,58 @@ SAT text parser returns Nothing on bad input
 import Sat; Sat.parseTextExpression("#") == Nothing
 args : --path=examples/handlers
 stdout : @.*true : Bool
+
+EHOP basic I/O, handler order, users and state
+open import Ehop2022; (example0(), example1(), example1'(), example2(), example3(), example6())
+args : --path=examples/handlers
+stdout : (((), "HelloWorld"), (1, "Hello"), 1, "root", (0, "alice bob root"), ((), 42)) : (((), Ehop2022.File), (Int, Ehop2022.File), Int, String, (Int, Ehop2022.File), ((), Int))
+
+EHOP forks and interrupts preserve the output order
+open import Ehop2022; (example4() == ([0, 0], "UNIX is basically a simple operating system, but you have to be a genius to understand the simplicity.\nTo be, or not to be,\nthat is the question:\nWhether 'tis nobler in the mind to suffer\n"), example5() == ([0, 0], "UNIX is basically To be, or not to be,\na simple operating system, that is the question:\nbut Whether 'tis nobler in the mind to suffer\nyou have to be a genius to understand the simplicity.\n"))
+args : --path=examples/handlers
+stdout : (true, true) : (Bool, Bool)
+
+EHOP composes the scheduler, sessions and file system
+open import Ehop2022; example7() == ([0, 0], (dir=[("act3", 3), ("hamlet", 2), ("ritchie.txt", 1), ("stdout", 0)], dregion=[(3, "To be, or not to be,\nthat is the question:\nWhether 'tis nobler in the mind to suffer\n"), (2, "To be, or not to be,\nthat is the question:\nWhether 'tis nobler in the mind to suffer\n"), (1, "UNIX is basically a simple operating system, but you have to be a genius to understand the simplicity.\n"), (0, "")], inodes=[(3, (loc=3, lno=1)), (2, (loc=2, lno=1)), (1, (loc=1, lno=1)), (0, (loc=0, lno=1))], lnext=4, inext=4))
+args : --path=examples/handlers
+stdout : true : Bool
+
+EHOP file writes append and creating an existing file truncates it
+open import Ehop2022; { var (observed, fsys) = runState(fsys0, fun() { bsfs0(fun() { var Some(fd) = do Create("notes"); do Write(fd, "one"); do Write(fd, "two"); var contents = do Read(fd); var Some(same) = do Create("notes"); (contents == Some("onetwo"), do Read(same) == Some(""), fd == same) }) }); (observed, fsys.dir, fsys.inext, fsys.lnext) }
+args : --path=examples/handlers
+stdout : ((true, true, true), [("notes", 1), ("stdout", 0)], 2, 2) : ((Bool, Bool, Bool), List (String, Int), Int, Int)
+
+EHOP missing files leave state unchanged and stdout uses its initial inode
+open import Ehop2022; { var (observed, fsys) = runState(fsys0, fun() { bsfs0(fun() { do Write(99, "discarded"); (do Read(99) == None, do Open("missing") == None) }) }); var (written, _) = runState(fsys0, fun() { bsfs0(fun() { echo("stdout"); do Read(stdout) == Some("stdout") }) }); (observed, fsys == fsys0, written) }
+args : --path=examples/handlers
+stdout : ((true, true), true, true) : ((Bool, Bool), Bool, Bool)
+
+EHOP copy replaces the destination and preserves the source
+open import Ehop2022; { var (code, fsys) = runState(fsys0, fun() { bsfs0(fun() { var Some(src) = do Create("source"); do Write(src, "complete"); var Some(dst) = do Create("destination"); do Write(dst, "old"); status(fun() { ccp("source", "destination") }) }) }); (code, withDefault(false, fun() { fread(fopen("source", fsys), fsys) == "complete" && fread(fopen("destination", fsys), fsys) == "complete" }), fsys.inext, fsys.lnext) }
+args : --path=examples/handlers
+stdout : (0, true, 3, 3) : (Int, Bool, Int, Int)
+
+EHOP failed copying exits before creating the destination
+open import Ehop2022; { var (code, fsys) = runState(fsys0, fun() { bsfs0(fun() { status(fun() { ccp("missing", "destination") }) }) }); var broken = (fsys0 with inodes=[]); var (readCode, afterRead) = runState(broken, fun() { bsfs0(fun() { status(fun() { ccp("stdout", "destination") }) }) }); (code, fsys == fsys0, readCode, afterRead == broken) }
+args : --path=examples/handlers
+stdout : (-1, true, -1, true) : (Int, Bool, Int, Bool)
+
+EHOP forked sessions keep independent users
+open import Ehop2022; nondet(fun() { sessionmgr(Root, fun() { if (fork()) { su(Alice); (whoami(), whoami()) } else { var initial = whoami(); su(Bob); (initial, whoami()) } }) }) == [("alice", "alice"), ("root", "bob")]
+args : --path=examples/handlers
+stdout : true : Bool
+
+EHOP interrupted sessions retain their user and reverse completion order
+open import Ehop2022; basicIO(fun() { timeshare(fun() { interruptWrite(fun() { sessionmgr(Root, fun() { status(fun() { if (fork()) { su(Alice); echo(whoami()); echo(whoami()); exit(11) } else { echo(whoami()); su(Bob); echo(whoami()); exit(22) } }) }) }) }) }) == ([22, 11], "alicerootalicebob")
+args : --path=examples/handlers
+stdout : true : Bool
+
+EHOP redirection forwards other effects from its callback
+open import Ehop2022; effect Probe { Probe : () => Int; } { var (answer, fsys) = runState(fsys0, fun() { bsfs0(fun() { handle(handle((fun() { echo("redirected"); do Probe }) >- "new") { case <Probe => k> -> k(42) case value -> value }) { case <Exit(_)> -> error("Redirection failed") } }) }); (answer, withDefault(false, fun() { fread(fopen("new", fsys), fsys) == "redirected" })) }
+args : --path=examples/handlers
+stdout : (42, true) : (Int, Bool)
+
+EHOP failed creation abandons a redirected producer
+open import Ehop2022; handle(handle((fun() { do Write(0, "unreachable") }) >- "failed") { case <Open(_) => k> -> k(None) case <Create(_) => k> -> k(None) }) { case <Exit(code)> -> code case <Write(_, _) => k> -> error("Producer ran after failed creation") case () -> 0 }
+args : --path=examples/handlers
+stdout : -1 : Int
