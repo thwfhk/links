@@ -1,10 +1,13 @@
 const assert = require("node:assert/strict");
-const { readFileSync } = require("node:fs");
-const { resolve } = require("node:path");
+const { copyFileSync, mkdtempSync, readFileSync, rmSync } = require("node:fs");
+const { tmpdir } = require("node:os");
+const { join, resolve } = require("node:path");
 const { test } = require("node:test");
 const { Worker } = require("node:worker_threads");
 
 const workerPath = resolve(process.argv[2]);
+const runtime = process.argv[3] ?? "javascript";
+assert.ok(["javascript", "wasm"].includes(runtime), `Unknown runtime ${runtime}`);
 
 // Adapt the browser message API to Node without changing the worker bundle.
 const bootstrap = `
@@ -15,8 +18,8 @@ const bootstrap = `
   require(workerData);
 `;
 
-function sendRequest(kind, source, exampleId) {
-  const worker = new Worker(bootstrap, { eval: true, workerData: workerPath });
+function sendRequest(kind, source, exampleId, scriptPath = workerPath) {
+  const worker = new Worker(bootstrap, { eval: true, workerData: scriptPath });
   const output = [];
   return new Promise((resolve, reject) => {
     const finish = () => {
@@ -54,6 +57,40 @@ test("Run reports the result, type and printed output", async () => {
   assert.deepEqual(result, {
     kind: "success", id: 1, value: "42", inferredType: "Int", output: "café",
   });
+});
+
+test("Run preserves floating-point values across worker messages", async () => {
+  const result = await sendRequest("run", "1.5 +. 2.25");
+  assert.deepEqual(result, {
+    kind: "success", id: 1, value: "3.75", inferredType: "Float", output: "",
+  });
+});
+
+test("Integer bounds and overflow follow the selected runtime", async () => {
+  const minimum = runtime === "wasm" ? -1_073_741_824 : -2_147_483_648;
+  const maximum = runtime === "wasm" ? 1_073_741_823 : 2_147_483_647;
+  const addition = runtime === "wasm" ? minimum : 1_073_741_824;
+  const result = await sendRequest("run",
+    "(min_int, max_int, max_int + 1, min_int - 1, 1073741823 + 1)");
+  assert.equal(result.kind, "success", result.diagnostic);
+  assert.equal(result.value,
+    `(${minimum}, ${maximum}, ${minimum}, ${maximum}, ${addition})`);
+});
+
+test("A missing worker script reports a startup error", async () => {
+  await assert.rejects(
+    sendRequest("check", "42", undefined, join(workerPath, "missing.js")),
+    /Cannot find module|ENOTDIR/);
+});
+
+test("The Wasm loader reports missing runtime assets", {
+  skip: runtime !== "wasm",
+}, async context => {
+  const directory = mkdtempSync(join(tmpdir(), "smalllinks-missing-wasm-"));
+  context.after(() => rmSync(directory, { recursive: true, force: true }));
+  const script = join(directory, "worker-wasm.js");
+  copyFileSync(workerPath, script);
+  await assert.rejects(sendRequest("check", "42", undefined, script), /ENOENT|no such file/i);
 });
 
 test("Run resumes a SmallLinks effect handler", async () => {
@@ -126,7 +163,7 @@ test("A host-only operation reports its name and preserves preceding output", as
   assert.equal(result.output, "before");
 });
 
-test("Milliseconds report an unsupported operation on the 32-bit runtime", async () => {
+test("Milliseconds report an unsupported operation in the browser", async () => {
   const result = await sendRequest("run", "serverTimeMilliseconds()");
   assert.equal(result.kind, "failure");
   assert.equal(result.stage, "running");
