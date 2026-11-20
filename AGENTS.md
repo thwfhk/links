@@ -47,9 +47,9 @@ new files in `tasks/X/`.
   before making unresolved choices that significantly affect which
   programs Links accepts, what annotations it requires, or how
   programs run.
-- Use Sol 6.1 x-high subagents by default for design, coding,
-  investigation and review. Use Sol 6.1 high for simpler tasks, and
-  Sol 6.1 max for very difficult tasks. Use Astra only for an
+- Use Sol 6.2 x-high subagents by default for design, coding,
+  investigation and review. Use Sol 6.2 high for simpler tasks, and
+  Sol 6.2 max for difficult tasks. Use Astra only for an
   extremely challenging task after earlier attempts have failed
   several times. Continue directly when delegation is unavailable.
 - Give each agent a bounded task, relevant sources, allowed files and
